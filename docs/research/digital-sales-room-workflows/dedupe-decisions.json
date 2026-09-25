@@ -1,0 +1,402 @@
+[
+  {
+    "label": "c00",
+    "members": [
+      "analytics-intent#01",
+      "room-experience#06"
+    ],
+    "names": {
+      "analytics-intent#01": "Audit per-buyer engagement inside a room",
+      "room-experience#06": "Review buyer engagement and prioritise follow-up"
+    },
+    "verdict": "same_workflow",
+    "confidence": 0.38,
+    "probabilities": {
+      "same_workflow": 0.59,
+      "distinct_workflows": 0.11,
+      "partial_overlap": 0.3
+    },
+    "canonical": "room-experience#06",
+    "canonical_confidence": 0.95
+  },
+  {
+    "label": "c01",
+    "members": [
+      "analytics-intent#02",
+      "room-experience#06"
+    ],
+    "names": {
+      "analytics-intent#02": "Inspect a single room's engagement dashboard (dwell, live feed, trend)",
+      "room-experience#06": "Review buyer engagement and prioritise follow-up"
+    },
+    "verdict": "same_workflow",
+    "confidence": 0.09,
+    "probabilities": {
+      "same_workflow": 0.39,
+      "distinct_workflows": 0.22,
+      "partial_overlap": 0.39
+    },
+    "canonical": "room-experience#06",
+    "canonical_confidence": 0.94
+  },
+  {
+    "label": "c02",
+    "members": [
+      "analytics-intent#03",
+      "security-governance#08"
+    ],
+    "names": {
+      "analytics-intent#03": "Read per-page dwell time and drop-off inside a PDF",
+      "security-governance#08": "Review engagement: verification state, per-page dwell, geo, device and downloads"
+    },
+    "verdict": "partial_overlap",
+    "confidence": 0.55,
+    "probabilities": {
+      "same_workflow": 0.08,
+      "distinct_workflows": 0.22,
+      "partial_overlap": 0.7
+    },
+    "canonical": "security-governance#08",
+    "canonical_confidence": 0.98
+  },
+  {
+    "label": "c03",
+    "members": [
+      "analytics-intent#11",
+      "crm-integration#15"
+    ],
+    "names": {
+      "analytics-intent#11": "Write DSR events into the seller activity feed",
+      "crm-integration#15": "Log room engagement onto the CRM activity timeline"
+    },
+    "verdict": "same_workflow",
+    "confidence": 0.21,
+    "probabilities": {
+      "same_workflow": 0.47,
+      "distinct_workflows": 0.33,
+      "partial_overlap": 0.2
+    },
+    "canonical": "analytics-intent#11",
+    "canonical_confidence": 0.62
+  },
+  {
+    "label": "c04",
+    "members": [
+      "analytics-intent#10",
+      "room-experience#17"
+    ],
+    "names": {
+      "analytics-intent#10": "Stream workspace activity events to your own systems in real time",
+      "room-experience#17": "Sync room events to the CRM via webhooks and automations"
+    },
+    "verdict": "partial_overlap",
+    "confidence": 0.45,
+    "probabilities": {
+      "same_workflow": 0.16,
+      "distinct_workflows": 0.21,
+      "partial_overlap": 0.63
+    },
+    "canonical": "analytics-intent#10",
+    "canonical_confidence": 0.73
+  },
+  {
+    "label": "c05",
+    "members": [
+      "crm-integration#04",
+      "crm-integration#05"
+    ],
+    "names": {
+      "crm-integration#04": "Log a single buyer engagement event into the CRM",
+      "crm-integration#05": "Batch-upsert engagement rows keyed on the external ID"
+    },
+    "verdict": "partial_overlap",
+    "confidence": 0.73,
+    "probabilities": {
+      "same_workflow": 0.06,
+      "distinct_workflows": 0.12,
+      "partial_overlap": 0.82
+    },
+    "canonical": "crm-integration#05",
+    "canonical_confidence": 0.94
+  },
+  {
+    "label": "c06",
+    "members": [
+      "quoting-proposals#10",
+      "room-experience#16"
+    ],
+    "names": {
+      "quoting-proposals#10": "Collect acceptance by e-signature, countersignature, signer reassignment and identity verification",
+      "room-experience#16": "Collect buyer sign-off with e-signature and an audit trail"
+    },
+    "verdict": "same_workflow",
+    "confidence": 0.23,
+    "probabilities": {
+      "same_workflow": 0.49,
+      "distinct_workflows": 0.05,
+      "partial_overlap": 0.46
+    },
+    "canonical": "quoting-proposals#10",
+    "canonical_confidence": 0.55
+  },
+  {
+    "label": "c07",
+    "members": [
+      "quoting-proposals#10",
+      "scheduling-meetings#17"
+    ],
+    "names": {
+      "quoting-proposals#10": "Collect acceptance by e-signature, countersignature, signer reassignment and identity verification",
+      "scheduling-meetings#17": "Collect mutual-action-plan approval by e-signature and track it"
+    },
+    "verdict": "partial_overlap",
+    "confidence": 0.41,
+    "probabilities": {
+      "same_workflow": 0.05,
+      "distinct_workflows": 0.34,
+      "partial_overlap": 0.61
+    },
+    "canonical": "quoting-proposals#10",
+    "canonical_confidence": 0.17
+  },
+  {
+    "label": "c08",
+    "members": [
+      "automation-engagement#08",
+      "scheduling-meetings#11"
+    ],
+    "names": {
+      "automation-engagement#08": "Send a multi-channel reminder: push notification plus in-app inbox fallback",
+      "scheduling-meetings#11": "Send conditional pre- and post-meeting reminders and SMS nudges"
+    },
+    "verdict": "partial_overlap",
+    "confidence": 0.44,
+    "probabilities": {
+      "same_workflow": 0.02,
+      "distinct_workflows": 0.35,
+      "partial_overlap": 0.63
+    },
+    "canonical": "automation-engagement#08",
+    "canonical_confidence": 0.81
+  },
+  {
+    "label": "c09",
+    "members": [
+      "automation-engagement#08",
+      "quoting-proposals#14"
+    ],
+    "names": {
+      "automation-engagement#08": "Send a multi-channel reminder: push notification plus in-app inbox fallback",
+      "quoting-proposals#14": "Expire a quote and auto-send buyer reminders"
+    },
+    "verdict": "distinct_workflows",
+    "confidence": 0.5,
+    "probabilities": {
+      "same_workflow": 0.01,
+      "distinct_workflows": 0.67,
+      "partial_overlap": 0.32
+    },
+    "canonical": "quoting-proposals#14",
+    "canonical_confidence": 0.58
+  },
+  {
+    "label": "c10",
+    "members": [
+      "quoting-proposals#14",
+      "security-governance#14"
+    ],
+    "names": {
+      "quoting-proposals#14": "Expire a quote and auto-send buyer reminders",
+      "security-governance#14": "Expire an agreement and drive pre-expiry reminders"
+    },
+    "verdict": "partial_overlap",
+    "confidence": 0.4,
+    "probabilities": {
+      "same_workflow": 0.12,
+      "distinct_workflows": 0.28,
+      "partial_overlap": 0.6
+    },
+    "canonical": "quoting-proposals#14",
+    "canonical_confidence": 0.86
+  },
+  {
+    "label": "c11",
+    "members": [
+      "automation-engagement#01",
+      "automation-engagement#08"
+    ],
+    "names": {
+      "automation-engagement#01": "Drip a multi-channel nurture sequence with in-app → email fallback",
+      "automation-engagement#08": "Send a multi-channel reminder: push notification plus in-app inbox fallback"
+    },
+    "verdict": "distinct_workflows",
+    "confidence": 0.39,
+    "probabilities": {
+      "same_workflow": 0.01,
+      "distinct_workflows": 0.59,
+      "partial_overlap": 0.4
+    },
+    "canonical": "automation-engagement#01",
+    "canonical_confidence": 0.75
+  },
+  {
+    "label": "c12",
+    "members": [
+      "room-experience#04",
+      "security-governance#01"
+    ],
+    "names": {
+      "room-experience#04": "Invite buyers to a room with a role and an access expiry",
+      "security-governance#01": "Gate each buyer link with a password, an expiry and email verification"
+    },
+    "verdict": "distinct_workflows",
+    "confidence": 0.32,
+    "probabilities": {
+      "same_workflow": 0.03,
+      "distinct_workflows": 0.55,
+      "partial_overlap": 0.42
+    },
+    "canonical": "security-governance#01",
+    "canonical_confidence": 0.92
+  },
+  {
+    "label": "c13",
+    "members": [
+      "quoting-proposals#12",
+      "security-governance#01"
+    ],
+    "names": {
+      "quoting-proposals#12": "Secure quote access with buyer authentication",
+      "security-governance#01": "Gate each buyer link with a password, an expiry and email verification"
+    },
+    "verdict": "same_workflow",
+    "confidence": 0.28,
+    "probabilities": {
+      "same_workflow": 0.52,
+      "distinct_workflows": 0.07,
+      "partial_overlap": 0.41
+    },
+    "canonical": "security-governance#01",
+    "canonical_confidence": 0.97
+  },
+  {
+    "label": "c14",
+    "members": [
+      "room-experience#14",
+      "security-governance#01"
+    ],
+    "names": {
+      "room-experience#14": "Expire or cap access to a room",
+      "security-governance#01": "Gate each buyer link with a password, an expiry and email verification"
+    },
+    "verdict": "distinct_workflows",
+    "confidence": 0.48,
+    "probabilities": {
+      "same_workflow": 0.02,
+      "distinct_workflows": 0.65,
+      "partial_overlap": 0.33
+    },
+    "canonical": "room-experience#14",
+    "canonical_confidence": 0.32
+  },
+  {
+    "label": "c15",
+    "members": [
+      "room-experience#15",
+      "security-governance#02"
+    ],
+    "names": {
+      "room-experience#15": "Verify buyer identity and restrict by email domain",
+      "security-governance#02": "Allow or deny specific emails and domains on a link"
+    },
+    "verdict": "same_workflow",
+    "confidence": 0.41,
+    "probabilities": {
+      "same_workflow": 0.61,
+      "distinct_workflows": 0.09,
+      "partial_overlap": 0.3
+    },
+    "canonical": "room-experience#15",
+    "canonical_confidence": 0.9
+  },
+  {
+    "label": "c16",
+    "members": [
+      "room-experience#15",
+      "security-governance#11"
+    ],
+    "names": {
+      "room-experience#15": "Verify buyer identity and restrict by email domain",
+      "security-governance#11": "Require recipient identity verification before opening or signing"
+    },
+    "verdict": "partial_overlap",
+    "confidence": 0.41,
+    "probabilities": {
+      "same_workflow": 0.2,
+      "distinct_workflows": 0.19,
+      "partial_overlap": 0.61
+    },
+    "canonical": "security-governance#11",
+    "canonical_confidence": 0.34
+  },
+  {
+    "label": "c17",
+    "members": [
+      "quoting-proposals#06",
+      "scheduling-meetings#12"
+    ],
+    "names": {
+      "quoting-proposals#06": "Route a discounted quote for standard approval",
+      "scheduling-meetings#12": "Route a requested slot for host approval before confirming"
+    },
+    "verdict": "distinct_workflows",
+    "confidence": 0.49,
+    "probabilities": {
+      "same_workflow": 0.04,
+      "distinct_workflows": 0.66,
+      "partial_overlap": 0.3
+    },
+    "canonical": "quoting-proposals#06",
+    "canonical_confidence": 0.52
+  },
+  {
+    "label": "c18",
+    "members": [
+      "analytics-intent#08",
+      "automation-engagement#14"
+    ],
+    "names": {
+      "analytics-intent#08": "Relate buyer engagement to CRM pipeline and close rate",
+      "automation-engagement#14": "Sweep stale opportunities by an inactivity rule and escalate"
+    },
+    "verdict": "distinct_workflows",
+    "confidence": 0.99,
+    "probabilities": {
+      "same_workflow": 0.0,
+      "distinct_workflows": 1.0,
+      "partial_overlap": 0.0
+    },
+    "canonical": "none",
+    "canonical_confidence": 0.47
+  },
+  {
+    "label": "c19",
+    "members": [
+      "analytics-intent#12",
+      "automation-engagement#09"
+    ],
+    "names": {
+      "analytics-intent#12": "Emit buyer intent signals with indicators, urgency, and attribution",
+      "automation-engagement#09": "Notify the internal team in Slack from a buyer signal"
+    },
+    "verdict": "distinct_workflows",
+    "confidence": 0.91,
+    "probabilities": {
+      "same_workflow": 0.02,
+      "distinct_workflows": 0.94,
+      "partial_overlap": 0.04
+    },
+    "canonical": "analytics-intent#12",
+    "canonical_confidence": 0.76
+  }
+]

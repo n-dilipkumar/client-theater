@@ -1,0 +1,2514 @@
+[
+  {
+    "ticket": "WF-001",
+    "slug": "create-a-digital-sales-room-from-an-account",
+    "name": "Create a Digital Sales Room from an account and template",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#01",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://api.seismic.com/reporting/v2/digitalSalesRooms`",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-digitalsalesroomsget",
+      "https://learn.liferay.com/w/digital-sales-room/activating-digital-sales-room",
+      "https://learn.liferay.com/w/digital-sales-room/dsr-launchpad",
+      "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
+    ],
+    "path": "wf/WF-001.md"
+  },
+  {
+    "ticket": "WF-002",
+    "slug": "build-the-room-s-buyer-facing-pages-from",
+    "name": "Build the room's buyer-facing pages from DSR fragments",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#02",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://api.seismic.com/reporting/v2/digitalSalesRooms`",
+      "https://learn.liferay.com/w/digital-sales-room/digital-sales-room-fragments",
+      "https://learn.liferay.com/w/digital-sales-room/managing-room-documents",
+      "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
+    ],
+    "path": "wf/WF-002.md"
+  },
+  {
+    "ticket": "WF-003",
+    "slug": "populate-and-govern-the-room-s-document-library",
+    "name": "Populate and govern the room's document library",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#03",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://api.seismic.com/integration/v2/teamsites/{teamsiteId}/files/{libraryContentId}`",
+      "https://api.seismic.com/integration/v2/teamsites/{teamsiteId}/files`",
+      "https://developer.seismic.com/seismicsoftware/reference/seismiclibrarycontentmanagementaddafile",
+      "https://developer.seismic.com/seismicsoftware/reference/seismiclibraryworkflowgetlistofapprovalworkflows",
+      "https://learn.liferay.com/w/digital-sales-room/digital-sales-room-fragments",
+      "https://learn.liferay.com/w/digital-sales-room/managing-room-documents"
+    ],
+    "path": "wf/WF-003.md"
+  },
+  {
+    "ticket": "WF-004",
+    "slug": "invite-buyers-to-a-room-with-a-role",
+    "name": "Invite buyers to a room with a role and an access expiry",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#04",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://learn.liferay.com/w/digital-sales-room/dsr-launchpad",
+      "https://learn.liferay.com/w/digital-sales-room/managing-room-documents",
+      "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
+    ],
+    "path": "wf/WF-004.md"
+  },
+  {
+    "ticket": "WF-005",
+    "slug": "archive-and-restore-a-room",
+    "name": "Archive and restore a room",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#05",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://api.qwilr.com/v1/pages?status=draft,live,accepting,accepted,disabled,declined`",
+      "https://api.qwilr.com/v1/pages?tags=archived`",
+      "https://api.seismic.com/reporting/v2/digitalSalesRooms?createdAtStartTime=…&createdAtEndTime=…`",
+      "https://docs.qwilr.com/api-reference",
+      "https://learn.liferay.com/w/digital-sales-room/activating-digital-sales-room",
+      "https://learn.liferay.com/w/digital-sales-room/digital-sales-room-fragments",
+      "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
+    ],
+    "path": "wf/WF-005.md"
+  },
+  {
+    "ticket": "WF-006",
+    "slug": "review-buyer-engagement-and-prioritise-follow-up",
+    "name": "Review buyer engagement and prioritise follow-up",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#06",
+    "merged_duplicates": [
+      "analytics-intent#01",
+      "analytics-intent#02"
+    ],
+    "source_count": 11,
+    "sources": [
+      "https://api.seismic.com/reporting/v2/digitalSalesRooms`",
+      "https://api.seismic.com/reporting/v2/libraryContents`",
+      "https://api.seismic.com/search/v1/content/query`",
+      "https://developer.seismic.com/seismicsoftware/reference/contentsearch",
+      "https://developer.seismic.com/seismicsoftware/reference/h1-reporting-api-overview",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-digitalsalesroomsget",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-librarycontentsget",
+      "https://learn.liferay.com/w/digital-sales-room/activating-digital-sales-room",
+      "https://learn.liferay.com/w/digital-sales-room/digital-sales-room-fragments",
+      "https://learn.liferay.com/w/digital-sales-room/engagement-metrics-dashboard",
+      "https://learn.liferay.com/w/digital-sales-room/index"
+    ],
+    "path": "wf/WF-006.md"
+  },
+  {
+    "ticket": "WF-007",
+    "slug": "ingest-a-document-or-deck-into-the-content",
+    "name": "Ingest a document or deck into the content library",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#07",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://api.seismic.com/cm/v1/teamSites/{teamSiteId}/external/contents`",
+      "https://api.seismic.com/integration/v2/teamsites/{teamsiteId}/files/{libraryContentId}`",
+      "https://api.seismic.com/integration/v2/teamsites/{teamsiteId}/files`",
+      "https://developer.seismic.com/seismicsoftware/reference/introduction-overview",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-librarycontentsget",
+      "https://developer.seismic.com/seismicsoftware/reference/seismiclibrarycontentmanagementaddafile"
+    ],
+    "path": "wf/WF-007.md"
+  },
+  {
+    "ticket": "WF-008",
+    "slug": "auto-sync-an-external-cloud-file-into-the",
+    "name": "Auto-sync an external cloud file into the content library",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#08",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://api.seismic.com/cm/v1/teamSites/{teamSiteId}/external/contents`",
+      "https://api.seismic.com/reporting/v2/libraryContents`",
+      "https://developer.seismic.com/seismicsoftware/reference/addexternalcontent",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-librarycontentsget",
+      "https://developer.seismic.com/seismicsoftware/reference/seismiclibrarycontentmanagementaddafile"
+    ],
+    "path": "wf/WF-008.md"
+  },
+  {
+    "ticket": "WF-009",
+    "slug": "approve-and-publish-library-content-immediately-or-on",
+    "name": "Approve and publish library content, immediately or on schedule",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#09",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://api.seismic.com/integration/v2/approvalWorkflows/{approvalWorkflowId}`",
+      "https://api.seismic.com/integration/v2/approvalWorkflows`",
+      "https://api.seismic.com/integration/v2/teamsites/{teamsiteId}/publish`",
+      "https://api.seismic.com/integration/v2/teamsites/{teamsiteId}/unpublish`",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-librarycontentsget",
+      "https://developer.seismic.com/seismicsoftware/reference/seismiclibrarypublishingpublishoneormoredocuments",
+      "https://developer.seismic.com/seismicsoftware/reference/seismiclibraryworkflowgetlistofapprovalworkflows"
+    ],
+    "path": "wf/WF-009.md"
+  },
+  {
+    "ticket": "WF-010",
+    "slug": "search-the-content-library-to-assemble-a-room",
+    "name": "Search the content library to assemble a room",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#10",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://api.seismic.com/search/v1/content/query`",
+      "https://developer.seismic.com/seismicsoftware/reference/contentsearch",
+      "https://developer.seismic.com/seismicsoftware/reference/introduction-overview"
+    ],
+    "path": "wf/WF-010.md"
+  },
+  {
+    "ticket": "WF-011",
+    "slug": "take-a-room-from-draft-to-live-and",
+    "name": "Take a room from draft to live and hand over the link",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#11",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://api.qwilr.com/v1/pages/{pageId}`",
+      "https://api.qwilr.com/v1/pages?status=draft,live,accepting,accepted,disabled,declined&expand=metadata`",
+      "https://api.qwilr.com/v1/pages`",
+      "https://api.qwilr.com/v1/webhooks`",
+      "https://docs.qwilr.com/api-reference",
+      "https://docs.qwilr.com/docs/getting-started/api-concepts",
+      "https://help.qwilr.com/article/578-dashboard-page-statuses",
+      "https://help.qwilr.com/article/87-sharing"
+    ],
+    "path": "wf/WF-011.md"
+  },
+  {
+    "ticket": "WF-012",
+    "slug": "generate-a-personalised-room-programmatically-from-a-template",
+    "name": "Generate a personalised room programmatically from a template",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#12",
+    "merged_duplicates": [],
+    "source_count": 13,
+    "sources": [
+      "https://api.qwilr.com/v1/blocks/saved`",
+      "https://api.qwilr.com/v1/pages/{pageId}?expand=metadata,acceptance,previewAcceptance`",
+      "https://api.qwilr.com/v1/pages/{pageId}`",
+      "https://api.qwilr.com/v1/pages`",
+      "https://api.qwilr.com/v1/taxes`",
+      "https://api.qwilr.com/v1/users`",
+      "https://api.qwilr.com/v1`",
+      "https://app.qwilr.com/#/page/",
+      "https://app.qwilr.com/#/page/template-id-here",
+      "https://docs.qwilr.com/api-reference",
+      "https://docs.qwilr.com/docs/getting-started/api-concepts",
+      "https://docs.qwilr.com/docs/getting-started/quick-start",
+      "https://help.qwilr.com/article/578-dashboard-page-statuses"
+    ],
+    "path": "wf/WF-012.md"
+  },
+  {
+    "ticket": "WF-013",
+    "slug": "personalise-room-content-with-conditional-rules",
+    "name": "Personalise room content with conditional rules",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#13",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://docs.qwilr.com/api-reference",
+      "https://help.qwilr.com/article/849-conditional-content-with-qwilr-templates",
+      "https://help.qwilr.com/category/85-templates-and-variables"
+    ],
+    "path": "wf/WF-013.md"
+  },
+  {
+    "ticket": "WF-014",
+    "slug": "expire-or-cap-access-to-a-room",
+    "name": "Expire or cap access to a room",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#14",
+    "merged_duplicates": [],
+    "source_count": 9,
+    "sources": [
+      "https://api.qwilr.com/v1/pages/{pageId}`",
+      "https://api.qwilr.com/v1/pages?status=draft,live,accepting,accepted,disabled,declined`",
+      "https://api.qwilr.com/v1/pages`",
+      "https://docs.qwilr.com/api-reference",
+      "https://help.qwilr.com/article/148-adding-view-limits",
+      "https://help.qwilr.com/article/151-adding-security",
+      "https://help.qwilr.com/article/578-dashboard-page-statuses",
+      "https://help.qwilr.com/article/768-setting-automatic-link-expiry-on-a-qwilr-page",
+      "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
+    ],
+    "path": "wf/WF-014.md"
+  },
+  {
+    "ticket": "WF-015",
+    "slug": "verify-buyer-identity-and-restrict-by-email-domain",
+    "name": "Verify buyer identity and restrict by email domain",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#15",
+    "merged_duplicates": [
+      "security-governance#02"
+    ],
+    "source_count": 4,
+    "sources": [
+      "https://help.qwilr.com/article/151-adding-security",
+      "https://help.qwilr.com/article/156-analytics-insights",
+      "https://help.qwilr.com/article/175-getting-documents-accepted",
+      "https://help.qwilr.com/article/797-welcome-to-qwilr-springboard"
+    ],
+    "path": "wf/WF-015.md"
+  },
+  {
+    "ticket": "WF-016",
+    "slug": "sync-room-events-to-the-crm-via-webhooks",
+    "name": "Sync room events to the CRM via webhooks and automations",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#17",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://api.qwilr.com/v1/pages`-independent:",
+      "https://api.qwilr.com/v1/users`",
+      "https://api.qwilr.com/v1/webhooks/{subscriptionId}`",
+      "https://api.qwilr.com/v1/webhooks`",
+      "https://docs.qwilr.com/api-reference",
+      "https://help.qwilr.com/article/846-automations-salesforce",
+      "https://help.qwilr.com/category/836-automations"
+    ],
+    "path": "wf/WF-016.md"
+  },
+  {
+    "ticket": "WF-017",
+    "slug": "white-label-rooms-on-a-custom-domain",
+    "name": "White-label rooms on a custom domain",
+    "domain": "room-experience",
+    "domain_title": "Room experience and content",
+    "source_uid": "room-experience#18",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://help.qwilr.com/article/63-custom-domain",
+      "https://help.qwilr.com/category/544-setting-up-your-branding",
+      "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
+    ],
+    "path": "wf/WF-017.md"
+  },
+  {
+    "ticket": "WF-018",
+    "slug": "read-per-page-dwell-time-and-drop-off",
+    "name": "Read per-page dwell time and drop-off inside a PDF",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#03",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://api.dock.us/v1/assets`",
+      "https://developers.dock.us/webhooks/event-types.md",
+      "https://help.dock.us/en/articles/6989922-content-analytics"
+    ],
+    "path": "wf/WF-018.md"
+  },
+  {
+    "ticket": "WF-019",
+    "slug": "rank-content-influence-and-associate-revenue-with-assets",
+    "name": "Rank content influence and associate revenue with assets",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#04",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://api.dock.us/v1/assets`",
+      "https://help.dock.us/en/articles/6989922-content-analytics",
+      "https://help.dock.us/en/articles/9114397-content-influence-report",
+      "https://www.dock.us/library/api-webhooks"
+    ],
+    "path": "wf/WF-019.md"
+  },
+  {
+    "ticket": "WF-020",
+    "slug": "extract-dsr-viewing-sessions-dwell-time-geography-for",
+    "name": "Extract DSR viewing sessions (dwell time + geography) for BI",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#05",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://api.seismic.com/reporting/v2/digitalSalesRoomViewingSessions`",
+      "https://api.seismic.com/reporting/v2/digitalSalesRooms`",
+      "https://developer.seismic.com/seismicsoftware/reference/h1-reporting-api-overview",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-digitalsalesroomsget",
+      "https://developer.seismic.com/seismicsoftware/reference/reporting-digitalsalesroomviewingsessionsget"
+    ],
+    "path": "wf/WF-020.md"
+  },
+  {
+    "ticket": "WF-021",
+    "slug": "classify-workspace-engagement-health-hot-warm-cooling-cold",
+    "name": "Classify workspace engagement health (Hot / Warm / Cooling / Cold)",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#06",
+    "merged_duplicates": [],
+    "source_count": 2,
+    "sources": [
+      "https://help.dock.us/en/articles/11664129-trends-in-workspace-views",
+      "https://learn.liferay.com/w/digital-sales-room/engagement-metrics-dashboard"
+    ],
+    "path": "wf/WF-021.md"
+  },
+  {
+    "ticket": "WF-022",
+    "slug": "triage-the-pipeline-with-saved-workspace-views",
+    "name": "Triage the pipeline with saved workspace views",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#07",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://api.dock.us/v1/workspaces`",
+      "https://developers.dock.us/api-reference/introduction",
+      "https://developers.dock.us/llms.txt",
+      "https://www.dock.us/library/workspace-views"
+    ],
+    "path": "wf/WF-022.md"
+  },
+  {
+    "ticket": "WF-023",
+    "slug": "relate-buyer-engagement-to-crm-pipeline-and-close",
+    "name": "Relate buyer engagement to CRM pipeline and close rate",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#08",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://api.dock.us/v1/deals`",
+      "https://developers.dock.us/api-reference/introduction",
+      "https://help.dock.us/en/articles/9006259-sales-impact-report",
+      "https://www.dock.us/library/reports"
+    ],
+    "path": "wf/WF-023.md"
+  },
+  {
+    "ticket": "WF-024",
+    "slug": "roll-up-client-engagement-and-multi-threading-portfolio",
+    "name": "Roll up client engagement and multi-threading portfolio-wide",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#09",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://api.dock.us/v1/workspaces`",
+      "https://help.dock.us/en/articles/9006160-client-engagement-report",
+      "https://help.dock.us/en/articles/9006640-implementations-report",
+      "https://www.dock.us/library/api-webhooks",
+      "https://www.dock.us/library/reports"
+    ],
+    "path": "wf/WF-024.md"
+  },
+  {
+    "ticket": "WF-025",
+    "slug": "stream-workspace-activity-events-to-your-own-systems",
+    "name": "Stream workspace activity events to your own systems in real time",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#10",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://api.dock.us`",
+      "https://developer.seismic.com/seismicsoftware/docs/webhooksoverview",
+      "https://developers.dock.us/api-reference/introduction",
+      "https://developers.dock.us/llms.txt",
+      "https://developers.dock.us/webhooks/create-subscription.md",
+      "https://developers.dock.us/webhooks/event-types.md",
+      "https://developers.dock.us/webhooks/introduction",
+      "https://www.dock.us/library/api-webhooks"
+    ],
+    "path": "wf/WF-025.md"
+  },
+  {
+    "ticket": "WF-026",
+    "slug": "write-dsr-events-into-the-seller-activity-feed",
+    "name": "Write DSR events into the seller activity feed",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#11",
+    "merged_duplicates": [
+      "crm-integration#15"
+    ],
+    "source_count": 8,
+    "sources": [
+      "https://api.outreach.io/api/v2/events",
+      "https://api.outreach.io/api/v2/events`",
+      "https://api.outreach.io/api/v2/webhooks`",
+      "https://developers.outreach.io/api/webhooks",
+      "https://developers.outreach.io/client-extensions",
+      "https://developers.outreach.io/client-extensions/activity-feed-custom-events",
+      "https://developers.salesloft.com/docs/api/live-website-tracking-parameters-create/",
+      "https://developers.salesloft.com/docs/api/third-party-live-feed-items-create/"
+    ],
+    "path": "wf/WF-026.md"
+  },
+  {
+    "ticket": "WF-027",
+    "slug": "emit-buyer-intent-signals-with-indicators-urgency-and",
+    "name": "Emit buyer intent signals with indicators, urgency, and attribution",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#12",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://api.salesloft.com/v2/integrations/signals/registrations/`",
+      "https://api.salesloft.com/v2/signals.json`",
+      "https://api.salesloft.com/v2/signals`",
+      "https://developer.salesloft.com/docs/api/signal-registrations/",
+      "https://developers.salesloft.com/docs/api/signals-create/",
+      "https://developers.salesloft.com/docs/platform/rhythm-resources/sending-signals/"
+    ],
+    "path": "wf/WF-027.md"
+  },
+  {
+    "ticket": "WF-028",
+    "slug": "turn-a-signal-into-an-automatic-seller-action",
+    "name": "Turn a signal into an automatic seller action (Play registration)",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#13",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://api.salesloft.com/v2/integrations/signals/registrations/plays`",
+      "https://api.salesloft.com/v2/webhook_subscriptions`",
+      "https://developer.salesloft.com/docs/api/integrations-signals-registrations-plays-create/",
+      "https://developers.salesloft.com/docs/platform/rhythm-resources/registering-plays/",
+      "https://developers.salesloft.com/docs/platform/webhooks/event-types/"
+    ],
+    "path": "wf/WF-028.md"
+  },
+  {
+    "ticket": "WF-029",
+    "slug": "score-dsr-activity-as-crm-lead-score-criteria",
+    "name": "Score DSR activity as CRM lead-score criteria",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#14",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/crm-contacts-v3/guide",
+      "https://help.dock.us/en/articles/8507275-create-hubspot-workflows-based-on-dock-activity",
+      "https://help.dock.us/en/articles/8507359-dock-activity-hubspot-lead-scoring"
+    ],
+    "path": "wf/WF-029.md"
+  },
+  {
+    "ticket": "WF-030",
+    "slug": "fire-crm-workflows-off-dsr-activity",
+    "name": "Fire CRM workflows off DSR activity",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#15",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.dock.us/llms.txt",
+      "https://help.dock.us/en/articles/8507275-create-hubspot-workflows-based-on-dock-activity",
+      "https://help.dock.us/en/articles/8507359-dock-activity-hubspot-lead-scoring",
+      "https://www.dock.us/library/api-webhooks"
+    ],
+    "path": "wf/WF-030.md"
+  },
+  {
+    "ticket": "WF-031",
+    "slug": "identify-anonymous-web-visitors-as-companies-and-filter",
+    "name": "Identify anonymous web visitors as companies and filter by pages visited",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#16",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "http://help.albacross.com/en/articles/10146587-creating-auto-engage-campaigns",
+      "http://help.albacross.com/en/articles/1108676-how-do-you-identify-visitors-on-my-website",
+      "http://help.albacross.com/en/articles/1508553-filter-leads-based-on-the-web-pages-they-ve-visited",
+      "http://help.albacross.com/en/collections/1918043-integrations-connectors",
+      "http://help.albacross.com/en/collections/54059-intent-data"
+    ],
+    "path": "wf/WF-031.md"
+  },
+  {
+    "ticket": "WF-032",
+    "slug": "stream-identified-company-contact-intent-to-your-own",
+    "name": "Stream identified company/contact intent to your own systems",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#17",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "http://help.albacross.com/en/articles/3116448-integrating-with-webhooks",
+      "http://help.albacross.com/en/articles/3306905-what-are-webhooks",
+      "http://help.albacross.com/en/articles/3368587-integrating-with-microsoft-teams-via-webhooks",
+      "http://help.albacross.com/en/articles/3387390-integrating-with-google-sheets-via-webhooks",
+      "http://help.albacross.com/en/collections/1918043-integrations-connectors"
+    ],
+    "path": "wf/WF-032.md"
+  },
+  {
+    "ticket": "WF-033",
+    "slug": "auto-add-and-continuously-track-in-market-companies",
+    "name": "Auto-add and continuously track in-market companies from intent signals",
+    "domain": "analytics-intent",
+    "domain_title": "Buyer engagement analytics and intent",
+    "source_uid": "analytics-intent#18",
+    "merged_duplicates": [],
+    "source_count": 2,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/crm-contacts-v3/guide",
+      "https://knowledge.hubspot.com/reports/use-buyer-intent"
+    ],
+    "path": "wf/WF-033.md"
+  },
+  {
+    "ticket": "WF-034",
+    "slug": "connect-a-crm-org-to-the-sales-room",
+    "name": "Connect a CRM org to the sales room (OAuth 2.0 authorization code)",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#01",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://app.hubspot.com/oauth/authorize?client_id=…&scope=…&redirect_uri=…`",
+      "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/requests_composite.htm",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/intro-oauth-and-connected-apps.html",
+      "https://developers.hubspot.com/docs/apps/developer-platform/build-apps/authentication/oauth/working-with-oauth",
+      "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
+      "https://example.com/?code=xxxx`",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api?view=dataverse-latest"
+    ],
+    "path": "wf/WF-034.md"
+  },
+  {
+    "ticket": "WF-035",
+    "slug": "map-sales-room-fields-onto-crm-fields-and",
+    "name": "Map sales-room fields onto CRM fields and define the sync key",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#02",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/properties/guide",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/using-object-apis",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/define-alternate-keys-entity?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query-metadata-web-api",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/web-api-service-documents"
+    ],
+    "path": "wf/WF-035.md"
+  },
+  {
+    "ticket": "WF-036",
+    "slug": "provision-the-sales-room-engagement-object-and-its",
+    "name": "Provision the sales-room engagement object and its fields into the CRM",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#03",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/custom-objects/guide",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/properties/guide",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/define-alternate-keys-entity?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/introduction-solutions",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query-metadata-web-api",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/web-api-service-documents"
+    ],
+    "path": "wf/WF-036.md"
+  },
+  {
+    "ticket": "WF-037",
+    "slug": "log-a-single-buyer-engagement-event-into-the",
+    "name": "Log a single buyer engagement event into the CRM",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#04",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/using-object-apis",
+      "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/create-entity-web-api?view=dataverse-latest"
+    ],
+    "path": "wf/WF-037.md"
+  },
+  {
+    "ticket": "WF-038",
+    "slug": "batch-upsert-engagement-rows-keyed-on-the-external",
+    "name": "Batch-upsert engagement rows keyed on the external ID",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#05",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/resources-composite-sobjects-collections-upsert.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/resources-sobject-upsert-patch.html",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/using-object-apis",
+      "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/define-alternate-keys-entity?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/upsertmultiple?view=dataverse-latest"
+    ],
+    "path": "wf/WF-038.md"
+  },
+  {
+    "ticket": "WF-039",
+    "slug": "write-account-contact-opportunity-as-one-atomic-transaction",
+    "name": "Write account + contact + opportunity as one atomic transaction",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#06",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/requests-composite.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/resources-composite-allornone.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/resources-composite-sobject-tree.html",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/using-object-apis",
+      "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api?view=dataverse-latest"
+    ],
+    "path": "wf/WF-039.md"
+  },
+  {
+    "ticket": "WF-040",
+    "slug": "surface-partial-failures-and-reject-invalid-writes-before",
+    "name": "Surface partial failures and reject invalid writes before commit",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#07",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html",
+      "https://developers.hubspot.com/docs/api-reference/error-handling",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/properties/guide",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api?view=dataverse-latest"
+    ],
+    "path": "wf/WF-040.md"
+  },
+  {
+    "ticket": "WF-041",
+    "slug": "detect-and-block-duplicate-records-during-sync",
+    "name": "Detect and block duplicate records during sync",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#08",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/headers-duplicaterules.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/headers.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/resources-sobject-upsert-patch.html",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/properties/guide",
+      "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/define-alternate-keys-entity?view=dataverse-latest"
+    ],
+    "path": "wf/WF-041.md"
+  },
+  {
+    "ticket": "WF-042",
+    "slug": "pull-crm-deal-account-and-contact-data-into",
+    "name": "Pull CRM deal, account and contact data into the room for display",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#09",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/headers.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/resources-query.html",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm",
+      "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/filter-rows?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/overview?view=dataverse-latest"
+    ],
+    "path": "wf/WF-042.md"
+  },
+  {
+    "ticket": "WF-043",
+    "slug": "stream-crm-record-changes-into-the-room-in",
+    "name": "Stream CRM record changes into the room in near real time",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#10",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-enrich-intro.html",
+      "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-intro.html",
+      "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-subscribe-pubsub-api.html",
+      "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-subscribe.html",
+      "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
+      "https://knowledge.hubspot.com/workflows/how-do-i-use-webhooks-with-hubspot-workflows",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-change-tracking-synchronize-data-external-systems?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest"
+    ],
+    "path": "wf/WF-043.md"
+  },
+  {
+    "ticket": "WF-044",
+    "slug": "emit-a-webhook-out-of-the-crm-when",
+    "name": "Emit a webhook out of the CRM when a deal stage changes",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#11",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/error-handling",
+      "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
+      "https://knowledge.hubspot.com/workflows/how-do-i-use-webhooks-with-hubspot-workflows"
+    ],
+    "path": "wf/WF-044.md"
+  },
+  {
+    "ticket": "WF-045",
+    "slug": "backfill-historical-records-on-a-schedule-with-a",
+    "name": "Backfill historical records on a schedule with a resumable cursor",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#12",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-asynch/",
+      "https://developers.hubspot.com/docs/api-reference/latest/account/account-information/guide",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/exports/guide",
+      "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-change-tracking-synchronize-data-external-systems?view=dataverse-latest",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/overview?view=dataverse-latest"
+    ],
+    "path": "wf/WF-045.md"
+  },
+  {
+    "ticket": "WF-046",
+    "slug": "throttle-and-retry-under-vendor-api-rate-limits",
+    "name": "Throttle and retry under vendor API rate limits",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#13",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/headers-api-usage.html",
+      "https://developers.hubspot.com/docs/api-reference/error-handling",
+      "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest"
+    ],
+    "path": "wf/WF-046.md"
+  },
+  {
+    "ticket": "WF-047",
+    "slug": "mirror-room-documents-into-crm-files",
+    "name": "Mirror room documents into CRM files",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#14",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/dome-sobject-insert-update-blob.html",
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/properties/guide",
+      "https://developers.hubspot.com/docs/api-reference/latest/files/guide"
+    ],
+    "path": "wf/WF-047.md"
+  },
+  {
+    "ticket": "WF-048",
+    "slug": "validate-the-connector-against-a-sandbox-or-test",
+    "name": "Validate the connector against a sandbox or test account",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#16",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.hubspot.com/docs/developer-tooling/local-development/agent-cli/guide",
+      "https://developers.hubspot.com/docs/developer-tooling/local-development/configurable-test-accounts",
+      "https://learn.microsoft.com/en-us/power-platform/admin/environments-overview"
+    ],
+    "path": "wf/WF-048.md"
+  },
+  {
+    "ticket": "WF-049",
+    "slug": "monitor-integration-health-and-remaining-api-quota",
+    "name": "Monitor integration health and remaining API quota",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#17",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm",
+      "https://developer.salesforce.com/docs/platform/api-rest/guide/headers-api-usage.html",
+      "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-intro.html",
+      "https://developers.hubspot.com/docs/api-reference/latest/account/account-information/guide",
+      "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest"
+    ],
+    "path": "wf/WF-049.md"
+  },
+  {
+    "ticket": "WF-050",
+    "slug": "reconcile-gaps-and-overflows-after-a-dropped-change",
+    "name": "Reconcile gaps and overflows after a dropped change stream",
+    "domain": "crm-integration",
+    "domain_title": "CRM integration and synchronisation",
+    "source_uid": "crm-integration#18",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-intro.html",
+      "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-replication-steps.html",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-change-tracking-synchronize-data-external-systems?view=dataverse-latest"
+    ],
+    "path": "wf/WF-050.md"
+  },
+  {
+    "ticket": "WF-051",
+    "slug": "route-and-book-a-demo-request-inline-from",
+    "name": "Route and book a demo request inline from a web form",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#01",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://fire.chilipiper.com/api/fire-edge/v1/org/concierge/routers/[routerSlug",
+      "https://help.chilipiper.com/hc/en-us/articles/28522554434323-Creating-a-Concierge-Flow",
+      "https://help.chilipiper.com/hc/en-us/articles/30935152032275-Using-Concierge-via-the-Edge-API",
+      "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically",
+      "https://your-tenant.chilipiper.com/concierge-router/[routerSlug"
+    ],
+    "path": "wf/WF-051.md"
+  },
+  {
+    "ticket": "WF-052",
+    "slug": "qualify-a-lead-without-offering-any-calendar",
+    "name": "Qualify a lead without offering any calendar",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#02",
+    "merged_duplicates": [],
+    "source_count": 2,
+    "sources": [
+      "https://fire.chilipiper.com/api/fire-edge/v1/org/concierge/routers/[routerSlug",
+      "https://help.chilipiper.com/hc/en-us/articles/30935152032275-Using-Concierge-via-the-Edge-API"
+    ],
+    "path": "wf/WF-052.md"
+  },
+  {
+    "ticket": "WF-053",
+    "slug": "route-a-booking-to-the-owner-of-the",
+    "name": "Route a booking to the owner of the CRM record",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#03",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://fire.chilipiper.com/api/fire-edge/v1/org/schedulingLinks/init-simple`",
+      "https://help.chilipiper.com/hc/en-us/articles/28522554434323-Creating-a-Concierge-Flow",
+      "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
+    ],
+    "path": "wf/WF-053.md"
+  },
+  {
+    "ticket": "WF-054",
+    "slug": "spread-bookings-across-a-team-by-availability-weighted",
+    "name": "Spread bookings across a team by availability-weighted round robin",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#04",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://help.chilipiper.com/hc/en-us/articles/28522554434323-Creating-a-Concierge-Flow",
+      "https://help.chilipiper.com/hc/en-us/articles/31428605286931",
+      "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
+    ],
+    "path": "wf/WF-054.md"
+  },
+  {
+    "ticket": "WF-055",
+    "slug": "hand-a-lead-off-from-an-sdr-scheduler",
+    "name": "Hand a lead off from an SDR scheduler to an AE",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#05",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://help.chilipiper.com/hc/en-us/articles/28522554434323-Creating-a-Concierge-Flow",
+      "https://help.chilipiper.com/hc/en-us/articles/42613941250835-Reassigning-Meetings",
+      "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
+    ],
+    "path": "wf/WF-055.md"
+  },
+  {
+    "ticket": "WF-056",
+    "slug": "book-a-meeting-with-no-scheduling-ui-headless",
+    "name": "Book a meeting with no scheduling UI (headless / AI agent)",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#06",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://help.chilipiper.com/hc/en-us/articles/30935152032275-Using-Concierge-via-the-Edge-API",
+      "https://help.chilipiper.com/hc/en-us/articles/50430350863635-How-do-I-connect-Chili-Piper-via-MCP",
+      "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
+    ],
+    "path": "wf/WF-056.md"
+  },
+  {
+    "ticket": "WF-057",
+    "slug": "find-a-time-that-works-for-a-multi",
+    "name": "Find a time that works for a multi-person panel",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#07",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developers.google.com/workspace/calendar/api/v3/reference/events/insert",
+      "https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query",
+      "https://learn.microsoft.com/en-us/graph/api/user-findmeetingtimes?view=graph-rest-1.0",
+      "https://www.googleapis.com/auth/calendar.events.freebusy`",
+      "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events`",
+      "https://www.googleapis.com/calendar/v3/freeBusy`"
+    ],
+    "path": "wf/WF-057.md"
+  },
+  {
+    "ticket": "WF-058",
+    "slug": "embed-a-bookable-calendar-inside-the-sales-room",
+    "name": "Embed a bookable calendar inside the sales room / app",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#08",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://cal.com/docs/api-reference/v2/bookings/create-a-booking",
+      "https://cal.com/docs/api-reference/v2/slots/get-available-time-slots-for-an-event-type",
+      "https://cal.com/docs/api-reference/v2/slots/reserve-a-slot",
+      "https://cal.com/docs/atoms/introduction",
+      "https://cal.com/docs/llms.txt"
+    ],
+    "path": "wf/WF-058.md"
+  },
+  {
+    "ticket": "WF-059",
+    "slug": "provision-a-per-booking-video-conference-link-meet",
+    "name": "Provision a per-booking video-conference link (Meet / Zoom / Teams / Gong)",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#09",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://cal.com/docs/api-reference/v2/bookings/create-a-booking",
+      "https://cal.com/docs/api-reference/v2/bookings/update-booking-location-for-an-existing-booking",
+      "https://developers.google.com/workspace/calendar/api/v3/reference/events/insert",
+      "https://example.zoom.us/j/1234567890`",
+      "https://fire.chilipiper.com/api/.../schedule-simple`",
+      "https://help.chilipiper.com/hc/en-us/articles/27994909516563-Meeting-Types-in-MyApp",
+      "https://help.chilipiper.com/hc/en-us/articles/39402611091475-Custom-Webhook-Configuration",
+      "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events?conferenceDataVersion=1`"
+    ],
+    "path": "wf/WF-059.md"
+  },
+  {
+    "ticket": "WF-060",
+    "slug": "auto-join-and-record-the-meeting-gated-by",
+    "name": "Auto-join and record the meeting, gated by recording consent",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#10",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://help.chilipiper.com/hc/en-us/articles/27994909516563-Meeting-Types-in-MyApp",
+      "https://help.gong.io/apidocs/create-a-new-gong-meeting-v2meetings.md",
+      "https://help.gong.io/docs/create-consent-profiles"
+    ],
+    "path": "wf/WF-060.md"
+  },
+  {
+    "ticket": "WF-061",
+    "slug": "send-conditional-pre-and-post-meeting-reminders-and",
+    "name": "Send conditional pre- and post-meeting reminders and SMS nudges",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#11",
+    "merged_duplicates": [],
+    "source_count": 2,
+    "sources": [
+      "https://cal.com/docs/api-reference/v2/workflows/create-a-workflow",
+      "https://help.chilipiper.com/hc/en-us/articles/28030135101971-Reminders-and-Messages"
+    ],
+    "path": "wf/WF-061.md"
+  },
+  {
+    "ticket": "WF-062",
+    "slug": "route-a-requested-slot-for-host-approval-before",
+    "name": "Route a requested slot for host approval before confirming",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#12",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://cal.com/docs/_llms/api-v2-reference.md",
+      "https://cal.com/docs/api-reference/v2/bookings/create-a-booking",
+      "https://cal.com/docs/developing/guides/automation/webhooks"
+    ],
+    "path": "wf/WF-062.md"
+  },
+  {
+    "ticket": "WF-063",
+    "slug": "reassign-a-booked-meeting-to-a-different-host",
+    "name": "Reassign a booked meeting to a different host",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#13",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://cal.com/docs/_llms/api-v2-reference.md",
+      "https://cal.com/docs/developing/guides/automation/webhooks",
+      "https://help.chilipiper.com/hc/en-us/articles/31428605286931",
+      "https://help.chilipiper.com/hc/en-us/articles/42613941250835-Reassigning-Meetings"
+    ],
+    "path": "wf/WF-063.md"
+  },
+  {
+    "ticket": "WF-064",
+    "slug": "reschedule-or-cancel-a-meeting-and-propagate-the",
+    "name": "Reschedule or cancel a meeting and propagate the change",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#14",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://cal.com/docs/_llms/api-v2-reference.md",
+      "https://cal.com/docs/api-reference/v2/slots/get-available-time-slots-for-an-event-type",
+      "https://cal.com/docs/developing/guides/automation/webhooks",
+      "https://help.chilipiper.com/hc/en-us/articles/27994909516563-Meeting-Types-in-MyApp",
+      "https://help.chilipiper.com/hc/en-us/articles/31428605286931"
+    ],
+    "path": "wf/WF-064.md"
+  },
+  {
+    "ticket": "WF-065",
+    "slug": "write-the-booking-back-into-the-crm",
+    "name": "Write the booking back into the CRM",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#15",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://cal.com/docs/_llms/api-v2-reference.md",
+      "https://cal.com/docs/llms.txt",
+      "https://help.chilipiper.com/hc/en-us/articles/27994909516563-Meeting-Types-in-MyApp",
+      "https://help.chilipiper.com/hc/en-us/articles/28522554434323-Creating-a-Concierge-Flow",
+      "https://help.chilipiper.com/hc/en-us/articles/31428605286931"
+    ],
+    "path": "wf/WF-065.md"
+  },
+  {
+    "ticket": "WF-066",
+    "slug": "push-meeting-lifecycle-events-to-downstream-systems",
+    "name": "Push meeting lifecycle events to downstream systems",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#16",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://cal.com/docs/_llms/api-v2-reference.md",
+      "https://cal.com/docs/developing/guides/automation/webhooks",
+      "https://help.chilipiper.com/hc/en-us/articles/39402611091475-Custom-Webhook-Configuration"
+    ],
+    "path": "wf/WF-066.md"
+  },
+  {
+    "ticket": "WF-067",
+    "slug": "collect-mutual-action-plan-approval-by-e-signature",
+    "name": "Collect mutual-action-plan approval by e-signature and track it",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#17",
+    "merged_duplicates": [],
+    "source_count": 12,
+    "sources": [
+      "https://app.documenso.com/api/v2/envelope/create`",
+      "https://app.documenso.com/api/v2/envelope/distribute`",
+      "https://app.documenso.com/api/v2`",
+      "https://app.documenso.com/d/abc123xyz?externalId=order-12345`",
+      "https://app.documenso.com/d/{token}`",
+      "https://app.documenso.com/embed/direct/{token}`",
+      "https://docs.documenso.com/docs/developers/embedding/direct-links",
+      "https://docs.documenso.com/docs/developers/getting-started/first-api-call",
+      "https://docs.documenso.com/docs/developers/webhooks/events",
+      "https://docs.documenso.com/llms.txt",
+      "https://openapi.documenso.com/`",
+      "https://stg-app.documenso.com/api/v2`"
+    ],
+    "path": "wf/WF-067.md"
+  },
+  {
+    "ticket": "WF-068",
+    "slug": "prepare-for-the-meeting-then-run-the-post",
+    "name": "Prepare for the meeting, then run the post-meeting follow-up sequence",
+    "domain": "scheduling-meetings",
+    "domain_title": "Scheduling and meetings",
+    "source_uid": "scheduling-meetings#18",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://app.cal.com/api/video/recording?token=…",
+      "https://cal.com/docs/_llms/api-v2-reference.md",
+      "https://cal.com/docs/developing/guides/automation/webhooks",
+      "https://help.gong.io/apidocs/assign-prospects-contacts-or-leads-to-an-engage-flow-v2flowsprospectsassign-1.md",
+      "https://help.gong.io/apidocs/create-a-new-gong-meeting-v2meetings.md",
+      "https://help.gong.io/docs/get-ready-for-meetings-with-ai-powered-meeting-prep",
+      "https://help.gong.io/docs/set-up-automated-engage-flows",
+      "https://help.gong.io/docs/update-your-crm-from-engage"
+    ],
+    "path": "wf/WF-068.md"
+  },
+  {
+    "ticket": "WF-069",
+    "slug": "gate-each-buyer-link-with-a-password-an",
+    "name": "Gate each buyer link with a password, an expiry and email verification",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#01",
+    "merged_duplicates": [
+      "quoting-proposals#12"
+    ],
+    "source_count": 5,
+    "sources": [
+      "https://www.papermark.com/docs/cli/commands/links.mdx",
+      "https://www.papermark.com/docs/guides/share-password-protected-link.mdx",
+      "https://www.papermark.com/docs/llms.txt",
+      "https://www.papermark.com/docs/openapi.json",
+      "https://www.papermark.com/docs/openapi.json`"
+    ],
+    "path": "wf/WF-069.md"
+  },
+  {
+    "ticket": "WF-070",
+    "slug": "require-nda-acceptance-before-the-buyer-sees-anything",
+    "name": "Require NDA acceptance before the buyer sees anything",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#03",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://www.papermark.com/docs/cli/commands/links.mdx",
+      "https://www.papermark.com/docs/llms.txt",
+      "https://www.papermark.com/docs/openapi.json"
+    ],
+    "path": "wf/WF-070.md"
+  },
+  {
+    "ticket": "WF-071",
+    "slug": "stamp-a-dynamic-per-viewer-watermark-on-every",
+    "name": "Stamp a dynamic, per-viewer watermark on every page",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#04",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://learn.microsoft.com/en-us/purview/encryption-sensitivity-labels",
+      "https://www.papermark.com/docs/guides/watermark-link-views.mdx",
+      "https://www.papermark.com/docs/openapi.json"
+    ],
+    "path": "wf/WF-071.md"
+  },
+  {
+    "ticket": "WF-072",
+    "slug": "enforce-view-only-access-and-block-bulk-download",
+    "name": "Enforce view-only access and block bulk download",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#05",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://www.papermark.com/docs/cli/commands/datarooms.mdx",
+      "https://www.papermark.com/docs/cli/commands/links.mdx",
+      "https://www.papermark.com/docs/openapi.json"
+    ],
+    "path": "wf/WF-072.md"
+  },
+  {
+    "ticket": "WF-073",
+    "slug": "apply-confidential-view-and-block-screenshot-screen-record",
+    "name": "Apply confidential view and block screenshot / screen-record shortcuts",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#06",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://www.papermark.com/docs/cli/commands/links.mdx",
+      "https://www.papermark.com/docs/llms.txt",
+      "https://www.papermark.com/docs/openapi.json"
+    ],
+    "path": "wf/WF-073.md"
+  },
+  {
+    "ticket": "WF-074",
+    "slug": "scope-visibility-to-an-audience-with-per-item",
+    "name": "Scope visibility to an audience with per-item view and download permissions",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#07",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://www.papermark.com/docs/cli/commands/datarooms.mdx",
+      "https://www.papermark.com/docs/cli/commands/links.mdx",
+      "https://www.papermark.com/docs/guides/share-dataroom-with-group.mdx",
+      "https://www.papermark.com/docs/openapi.json"
+    ],
+    "path": "wf/WF-074.md"
+  },
+  {
+    "ticket": "WF-075",
+    "slug": "review-engagement-verification-state-per-page-dwell-geo",
+    "name": "Review engagement: verification state, per-page dwell, geo, device and downloads",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#08",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://www.papermark.com/docs/api/webhooks.mdx",
+      "https://www.papermark.com/docs/cli/commands/datarooms.mdx",
+      "https://www.papermark.com/docs/cli/commands/links.mdx",
+      "https://www.papermark.com/docs/openapi.json"
+    ],
+    "path": "wf/WF-075.md"
+  },
+  {
+    "ticket": "WF-076",
+    "slug": "revoke-access-early-and-keep-the-audit-row",
+    "name": "Revoke access early and keep the audit row",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#09",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://www.papermark.com/docs/api/reference/datarooms/v1/datarooms/id/groups/gid/delete.mdx",
+      "https://www.papermark.com/docs/api/reference/datarooms/v1/datarooms/id/groups/gid/members/mid/delete.mdx",
+      "https://www.papermark.com/docs/api/reference/links/v1/links/id/delete.mdx",
+      "https://www.papermark.com/docs/cli/commands/datarooms.mdx",
+      "https://www.papermark.com/docs/llms.txt"
+    ],
+    "path": "wf/WF-076.md"
+  },
+  {
+    "ticket": "WF-077",
+    "slug": "manage-internal-workspace-roles-and-least-privilege-integration",
+    "name": "Manage internal workspace roles and least-privilege integration scopes",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#10",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://developer.seismic.com/seismicsoftware/docs/scopes-1",
+      "https://developers.pandadoc.com/reference/changememberrole.md",
+      "https://developers.pandadoc.com/reference/list-document-audit-trail.md",
+      "https://www.papermark.com/docs/api/errors.mdx",
+      "https://www.papermark.com/docs/api/scopes.mdx"
+    ],
+    "path": "wf/WF-077.md"
+  },
+  {
+    "ticket": "WF-078",
+    "slug": "require-recipient-identity-verification-before-opening-or-signing",
+    "name": "Require recipient identity verification before opening or signing",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#11",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.hellosign.com/docs/guides/app-approval/signer-auth.md",
+      "https://developers.hellosign.com/docs/guides/sms-tools.md",
+      "https://developers.pandadoc.com/docs/enable-verification.md",
+      "https://developers.pandadoc.com/reference/list-document-audit-trail.md"
+    ],
+    "path": "wf/WF-078.md"
+  },
+  {
+    "ticket": "WF-079",
+    "slug": "export-a-tamper-evident-audit-trail-with-ip",
+    "name": "Export a tamper-evident audit trail with IP and verification outcomes",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#12",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.hellosign.com/api/manual-reference-pages/glossary/security-compliance.md",
+      "https://developers.hellosign.com/api/report/create.md",
+      "https://developers.pandadoc.com/reference/list-document-audit-trail.md"
+    ],
+    "path": "wf/WF-079.md"
+  },
+  {
+    "ticket": "WF-080",
+    "slug": "download-the-executed-agreement-from-the-e-vault",
+    "name": "Download the executed agreement from the e-vault, webhook-driven",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#13",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.pandadoc.com/docs/how-to-download-completed-document.md",
+      "https://developers.pandadoc.com/reference/download-protected-document.md",
+      "https://developers.pandadoc.com/reference/pdfofcompleteddocumentavailablefordownload.md"
+    ],
+    "path": "wf/WF-080.md"
+  },
+  {
+    "ticket": "WF-081",
+    "slug": "expire-an-agreement-and-drive-pre-expiry-reminders",
+    "name": "Expire an agreement and drive pre-expiry reminders",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#14",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.hellosign.com/api/manual-reference-pages/expiration.md",
+      "https://developers.hellosign.com/docs/guides/sms-tools.md",
+      "https://www.papermark.com/docs/guides/share-password-protected-link.mdx"
+    ],
+    "path": "wf/WF-081.md"
+  },
+  {
+    "ticket": "WF-082",
+    "slug": "verify-and-ip-allowlist-inbound-provider-webhooks",
+    "name": "Verify and IP-allowlist inbound provider webhooks",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#15",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.hellosign.com/docs/guides/events-and-callbacks/walkthrough.md",
+      "https://developers.hellosign.com/llms.txt",
+      "https://dropbox-sign-api-config.s3.amazonaws.com/ip-ranges.json`",
+      "https://www.papermark.com/docs/api/webhooks.mdx"
+    ],
+    "path": "wf/WF-082.md"
+  },
+  {
+    "ticket": "WF-083",
+    "slug": "record-buyer-sessions-behind-a-consent-gate-masked",
+    "name": "Record buyer sessions behind a consent gate, masked, IP-excluded and auto-purged",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#16",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://learn.microsoft.com/en-us/clarity/clarity-consent-api-v2",
+      "https://learn.microsoft.com/en-us/clarity/faq",
+      "https://learn.microsoft.com/en-us/clarity/ip-exclusion"
+    ],
+    "path": "wf/WF-083.md"
+  },
+  {
+    "ticket": "WF-084",
+    "slug": "federate-staff-sso-and-auto-provision-deprovision-via",
+    "name": "Federate staff SSO and auto-provision / deprovision via SCIM",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#17",
+    "merged_duplicates": [],
+    "source_count": 2,
+    "sources": [
+      "https://workos.com/docs/directory-sync/overview",
+      "https://workos.com/docs/sso"
+    ],
+    "path": "wf/WF-084.md"
+  },
+  {
+    "ticket": "WF-085",
+    "slug": "meet-gdpr-ccpa-region-residency-retention-limits-dsar",
+    "name": "Meet GDPR / CCPA: region residency, retention limits, DSAR and consent tooling",
+    "domain": "security-governance",
+    "domain_title": "Security, access and governance",
+    "source_uid": "security-governance#18",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://learn.microsoft.com/en-us/clarity/clarity-consent-api-v2",
+      "https://learn.microsoft.com/en-us/clarity/faq",
+      "https://www.highspot.com/product/security/"
+    ],
+    "path": "wf/WF-085.md"
+  },
+  {
+    "ticket": "WF-086",
+    "slug": "author-a-quote-from-a-deal-or-opportunity",
+    "name": "Author a quote from a deal or opportunity",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#01",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://knowledge.hubspot.com/cpq/understand-hubspot-cpq",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/create-custom-modules-to-use-on-quote-templates",
+      "https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/quote",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/add-product-quote-order-invoice",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/create-edit-quote-sales",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/developer/quote-order-invoice-entities"
+    ],
+    "path": "wf/WF-086.md"
+  },
+  {
+    "ticket": "WF-087",
+    "slug": "curate-a-product-and-price-book-catalogue-with",
+    "name": "Curate a product and price-book catalogue with tiered pricing",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#02",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://developers.pandadoc.com/reference/search-catalog-items",
+      "https://knowledge.hubspot.com/cpq/understand-hubspot-cpq",
+      "https://knowledge.hubspot.com/products/create-and-manage-products",
+      "https://knowledge.hubspot.com/products/use-price-books",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/add-product-quote-order-invoice",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/price-calculation-opportunity-quote-order-invoice-records"
+    ],
+    "path": "wf/WF-087.md"
+  },
+  {
+    "ticket": "WF-088",
+    "slug": "auto-assign-the-correct-price-book-or-price",
+    "name": "Auto-assign the correct price book or price list to a deal by rule",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#03",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://knowledge.hubspot.com/products/use-price-books",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/create-edit-quote-sales",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/developer/set-default-price-level-for-opportunity-quote-order-invoice"
+    ],
+    "path": "wf/WF-088.md"
+  },
+  {
+    "ticket": "WF-089",
+    "slug": "quote-in-a-transaction-currency-with-fx-conversion",
+    "name": "Quote in a transaction currency with FX conversion and same-currency constraints",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#04",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://knowledge.hubspot.com/products/use-price-books",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/quote",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/create-edit-quote-sales",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/price-calculation-opportunity-quote-order-invoice-records",
+      "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/reference/entities/transactioncurrency"
+    ],
+    "path": "wf/WF-089.md"
+  },
+  {
+    "ticket": "WF-090",
+    "slug": "enforce-configuration-and-discount-guardrails-with-quote-rules",
+    "name": "Enforce configuration and discount guardrails with quote rules before publish",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#05",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/quote-rules-syntax",
+      "https://knowledge.hubspot.com/cpq/understand-hubspot-cpq",
+      "https://knowledge.hubspot.com/quotes/configure-quote-rules"
+    ],
+    "path": "wf/WF-090.md"
+  },
+  {
+    "ticket": "WF-091",
+    "slug": "route-a-discounted-quote-for-standard-approval",
+    "name": "Route a discounted quote for standard approval",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#06",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/manage-quote-approvals",
+      "https://knowledge.hubspot.com/quotes/manage-quotes",
+      "https://knowledge.hubspot.com/quotes/set-up-quote-approvals"
+    ],
+    "path": "wf/WF-091.md"
+  },
+  {
+    "ticket": "WF-092",
+    "slug": "chain-sequential-multi-level-approvals-through-a-workflow",
+    "name": "Chain sequential multi-level approvals through a workflow",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#07",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_163853050104.html",
+      "https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_163853389082.html",
+      "https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_163878373827.html",
+      "https://knowledge.hubspot.com/quotes/manage-quote-approvals",
+      "https://knowledge.hubspot.com/quotes/set-up-quote-approvals"
+    ],
+    "path": "wf/WF-092.md"
+  },
+  {
+    "ticket": "WF-093",
+    "slug": "build-a-branded-proposal-from-a-template",
+    "name": "Build a branded proposal from a template",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#08",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://developers.pandadoc.com/docs/create-with-content-placeholders-from-template.md",
+      "https://developers.pandadoc.com/docs/working-with-pricing-tables.md",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/create-custom-modules-to-use-on-quote-templates",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/create-quote-pdf",
+      "https://learn.microsoft.com/en-us/power-platform/admin/using-word-templates-dynamics-365"
+    ],
+    "path": "wf/WF-093.md"
+  },
+  {
+    "ticket": "WF-094",
+    "slug": "publish-and-share-the-quote-as-a-hosted",
+    "name": "Publish and share the quote as a hosted link or email",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#09",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/manage-quotes",
+      "https://knowledge.hubspot.com/quotes/set-up-quotes",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/create-edit-quote-sales",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/create-quote-pdf",
+      "https://learn.microsoft.com/en-us/power-platform/admin/using-word-templates-dynamics-365"
+    ],
+    "path": "wf/WF-094.md"
+  },
+  {
+    "ticket": "WF-095",
+    "slug": "collect-acceptance-by-e-signature-countersignature-signer-reassignment",
+    "name": "Collect acceptance by e-signature, countersignature, signer reassignment and identity verification",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#10",
+    "merged_duplicates": [
+      "room-experience#16"
+    ],
+    "source_count": 8,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://developers.pandadoc.com/docs/embedded-signing.md",
+      "https://developers.pandadoc.com/docs/send-document.md",
+      "https://knowledge.hubspot.com/contracts/set-up-contracts",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/manage-quotes",
+      "https://knowledge.hubspot.com/quotes/set-up-quotes",
+      "https://knowledge.hubspot.com/quotes/use-e-signatures-with-quotes"
+    ],
+    "path": "wf/WF-095.md"
+  },
+  {
+    "ticket": "WF-096",
+    "slug": "accept-a-quote-without-a-signature-and-take",
+    "name": "Accept a quote without a signature and take payment in the quote",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#11",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://knowledge.hubspot.com/contracts/set-up-contracts",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/manage-quotes",
+      "https://knowledge.hubspot.com/quotes/set-up-quotes"
+    ],
+    "path": "wf/WF-096.md"
+  },
+  {
+    "ticket": "WF-097",
+    "slug": "track-buyer-engagement-on-a-shared-quote-and",
+    "name": "Track buyer engagement on a shared quote and drive follow-up",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#13",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://knowledge.hubspot.com/cpq/understand-hubspot-cpq",
+      "https://knowledge.hubspot.com/quotes/manage-quotes",
+      "https://knowledge.hubspot.com/quotes/set-up-quotes"
+    ],
+    "path": "wf/WF-097.md"
+  },
+  {
+    "ticket": "WF-098",
+    "slug": "expire-a-quote-and-auto-send-buyer-reminders",
+    "name": "Expire a quote and auto-send buyer reminders",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#14",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://developers.pandadoc.com/llms.txt",
+      "https://developers.pandadoc.com/reference/handledocumentstatechanged.md",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/manage-quotes",
+      "https://knowledge.hubspot.com/quotes/set-up-quotes"
+    ],
+    "path": "wf/WF-098.md"
+  },
+  {
+    "ticket": "WF-099",
+    "slug": "auto-create-a-contract-from-an-accepted-quote",
+    "name": "Auto-create a contract from an accepted quote",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#15",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/latest/crm/objects/quotes/guide",
+      "https://knowledge.hubspot.com/contracts/set-up-contracts",
+      "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
+      "https://knowledge.hubspot.com/quotes/use-e-signatures-with-quotes"
+    ],
+    "path": "wf/WF-099.md"
+  },
+  {
+    "ticket": "WF-100",
+    "slug": "create-a-renewal-quote-from-a-contract-and",
+    "name": "Create a renewal quote from a contract and auto-create the renewal deal",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#16",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://knowledge.hubspot.com/contracts/set-up-contracts",
+      "https://knowledge.hubspot.com/cpq/understand-hubspot-cpq",
+      "https://knowledge.hubspot.com/quotes/create-a-renewal-quote-on-a-contract"
+    ],
+    "path": "wf/WF-100.md"
+  },
+  {
+    "ticket": "WF-101",
+    "slug": "convert-an-accepted-quote-into-an-order-and",
+    "name": "Convert an accepted quote into an order and lock the price",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#17",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/quote",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/add-product-quote-order-invoice",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/create-edit-order-sales",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/developer/quote-order-invoice-entities",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/lock-unlock-price-order-invoice",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/sales-transactions"
+    ],
+    "path": "wf/WF-101.md"
+  },
+  {
+    "ticket": "WF-102",
+    "slug": "revise-a-quote-to-create-a-new-revision",
+    "name": "Revise a quote to create a new revision instead of losing the deal",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#18",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://knowledge.hubspot.com/quotes/manage-quotes",
+      "https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/quote",
+      "https://learn.microsoft.com/en-us/dynamics365/project-operations/psa/basic-quote-lines",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/developer/quote-order-invoice-entities",
+      "https://learn.microsoft.com/en-us/dynamics365/sales/sales-transactions"
+    ],
+    "path": "wf/WF-102.md"
+  },
+  {
+    "ticket": "WF-103",
+    "slug": "generate-a-proposal-from-crm-data-via-a",
+    "name": "Generate a proposal from CRM data via a document API, gate it on internal approval, and sync status back",
+    "domain": "quoting-proposals",
+    "domain_title": "Pricing, quoting and proposals",
+    "source_uid": "quoting-proposals#19",
+    "merged_duplicates": [],
+    "source_count": 10,
+    "sources": [
+      "https://api.pandadoc.com/public/v1/documents`",
+      "https://developers.pandadoc.com/docs/create-with-content-placeholders-from-template.md",
+      "https://developers.pandadoc.com/docs/embedded-signing.md",
+      "https://developers.pandadoc.com/docs/salesforce-custom-triggers.md",
+      "https://developers.pandadoc.com/docs/send-document.md",
+      "https://developers.pandadoc.com/docs/update-quotes.md",
+      "https://developers.pandadoc.com/docs/working-with-pricing-tables.md",
+      "https://developers.pandadoc.com/llms.txt",
+      "https://developers.pandadoc.com/reference/handledocumentstatechanged.md",
+      "https://developers.pandadoc.com/reference/search-catalog-items"
+    ],
+    "path": "wf/WF-103.md"
+  },
+  {
+    "ticket": "WF-104",
+    "slug": "drip-a-multi-channel-nurture-sequence-with-in",
+    "name": "Drip a multi-channel nurture sequence with in-app → email fallback",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#01",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://api.intercom.io/export/workflows/{id}`",
+      "https://api.intercom.io/messages`",
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/messages",
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/workflows",
+      "https://developers.intercom.com/docs/references/webhooks/webhook-models",
+      "https://www.intercom.com/help/en/articles/4425207-series-explained"
+    ],
+    "path": "wf/WF-104.md"
+  },
+  {
+    "ticket": "WF-105",
+    "slug": "re-enter-a-recurring-series-and-tag-the",
+    "name": "Re-enter a recurring series and tag the contact on completion",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#02",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/tags",
+      "https://developers.intercom.com/docs/references/webhooks/webhook-models",
+      "https://www.intercom.com/help/en/articles/4425207-series-explained"
+    ],
+    "path": "wf/WF-105.md"
+  },
+  {
+    "ticket": "WF-106",
+    "slug": "trigger-outreach-when-a-prospect-repeatedly-browses-a",
+    "name": "Trigger outreach when a prospect repeatedly browses a high-intent page",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#03",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/data-connectors",
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/messages",
+      "https://www.intercom.com/help/en/articles/2499085-when-a-customer-visits-your-site",
+      "https://www.intercom.com/help/en/articles/7434613-how-to-trigger-a-workflow"
+    ],
+    "path": "wf/WF-106.md"
+  },
+  {
+    "ticket": "WF-107",
+    "slug": "chase-unresponsive-buyers-and-reroute-conversations-from-unresponsive",
+    "name": "Chase unresponsive buyers and reroute conversations from unresponsive reps",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#04",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/messages",
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/tickets",
+      "https://www.intercom.com/help/en/articles/7155449-automations-of-snoozed-conversations",
+      "https://www.intercom.com/help/en/articles/7434613-how-to-trigger-a-workflow"
+    ],
+    "path": "wf/WF-107.md"
+  },
+  {
+    "ticket": "WF-108",
+    "slug": "run-sla-response-timers-that-respect-office-hours",
+    "name": "Run SLA response timers that respect office hours and pause rules",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#05",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/tickets",
+      "https://developers.intercom.com/docs/references/webhooks/webhook-models",
+      "https://www.intercom.com/help/en/articles/2672572-slas-report",
+      "https://www.intercom.com/help/en/articles/6546152-set-slas-for-conversations-and-tickets"
+    ],
+    "path": "wf/WF-108.md"
+  },
+  {
+    "ticket": "WF-109",
+    "slug": "escalate-just-before-when-an-sla-target-is",
+    "name": "Escalate just before / when an SLA target is breached",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#06",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/data-connectors",
+      "https://developers.intercom.com/docs/references/webhooks/webhook-models",
+      "https://www.intercom.com/help/en/articles/15362781-trigger-a-workflow-before-or-when-an-sla-breaches",
+      "https://www.intercom.com/help/en/articles/6546152-set-slas-for-conversations-and-tickets"
+    ],
+    "path": "wf/WF-109.md"
+  },
+  {
+    "ticket": "WF-110",
+    "slug": "escalate-a-conversation-converted-into-a-ticket-to",
+    "name": "Escalate a conversation converted into a ticket to the owning team",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#07",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/tickets",
+      "https://developers.intercom.com/docs/references/webhooks/webhook-models",
+      "https://www.intercom.com/help/en/articles/7434613-how-to-trigger-a-workflow"
+    ],
+    "path": "wf/WF-110.md"
+  },
+  {
+    "ticket": "WF-111",
+    "slug": "send-a-multi-channel-reminder-push-notification-plus",
+    "name": "Send a multi-channel reminder: push notification plus in-app inbox fallback",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#08",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://docs.customer.io/integrations/api/customerio-apis.md",
+      "https://docs.customer.io/messaging/channels/in-app/inbox/get-started.md",
+      "https://docs.customer.io/messaging/channels/push/send-push.md"
+    ],
+    "path": "wf/WF-111.md"
+  },
+  {
+    "ticket": "WF-112",
+    "slug": "notify-the-internal-team-in-slack-from-a",
+    "name": "Notify the internal team in Slack from a buyer signal",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#09",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://api.slack.com/reference/surfaces/formatting`",
+      "https://docs.customer.io/integrations/api/customerio-apis.md",
+      "https://docs.customer.io/messaging/channels/slack/get-started.md",
+      "https://docs.customer.io/messaging/send/automations/data-workflows/webhook-triggered-automations.md",
+      "https://…|label"
+    ],
+    "path": "wf/WF-112.md"
+  },
+  {
+    "ticket": "WF-113",
+    "slug": "ingest-third-party-data-by-webhook-and-fan",
+    "name": "Ingest third-party data by webhook and fan it out as events",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#10",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://docs.customer.io/files/journeys-webhooks.json`",
+      "https://docs.customer.io/integrations/api/customerio-apis.md",
+      "https://docs.customer.io/llms.txt",
+      "https://docs.customer.io/messaging/send/automations/data-workflows/webhook-triggered-automations.md"
+    ],
+    "path": "wf/WF-113.md"
+  },
+  {
+    "ticket": "WF-114",
+    "slug": "start-a-workflow-from-an-external-system-s",
+    "name": "Start a workflow from an external system's webhook",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#11",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://help.gohighlevel.com/support/solutions/articles/155000002292-a-list-of-workflow-triggers",
+      "https://help.gohighlevel.com/support/solutions/articles/155000002294-what-are-workflow-actions-complete-list-",
+      "https://help.gohighlevel.com/support/solutions/articles/155000003147-workflow-trigger-inbound-webhook",
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomTriggers/",
+      "https://services.leadconnectorhq.com/...`"
+    ],
+    "path": "wf/WF-114.md"
+  },
+  {
+    "ticket": "WF-115",
+    "slug": "publish-custom-workflow-triggers-and-actions-to-an",
+    "name": "Publish custom workflow triggers and actions to an app marketplace",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#12",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomActions/",
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomTriggers/",
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/Snapshots",
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/WorkflowActionsAndTriggers/",
+      "https://services.leadconnectorhq.com/workflows-marketplace/triggers/execute/abc/def",
+      "https://services.leadconnectorhq.com/workflows-marketplace/triggers/execute/abc/def`"
+    ],
+    "path": "wf/WF-115.md"
+  },
+  {
+    "ticket": "WF-116",
+    "slug": "create-an-automated-seller-follow-up-task-with",
+    "name": "Create an automated seller follow-up task with a reminder",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#13",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/crm-tasks-v3/basic/post-crm-v3-objects-tasks",
+      "https://help.gohighlevel.com/support/solutions/articles/155000002292-a-list-of-workflow-triggers",
+      "https://help.gohighlevel.com/support/solutions/articles/155000002294-what-are-workflow-actions-complete-list-",
+      "https://knowledge.hubspot.com/workflows/create-workflows"
+    ],
+    "path": "wf/WF-116.md"
+  },
+  {
+    "ticket": "WF-117",
+    "slug": "sweep-stale-opportunities-by-an-inactivity-rule-and",
+    "name": "Sweep stale opportunities by an inactivity rule and escalate",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#14",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://help.gohighlevel.com/support/solutions/articles/155000002292-a-list-of-workflow-triggers",
+      "https://help.gohighlevel.com/support/solutions/articles/155000002294-what-are-workflow-actions-complete-list-",
+      "https://help.gohighlevel.com/support/solutions/articles/155000002471-workflow-action-if-else",
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomActions/"
+    ],
+    "path": "wf/WF-117.md"
+  },
+  {
+    "ticket": "WF-118",
+    "slug": "order-and-throttle-in-app-guide-prompts-and",
+    "name": "Order and throttle in-app guide prompts, and re-prompt after dismissal",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#15",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://support.pendo.io/hc/en-us/articles/360031864452-Order-and-throttle-your-guides",
+      "https://support.pendo.io/hc/en-us/articles/360031864612-Define-guide-settings",
+      "https://support.pendo.io/hc/en-us/articles/360031864692-Overlay-guide-activation-options",
+      "https://support.pendo.io/hc/en-us/articles/360032203891-Create-a-guide-permalink",
+      "https://web-sdk.pendo.io/public/guides#showguidebyidid-reason`"
+    ],
+    "path": "wf/WF-118.md"
+  },
+  {
+    "ticket": "WF-119",
+    "slug": "gate-an-automation-on-an-external-human-approval",
+    "name": "Gate an automation on an external human approval, then resume",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#16",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://knowledge.hubspot.com/workflows/set-when-a-webhook-is-received-workflow-triggers",
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomActions/",
+      "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomTriggers/",
+      "https://services.leadconnectorhq.com/workflows-marketplace/triggers/execute/abc/def`"
+    ],
+    "path": "wf/WF-119.md"
+  },
+  {
+    "ticket": "WF-120",
+    "slug": "enroll-records-on-a-schedule-with-re-enrollment",
+    "name": "Enroll records on a schedule with re-enrollment control and backfill",
+    "domain": "automation-engagement",
+    "domain_title": "Automations and engagement",
+    "source_uid": "automation-engagement#17",
+    "merged_duplicates": [],
+    "source_count": 3,
+    "sources": [
+      "https://developers.hubspot.com/docs/api-reference/crm-tasks-v3/basic/post-crm-v3-objects-tasks",
+      "https://knowledge.hubspot.com/workflows/create-workflows",
+      "https://knowledge.hubspot.com/workflows/set-when-a-webhook-is-received-workflow-triggers"
+    ],
+    "path": "wf/WF-120.md"
+  },
+  {
+    "ticket": "WF-121",
+    "slug": "tracked-per-recipient-document-link-with-page-level",
+    "name": "Tracked, per-recipient document link with page-level read analytics",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#01",
+    "merged_duplicates": [],
+    "source_count": 9,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/cloudbtl/DeckLens",
+      "https://github.com/coneshare/coneshare",
+      "https://github.com/papermark/papermark",
+      "https://help.walnut.io/help/deal-rooms/getting-started",
+      "https://seismic.com/platform/digital-sales-rooms/",
+      "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/",
+      "https://www.papermark.com",
+      "https://www.papermark.com/"
+    ],
+    "path": "wf/WF-121.md"
+  },
+  {
+    "ticket": "WF-122",
+    "slug": "structured-data-room-with-staged-tiered-disclosure",
+    "name": "Structured data room with staged, tiered disclosure",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#02",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/ManishBlueprints/Deckly",
+      "https://github.com/ONLYOFFICE/DocSpace",
+      "https://github.com/hypersocialinc/hyperportal",
+      "https://github.com/pydio/cells",
+      "https://help.walnut.io/help/deal-rooms/getting-started"
+    ],
+    "path": "wf/WF-122.md"
+  },
+  {
+    "ticket": "WF-123",
+    "slug": "in-room-qualifying-form-buyer-data-capture",
+    "name": "In-room qualifying form / buyer data capture",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#03",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://dealfront.com/",
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/formbricks/formbricks",
+      "https://www.ebsta.com/",
+      "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
+    ],
+    "path": "wf/WF-123.md"
+  },
+  {
+    "ticket": "WF-124",
+    "slug": "native-mutual-action-plan-with-owners-timelines-and",
+    "name": "Native Mutual Action Plan with owners, timelines and reminders",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#04",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://help.walnut.io/help/deal-rooms/getting-started",
+      "https://recapped.io/",
+      "https://www.allego.com/",
+      "https://www.dock.us/features/mutual-action-plan",
+      "https://www.dock.us/solutions/sales",
+      "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
+    ],
+    "path": "wf/WF-124.md"
+  },
+  {
+    "ticket": "WF-125",
+    "slug": "bi-directional-crm-sync-with-room-creation-on",
+    "name": "Bi-directional CRM sync with room creation on CRM conditions",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#05",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/n8n-io/n8n",
+      "https://github.com/node-red/node-red",
+      "https://github.com/snowplow/snowplow",
+      "https://help.walnut.io/help/deal-rooms/getting-started",
+      "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
+    ],
+    "path": "wf/WF-125.md"
+  },
+  {
+    "ticket": "WF-126",
+    "slug": "seller-recorded-video-intro-and-in-room-video",
+    "name": "Seller-recorded video intro and in-room video walkthrough",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#06",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://github.com/jitsi/jitsi-meet",
+      "https://github.com/livekit/livekit",
+      "https://github.com/versatica/mediasoup",
+      "https://goconsensus.com/",
+      "https://seismic.com/platform/digital-sales-rooms/",
+      "https://www.allego.com/",
+      "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
+    ],
+    "path": "wf/WF-126.md"
+  },
+  {
+    "ticket": "WF-127",
+    "slug": "interactive-product-demo-with-activity-heatmaps-and-organic",
+    "name": "Interactive product demo with activity heatmaps and organic stakeholder discovery",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#07",
+    "merged_duplicates": [],
+    "source_count": 4,
+    "sources": [
+      "https://github.com/apache/superset",
+      "https://github.com/excalidraw/excalidraw",
+      "https://goconsensus.com/",
+      "https://goconsensus.com/overview/demolytics"
+    ],
+    "path": "wf/WF-127.md"
+  },
+  {
+    "ticket": "WF-128",
+    "slug": "live-co-presented-walkthrough-inside-the-deal",
+    "name": "Live co-presented walkthrough inside the deal",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#08",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://github.com/bigbluebutton/bigbluebutton",
+      "https://github.com/hakimel/reveal.js",
+      "https://github.com/jitsi/jitsi-meet",
+      "https://github.com/livekit/livekit",
+      "https://github.com/slidevjs/slidev",
+      "https://goconsensus.com/",
+      "https://www.dock.us/"
+    ],
+    "path": "wf/WF-128.md"
+  },
+  {
+    "ticket": "WF-129",
+    "slug": "in-room-pricing-quote-and-signable-order-form",
+    "name": "In-room pricing, quote and signable order form",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#09",
+    "merged_duplicates": [],
+    "source_count": 6,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/OpenSignLabs/OpenSign",
+      "https://github.com/documenso/documenso",
+      "https://www.dock.us/",
+      "https://www.dock.us/sitemap.xml`",
+      "https://www.docusign.com/products/rooms"
+    ],
+    "path": "wf/WF-129.md"
+  },
+  {
+    "ticket": "WF-130",
+    "slug": "generated-personalised-collateral-from-deal-data-ai-document",
+    "name": "Generated, personalised collateral from deal data (AI document generation)",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#10",
+    "merged_duplicates": [],
+    "source_count": 9,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://fletch.co/",
+      "https://github.com/gitbrent/PptxGenJS",
+      "https://github.com/marp-team/marp",
+      "https://github.com/slidevjs/slidev",
+      "https://help.walnut.io/help/deal-rooms/getting-started",
+      "https://www.dock.us/solutions/sales",
+      "https://www.highspot.com/",
+      "https://www.walnut.io/digital-sales-room-software/"
+    ],
+    "path": "wf/WF-130.md"
+  },
+  {
+    "ticket": "WF-131",
+    "slug": "content-protection-watermarking-download-control-nda-gating-audit",
+    "name": "Content protection: watermarking, download control, NDA gating, audit log",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#11",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/coneshare/coneshare",
+      "https://github.com/documenso/documenso",
+      "https://github.com/keycloak/keycloak",
+      "https://github.com/papermark/papermark",
+      "https://github.com/zitadel/zitadel",
+      "https://seismic.com/platform/digital-sales-rooms/",
+      "https://www.papermark.com/"
+    ],
+    "path": "wf/WF-131.md"
+  },
+  {
+    "ticket": "WF-132",
+    "slug": "in-room-collaboration-comments-threads-tagging-and-champion",
+    "name": "In-room collaboration: comments, threads, tagging, and champion enablement",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#12",
+    "merged_duplicates": [],
+    "source_count": 7,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/AppFlowy-IO/AppFlowy",
+      "https://github.com/ether/etherpad",
+      "https://github.com/hackmdio/codimd",
+      "https://help.walnut.io/help/deal-rooms/getting-started",
+      "https://seismic.com/platform/digital-sales-rooms/",
+      "https://www.dock.us/solutions/sales"
+    ],
+    "path": "wf/WF-132.md"
+  },
+  {
+    "ticket": "WF-133",
+    "slug": "intent-signal-seller-alert-crm-task-routing-workflow",
+    "name": "Intent signal → seller alert → CRM task (routing workflow)",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#13",
+    "merged_duplicates": [],
+    "source_count": 9,
+    "sources": [
+      "https://dealfront.com/",
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/PostHog/posthog",
+      "https://github.com/coneshare/coneshare",
+      "https://github.com/snowplow/snowplow",
+      "https://goconsensus.com/overview/demolytics",
+      "https://recapped.io/",
+      "https://seismic.com/platform/digital-sales-rooms/",
+      "https://www.ebsta.com/"
+    ],
+    "path": "wf/WF-133.md"
+  },
+  {
+    "ticket": "WF-134",
+    "slug": "engagement-driven-deal-health-scoring-risk-detection-and",
+    "name": "Engagement-driven deal-health scoring, risk detection and coaching trigger",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#14",
+    "merged_duplicates": [],
+    "source_count": 9,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/PostHog/posthog",
+      "https://github.com/apache/superset",
+      "https://github.com/snowplow/snowplow",
+      "https://recapped.io/",
+      "https://seismic.com/",
+      "https://www.ebsta.com/",
+      "https://www.highspot.com/",
+      "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
+    ],
+    "path": "wf/WF-134.md"
+  },
+  {
+    "ticket": "WF-135",
+    "slug": "conversation-intelligence-capture-and-crm-write-back",
+    "name": "Conversation intelligence capture and CRM write-back",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#15",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://dealhub.io/",
+      "https://github.com/kestra-io/kestra",
+      "https://github.com/rudderlabs/rudder-server",
+      "https://github.com/windmill-labs/windmill",
+      "https://recapped.io/",
+      "https://www.allego.com/",
+      "https://www.ebsta.com/",
+      "https://www.highspot.com/"
+    ],
+    "path": "wf/WF-135.md"
+  },
+  {
+    "ticket": "WF-136",
+    "slug": "buyer-self-serve-booking-of-the-next-step",
+    "name": "Buyer self-serve booking of the next step",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#16",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://github.com/calcom/cal.diy",
+      "https://github.com/livekit/livekit",
+      "https://goconsensus.com/",
+      "https://gtmking.com/deal-rooms`",
+      "https://www.dock.us/"
+    ],
+    "path": "wf/WF-136.md"
+  },
+  {
+    "ticket": "WF-137",
+    "slug": "governance-versioning-brand-control-and-the-closed-won",
+    "name": "Governance: versioning, brand control, and the closed-won → onboarding handoff",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#17",
+    "merged_duplicates": [],
+    "source_count": 8,
+    "sources": [
+      "https://github.com/docmost/docmost",
+      "https://github.com/nextcloud/server",
+      "https://help.walnut.io/help/deal-rooms/getting-started",
+      "https://recapped.io/",
+      "https://seismic.com/platform/digital-sales-rooms/",
+      "https://www.allego.com/",
+      "https://www.dock.us/sitemap.xml",
+      "https://www.dock.us/solutions/sales"
+    ],
+    "path": "wf/WF-137.md"
+  },
+  {
+    "ticket": "WF-138",
+    "slug": "branded-custom-domain-white-label-buyer-experience",
+    "name": "Branded, custom-domain, white-label buyer experience",
+    "domain": "competitive-baseline",
+    "domain_title": "Competitive baseline",
+    "source_uid": "competitive-baseline#18",
+    "merged_duplicates": [],
+    "source_count": 5,
+    "sources": [
+      "https://dealhub.io/platform/dealroom/",
+      "https://github.com/liferay/liferay-portal",
+      "https://github.com/papermark/papermark",
+      "https://seismic.com/platform/digital-sales-rooms/",
+      "https://www.docker.com/"
+    ],
+    "path": "wf/WF-138.md"
+  }
+]
