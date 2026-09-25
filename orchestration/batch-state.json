@@ -1,0 +1,58 @@
+{
+  "results": [
+    {
+      "ticket": "WF-005",
+      "ok": true,
+      "name": "Archive and restore a room",
+      "worktree": "C:/Users/Dilip/orca/workspaces/client-theater/wf-005",
+      "branch": "refs/heads/n-dilipkumar/wf-005",
+      "head": "82deb4c1",
+      "handle": "term_840ca44f-baf5-47c0-8be4-19f99c9c21f2"
+    },
+    {
+      "ticket": "WF-006",
+      "ok": true,
+      "name": "Review buyer engagement and prioritise follow-up",
+      "worktree": "C:/Users/Dilip/orca/workspaces/client-theater/wf-006",
+      "branch": "refs/heads/n-dilipkumar/wf-006",
+      "head": "82deb4c1",
+      "handle": "term_efd43ace-7882-4989-a3b2-16f6cfc97819"
+    },
+    {
+      "ticket": "WF-007",
+      "ok": true,
+      "name": "Ingest a document or deck into the content library",
+      "worktree": "C:/Users/Dilip/orca/workspaces/client-theater/wf-007",
+      "branch": "refs/heads/n-dilipkumar/wf-007",
+      "head": "82deb4c1",
+      "handle": "term_fb000dbb-1afa-47fd-8cc9-2d60e93ab704"
+    },
+    {
+      "ticket": "WF-008",
+      "ok": true,
+      "name": "Auto-sync an external cloud file into the content library",
+      "worktree": "C:/Users/Dilip/orca/workspaces/client-theater/wf-008",
+      "branch": "refs/heads/n-dilipkumar/wf-008",
+      "head": "82deb4c1",
+      "handle": "term_5095edbc-ea50-4825-bd65-5028d74c92ff"
+    },
+    {
+      "ticket": "WF-009",
+      "ok": true,
+      "name": "Approve and publish library content, immediately or on schedule",
+      "worktree": "C:/Users/Dilip/orca/workspaces/client-theater/wf-009",
+      "branch": "refs/heads/n-dilipkumar/wf-009",
+      "head": "82deb4c1",
+      "handle": "term_1559991a-e456-4c1a-96aa-874d27d66bc0"
+    },
+    {
+      "ticket": "WF-010",
+      "ok": true,
+      "name": "Search the content library to assemble a room",
+      "worktree": "C:/Users/Dilip/orca/workspaces/client-theater/wf-010",
+      "branch": "refs/heads/n-dilipkumar/wf-010",
+      "head": "82deb4c1",
+      "handle": "term_51f18729-4e1a-4608-8d49-d0cd39c60cde"
+    }
+  ]
+}
