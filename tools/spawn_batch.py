@@ -39,7 +39,12 @@ Work ONLY inside this worktree. Do not touch any other directory.
 4. Implement the workflow: React + Tailwind UI, Python FastAPI backend, SQLite only through the audited wrapper, schema-flexible APIs at every layer.
 5. Follow design-system/digital-sales-room/MASTER.md for the UI.
 6. Write tests. A feature without tests is not finished.
-7. Run the backend suite: cd backend && ../.venv/Scripts/python -m pytest
+7. Run the backend suite. The shared virtualenv is already linked into this worktree, so run it from the backend directory:
+
+       cd backend
+       ../.venv/Scripts/python -m pytest
+
+   Running pytest from the repository root fails with `ModuleNotFoundError: No module named 'dsr'`, because the package root is `backend/`. Frontend dependencies are linked too, so `cd frontend && npm run build` works without an install.
 
 Do NOT push. Do NOT open a PR. Do NOT merge. The Orchestrator handles that after review.
 
