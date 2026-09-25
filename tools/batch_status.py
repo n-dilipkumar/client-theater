@@ -64,7 +64,9 @@ def main() -> int:
 
     results = json.loads(STATE.read_text(encoding="utf-8"))["results"]
 
-    # Branches that exist and how far ahead of main they are.
+    # Branches that exist and how far ahead of main they are. Feature branches
+    # are named feature/<ticket>-<slug>, so match on the ticket segment rather
+    # than a prefix of the whole ref.
     branches = {}
     for line in git("for-each-ref", "--format=%(refname:short)", "refs/heads").splitlines():
         if line.startswith("feature/"):
@@ -75,7 +77,7 @@ def main() -> int:
     for result in results:
         handle = result.get("handle")
         ticket = result["ticket"]
-        branch = next((b for b in branches if b.startswith(f"{ticket}-")), None)
+        branch = next((b for b in branches if f"/{ticket}-" in b), None)
         commits = branches.get(branch, 0) if branch else 0
 
         status, last = "unknown", ""
