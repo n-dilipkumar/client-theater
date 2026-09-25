@@ -16,6 +16,29 @@ probabilities and cannot be spawned as a chat agent. This is confirmed by the
 vendor documentation and by the OpenCode model catalogue, which contains no Jev
 entry. Do not attempt to add it to `model:` in a sub-agent call.
 
+## Browser verification (browser-skill)
+
+Visual verification uses the `browser-skill` skill and the `bsk` CLI. The CLI is
+**not on PATH by default** in agent shells; call it by absolute path:
+
+```sh
+C:\Users\Dilip\.local\bin\bsk.exe
+```
+
+**Always set `BSK_AUTO_START=0`.** This host reaps child processes per command
+and blocks Windows Job Object breakaway, so the CLI cannot auto-start its own
+daemon. The daemon is instead started once as a persistent background task:
+
+```sh
+$env:BSK_AUTO_START="0"; bsk daemon start --foreground
+```
+
+Check it with `bsk status --json` (daemon 0.3.1, protocol 1.3). A `permission`
+or `timeout` error is not evidence the daemon is absent; check `bsk logs` and
+reuse a running daemon. Never delete daemon runtime files to recover.
+
+`ui-verifier` and `reviewer-bot` subagents live in `.opencode/agent/`.
+
 ## Validation
 
 Every gate is a typed Jev judgment with a recorded probability. Use the client
