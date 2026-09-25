@@ -48,9 +48,11 @@ Work ONLY inside this worktree. Do not touch any other directory.
 
 Do NOT push. Do NOT open a PR. Do NOT merge. The Orchestrator handles that after review.
 
-Do NOT start a server on port 8000. Other worktrees use it, and a bind conflict
-will make your verification fail for reasons unrelated to your change. Verify
-through the test suite instead.
+Do NOT run a server, and do NOT verify over HTTP. A shared server already owns
+port 8000 and it runs the MAIN checkout, not your worktree, so any endpoint you
+added will 404 there and any check you make against it is meaningless. Several
+agents have already reported false failures this way. Verify with the pytest
+suite instead: it runs in-process against your worktree's own code.
 
 Commit your work on the feature branch before you finish, so the work is not
 lost when this session ends.
