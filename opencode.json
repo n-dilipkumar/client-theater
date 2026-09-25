@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/opencode-go/space-bunny-free",
+  "small_model": "opencode-go/opencode-go/space-bunny-free",
+  "autoupdate": false,
+  "share": "disabled",
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "*": "allow",
+      "git push*": "ask",
+      "gh pr merge*": "ask"
+    }
+  },
+  "instructions": ["AGENTS.md"]
+}
