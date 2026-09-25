@@ -48,6 +48,13 @@ Work ONLY inside this worktree. Do not touch any other directory.
 
 Do NOT push. Do NOT open a PR. Do NOT merge. The Orchestrator handles that after review.
 
+Do NOT start a server on port 8000. Other worktrees use it, and a bind conflict
+will make your verification fail for reasons unrelated to your change. Verify
+through the test suite instead.
+
+Commit your work on the feature branch before you finish, so the work is not
+lost when this session ends.
+
 When finished, report concisely: files changed, test results (paste the summary line), and anything you could not complete or that looked ambiguous in the research."""
 
 
@@ -195,10 +202,23 @@ def main() -> int:
 
     ok = sum(1 for r in results if r["ok"])
     print(f"\nspawned {ok}/{len(results)}")
-    (ROOT / "orchestration" / "batch-state.json").write_text(
-        json.dumps({"results": results}, indent=2), encoding="utf-8"
+
+    # Merge into the existing ledger rather than replacing it: each spawn run
+    # covers a different range, and overwriting would orphan earlier handles.
+    ledger = ROOT / "orchestration" / "batch-state.json"
+    existing: dict[str, dict] = {}
+    if ledger.is_file():
+        try:
+            for row in json.loads(ledger.read_text(encoding="utf-8")).get("results", []):
+                existing[row["ticket"]] = row
+        except (json.JSONDecodeError, KeyError, AttributeError):
+            existing = {}
+    for row in results:
+        existing[row["ticket"]] = row
+    ledger.write_text(
+        json.dumps({"results": [existing[k] for k in sorted(existing)]}, indent=2), encoding="utf-8"
     )
-    print("wrote orchestration/batch-state.json")
+    print(f"ledger now tracks {len(existing)} ticket(s) in orchestration/batch-state.json")
     return 0 if ok == len(results) else 1
 
 
