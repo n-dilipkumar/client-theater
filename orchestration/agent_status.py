@@ -81,6 +81,14 @@ IDLE = re.compile(r"(Ask anything|waiting for your input)", re.I)
 PERM = re.compile(r"Permission required", re.I)
 WORKING = re.compile(r"(⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|Thinking|Explored|Thought|execute|fetch)", re.I)
 
+# The last thing an OpenCode TUI prints when a turn ends, whether it finished or
+# was interrupted. This has to be checked BEFORE the spinner test: an interrupted
+# turn leaves "Build - Space Bunny Free - 10m 57s - interrupted" in the scrollback
+# while the status bar below it still shows the spinner strip, so a spinner-first
+# test reports an agent that stopped dead as busy. That is the exact failure this
+# tool exists to prevent, so it is checked first and reported as its own state.
+STOPPED = re.compile(r"·\s*interrupted\s*$|·\s*(?:[\d.]+m?s)\s*·\s*[\d.]+\s*tok/s", re.M)
+
 print("=" * 78)
 print("  DISPATCHED PORT AGENTS")
 print("=" * 78)
@@ -101,6 +109,8 @@ for a in agents:
         state = "NO SCREEN OUTPUT"
     elif PERM.search(text):
         state = "BLOCKED ON PERMISSION PROMPT"
+    elif STOPPED.search(text):
+        state = "STOPPED - last turn ended, needs a follow-up"
     elif IDLE.search(text):
         state = "idle at prompt"
     elif WORKING.search(text):
@@ -148,7 +158,7 @@ for a in agents:
     else:
         print("    contract: no shared file touched")
 
-    if state in ("NO SCREEN OUTPUT", "BLOCKED ON PERMISSION PROMPT"):
+    if state in ("NO SCREEN OUTPUT", "BLOCKED ON PERMISSION PROMPT") or state.startswith("STOPPED"):
         print("    >>> NEEDS ATTENTION")
 
 print()
