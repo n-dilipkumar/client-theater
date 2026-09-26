@@ -301,3 +301,5 @@ if FRONTEND_DIST.is_dir():
         if full_path and candidate.is_file():
             return FileResponse(candidate)
         return FileResponse(FRONTEND_DIST / "index.html")
+
+# probe: this line exists only to prove the CI guard blocks a shared-file edit
