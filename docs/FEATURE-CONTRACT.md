@@ -27,6 +27,7 @@ The host discovers your files automatically. There is no registration step.
 | `frontend/src/components/ui.jsx` | UI primitives; use `Icon path=` for new glyphs |
 | `backend/dsr/db/audited.py` | The audit wrapper; the product guarantee lives here |
 | `backend/dsr/store.py` | Generic schema-flexible storage |
+| `backend/seed.py` | Core demo data; features export their own `seed()` |
 
 Needing something that these files do not provide is a design signal, not a
 licence to edit them. Put it in your own module and raise it in your PR
@@ -129,6 +130,30 @@ Rules:
 - **Payloads stay schema-flexible.** Store arbitrary JSON in `data` via
   `store.create(collection, {...})`. Do not add a migration or a typed column
   for your team's field.
+
+### Demo data
+
+Ten of the first twelve features rewrote `backend/seed.py` purely to add their
+own demo rows. Export a `seed` function in your own feature module instead:
+
+```python
+def seed(db, context):
+    """db: an AuditedDatabase. context: {"room_ids", "now", "rng"}."""
+    room_id, account = context["room_ids"][0]
+    db.create(
+        "timeline",
+        {"summary": "Shared the overview deck.", "at": context["now"].isoformat()},
+        room_id=room_id,
+        actor="dana",
+        source="seed",
+    )
+    return "3 timeline notes"   # shown by the seeder; return None for nothing
+```
+
+The seeder calls it after the core dataset, prints what you added, and skips
+your feature loudly if it raises rather than aborting the whole seed. A feature
+whose page is empty in the demo is a feature nobody can review, so seed
+something representative.
 
 ## Frontend feature
 
