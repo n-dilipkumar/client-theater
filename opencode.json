@@ -4,13 +4,34 @@
   "small_model": "opencode/space-bunny-free",
   "autoupdate": false,
   "share": "disabled",
-  "permission": {
-    "edit": "allow",
-    "bash": {
-      "*": "allow",
-      "git push*": "ask",
-      "gh pr merge*": "ask"
-    }
-  },
+  "permissions": [
+    { "action": "edit", "resource": "*", "effect": "allow" },
+
+    {
+      "action": "external_directory",
+      "resource": "C:/Users/Dilip/orca/projects/client-theater/*",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "C:/Users/Dilip/orca/projects/client-theater/*",
+      "effect": "allow"
+    },
+    {
+      "action": "external_directory",
+      "resource": "C:/Users/Dilip/orca/workspaces/client-theater/*",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "C:/Users/Dilip/orca/workspaces/client-theater/*",
+      "effect": "allow"
+    },
+
+    { "action": "shell", "resource": "*", "effect": "allow" },
+    { "action": "shell", "resource": "git push *", "effect": "ask" },
+    { "action": "shell", "resource": "gh pr merge *", "effect": "ask" },
+    { "action": "shell", "resource": "gh pr close *", "effect": "ask" }
+  ],
   "instructions": ["AGENTS.md"]
 }
