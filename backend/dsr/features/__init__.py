@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -269,3 +270,19 @@ def load_features(app: FastAPI) -> FeatureRegistry:
 def load_feature(module_name: str):
     """Import one feature module directly, for its own tests."""
     return importlib.import_module(f"{PACKAGE}.{module_name}")
+
+
+def iter_feature_modules() -> Iterator[tuple[str, Any, str]]:
+    """Yield ``(name, module, error)`` for every feature, importing safely.
+
+    Used by callers that want something from a feature other than its routes —
+    the seeder, for one. Module-level import is done here rather than by each
+    caller so that one broken feature stays a single reported failure instead of
+    breaking every consumer of the package.
+    """
+    for module_name in _module_names():
+        full_name = f"{PACKAGE}.{module_name}"
+        try:
+            yield module_name, importlib.import_module(full_name), ""
+        except Exception as exc:
+            yield module_name, None, f"{type(exc).__name__}: {exc}"
