@@ -155,3 +155,99 @@ directory was empty. For a branch-based triage that is a reasonable proxy. For
 uncommitted work it is blind, and the failure is silent. Any future triage of this
 project must check `git status --porcelain` in the worktree, not only
 `git rev-list`.
+
+---
+
+## 2026-09-26 — Dispatch set 1: three agents, three environment bugs
+
+The mechanics were established by probing rather than assumed, and two of the
+three probes found something that changed the design.
+
+**`orca worktree create --agent opencode` does not work.** It fails with *"Selected
+agent is disabled"* — only `pi` is enabled in Orca's settings, and that is a
+desktop-app toggle with no CLI surface. The working path is
+`orca terminal create --worktree <id> --command opencode`, which launches the real
+TUI in a real tab; `terminal show` then reports `agentIdentity: opencode` and the
+status bar reads **Build · Space Bunny Free**. So the agent is a genuine OpenCode
+agent on the model `AGENTS.md` requires, in a tab, with no settings change needed.
+Verified end to end before relying on it: a probe agent was sent a prompt and
+answered `TAB-AGENT-OK`.
+
+**`terminal read --json` returns the screen under `result.terminal.tail`** as an
+array of lines, not `result.text`. Reading the wrong key returns empty and looks
+like a dead agent — which briefly read as a broken dispatch.
+
+**A server restart interrupted the dispatch mid-run**, after the worktrees and
+agent tabs were created but before the run finished. Reading each screen showed
+WF-003 and WF-012 had received their briefs and were working, while WF-002 sat at
+an empty prompt. Resuming meant sending WF-002's brief, not re-dispatching —
+re-dispatching would have left two agents already working on a third that was not
+needed. The handle map is now written to `data/dispatched.json` before the sends
+rather than after, so an interruption cannot lose it.
+
+### Two of three agents then stalled on the same thing
+
+WF-002 spent **four minutes** hunting for a virtualenv, walked into a *sibling
+worktree* to look for one, and raised an external-directory permission prompt.
+WF-003 climbed to `D:/` and hit the same wall. Declining the prompt declined the
+tool call and **ended the turn**, so both had done nothing.
+
+The cause is structural, not a one-off, and it would have hit roughly one agent in
+three across the whole programme:
+
+1. **A worktree has no `.venv`**, because `.venv` is gitignored. `AGENTS.md` and
+   the port briefs both said `cd backend && ../.venv/Scripts/python -m pytest`,
+   which does not resolve in a worktree. The briefs now carry the absolute
+   interpreter path, and say plainly that no sibling worktree may be read to find
+   a venv — the negative instruction matters as much as the positive one, because
+   the wandering is what raised the prompt.
+2. **`opencode.json` used V1 syntax in a V2 config.** It had `permission` with a
+   `bash` sub-object; V2 wants a `permissions` array of `{action, resource,
+   effect}` with actions like `shell`, and explicitly warns that V1's
+   `permission`/`bash`/`task` are not the V2 names. The intended policy — allow
+   `git push` but ask, ask on `gh pr merge` — **was not in force at all**.
+   Rewritten as V2 rules plus the missing piece: an `external_directory` allow for
+   this repo's two directories. That action is what OpenCode checks before any read
+   outside the active worktree, and it defaults to `ask`, which is exactly why
+   every agent that strayed got a modal prompt nobody could answer for it.
+
+Limitation recorded honestly: the config fix only reaches sessions started after
+it merged, so the three running agents were redirected by hand.
+
+---
+
+## 2026-09-26 — The four "collisions" were not collisions
+
+`PORT-PLAN.md` blocked WF-007, WF-010, WF-009 and WF-011 on the claim that
+*"WF-007 and WF-010 genuinely both own /api/library, and WF-009 and WF-011 both
+define a publishing router — the host will refuse the second regardless."*
+
+Measured against the host's actual rule, which refuses on `(method, path)` **after
+prefixing**:
+
+| Pair | Routes each | Identical `(method, path)` | Overlapping paths |
+|---|---|---|---|
+| WF-007 vs WF-010 | 11 / 0 | **0** | **0** |
+| WF-009 vs WF-011 | 13 / 10 | **0** | **0** |
+
+WF-007 owns `/api/library/rooms/{id}/documents` and `/documents/{id}`. WF-010 owns
+`/api/library/contract`, `/fields`, `/search`, `/assemble`, `/searches`. WF-009
+owns `/api/publishing/processes`, `/submissions`, `/workflows`, `/publish`,
+`/publications`. WF-011 owns `/api/publishing/rooms`, `/status`, `/share-link`,
+`/access`, `/events`, `/webhooks`.
+
+The claim came from comparing **prefixes** — the exact check `fd544e2` replaced
+with route-level comparison, because prefix comparison both wrongly blocked
+WF-003/WF-005 and missed genuine dead-code shadowing of core routes. Judging these
+pairs by prefix repeated the mistake that fix exists to stop repeating.
+
+Jev was asked whether they were duplicate workflows and answered
+**`port_all_four_as_is` at 0.79**. Their shared filename
+`backend/dsr/publishing.py` also stops being a conflict: each becomes its own module
+under `backend/dsr/features/`. Both features keep the `/api/library` and
+`/api/publishing` prefixes, which is safe precisely *because* their concrete paths
+differ — the case the host was built for.
+
+**Still held back: WF-005**, whose branch edits `db/audited.py` and `store.py`, the
+audit guarantee itself. That needs a human read before anything carries it across,
+and an agent port is the wrong instrument for it.
