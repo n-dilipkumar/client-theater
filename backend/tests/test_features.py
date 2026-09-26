@@ -109,22 +109,23 @@ def test_broken_feature_is_recorded_not_fatal(clean_registry, monkeypatch):
     assert "broken on purpose" in failure.error
 
 
-def test_prefix_collision_is_reported_not_mounted(clean_registry, monkeypatch):
-    """Two features on one prefix would silently shadow each other."""
+def test_route_collision_is_reported_not_mounted(clean_registry, monkeypatch):
+    """Two features on one concrete route would silently shadow each other."""
 
-    def make_module(name, feature_id, prefix):
+    def make_module(name, feature_id, routes):
         module = ModuleType(name)
         module.FEATURE = {"id": feature_id, "name": feature_id}
-        module.router = APIRouter(prefix=prefix)
+        module.router = APIRouter(prefix="/api/shared")
+        for path in routes:
 
-        @module.router.get("/ping")
-        def ping():
-            return {"ok": True}
+            @module.router.get(path)
+            def handler():
+                return {"ok": True}
 
         return module
 
-    first = make_module("dsr.features.alpha", "alpha", "/api/alpha")
-    second = make_module("dsr.features.beta", "beta", "/api/alpha")
+    first = make_module("dsr.features.alpha", "alpha", ["/ping"])
+    second = make_module("dsr.features.beta", "beta", ["/ping"])
 
     monkeypatch.setattr(host, "_module_names", lambda: ["alpha", "beta"])
     monkeypatch.setattr(
@@ -136,13 +137,144 @@ def test_prefix_collision_is_reported_not_mounted(clean_registry, monkeypatch):
     registry = host.load_features(app)
     assert [f.id for f in registry.features] == ["alpha"]
     assert len(registry.failed) == 1
-    assert "already claimed" in registry.failed[0].error
+    assert "route collision" in registry.failed[0].error
 
 
-def test_live_registry_has_no_prefix_collisions():
+def test_shared_prefix_with_disjoint_paths_is_allowed(clean_registry, monkeypatch):
+    """WF-003 and WF-005 both sit under /api/rooms legitimately; that is not a clash."""
+
+    def make_module(name, feature_id, path):
+        module = ModuleType(name)
+        module.FEATURE = {"id": feature_id, "name": feature_id}
+        module.router = APIRouter(prefix="/api/rooms")
+
+        @module.router.get(path)
+        def handler():
+            return {"ok": True}
+
+        return module
+
+    first = make_module("dsr.features.rooms", "rooms", "")
+    second = make_module("dsr.features.documents", "documents", "/{room_id}/documents")
+
+    monkeypatch.setattr(host, "_module_names", lambda: ["rooms", "documents"])
+    monkeypatch.setattr(
+        host.importlib,
+        "import_module",
+        lambda name: first if name.endswith("rooms") else second,
+    )
+
+    registry = host.load_features(app)
+    assert {f.id for f in registry.features} == {"rooms", "documents"}
+    assert registry.failed == []
+
+
+def test_reusing_a_core_route_is_reported(clean_registry, monkeypatch):
+    """A feature that re-registered a core path would be dead code, not a feature."""
+    from types import ModuleType
+
+    module = ModuleType("dsr.features.squatter")
+    module.FEATURE = {"id": "squatter", "name": "Squatter"}
+    module.router = APIRouter()
+
+    @module.router.get("/api/health")
+    def handler():
+        return {"stolen": True}
+
+    monkeypatch.setattr(host, "_module_names", lambda: ["squatter"])
+    monkeypatch.setattr(host.importlib, "import_module", lambda name: module)
+
+    registry = host.load_features(app)
+    assert registry.features == []
+    assert "core:health" in registry.failed[0].error
+
+
+def test_exception_handlers_are_registered_by_the_host(clean_registry, monkeypatch):
+    """FastAPI accepts exception handlers on the app only, so the host mounts them."""
+    from types import ModuleType
+
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    class FeatureError(Exception):
+        pass
+
+    module = ModuleType("dsr.features.guarded")
+    module.FEATURE = {"id": "guarded", "name": "Guarded"}
+    module.router = APIRouter(prefix="/api/guarded")
+
+    @module.router.get("/boom")
+    def boom():
+        raise FeatureError("no")
+
+    # Starlette's handler signature, matching the core handlers in api.py.
+    def handle(request: Request, exc: FeatureError):
+        return JSONResponse(status_code=418, content={"error": "feature_error", "detail": str(exc)})
+
+    module.EXCEPTION_HANDLERS = {FeatureError: handle}
+
+    monkeypatch.setattr(host, "_module_names", lambda: ["guarded"])
+    monkeypatch.setattr(host.importlib, "import_module", lambda name: module)
+
+    registry = host.load_features(app)
+    assert registry.features[0].exception_handlers == ["FeatureError"]
+
+    # Mounting onto the real app would leak the handler into other tests, so the
+    # behavioural check uses a throwaway app with the same module.
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    probe = FastAPI()
+    probe.include_router(module.router)
+    probe.add_exception_handler(FeatureError, handle)
+    response = TestClient(probe, raise_server_exceptions=False).get("/api/guarded/boom")
+    assert response.status_code == 418
+    assert response.json()["error"] == "feature_error"
+
+
+def test_duplicate_exception_handler_is_refused(clean_registry, monkeypatch):
+    """Two features mapping one error type would make the winner load-order dependent."""
+    from types import ModuleType
+
+    class Shared(Exception):
+        pass
+
+    def make(name, feature_id):
+        module = ModuleType(name)
+        module.FEATURE = {"id": feature_id, "name": feature_id}
+        module.router = APIRouter(prefix=f"/api/{feature_id}")
+
+        @module.router.get("/ping")
+        def handler():
+            return {"ok": True}
+
+        module.EXCEPTION_HANDLERS = {Shared: lambda exc: None}
+        return module
+
+    first = make("dsr.features.one", "one")
+    second = make("dsr.features.two", "two")
+
+    monkeypatch.setattr(host, "_module_names", lambda: ["one", "two"])
+    monkeypatch.setattr(
+        host.importlib,
+        "import_module",
+        lambda name: first if name.endswith(".one") else second,
+    )
+
+    registry = host.load_features(app)
+    assert [f.id for f in registry.features] == ["one"]
+    assert "exception handler collision" in registry.failed[0].error
+
+
+def test_live_registry_has_no_route_collisions():
     """The real package must obey the rule the loader enforces."""
-    prefixes = [f.prefix for f in host.REGISTRY.features if f.prefix]
-    assert len(prefixes) == len(set(prefixes)), f"duplicate prefixes: {prefixes}"
+    seen: set[tuple[str, str]] = set()
+    for feature in host.REGISTRY.features:
+        for route in feature.routes:
+            for method in route["methods"]:
+                key = (method, route["path"])
+                assert key not in seen, f"{feature.id} duplicates {key}"
+                seen.add(key)
 
 
 def test_feature_modules_do_not_import_the_app():
