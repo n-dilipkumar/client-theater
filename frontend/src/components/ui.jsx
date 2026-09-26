@@ -9,7 +9,11 @@
 import { useEffect, useState } from 'react'
 
 /** Inline SVG icon set. Icons are decorative and hidden from assistive tech;
- *  the surrounding control always carries its own text label. */
+ *  the surrounding control always carries its own text label.
+ *
+ *  `path` lets a feature draw a glyph that is not in PATHS without editing this
+ *  file. Features must not append to PATHS: it is shared, and a hundred features
+ *  editing it is exactly the conflict the feature host exists to prevent. */
 const PATHS = {
   dashboard: 'M3 3h7v9H3V3zm0 11h7v7H3v-7zm11 0h7v7h-7v-7zm0-11h7v9h-7V3z',
   rooms: 'M3 7l9-4 9 4-9 4-9-4zm0 5l9 4 9-4M3 17l9 4 9-4',
@@ -25,7 +29,7 @@ const PATHS = {
   database: 'M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3zm8-3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5m16 7c0 1.7-3.6 3-8 3s-8-1.3-8-3',
 }
 
-export function Icon({ name, size = 18, className = '' }) {
+export function Icon({ name, size = 18, className = '', path }) {
   return (
     <svg
       aria-hidden="true"
@@ -40,7 +44,7 @@ export function Icon({ name, size = 18, className = '' }) {
       strokeLinejoin="round"
       className={className}
     >
-      <path d={PATHS[name] || PATHS.schema} />
+      <path d={path || PATHS[name] || PATHS.schema} />
     </svg>
   )
 }
