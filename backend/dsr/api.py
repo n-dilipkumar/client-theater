@@ -12,46 +12,21 @@ positional shapes.
 
 from __future__ import annotations
 
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound
+from dsr.deps import FRONTEND_DIST, StoreDep, db_path as _db_path, get_store, mirror_dir as _mirror_dir
+from dsr.features import load_features
 from dsr.store import RecordStore, parse_where
 
-_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _db_path() -> str:
-    """Resolve the database path at call time, not import time.
-
-    Reading the environment lazily matters for test isolation: a module-level
-    constant would be captured on first import and every test would silently
-    share one database.
-    """
-    return os.environ.get("DSR_DB_PATH", str(_ROOT / "data" / "dsr.db"))
-
-
-def _mirror_dir() -> str:
-    return os.environ.get("DSR_AUDIT_DIR", str(_ROOT / "data" / "audit"))
-
-
-# Static file mounting is inherently import-time, so this one stays a constant.
-FRONTEND_DIST = Path(os.environ.get("DSR_FRONTEND_DIST", str(_ROOT / "frontend" / "dist")))
-
-
-def get_store(request: Request) -> RecordStore:
-    """FastAPI dependency yielding the process-wide store."""
-    return request.app.state.store
-
-
-StoreDep = Depends(get_store)
+__all__ = ["app", "get_store", "StoreDep", "FRONTEND_DIST"]
 
 
 @asynccontextmanager
@@ -294,6 +269,18 @@ def audit_entry(seq: int, store: RecordStore = StoreDep) -> dict[str, Any]:
         if entry["seq"] == seq:
             return entry
     raise HTTPException(status_code=404, detail=f"audit entry {seq} not found")
+
+
+# --------------------------------------------------------------------------- #
+# Feature plugins: one module per workflow, discovered on the next line.
+#
+# This must run before the SPA catch-all below, because that catch-all matches
+# every path that has not already been claimed. A feature added under
+# dsr/features/ is mounted here without this file being touched, which is the
+# whole reason a hundred features can be built in parallel and merged.
+# --------------------------------------------------------------------------- #
+
+load_features(app)
 
 
 # --------------------------------------------------------------------------- #

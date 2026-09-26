@@ -343,16 +343,24 @@ class Jev:
         fail_options: Sequence[str] = (),
         model: str | None = None,
         gate: str = "option",
+        pass_values: Sequence[str] = (),
     ) -> Decision:
         """Run a gated validation decision and audit the outcome.
 
         ``pass_option`` names the question that carries the gate.
 
+        ``pass_values`` names the ``choice`` values that count as success for a
+        ``gate="option"`` decision. It is separate from ``pass_option`` because
+        the gate question is usually called ``verdict`` while the answer that
+        passes is ``accept`` / ``ready`` / ``merge``. Leaving it empty falls
+        back to ``(pass_option,)`` for callers whose passing value and question
+        genuinely share a name.
+
         ``gate`` selects how that question is turned into a verdict:
 
         ``"option"``
             For approval gates. The question must be a ``choice`` and only
-            ``pass_option`` counts as success. Any other selection fails, and a
+            ``pass_values`` counts as success. Any other selection fails, and a
             selection below ``threshold`` confidence is ``uncertain``.
         ``"confidence"``
             For selection gates where *any* offered option is a legitimate
@@ -374,7 +382,7 @@ class Jev:
             )
         gate_answer = answers[pass_option]
         verdict, passed, reason, selected = self._apply_gate(
-            gate_answer, pass_option, fail_options, threshold, gate
+            gate_answer, pass_option, fail_options, threshold, gate, pass_values
         )
 
         record = Decision(
@@ -401,9 +409,11 @@ class Jev:
         fail_options: Sequence[str],
         threshold: float,
         mode: str = "option",
+        pass_values: Sequence[str] = (),
     ) -> tuple[str, bool, str, str | None]:
         """Return ``(verdict, passed, reason, selected)`` for a gate answer."""
         confidence = gate.confidence if gate.confidence is not None else 0.0
+        pass_values = tuple(pass_values) or (pass_option,)
 
         if mode == "confidence":
             selected = gate.value if gate.type == "choice" else None
@@ -429,19 +439,24 @@ class Jev:
 
         if gate.type == "choice":
             chosen = gate.value
-            if chosen == pass_option:
-                if confidence >= threshold:
-                    return "pass", True, f"chose {chosen!r} at confidence {confidence:.2f}", chosen
-                return (
-                    "uncertain",
-                    False,
-                    f"chose {chosen!r} but confidence {confidence:.2f} < {threshold:.2f}; "
-                    "insufficient evidence to gate on",
-                    chosen,
-                )
             if chosen in fail_options:
                 return "fail", False, f"chose {chosen!r} (explicit failure option)", chosen
-            return "fail", False, f"chose {chosen!r} rather than {pass_option!r}", chosen
+            if chosen not in pass_values:
+                return (
+                    "fail",
+                    False,
+                    f"chose {chosen!r}; only {', '.join(repr(v) for v in pass_values)} passes",
+                    chosen,
+                )
+            if confidence >= threshold:
+                return "pass", True, f"chose {chosen!r} at confidence {confidence:.2f}", chosen
+            return (
+                "uncertain",
+                False,
+                f"chose {chosen!r} but confidence {confidence:.2f} < {threshold:.2f}; "
+                "insufficient evidence to gate on",
+                chosen,
+            )
 
         # Noul / Score: pass is a probability at or above the threshold.
         try:
@@ -514,6 +529,7 @@ class Jev:
                 },
             },
             pass_option="verdict",
+            pass_values=("accept",),
             fail_options=("reject",),
             threshold=threshold,
         )
@@ -546,6 +562,7 @@ class Jev:
                 }
             },
             pass_option="verdict",
+            pass_values=("ready",),
             fail_options=("unusable",),
             threshold=threshold,
         )
@@ -591,6 +608,7 @@ class Jev:
                 },
             },
             pass_option="verdict",
+            pass_values=("merge",),
             fail_options=("reject",),
             threshold=threshold,
         )
@@ -656,7 +674,11 @@ def _main(argv: list[str]) -> int:
     ask.add_argument("--model", default=DEFAULT_MODEL)
 
     decide = sub.add_parser("decide", help="run a gated decision from a JSON file")
-    decide.add_argument("payload", type=Path, help="JSON: {decision, state, questions, pass_option}")
+    decide.add_argument(
+        "payload",
+        type=Path,
+        help="JSON: {decision, state, questions, pass_option, pass_values?, fail_options?}",
+    )
     decide.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
     decide.add_argument("--transport", default="bridge", choices=("bridge", "direct"))
     decide.add_argument("--model", default=DEFAULT_MODEL)
@@ -706,6 +728,7 @@ def _main(argv: list[str]) -> int:
         state=payload["state"],
         questions=payload["questions"],
         pass_option=payload.get("pass_option", "verdict"),
+        pass_values=payload.get("pass_values", ()),
         fail_options=payload.get("fail_options", ()),
         threshold=args.threshold,
         model=args.model,
