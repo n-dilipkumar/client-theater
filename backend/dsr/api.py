@@ -17,12 +17,19 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound
+from dsr.generation import (
+    GenerationConflict,
+    GenerationError,
+    UnknownTemplate,
+    TemplateGenerator,
+    parse_request,
+)
 from dsr.store import RecordStore, parse_where
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -51,7 +58,13 @@ def get_store(request: Request) -> RecordStore:
     return request.app.state.store
 
 
+def get_generator(request: Request) -> TemplateGenerator:
+    """FastAPI dependency yielding the process-wide template generator."""
+    return request.app.state.generator
+
+
 StoreDep = Depends(get_store)
+GeneratorDep = Depends(get_generator)
 
 
 @asynccontextmanager
@@ -61,6 +74,7 @@ async def lifespan(app: FastAPI):
     db = AuditedDatabase(path, mirror_dir=_mirror_dir(), actor="api")
     app.state.db = db
     app.state.store = RecordStore(db)
+    app.state.generator = TemplateGenerator(app.state.store)
     yield
     db.close()
 
@@ -101,9 +115,40 @@ async def _audit_error(request: Request, exc: AuditError) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": "audit_error", "detail": str(exc)})
 
 
+@app.exception_handler(GenerationError)
+async def _generation_error(request: Request, exc: GenerationError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"error": "generation_error", "detail": str(exc)})
+
+
+@app.exception_handler(UnknownTemplate)
+async def _unknown_template(request: Request, exc: UnknownTemplate) -> JSONResponse:
+    return JSONResponse(
+        status_code=404, content={"error": "unknown_template", "detail": str(exc), "id": str(exc)}
+    )
+
+
+@app.exception_handler(GenerationConflict)
+async def _generation_conflict(request: Request, exc: GenerationConflict) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": "generation_conflict", "detail": str(exc)})
+
+
 # --------------------------------------------------------------------------- #
 # Health and stats
 # --------------------------------------------------------------------------- #
+
+
+def _parse_batch_item(item: Any, index: int):
+    """Parse one batch entry, naming the index in any error.
+
+    A batch is all-or-nothing, so "items[7]: template_id is required" tells the
+    caller exactly which row to fix instead of making them count rows.
+    """
+    if not isinstance(item, dict):
+        raise GenerationError(f"items[{index}]: each item must be an object")
+    try:
+        return parse_request(item)
+    except GenerationError as exc:
+        raise GenerationError(f"items[{index}]: {exc}") from exc
 
 
 @app.get("/api/health", tags=["system"])
@@ -294,6 +339,150 @@ def audit_entry(seq: int, store: RecordStore = StoreDep) -> dict[str, Any]:
         if entry["seq"] == seq:
             return entry
     raise HTTPException(status_code=404, detail=f"audit entry {seq} not found")
+
+
+# --------------------------------------------------------------------------- #
+# WF-012: generate a personalised room programmatically from a template
+#
+# A template is a shell, never a room. Generating means handing the shell a map
+# of substitution values and getting a real room back, audited, and either a
+# draft or published. Nothing here declares a schema: the block list, the
+# variable declarations, metadata and tags are all arbitrary JSON, so a team can
+# add a field without touching this file. The routes add the workflow's
+# invariants (one audit row, opt-in publication, caller-defined ids) and nothing
+# else; the generic records routes remain the escape hatch.
+# --------------------------------------------------------------------------- #
+
+
+@app.get("/api/templates", tags=["wf-012"])
+def list_templates(
+    where: str | None = Query(default=None, description='JSON object or "k=v,k2=v2"'),
+    limit: int = Query(default=100, ge=1, le=1000),
+    generator: TemplateGenerator = GeneratorDep,
+) -> dict[str, Any]:
+    """List room templates, optionally filtered on any JSON path."""
+    try:
+        filters = parse_where(where)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    records = generator.templates(where=filters, limit=limit)
+    return {"collection": "template", "count": len(records), "records": records}
+
+
+@app.post("/api/templates", status_code=201, tags=["wf-012"])
+def declare_template(
+    response: Response,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    actor: str | None = Query(default=None),
+    generator: TemplateGenerator = GeneratorDep,
+) -> dict[str, Any]:
+    """Declare a template shell: blocks plus the variables they reference.
+
+    Supply ``template_id`` to update an existing template in place (200); omit it
+    to create a new one (201). The declared ``variables`` list drives the
+    generator UI and is advisory, never a validation gate.
+    """
+    record = generator.declare(payload, actor=actor, source="POST /api/templates")
+    if payload.get("template_id"):
+        response.status_code = 200
+    return record
+
+
+@app.get("/api/templates/{template_id}", tags=["wf-012"])
+def read_template(
+    template_id: str, generator: TemplateGenerator = GeneratorDep
+) -> dict[str, Any]:
+    return generator.template(template_id)
+
+
+@app.post("/api/templates/preview", tags=["wf-012"])
+def preview_generation(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    generator: TemplateGenerator = GeneratorDep,
+) -> dict[str, Any]:
+    """Render a request without writing anything.
+
+    The operator's safety net: the buyer-visible content, the variables that
+    were left unresolved, the substitutions the template never referenced, and
+    the expiry deadline the room *would* get if published now. Nothing is
+    written, so nothing is audited.
+    """
+    return generator.preview(payload)
+
+
+@app.get("/api/generations", tags=["wf-012"])
+def list_generations(
+    where: str | None = Query(default=None, description='JSON object or "k=v,k2=v2"'),
+    limit: int = Query(default=100, ge=1, le=1000),
+    generator: TemplateGenerator = GeneratorDep,
+) -> dict[str, Any]:
+    """List rooms generated from a template.
+
+    ``where`` resolves dotted JSON paths through the dynamic index, so
+    ``{"external_id":"sf-op-0001"}`` or ``{"published":true}`` work without this
+    endpoint knowing either field exists.
+    """
+    try:
+        filters = parse_where(where)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rooms = generator.generated(where=filters, limit=limit)
+    return {"collection": "room", "generated": True, "count": len(rooms), "rooms": rooms}
+
+
+@app.post("/api/generations", status_code=201, tags=["wf-012"])
+def create_generation(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    actor: str | None = Query(default=None),
+    generator: TemplateGenerator = GeneratorDep,
+) -> dict[str, Any]:
+    """Generate one personalised room from a template.
+
+    ``published`` defaults to false: a generation is a draft unless the caller
+    explicitly asks otherwise, and an ``expiry`` setting on a draft is retained
+    rather than started.
+    """
+    request = parse_request(payload)
+    return generator.generate(request, actor=actor)
+
+
+@app.post("/api/generations/bulk", status_code=201, tags=["wf-012"])
+def create_generations(
+    items: list[dict[str, Any]] = Body(default_factory=list),
+    actor: str | None = Query(default=None),
+    generator: TemplateGenerator = GeneratorDep,
+) -> dict[str, Any]:
+    """Generate a batch of rooms: one transaction, one audit row, all or nothing.
+
+    Capped at ``MAX_BATCH`` items. Every item is rendered and every caller-supplied
+    ``external_id`` checked before the single write, so a bad item cannot leave
+    the good ones committed.
+    """
+    if isinstance(items, dict) or not isinstance(items, list):
+        raise HTTPException(status_code=400, detail="a batch body must be an array of requests")
+    requests = [_parse_batch_item(item, index) for index, item in enumerate(items)]
+    return generator.generate_many(requests, actor=actor)
+
+
+@app.get("/api/generations/{room_id}", tags=["wf-012"])
+def read_generation(room_id: str, generator: TemplateGenerator = GeneratorDep) -> dict[str, Any]:
+    """Read a generated room.
+
+    The record envelope is exactly what the store holds; ``generation`` holds
+    only the state derived from it on read (``status``, ``expires_at``), so a
+    stored fact and a computed one are never confused.
+    """
+    return generator.get_generated(room_id)
+
+
+@app.post("/api/generations/{room_id}/publish", tags=["wf-012"])
+def publish_generation(
+    room_id: str,
+    actor: str | None = Query(default=None),
+    generator: TemplateGenerator = GeneratorDep,
+) -> dict[str, Any]:
+    """Publish a generated room, which is when its expiry clock starts."""
+    return generator.publish(room_id, actor=actor)
 
 
 # --------------------------------------------------------------------------- #

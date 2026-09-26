@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AuditLog from './pages/AuditLog'
 import Dashboard from './pages/Dashboard'
+import Generator from './pages/Generator'
 import Rooms from './pages/Rooms'
 import SchemaExplorer from './pages/SchemaExplorer'
 import { Icon } from './components/ui'
@@ -12,6 +13,7 @@ import { Icon } from './components/ui'
 const ROUTES = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', Component: Dashboard },
   { id: 'rooms', label: 'Sales rooms', icon: 'rooms', Component: Rooms },
+  { id: 'generate', label: 'Template generator', icon: 'template', Component: Generator },
   { id: 'audit', label: 'Audit log', icon: 'audit', Component: AuditLog },
   { id: 'schema', label: 'Schema explorer', icon: 'schema', Component: SchemaExplorer },
 ]

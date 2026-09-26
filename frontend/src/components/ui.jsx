@@ -23,6 +23,14 @@ const PATHS = {
   close: 'M6 6l12 12M18 6L6 18',
   chevron: 'M9 6l6 6-6 6',
   database: 'M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3zm8-3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5m16 7c0 1.7-3.6 3-8 3s-8-1.3-8-3',
+  // WF-012: a template is a layout of placeholders; generation fills them in.
+  template: 'M4 4h16v4H4V4zm0 8h7v8H4v-8zm11 0h5v8h-5v-8zM7 6h.01M7 14h.01M17 14h.01',
+  generate: 'M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z',
+  eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7zm10 3a3 3 0 100-6 3 3 0 000 6z',
+  layers: 'M12 2l9 5-9 5-9-5 9-5zm9 10l-9 5-9-5m18 5l-9 5-9-5',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+  warning: 'M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
+  clock: 'M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z',
 }
 
 export function Icon({ name, size = 18, className = '' }) {

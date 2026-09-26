@@ -64,6 +64,37 @@ export const api = {
     const suffix = query.toString() ? `?${query}` : ''
     return request(`/audit${suffix}`)
   },
+
+  // -- WF-012: generate a room from a template ---------------------------
+  // These payloads are as schema-flexible as the rest of the API, so nothing
+  // here enumerates the fields a generation accepts.
+
+  listTemplates: (params = {}) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== '') query.set(key, value)
+    }
+    const suffix = query.toString() ? `?${query}` : ''
+    return request(`/templates${suffix}`)
+  },
+  declareTemplate: (payload) =>
+    request('/templates', { method: 'POST', body: JSON.stringify(payload) }),
+
+  /** Render a request without writing anything. */
+  previewGeneration: (payload) =>
+    request('/templates/preview', { method: 'POST', body: JSON.stringify(payload) }),
+
+  generate: (payload) => request('/generations', { method: 'POST', body: JSON.stringify(payload) }),
+  generateMany: (items) => request('/generations/bulk', { method: 'POST', body: JSON.stringify(items) }),
+  listGenerations: (params = {}) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== '') query.set(key, value)
+    }
+    const suffix = query.toString() ? `?${query}` : ''
+    return request(`/generations${suffix}`)
+  },
+  publishGeneration: (roomId) => request(`/generations/${roomId}/publish`, { method: 'POST' }),
 }
 
 /** Format an ISO timestamp as a compact relative string plus absolute time. */
