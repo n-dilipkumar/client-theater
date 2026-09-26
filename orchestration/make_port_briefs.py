@@ -30,15 +30,19 @@ SHARED = [
     "frontend/vite.config.js",
 ]
 
-# Dispatch set 1. Held back on purpose:
+# Dispatch set 2. These four were held back in set 1 on the claim that they
+# collided. Measuring the actual mounted (method, path) pairs says otherwise: 0
+# identical pairs in either direction, and 0 overlapping path strings. The claim
+# came from comparing router PREFIXES, which is exactly the check fd544e2 replaced
+# with route-level comparison - prefix comparison both wrongly blocked WF-003/
+# WF-005 and missed genuine dead-code shadowing of core routes. Jev was asked
+# whether they were duplicate workflows and answered port_all_four_as_is at 0.79.
+#
+# Held back on purpose, still:
 #
 #   WF-005  its branch edits db/audited.py and store.py - the audit guarantee
 #           itself. Needs a human read of what it changed before anything carries
 #           it across, not an agent port.
-#   WF-007  collides with WF-010 on /api/library. Needs a scope decision.
-#   WF-009  collides with WF-011 on the publishing router. Needs a scope decision.
-#   WF-010  collides with WF-007. Needs a scope decision.
-#   WF-011  collides with WF-009. Needs a scope decision.
 #   WF-001, WF-004, WF-015, WF-017
 #           rescued this session from uncommitted working trees. Untrusted input
 #           until read: WF-004 also modified tools/jev.py, the validator every
@@ -127,6 +131,137 @@ TICKETS = [
             "previous session and had never been run. Treat the code as an untested "
             "starting point to read, not as work that passed anything. Its tests in "
             "particular have probably never been executed.",
+        ],
+    },
+    {
+        "ticket": "WF-007",
+        "source_branch": "feature/WF-007-ingest-a-document-or-deck-into-the-content",
+        "feature_module": "wf007_library.py",
+        "feature_id": "wf-007-content-library",
+        "prefix": "library",
+        "name": "Ingest a document or deck into the content library",
+        "description": "Ingest a document or deck into the room's content library: folders, uploads, and thumbnails.",
+        "additive": [
+            "backend/dsr/library.py",
+            "backend/dsr/library_api.py",
+            "backend/tests/test_library.py",
+            "frontend/src/pages/Library.jsx",
+        ],
+        "notes": [
+            "This workflow was held back believing it collided with WF-010 on "
+            "/api/library. It does not. WF-007 owns /api/library/rooms/{id}/documents, "
+            "/api/library/documents/{id} and its content and thumbnail sub-paths; WF-010 "
+            "owns /api/library/contract, /fields, /search, /assemble and /searches. Zero "
+            "concrete paths overlap, and the host allows two features to share a prefix. "
+            "You may safely use the prefix /api/library, which keeps this feature's public "
+            "URL identical to the branch's.",
+            "The branch also added `orchestration/decisions/wf-007-*.json` and three "
+            "`tools/jev*.py` files, and modified `tools/jev.py` and "
+            "`tools/verify_localhost.py`. Do NOT carry any of those over. `tools/` and "
+            "`orchestration/` are platform territory, and another agent may be changing "
+            "them at the same time.",
+            "The branch modified `backend/pyproject.toml` and `.gitignore`. Leave both "
+            "alone. If this feature genuinely needs a new dependency, say so in your "
+            "report and let a human add it once, deliberately - not four agents each "
+            "adding their own.",
+        ],
+    },
+    {
+        "ticket": "WF-010",
+        "source_branch": "feature/WF-010-search-the-content-library-to-assemble-a-room",
+        "feature_module": "wf010_library_search.py",
+        "feature_id": "wf-010-library-search",
+        "prefix": "library",
+        "name": "Search the content library to assemble a room",
+        "description": "Search the content library and assemble a room from what the search returns.",
+        "additive": [
+            "backend/tests/test_documents.py",
+            "backend/tests/test_documents_api.py",
+            "backend/tests/test_permissions.py",
+        ],
+        "notes": [
+            "IMPORTANT: the file list above is incomplete and you must derive the real one. "
+            "WF-010 registered its routes directly on the shared `app` object rather than "
+            "behind an `APIRouter`, so `git diff --name-only origin/main...<branch>` does not "
+            "show a module holding them. Run that diff yourself and read the api.py delta to "
+            "find the module that actually contains LibrarySearch, LibraryAssembler, "
+            "LibrarySchema, LibraryHit, Cursor, Group, Match, FieldText and Condition. Those "
+            "symbols are the library-search domain and they are what you are porting.",
+            "This workflow was held back believing it collided with WF-007 on "
+            "/api/library. It does not: you own /api/library/contract, /fields, /search, "
+            "/assemble and /searches, while WF-007 owns the /rooms/{id}/documents and "
+            "/documents/{id} paths. Zero concrete paths overlap. Use the prefix /api/library.",
+            "Two features sharing the prefix /api/library is the case the plugin host was "
+            "built for, but it is only safe because your concrete paths differ. Before you "
+            "finish, confirm your mounted paths contain no /rooms/{room_id}/documents or "
+            "/documents/{document_id} path, which is WF-007's.",
+        ],
+    },
+    {
+        "ticket": "WF-009",
+        "source_branch": "feature/WF-009-approve-and-publish-library-content-immediately-or-on",
+        "feature_module": "wf009_publishing.py",
+        "feature_id": "wf-009-publishing",
+        "prefix": "publishing",
+        "name": "Approve and publish library content, immediately or on schedule",
+        "description": "Approve library content through a workflow and release it, immediately or on a schedule.",
+        "additive": [
+            "backend/dsr/publishing.py",
+            "backend/dsr/publishing_api.py",
+            "backend/tests/test_wf009_publishing.py",
+            "frontend/src/pages/Publishing.jsx",
+        ],
+        "notes": [
+            "This workflow was held back believing it collided with WF-011 on a publishing "
+            "router. It does not. You own /api/publishing/processes, /submissions, /workflows "
+            "and its steps, /publish, /publications, /publications/due, /folders and "
+            "/subscriptions. WF-011 owns /api/publishing/rooms and its status, share-link, "
+            "access, /events and /webhooks paths. Zero concrete paths overlap, and the host "
+            "allows a shared prefix. Use the prefix /api/publishing.",
+            "The branch modified `backend/dsr/store.py`, which is a shared file. Do NOT carry "
+            "that over. If your feature needs something store.py does not provide, report it as "
+            "a finding rather than editing it - CI will fail the branch and the right fix is a "
+            "deliberate platform change.",
+            "Your module defines a class named `PublishingService`, and so does WF-011's. That "
+            "is fine and expected: your port becomes backend/dsr/features/wf009_publishing.py "
+            "and theirs becomes wf011_publishing.py, so they are separate files that never "
+            "collide. Do not try to share one service with WF-011 - neither of you can see the "
+            "other's branch, and a shared module is precisely what the plugin host removes.",
+        ],
+    },
+    {
+        "ticket": "WF-011",
+        "source_branch": "feature/WF-011-take-a-room-from-draft-to-live-and",
+        "feature_module": "wf011_publishing.py",
+        "feature_id": "wf-011-room-handover",
+        "prefix": "publishing",
+        "name": "Take a room from draft to live and hand over the link",
+        "description": "Take a room from draft to live, then hand over the link and manage access after handover.",
+        "additive": [
+            "backend/dsr/publishing.py",
+            "backend/dsr/routes_publishing.py",
+            "backend/tests/test_api_publishing.py",
+            "backend/tests/test_publishing.py",
+            "frontend/src/lib/publish.js",
+            "frontend/src/pages/Publish.jsx",
+        ],
+        "notes": [
+            "This workflow was held back believing it collided with WF-009 on a publishing "
+            "router. It does not. You own /api/publishing/rooms and /rooms/{id}/status, "
+            "/share-link, /access, /events, /webhooks and /webhooks/{id}/deliveries. WF-009 "
+            "owns /processes, /submissions, /workflows, /publish, /publications, /folders and "
+            "/subscriptions. Zero concrete paths overlap. Use the prefix /api/publishing.",
+            "Your module also defines a class named `PublishingService`, independently written "
+            "from WF-009's with different operations: yours is room lifecycle and handover "
+            "(room, status_of, public_url, share, board, set_status, set_access, subscribe, "
+            "cancel_subscription, events, deliveries), theirs is approval and release "
+            "(create_process, submit, decide, publish, run_due). Keep yours as-is. Your port "
+            "becomes backend/dsr/features/wf011_publishing.py and theirs becomes "
+            "wf009_publishing.py, so the shared class name is harmless. Attempting to merge "
+            "the two would require editing a file you cannot see.",
+            "`frontend/src/lib/publish.js` is an API wrapper. Move it inside your feature "
+            "folder as `api.js` and have it call `apiRequest` from `@/lib/api` - do NOT add "
+            "methods to the shared `frontend/src/lib/api.js`, which is a shared file.",
         ],
     },
 ]
