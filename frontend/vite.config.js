@@ -19,4 +19,12 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  test: {
+    // The pages are the contract: they must render a real API payload, so the
+    // tests run against a DOM rather than a shallow snapshot.
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.test.{js,jsx}'],
+  },
 })

@@ -23,6 +23,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound
+from dsr.domain_service import DomainConflict, DomainService, HostNotServed
+from dsr.domains import (
+    DomainError,
+    cname_target,
+    default_base_url,
+    link_secret_from_path,
+    resolver_from_env,
+)
 from dsr.store import RecordStore, parse_where
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -54,6 +62,19 @@ def get_store(request: Request) -> RecordStore:
 StoreDep = Depends(get_store)
 
 
+def get_domain_service(request: Request) -> DomainService:
+    """FastAPI dependency yielding the domain service.
+
+    Held on app state rather than built per request so the resolver is created
+    once: constructing it reads the deployment's DNS configuration, and a new
+    one per request would re-read configuration for every call.
+    """
+    return request.app.state.domain_service
+
+
+DomainDep = Depends(get_domain_service)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     path = Path(_db_path())
@@ -61,6 +82,7 @@ async def lifespan(app: FastAPI):
     db = AuditedDatabase(path, mirror_dir=_mirror_dir(), actor="api")
     app.state.db = db
     app.state.store = RecordStore(db)
+    app.state.domain_service = DomainService(app.state.store, resolver=resolver_from_env())
     yield
     db.close()
 
@@ -99,6 +121,23 @@ async def _audit_error(request: Request, exc: AuditError) -> JSONResponse:
     # 409: the request was well-formed but conflicts with current state.
     status = 409 if "conflict" in str(exc).lower() or "exists" in str(exc).lower() else 400
     return JSONResponse(status_code=status, content={"error": "audit_error", "detail": str(exc)})
+
+
+@app.exception_handler(DomainError)
+async def _domain_error(request: Request, exc: DomainError) -> JSONResponse:
+    # 422: the value was well-formed HTTP but not a usable domain or brand token.
+    return JSONResponse(status_code=422, content={"error": "invalid_domain", "detail": str(exc)})
+
+
+@app.exception_handler(HostNotServed)
+async def _host_not_served(request: Request, exc: HostNotServed) -> JSONResponse:
+    # 404: the host is not routed to this deployment, so nothing here can be
+    # served. Kept as 404 rather than 421 to avoid advertising that the secret
+    # is real.
+    return JSONResponse(
+        status_code=404,
+        content={"error": "host_not_served", "detail": f"{exc.host} is not served by this deployment"},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -216,15 +255,26 @@ def update_record(
     expected_revision: int | None = Query(default=None),
     store: RecordStore = StoreDep,
 ) -> dict[str, Any]:
-    """Merge a partial payload into ``data`` and audit the change."""
+    """Merge a partial payload into ``data`` and audit the change.
+
+    For ``room`` records the product's own fields are filtered out first. The
+    share-link secret is documented as a "non-removable identifier", so the
+    generic route must not be a back door for clearing it; the dedicated
+    endpoints under ``/api/rooms`` are the only writer for those fields.
+    """
     existing = store.get(record_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"record {record_id} not found")
     if existing["collection"] != collection:
         raise HTTPException(status_code=404, detail=f"record {record_id} is not in {collection}")
+
+    patch = payload
+    if collection == "room":
+        patch = DomainService.strip_reserved(payload)
+
     return store.update(
         record_id,
-        payload,
+        patch,
         actor=actor,
         source=f"PATCH /api/records/{collection}/{record_id}",
         expected_revision=expected_revision,
@@ -257,6 +307,193 @@ def restore_record(
 ) -> dict[str, Any]:
     """Undo a soft delete."""
     return store.restore(record_id, actor=actor, source="POST restore")
+
+
+# --------------------------------------------------------------------------- #
+# White-label rooms on a custom domain (WF-017)
+# --------------------------------------------------------------------------- #
+#
+# These routes are the researched flow, in the researched order: configure DNS
+# with a CNAME, wait for it to propagate, enter the domain, let the service
+# verify it, then save. They sit on top of the same schema-flexible record
+# store as everything else -- no table, column, or migration was added.
+
+
+@app.get("/api/white-label/config", tags=["white-label"])
+def white_label_config() -> dict[str, Any]:
+    """Deployment facts the setup screen needs.
+
+    The CNAME target is the deployment's own edge hostname, surfaced from the
+    server so the UI never has to guess or hard-code it.
+    """
+    return {
+        "cname_target": cname_target(),
+        "base_url": default_base_url(),
+        "record_type": "CNAME",
+        "propagation_note": (
+            "A new CNAME can take up to 24 hours to propagate. You can keep sharing the default-host "
+            "links while you wait; they will continue to work."
+        ),
+        "cloudflare_note": (
+            "If this domain is proxied by Cloudflare, set the CNAME to DNS only (proxy off). "
+            "A proxied record will not verify and slows page loads."
+        ),
+        "format_note": "The domain must be in subdomain format, for example proposals.acme.com.",
+    }
+
+
+@app.get("/api/rooms/{room_id}/white-label", tags=["white-label"])
+def room_white_label(
+    room_id: str, service: DomainService = DomainDep
+) -> dict[str, Any]:
+    """A room's public identity: domain state, share links, brand tokens."""
+    try:
+        room = service.get_room(room_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"room {room_id} not found") from None
+    return service.describe(room)
+
+
+@app.post("/api/rooms/{room_id}/white-label/link-secret", tags=["white-label"])
+def room_link_secret(
+    room_id: str,
+    actor: str | None = Query(default=None),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Mint the room's share-link secret, if it has none."""
+    try:
+        room = service.ensure_link_secret(room_id, actor=actor)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"room {room_id} not found") from None
+    return service.describe(room)
+
+
+@app.post("/api/white-label/verify", tags=["white-label"])
+def verify_domain(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Check a candidate domain. Claims nothing.
+
+    Separate from the claim endpoint because the researched flow is verify-then-
+    save: the operator needs to see what is wrong before committing to a change.
+    """
+    domain = payload.get("domain")
+    if domain is None:
+        raise HTTPException(status_code=400, detail="domain is required")
+    return service.verify(domain)
+
+
+@app.post("/api/rooms/{room_id}/white-label/domain", tags=["white-label"])
+def claim_domain(
+    room_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    force: bool = Query(default=False, description="Save even if the CNAME has not propagated yet"),
+    actor: str | None = Query(default=None),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Attach a verified custom domain to a room."""
+    domain = payload.get("domain")
+    if domain is None:
+        raise HTTPException(status_code=400, detail="domain is required")
+    try:
+        service.claim(room_id, domain, force=force, actor=actor)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"room {room_id} not found") from None
+    except DomainConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return service.describe(service.get_room(room_id))
+
+
+@app.delete("/api/rooms/{room_id}/white-label/domain", tags=["white-label"])
+def release_domain(
+    room_id: str,
+    actor: str | None = Query(default=None),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Detach the custom domain. Share links keep working on the default host."""
+    try:
+        service.release(room_id, actor=actor)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"room {room_id} not found") from None
+    return service.describe(service.get_room(room_id))
+
+
+@app.post("/api/rooms/{room_id}/white-label/recheck", tags=["white-label"])
+def recheck_domain(
+    room_id: str,
+    actor: str | None = Query(default=None),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Re-run DNS verification for the domain the room already holds."""
+    try:
+        service.recheck(room_id, actor=actor)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"room {room_id} not found") from None
+    return service.describe(service.get_room(room_id))
+
+
+@app.patch("/api/rooms/{room_id}/white-label/branding", tags=["white-label"])
+def update_branding(
+    room_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    actor: str | None = Query(default=None),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Merge brand tokens into the room's open ``branding`` object.
+
+    Colours and font stacks are validated because they are rendered into inline
+    styles. Every other key passes through untouched: a team can add
+    ``branding.email_footer`` without coordinating with anyone.
+    """
+    try:
+        service.update_branding(room_id, payload, actor=actor)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"room {room_id} not found") from None
+    return service.describe(service.get_room(room_id))
+
+
+@app.get("/api/white-label/links/{secret}", tags=["white-label"])
+def resolve_link(
+    secret: str,
+    host: str | None = Query(default=None, description="The Host header the request arrived on"),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Resolve a share-link secret to the room it points at.
+
+    Identity is the secret, not the host, so the same secret resolves on the
+    default host and on every verified custom domain. That is what stops a
+    domain change from breaking links the customer already shared.
+    """
+    try:
+        resolved = service.resolve(secret, host=host)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="no room matches that link secret") from None
+    room = resolved["room"]
+    return {
+        "room_id": room["id"],
+        "name": (room.get("data") or {}).get("name"),
+        "served_on_custom_domain": resolved["served_on_custom_domain"],
+        "white_label": service.describe(room),
+    }
+
+
+@app.get("/api/white-label/resolve", tags=["white-label"])
+def resolve_link_path(
+    path: str = Query(description="The request path, e.g. /r/Proposal-Name-aB3xY9zK1q"),
+    host: str | None = Query(default=None),
+    service: DomainService = DomainDep,
+) -> dict[str, Any]:
+    """Resolve a full room path to its secret and room.
+
+    The inverse of link construction: reads the trailing secret out of the path
+    so an edge proxy can route a white-labelled request without reimplementing
+    the slug rules.
+    """
+    secret = link_secret_from_path(path)
+    if not secret:
+        raise HTTPException(status_code=404, detail="path carries no link secret")
+    return resolve_link(secret=secret, host=host, service=service)
 
 
 # --------------------------------------------------------------------------- #

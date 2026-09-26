@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import AuditLog from './pages/AuditLog'
 import Dashboard from './pages/Dashboard'
+import PublicRoom from './pages/PublicRoom'
 import Rooms from './pages/Rooms'
 import SchemaExplorer from './pages/SchemaExplorer'
+import WhiteLabel from './pages/WhiteLabel'
 import { Icon } from './components/ui'
 
 /**
@@ -12,9 +14,20 @@ import { Icon } from './components/ui'
 const ROUTES = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', Component: Dashboard },
   { id: 'rooms', label: 'Sales rooms', icon: 'rooms', Component: Rooms },
+  { id: 'white-label', label: 'White-label', icon: 'globe', Component: WhiteLabel },
   { id: 'audit', label: 'Audit log', icon: 'audit', Component: AuditLog },
   { id: 'schema', label: 'Schema explorer', icon: 'schema', Component: SchemaExplorer },
 ]
+
+/**
+ * Buyer-facing room paths are *not* hash-routed.
+ *
+ * A white-labelled share link is a real path on a real host
+ * (`proposals.acme.com/r/Proposal-Name-aB3xY9zK1q`), so it has to be matched
+ * before the hash router runs. This is the piece that makes a share link resolve
+ * to a room rather than to the dashboard.
+ */
+const ROOM_PATH_RE = /^\/r\/([^/]+)$/
 
 function currentRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '')
@@ -24,6 +37,20 @@ function currentRoute() {
 export default function App() {
   const [route, setRoute] = useState(currentRoute)
   const [navOpen, setNavOpen] = useState(false)
+  const [roomPath, setRoomPath] = useState(() => window.location.pathname)
+
+  // The path can change without a hash change when a buyer opens a share link,
+  // so it is tracked separately from the hash route.
+  useEffect(() => {
+    const sync = () => setRoomPath(window.location.pathname)
+    window.addEventListener('popstate', sync)
+    return () => window.removeEventListener('popstate', sync)
+  }, [])
+
+  const roomMatch = roomPath.match(ROOM_PATH_RE)
+  if (roomMatch) {
+    return <PublicRoom path={roomPath} />
+  }
 
   useEffect(() => {
     const onHashChange = () => {

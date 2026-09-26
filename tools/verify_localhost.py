@@ -8,12 +8,15 @@ Checks, in order:
 """
 
 import json
+import os
 import re
 import sys
 import urllib.error
 import urllib.request
 
-BASE = "http://127.0.0.1:8000"
+# Overridable so a worktree can verify against its own server when port 8000 is
+# already taken by another checkout.
+BASE = os.environ.get("DSR_VERIFY_BASE", "http://127.0.0.1:8000").rstrip("/")
 failures = []
 
 
@@ -121,6 +124,98 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     check("write/read/audit round trip", False, str(exc))
+
+print("\n=== 6. white-label room on a custom domain (WF-017) ===")
+# Runs the researched flow against the live server: verify a domain, save it,
+# read the share link back, then confirm the link still resolves after the
+# domain is released. Fixtures stand in for DNS so this is deterministic.
+try:
+    status, body = get("/api/white-label/config")
+    config = json.loads(body)
+    check("GET /api/white-label/config", status == 200 and "cname_target" in config)
+
+    status, room = post("/api/records/room", {"name": "Verify White Label", "account": "Acme"})
+    room_id = room["id"]
+
+    status, minted = post(f"/api/rooms/{room_id}/white-label/link-secret", {})
+    white = json.loads(minted) if isinstance(minted, str) else minted
+    check("a share link is minted", white.get("has_link_secret") is True, white.get("share_url", ""))
+    check(
+        "the default-host link is usable before any domain is set",
+        white.get("share_url", "").startswith(BASE),
+        white.get("share_url", ""),
+    )
+
+    secret_host = BASE.split("//", 1)[-1]
+
+    status, report = post("/api/white-label/verify", {"domain": "proposals.acme.com"})
+    report = json.loads(report) if isinstance(report, str) else report
+    check("a propagated CNAME verifies", report.get("ready") is True, json.dumps(report.get("checks")))
+
+    status, report = post("/api/white-label/verify", {"domain": "wrong.acme.com"})
+    report = json.loads(report) if isinstance(report, str) else report
+    check("a wrong CNAME is refused with a reason", report.get("ready") is False)
+
+    status, claimed = post(
+        f"/api/rooms/{room_id}/white-label/domain", {"domain": "proposals.acme.com"}
+    )
+    claimed = json.loads(claimed) if isinstance(claimed, str) else claimed
+    check("the domain is saved", claimed.get("domain") == "proposals.acme.com")
+    check(
+        "the share link moves to the custom host",
+        claimed.get("share_url", "").startswith("https://proposals.acme.com/"),
+        claimed.get("share_url", ""),
+    )
+    check(
+        "the slug and secret are preserved across the host change",
+        claimed.get("slug") in claimed.get("share_url", ""),
+        claimed.get("slug", ""),
+    )
+
+    secret = claimed["slug"].rsplit("-", 1)[-1]
+    status, resolved = get(f"/api/white-label/links/{secret}?host=proposals.acme.com")
+    resolved = json.loads(resolved) if isinstance(resolved, str) else resolved
+    check("the link resolves on the custom host", resolved.get("room_id") == room_id)
+
+    status, resolved = get(f"/api/white-label/links/{secret}?host={secret_host}")
+    resolved = json.loads(resolved) if isinstance(resolved, str) else resolved
+    check(
+        "the same link still resolves on the default host",
+        resolved.get("room_id") == room_id,
+        "sourced: old links keep working",
+    )
+
+    # The researched hazard: re-pointing a domain must not break shared links.
+    request = urllib.request.Request(f"{BASE}/api/rooms/{room_id}/white-label/domain", method="DELETE")
+    with urllib.request.urlopen(request, timeout=15) as response:
+        released = json.loads(response.read())
+    check("the domain is released", released.get("domain") is None)
+
+    status, resolved = get(f"/api/white-label/links/{secret}?host={secret_host}")
+    resolved = json.loads(resolved) if isinstance(resolved, str) else resolved
+    check("releasing a domain does not break the link", resolved.get("room_id") == room_id)
+
+    request = urllib.request.Request(
+        f"{BASE}/api/rooms/{room_id}/white-label/branding",
+        data=json.dumps({"accent": "url(https://evil.example.net/x)"}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="PATCH",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            check("an unsafe colour is refused", False, f"status={response.status}")
+    except urllib.error.HTTPError as exc:
+        check("an unsafe colour is refused", exc.code == 422, f"status={exc.code}")
+
+    status, audit = get(f"/api/audit?record_id={room_id}")
+    sources = [e["source"] for e in json.loads(audit)["entries"]]
+    check(
+        "every white-label change is audited",
+        any("custom domain" in s for s in sources) and any("link secret" in s for s in sources),
+        "; ".join(sorted(set(sources))),
+    )
+except Exception as exc:  # noqa: BLE001
+    check("white-label flow", False, str(exc))
 
 print("\n" + "=" * 60)
 if failures:

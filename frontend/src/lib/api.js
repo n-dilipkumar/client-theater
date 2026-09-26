@@ -64,6 +64,31 @@ export const api = {
     const suffix = query.toString() ? `?${query}` : ''
     return request(`/audit${suffix}`)
   },
+
+  // White-label rooms on a custom domain. Every call is a plain request against
+  // the schema-flexible store; nothing here knows the shape of a room record.
+  whiteLabelConfig: () => request('/white-label/config'),
+
+  roomWhiteLabel: (roomId) => request(`/rooms/${roomId}/white-label`),
+  mintLinkSecret: (roomId) => request(`/rooms/${roomId}/white-label/link-secret`, { method: 'POST' }),
+
+  verifyDomain: (domain) => request('/white-label/verify', { method: 'POST', body: JSON.stringify({ domain }) }),
+  claimDomain: (roomId, domain, { force = false } = {}) =>
+    request(`/rooms/${roomId}/white-label/domain${force ? '?force=true' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ domain }),
+    }),
+  releaseDomain: (roomId) => request(`/rooms/${roomId}/white-label/domain`, { method: 'DELETE' }),
+  recheckDomain: (roomId) => request(`/rooms/${roomId}/white-label/recheck`, { method: 'POST' }),
+
+  saveBranding: (roomId, branding) =>
+    request(`/rooms/${roomId}/white-label/branding`, { method: 'PATCH', body: JSON.stringify(branding) }),
+
+  resolveLink: (path, host) => {
+    const query = new URLSearchParams({ path })
+    if (host) query.set('host', host)
+    return request(`/white-label/resolve?${query}`)
+  },
 }
 
 /** Format an ISO timestamp as a compact relative string plus absolute time. */
