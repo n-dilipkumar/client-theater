@@ -1,0 +1,174 @@
+name: CI
+
+# The feature host exists so that a hundred features, written by a hundred agents
+# in a hundred worktrees, can merge without three-way conflicts. That only holds
+# if a feature branch keeps to adding files, and the only way to guarantee that
+# at scale is to make CI refuse the merge rather than trusting every agent to
+# remember the rule. The guard below is the enforcement point.
+#
+# Two deliberate asymmetries:
+#
+#   * The shared-file guard runs on pull_request but NOT on push to main. Platform
+#     work legitimately edits shared files - it is how a new extension point gets
+#     added - so a hard failure there would block the very commits that keep the
+#     contract current.
+#   * The tests run everywhere. There is no "tests are only needed on features"
+#     escape hatch, because the audit guarantee is the product.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  # A newer push to the same branch makes an in-flight run irrelevant. The audit
+  # trail records every completed run, so cancelling superseded ones keeps that
+  # trail meaningful instead of full of stale results.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Feature contract (no shared files)
+    # Platform work on main is allowed to edit shared files; a feature branch is
+    # not. Skipping main is what keeps that distinction enforceable.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The guard diffs against origin/main, so the base ref must exist.
+          # A shallow clone of the PR branch alone would make it silently pass.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Refuse shared-file edits
+        run: python tools/check_feature_diff.py --base origin/main
+
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e 'backend[dev]'
+
+      - name: Run the suite
+        working-directory: backend
+        run: python -m pytest
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+
+      # A feature whose page does not compile must not merge. The frontend host
+      # discovers features by globbing src/features/*\/index.jsx, so a broken
+      # feature only fails here rather than in a browser.
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  end-to-end:
+    name: Local host app (headless)
+    runs-on: ubuntu-latest
+    # The heavier of the checks: it installs both toolchains and starts a real
+    # server. It is the job that answers "would a browser actually load this",
+    # which unit tests and a build cannot.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e 'backend[dev]'
+
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # A feature whose page ships empty is a feature nobody can review, so the
+      # demo dataset is part of what is being verified, not a convenience.
+      - name: Seed a fresh demo database
+        env:
+          DSR_DB_PATH: ${{ runner.temp }}/ci.db
+          DSR_AUDIT_DIR: ${{ runner.temp }}/ci-audit
+        run: python backend/seed.py
+
+      - name: Start the app
+        env:
+          DSR_DB_PATH: ${{ runner.temp }}/ci.db
+          DSR_AUDIT_DIR: ${{ runner.temp }}/ci-audit
+        run: |
+          python -m uvicorn dsr.api:app --app-dir backend --host 127.0.0.1 --port 8000 &
+          # Poll rather than sleep a fixed amount: a slow runner would otherwise
+          # fail a healthy build, which trains people to ignore red.
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/api/health > /dev/null; then
+              echo "server up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server did not come up"
+          exit 1
+
+      # Every feature's own routes are checked here too, not just the core ones:
+      # a plugin that failed to import is skipped by the host and reported at
+      # /api/features, so an unhandled failure would otherwise look like a
+      # passing build.
+      - name: Verify what a browser would load
+        run: python tools/verify_localhost.py
+
+      - name: No feature failed to load
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          with urllib.request.urlopen("http://127.0.0.1:8000/api/features", timeout=15) as r:
+              reg = json.load(r)
+          failed = reg.get("failed", [])
+          if failed:
+              for f in failed:
+                  print(f"  {f.get('id')}: {f.get('error')}")
+              raise SystemExit(f"{len(failed)} feature(s) failed to load")
+          print(f"OK: {reg['count']} feature(s) loaded, 0 failed")
+          PY
