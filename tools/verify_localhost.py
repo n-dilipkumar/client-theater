@@ -5,15 +5,21 @@ Checks, in order:
   2. the hashed JS and CSS assets referenced by the shell resolve
   3. the API the SPA calls at runtime responds
   4. a full write -> read -> audit round trip works through HTTP
+  5. the WF-001 wizard endpoints do what the three wizard steps need
+
+Point it at a non-default instance with DSR_BASE_URL, which matters when
+another worktree already holds port 8000.
 """
 
 import json
+import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
-BASE = "http://127.0.0.1:8000"
+BASE = os.environ.get("DSR_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 failures = []
 
 
@@ -29,8 +35,12 @@ def post(path, payload, method="POST"):
         headers={"Content-Type": "application/json"},
         method=method,
     )
-    with urllib.request.urlopen(request, timeout=15) as response:
-        return response.status, json.loads(response.read())
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return response.status, json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        # A refused request is a result to assert on, not an error to propagate.
+        return exc.code, json.loads(exc.read() or b"{}")
 
 
 def check(label, condition, detail=""):
@@ -121,6 +131,100 @@ try:
     )
 except Exception as exc:  # noqa: BLE001
     check("write/read/audit round trip", False, str(exc))
+
+print("\n=== 6. WF-001 wizard: account -> template -> name/URL ===")
+try:
+    status, body = get("/api/room-templates")
+    templates = json.loads(body)["templates"]
+    check("step 2 offers templates", status == 200 and len(templates) > 0, f"{len(templates)} templates")
+    check(
+        "every template carries an id and a pinned version",
+        all(t.get("template_id") and t.get("template_version_id") for t in templates),
+    )
+    template_id = next((t["template_id"] for t in templates if t["template_id"] == "tpl_standard"), templates[0]["template_id"])
+
+    status, body = get("/api/accounts")
+    accounts = json.loads(body)["accounts"]
+    check("step 1 lists accounts", status == 200, f"{len(accounts)} accounts")
+    if not accounts:
+        # A fresh database is a legitimate state: the wizard must say so rather
+        # than fail, and creating a room must then be refused.
+        status, refusal = post(
+            "/api/rooms", {"name": "Verify Bot Room", "account_id": "account_missing", "template_id": template_id}
+        )
+        check(
+            "refuses a room with no valid account",
+            status == 404 and refusal["error"] == "account_not_found",
+            f"status={status}",
+        )
+    else:
+        account_id = accounts[0]["id"]
+        status, created = post(
+            f"/api/rooms?actor=verify-bot&request_id=verify-wf001",
+            {
+                "name": "Verify Bot Room",
+                "account_id": account_id,
+                "template_id": template_id,
+                "smoke": True,
+                "team_routing": {"queue": "enterprise"},
+            },
+        )
+        room = created
+        data = room.get("data", {})
+        check("POST /api/rooms", status == 201 and data.get("name") == "Verify Bot Room", f"status={status}")
+        check("room is bound to the chosen account", data.get("account_id") == account_id)
+        check("room pins the chosen template version", data.get("template_id") == template_id and bool(data.get("template_version_id")))
+        check("room is active by default", data.get("status") == "active")
+        check("room carries a friendly URL", bool(data.get("friendly_url")), data.get("friendly_url", ""))
+        check(
+            "room is bound to exactly one site",
+            room["site"]["id"] == data.get("site_id") and room["site"]["room_id"] == room["id"],
+        )
+
+        status, body = get(f"/api/rooms?q={urllib.parse.quote('Verify Bot')}")
+        check("the new room appears in the list", json.loads(body)["count"] >= 1)
+
+        status, body = get('/api/records/room?where={"team_routing.queue":"enterprise"}')
+        check(
+            "an unknown field is queryable without a migration",
+            room["id"] in [r["id"] for r in json.loads(body)["records"]],
+        )
+
+        status, body = get("/api/audit?request_id=verify-wf001")
+        entries = json.loads(body)["entries"]
+        check(
+            "room and site share one request id, one audit row each",
+            sorted(e["collection"] for e in entries) == ["room", "site"],
+            str([(e["collection"], e["action"]) for e in entries]),
+        )
+        check("audit records the actor", all(e["actor"] == "verify-bot" for e in entries))
+
+        # A duplicate friendly URL is a conflict, and must write nothing.
+        before = json.loads(get("/api/stats")[1])
+        status, refusal = post(
+            "/api/rooms",
+            {
+                "name": "Verify Bot Room Two",
+                "account_id": account_id,
+                "template_id": template_id,
+                "friendly_url": data.get("friendly_url"),
+            },
+        )
+        check(
+            "a taken friendly URL is a 409, not a silent rewrite",
+            status == 409 and refusal.get("error") == "friendly_url_taken",
+            f"status={status} {refusal.get('error')}",
+        )
+        after = json.loads(get("/api/stats")[1])
+        check(
+            "a refused creation writes nothing",
+            after["records"] == before["records"] and after["audit_entries"] == before["audit_entries"],
+            f"records {before['records']}->{after['records']}, audit {before['audit_entries']}->{after['audit_entries']}",
+        )
+except urllib.error.HTTPError as exc:
+    check("WF-001 wizard round trip", False, f"HTTP {exc.code}: {exc.read().decode('utf-8', 'replace')[:200]}")
+except Exception as exc:  # noqa: BLE001
+    check("WF-001 wizard round trip", False, str(exc))
 
 print("\n" + "=" * 60)
 if failures:

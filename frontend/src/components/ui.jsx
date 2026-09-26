@@ -22,6 +22,8 @@ const PATHS = {
   search: 'M11 19a8 8 0 100-16 8 8 0 000 16zm10 2l-4.35-4.35',
   close: 'M6 6l12 12M18 6L6 18',
   chevron: 'M9 6l6 6-6 6',
+  back: 'M15 6l-6 6 6 6',
+  check: 'M4 12l5 5L20 6',
   database: 'M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3zm8-3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5m16 7c0 1.7-3.6 3-8 3s-8-1.3-8-3',
 }
 
@@ -166,6 +168,83 @@ export function Field({ label, hint, children, id }) {
 export const inputClass =
   'min-h-11 w-full rounded-lg border border-border-subtle/50 bg-background/60 px-3 text-sm ' +
   'text-foreground placeholder:text-muted-foreground/60 focus:border-accent'
+
+/**
+ * Wizard progress. Each step is a real list item so a screen reader announces
+ * position, and the current step carries `aria-current="step"`.
+ */
+export function Stepper({ steps, current }) {
+  return (
+    <ol className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+      {steps.map((step, index) => {
+        const state = index === current ? 'current' : index < current ? 'done' : 'todo'
+        return (
+          <li key={step.id} className="flex flex-1 items-center gap-2">
+            <span
+              aria-current={state === 'current' ? 'step' : undefined}
+              className={`flex min-h-11 min-w-11 items-center justify-center rounded-lg border font-mono text-sm
+                transition-colors duration-200 ${
+                  state === 'current'
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : state === 'done'
+                      ? 'border-border-subtle/50 bg-muted text-muted-foreground'
+                      : 'border-border-subtle/30 text-muted-foreground/70'
+                }`}
+            >
+              {index + 1}
+              <span className="sr-only">
+                {state === 'current' ? '(current step)' : state === 'done' ? '(completed)' : '(not started)'}
+              </span>
+            </span>
+            <span
+              className={`text-sm ${state === 'current' ? 'font-medium text-foreground' : 'text-muted-foreground'}`}
+            >
+              {step.label}
+            </span>
+            {index < steps.length - 1 && (
+              <span aria-hidden="true" className="mx-2 hidden h-px flex-1 bg-border-subtle/40 sm:block" />
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/**
+ * One selectable option, rendered as a real radio inside its own label.
+ *
+ * A radio (rather than a clickable div) is what makes arrow-key navigation and
+ * the group announcement work for free. The visible card is the label, so the
+ * whole 44px surface is the touch target and the input stays in the tab order.
+ */
+export function ChoiceCard({ name, value, checked, onChange, title, description, meta }) {
+  return (
+    <label
+      className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border p-4
+        transition-colors duration-200 has-[:focus-visible]:outline-2
+        has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
+          checked
+            ? 'border-accent bg-accent/10'
+            : 'border-border-subtle/40 bg-background/40 hover:border-border-subtle hover:bg-muted/40'
+        }`}
+    >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        onChange={() => onChange(value)}
+        className="mt-1 h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-foreground">{title}</span>
+        {description && <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>}
+        {meta && <span className="mt-1.5 flex flex-wrap gap-1.5">{meta}</span>}
+      </span>
+    </label>
+  )
+}
 
 /** Async data hook with explicit loading/error state and a manual refetch. */
 export function useAsync(loader, deps = []) {

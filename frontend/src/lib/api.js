@@ -16,17 +16,36 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`
+    let code = null
     try {
       const body = await response.json()
       detail = body.detail || body.error || detail
+      // A refused workflow answers with a machine-readable code alongside the
+      // operator-facing message, so a wizard can send the operator back to the
+      // step that caused it rather than just showing a message.
+      code = body.error || null
     } catch {
       // Non-JSON error body; the status line is the best we have.
     }
-    throw new Error(detail)
+    const error = new Error(detail)
+    error.code = code
+    error.status = response.status
+    throw error
   }
 
   if (response.status === 204) return null
   return response.json()
+}
+
+/** Build a query string, dropping empty values so callers can pass form state
+ *  straight through without pruning it first. */
+function queryString(params = {}) {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') query.set(key, value)
+  }
+  const text = query.toString()
+  return text ? `?${text}` : ''
 }
 
 export const api = {
@@ -35,14 +54,7 @@ export const api = {
 
   collections: () => request('/collections'),
 
-  listRecords: (collection, params = {}) => {
-    const query = new URLSearchParams()
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && value !== '') query.set(key, value)
-    }
-    const suffix = query.toString() ? `?${query}` : ''
-    return request(`/records/${collection}${suffix}`)
-  },
+  listRecords: (collection, params = {}) => request(`/records/${collection}${queryString(params)}`),
   getRecord: (collection, id) => request(`/records/${collection}/${id}`),
   createRecord: (collection, payload, params = {}) => {
     const query = new URLSearchParams(params).toString()
@@ -56,14 +68,17 @@ export const api = {
   deleteRecord: (collection, id) => request(`/records/${collection}/${id}`, { method: 'DELETE' }),
   restoreRecord: (collection, id) => request(`/records/${collection}/${id}/restore`, { method: 'POST' }),
 
-  audit: (params = {}) => {
-    const query = new URLSearchParams()
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && value !== '') query.set(key, value)
-    }
-    const suffix = query.toString() ? `?${query}` : ''
-    return request(`/audit${suffix}`)
-  },
+  audit: (params = {}) => request(`/audit${queryString(params)}`),
+
+  // -- WF-001: create a room from an account and a template ----------------- //
+  // The three wizard reads and one write. The generic record routes above stay
+  // available and unchanged; these exist so the wizard does not have to know
+  // that a room is also bound to a site and pinned to a template version.
+  roomTemplates: () => request('/room-templates'),
+  accounts: (params = {}) => request(`/accounts${queryString(params)}`),
+  listRooms: (params = {}) => request(`/rooms${queryString(params)}`),
+  createRoom: (payload, params = {}) =>
+    request(`/rooms${queryString(params)}`, { method: 'POST', body: JSON.stringify(payload) }),
 }
 
 /** Format an ISO timestamp as a compact relative string plus absolute time. */

@@ -11,6 +11,10 @@ Guarantees
 * **Atomic audit.** The audit row is written in the same transaction as the
   change it describes. Either both land or neither does, so the log can never
   drift from the data.
+* **Atomic multi-record writes.** :meth:`AuditedDatabase.transaction` groups
+  several writes into one transaction, so a workflow that must produce two
+  related records cannot half-succeed. Every write inside the block is audited
+  individually, exactly as if it had been made on its own.
 * **One writer.** A single connection guarded by a re-entrant lock, with WAL
   journalling and a busy timeout. This was chosen over per-writer databases and
   over letting callers write directly; see the recorded decision in
@@ -129,6 +133,10 @@ class AuditedDatabase:
         self.actor = actor
         self._lock = threading.RLock()
         self._closed = False
+        # Depth of open `transaction()` blocks. A non-zero value means a writer
+        # handle is in play, so the single-record methods must refuse rather than
+        # quietly open a second, independent transaction.
+        self._tx_depth = 0
         # An in-memory database must share one connection to stay coherent.
         self._shared_memory = self.path == ":memory:"
         self._conn = self._connect(busy_timeout_ms)
@@ -183,6 +191,11 @@ class AuditedDatabase:
         with self._lock:
             if self._closed:
                 raise AuditError("database is closed")
+            if self._tx_depth:
+                raise AuditError(
+                    "a write was attempted while a transaction() block is open; use the writer "
+                    "handle passed into the block so the change joins the same transaction"
+                )
             try:
                 self._conn.execute("BEGIN IMMEDIATE")
             except sqlite3.OperationalError as exc:
@@ -194,6 +207,40 @@ class AuditedDatabase:
                 raise
             else:
                 self._conn.commit()
+
+    @contextmanager
+    def transaction(
+        self,
+        *,
+        actor: str | None = None,
+        source: str | None = None,
+        request_id: str | None = None,
+    ) -> Iterator["AuditedWriter"]:
+        """Group several audited writes into one all-or-nothing transaction.
+
+        A workflow that must produce more than one record — a room and the site
+        it is bound to, say — cannot half-succeed through this handle: either
+        every write and every audit row commits, or none of them do. Each write
+        still gets its own audit row, so the log describes the work at the same
+        granularity as single-record writes.
+
+            with db.transaction(actor="api") as tx:
+                room = tx.create("room", {...})
+                tx.create("site", {...}, room_id=room["id"])
+
+        ``actor``/``source``/``request_id`` become the default for every write in
+        the block; any single call can override them.
+        """
+        with self._write() as conn:
+            self._tx_depth += 1
+            writer = AuditedWriter(self, conn, actor=actor, source=source, request_id=request_id)
+            try:
+                yield writer
+            finally:
+                self._tx_depth -= 1
+        # Reached only after the commit succeeded, so the mirror cannot describe
+        # a change that was rolled back.
+        writer.flush_mirrors()
 
     def _audit(
         self,
@@ -402,6 +449,119 @@ class AuditedDatabase:
 
     # -- writes (always audited) -------------------------------------------- #
 
+    def _insert_record(
+        self,
+        conn: sqlite3.Connection,
+        collection: str,
+        data: Mapping[str, Any] | None,
+        *,
+        record_id: str | None,
+        room_id: str | None,
+        actor: str | None,
+        source: str | None,
+        request_id: str | None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Insert one record on ``conn``, audit it, and return it with its mirror.
+
+        Shared by :meth:`create` and :class:`AuditedWriter` so a record written
+        inside a transaction is indexed and audited exactly like one written on
+        its own. There is deliberately no second implementation of this.
+        """
+        if not collection:
+            raise ValueError("collection is required")
+        payload = dict(data or {})
+        for reserved in _RESERVED:
+            payload.pop(reserved, None)
+        rid = record_id or new_id(collection)
+        now = utcnow()
+        started = time.perf_counter()
+
+        try:
+            conn.execute(
+                "INSERT INTO records"
+                " (id, collection, room_id, data, revision, created_at, updated_at, actor, source)"
+                " VALUES (?,?,?,?,1,?,?,?,?)",
+                (rid, collection, room_id, _dumps(payload), now, now, actor or self.actor, source),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise AuditError(f"record {rid!r} already exists: {exc}") from exc
+        self._reindex(conn, rid, payload)
+        self._audit(
+            conn,
+            action="insert",
+            collection=collection,
+            record_id=rid,
+            room_id=room_id,
+            actor=actor,
+            source=source,
+            request_id=request_id,
+            summary=f"created {collection} {rid}",
+            before=None,
+            after=payload,
+            started=started,
+        )
+        row = conn.execute("SELECT * FROM records WHERE id = ?", (rid,)).fetchone()
+        return self._hydrate(row), {
+            "action": "insert",
+            "collection": collection,
+            "record_id": rid,
+            "after": payload,
+        }
+
+    def _update_record(
+        self,
+        conn: sqlite3.Connection,
+        record_id: str,
+        patch: Mapping[str, Any],
+        *,
+        actor: str | None,
+        source: str | None,
+        request_id: str | None,
+        expected_revision: int | None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Merge-patch one live record on ``conn``, audit it, return it and its mirror."""
+        started = time.perf_counter()
+        row = conn.execute(
+            "SELECT * FROM records WHERE id = ? AND deleted_at IS NULL", (record_id,)
+        ).fetchone()
+        if row is None:
+            raise RecordNotFound(record_id)
+        current = _loads(row["data"], {}) or {}
+        if expected_revision is not None and int(row["revision"]) != int(expected_revision):
+            raise AuditError(
+                f"revision conflict on {record_id}: expected {expected_revision}, found {row['revision']}"
+            )
+        merged = {**current, **dict(patch)}
+        for reserved in _RESERVED:
+            merged.pop(reserved, None)
+        now = utcnow()
+        conn.execute(
+            "UPDATE records SET data = ?, revision = revision + 1, updated_at = ?, actor = ? WHERE id = ?",
+            (_dumps(merged), now, actor or self.actor, record_id),
+        )
+        self._reindex(conn, record_id, merged)
+        self._audit(
+            conn,
+            action="update",
+            collection=row["collection"],
+            record_id=record_id,
+            room_id=row["room_id"],
+            actor=actor,
+            source=source,
+            request_id=request_id,
+            summary=f"updated {row['collection']} {record_id}",
+            before=current,
+            after=merged,
+            started=started,
+        )
+        fresh = conn.execute("SELECT * FROM records WHERE id = ?", (record_id,)).fetchone()
+        return self._hydrate(fresh), {
+            "action": "update",
+            "collection": row["collection"],
+            "record_id": record_id,
+            "diff": _diff(current, merged),
+        }
+
     def create(
         self,
         collection: str,
@@ -414,44 +574,18 @@ class AuditedDatabase:
         request_id: str | None = None,
     ) -> dict[str, Any]:
         """Insert a record and audit it atomically."""
-        if not collection:
-            raise ValueError("collection is required")
-        payload = dict(data or {})
-        for reserved in _RESERVED:
-            payload.pop(reserved, None)
-        rid = record_id or new_id(collection)
-        now = utcnow()
-        started = time.perf_counter()
-
         with self._write() as conn:
-            try:
-                conn.execute(
-                    "INSERT INTO records"
-                    " (id, collection, room_id, data, revision, created_at, updated_at, actor, source)"
-                    " VALUES (?,?,?,?,1,?,?,?,?)",
-                    (rid, collection, room_id, _dumps(payload), now, now, actor or self.actor, source),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise AuditError(f"record {rid!r} already exists: {exc}") from exc
-            self._reindex(conn, rid, payload)
-            self._audit(
+            record, mirror = self._insert_record(
                 conn,
-                action="insert",
-                collection=collection,
-                record_id=rid,
+                collection,
+                data,
+                record_id=record_id,
                 room_id=room_id,
                 actor=actor,
                 source=source,
                 request_id=request_id,
-                summary=f"created {collection} {rid}",
-                before=None,
-                after=payload,
-                started=started,
             )
-            row = conn.execute("SELECT * FROM records WHERE id = ?", (rid,)).fetchone()
-
-        record = self._hydrate(row)
-        self._mirror({"action": "insert", "collection": collection, "record_id": rid, "after": payload})
+        self._mirror(mirror)
         return record
 
     def update(
@@ -469,47 +603,17 @@ class AuditedDatabase:
         ``expected_revision`` enables optimistic concurrency: the update fails
         if the record has moved on since the caller read it.
         """
-        started = time.perf_counter()
         with self._write() as conn:
-            row = conn.execute(
-                "SELECT * FROM records WHERE id = ? AND deleted_at IS NULL", (record_id,)
-            ).fetchone()
-            if row is None:
-                raise RecordNotFound(record_id)
-            current = _loads(row["data"], {}) or {}
-            if expected_revision is not None and int(row["revision"]) != int(expected_revision):
-                raise AuditError(
-                    f"revision conflict on {record_id}: expected {expected_revision}, found {row['revision']}"
-                )
-            merged = {**current, **dict(patch)}
-            for reserved in _RESERVED:
-                merged.pop(reserved, None)
-            now = utcnow()
-            conn.execute(
-                "UPDATE records SET data = ?, revision = revision + 1, updated_at = ?, actor = ? WHERE id = ?",
-                (_dumps(merged), now, actor or self.actor, record_id),
-            )
-            self._reindex(conn, record_id, merged)
-            self._audit(
+            record, mirror = self._update_record(
                 conn,
-                action="update",
-                collection=row["collection"],
-                record_id=record_id,
-                room_id=row["room_id"],
+                record_id,
+                patch,
                 actor=actor,
                 source=source,
                 request_id=request_id,
-                summary=f"updated {row['collection']} {record_id}",
-                before=current,
-                after=merged,
-                started=started,
+                expected_revision=expected_revision,
             )
-            fresh = conn.execute("SELECT * FROM records WHERE id = ?", (record_id,)).fetchone()
-
-        record = self._hydrate(fresh)
-        self._mirror(
-            {"action": "update", "collection": record["collection"], "record_id": record_id, "diff": _diff(current, merged)}
-        )
+        self._mirror(mirror)
         return record
 
     def delete(
@@ -668,14 +772,25 @@ class AuditedDatabase:
         record_id: str | None = None,
         actor: str | None = None,
         action: str | None = None,
+        request_id: str | None = None,
         since: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Read the audit trail, newest first."""
+        """Read the audit trail, newest first.
+
+        ``request_id`` is how one caller's several writes are read back together,
+        which is what makes a multi-record workflow traceable as a unit.
+        """
         sql = "SELECT * FROM audit_log WHERE 1=1"
         params: list[Any] = []
-        for column, value in (("collection", collection), ("record_id", record_id), ("actor", actor), ("action", action)):
+        for column, value in (
+            ("collection", collection),
+            ("record_id", record_id),
+            ("actor", actor),
+            ("action", action),
+            ("request_id", request_id),
+        ):
             if value is not None:
                 sql += f" AND {column} = ?"  # noqa: S608 - column from a fixed allowlist
                 params.append(value)
@@ -701,6 +816,7 @@ class AuditedDatabase:
         record_id: str | None = None,
         actor: str | None = None,
         action: str | None = None,
+        request_id: str | None = None,
     ) -> int:
         """Count audit rows matching the same filters as :meth:`audit`."""
         sql = "SELECT COUNT(*) AS n FROM audit_log WHERE 1=1"
@@ -710,6 +826,7 @@ class AuditedDatabase:
             ("record_id", record_id),
             ("actor", actor),
             ("action", action),
+            ("request_id", request_id),
         ):
             if value is not None:
                 sql += f" AND {column} = ?"  # noqa: S608 - column from a fixed allowlist
@@ -745,3 +862,101 @@ class AuditedDatabase:
             "by_action": by_action,
             "schema_version": SCHEMA_VERSION,
         }
+
+
+class AuditedWriter:
+    """Audited write handle for one open transaction.
+
+    Yielded by :meth:`AuditedDatabase.transaction`. Every method writes on the
+    transaction's connection, so the whole block shares one commit or one
+    rollback, and every write still produces its own audit row and index entry.
+    The single-record methods on :class:`AuditedDatabase` share their
+    implementation with these, so there is no way for a transactional write to
+    be indexed or audited differently from a standalone one.
+    """
+
+    def __init__(
+        self,
+        db: AuditedDatabase,
+        conn: sqlite3.Connection,
+        *,
+        actor: str | None = None,
+        source: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        self._db = db
+        self._conn = conn
+        self._actor = actor
+        self._source = source
+        self._request_id = request_id
+        self._pending_mirrors: list[dict[str, Any]] = []
+
+    def _resolve(
+        self, actor: str | None, source: str | None, request_id: str | None
+    ) -> tuple[str | None, str | None, str | None]:
+        """Per-call values, falling back to the block's defaults."""
+        return (
+            actor if actor is not None else self._actor,
+            source if source is not None else self._source,
+            request_id if request_id is not None else self._request_id,
+        )
+
+    def create(
+        self,
+        collection: str,
+        data: Mapping[str, Any] | None = None,
+        *,
+        record_id: str | None = None,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Insert a record that commits with the rest of the transaction."""
+        actor, source, request_id = self._resolve(actor, source, request_id)
+        record, mirror = self._db._insert_record(  # noqa: SLF001 - one implementation, shared
+            self._conn,
+            collection,
+            data,
+            record_id=record_id,
+            room_id=room_id,
+            actor=actor,
+            source=source,
+            request_id=request_id,
+        )
+        self._pending_mirrors.append(mirror)
+        return record
+
+    def update(
+        self,
+        record_id: str,
+        patch: Mapping[str, Any],
+        *,
+        actor: str | None = None,
+        source: str | None = None,
+        request_id: str | None = None,
+        expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Merge-patch a record that commits with the rest of the transaction."""
+        actor, source, request_id = self._resolve(actor, source, request_id)
+        record, mirror = self._db._update_record(  # noqa: SLF001 - one implementation, shared
+            self._conn,
+            record_id,
+            patch,
+            actor=actor,
+            source=source,
+            request_id=request_id,
+            expected_revision=expected_revision,
+        )
+        self._pending_mirrors.append(mirror)
+        return record
+
+    def flush_mirrors(self) -> None:
+        """Write the queued JSONL mirror rows. Called only after a commit.
+
+        Mirroring is best-effort by design: the database is the source of truth,
+        so a mirror failure must not fail work that has already committed.
+        """
+        pending, self._pending_mirrors = self._pending_mirrors, []
+        for mirror in pending:
+            self._db._mirror(mirror)  # noqa: SLF001

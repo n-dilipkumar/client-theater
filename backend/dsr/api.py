@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound
+from dsr.rooms import RoomCreationError, create_room, list_accounts, list_rooms, list_templates
 from dsr.store import RecordStore, parse_where
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -99,6 +100,19 @@ async def _audit_error(request: Request, exc: AuditError) -> JSONResponse:
     # 409: the request was well-formed but conflicts with current state.
     status = 409 if "conflict" in str(exc).lower() or "exists" in str(exc).lower() else 400
     return JSONResponse(status_code=status, content={"error": "audit_error", "detail": str(exc)})
+
+
+@app.exception_handler(RoomCreationError)
+async def _room_creation_error(request: Request, exc: RoomCreationError) -> JSONResponse:
+    """Map a refused create-room request to its status and a machine-readable code.
+
+    The wizard needs the code to say which step to send the operator back to;
+    the message is written for the operator, not for a log reader.
+    """
+    return JSONResponse(
+        status_code=exc.status,
+        content={"error": exc.code, "detail": exc.message},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -270,6 +284,9 @@ def audit_log(
     record_id: str | None = Query(default=None),
     actor: str | None = Query(default=None),
     action: str | None = Query(default=None),
+    request_id: str | None = Query(
+        default=None, description="read back every write made by one request as a unit"
+    ),
     since: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -281,6 +298,7 @@ def audit_log(
         record_id=record_id,
         actor=actor,
         action=action,
+        request_id=request_id,
         since=since,
         limit=limit,
         offset=offset,
@@ -294,6 +312,92 @@ def audit_entry(seq: int, store: RecordStore = StoreDep) -> dict[str, Any]:
         if entry["seq"] == seq:
             return entry
     raise HTTPException(status_code=404, detail=f"audit entry {seq} not found")
+
+
+# --------------------------------------------------------------------------- #
+# WF-001: create a Digital Sales Room from an account and a template
+# --------------------------------------------------------------------------- #
+
+
+@app.get("/api/room-templates", tags=["rooms"])
+def room_templates(store: RecordStore = StoreDep) -> dict[str, Any]:
+    """Templates the create-room wizard offers.
+
+    The shipped catalogue overlaid with any ``template`` records in the store,
+    so an operator can add a template with a plain POST and no redeploy.
+    """
+    templates = list_templates(store)
+    return {"templates": templates, "count": len(templates)}
+
+
+@app.get("/api/accounts", tags=["rooms"])
+def accounts(
+    q: str | None = Query(default=None, description="case-insensitive substring of name or domain"),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """Accounts a room can be bound to (wizard step 1).
+
+    Accounts are ordinary schema-flexible records, so the whole record is
+    returned and nothing here needs to know which fields a team stores.
+    """
+    return list_accounts(store, query=q, limit=limit, offset=offset)
+
+
+@app.post("/api/rooms", status_code=201, tags=["rooms"])
+def create_room_endpoint(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    actor: str | None = Query(default=None),
+    request_id: str | None = Query(default=None),
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """Create a room from an account and a template (wizard steps 1-3).
+
+    Required: ``name``, ``account_id``, ``template_id``. Optional:
+    ``friendly_url`` (derived from the name when omitted), ``created_by``,
+    ``created_by_username``. **Any other field is stored and indexed as-is**,
+    which is how a team ships a new room attribute without a migration.
+    """
+    body = dict(payload)
+    for consumed in ("name", "account_id", "template_id", "friendly_url", "created_by", "created_by_username"):
+        body.pop(consumed, None)
+
+    room = create_room(
+        store,
+        name=payload.get("name"),
+        account_id=payload.get("account_id"),
+        template_id=payload.get("template_id"),
+        friendly_url=payload.get("friendly_url"),
+        actor=actor,
+        created_by=payload.get("created_by"),
+        created_by_username=payload.get("created_by_username"),
+        extra=body,
+        request_id=request_id,
+    )
+    return room
+
+
+@app.get("/api/rooms", tags=["rooms"])
+def list_rooms_endpoint(
+    status: str = Query(default="active", description="active | archived | all"),
+    q: str | None = Query(default=None, description="substring of name, friendly URL, account, or template"),
+    account_id: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """The Rooms list, filtered to one status at a time (defaults to Active)."""
+    return list_rooms(
+        store,
+        status=status,
+        query=q,
+        account_id=account_id,
+        template_id=template_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # --------------------------------------------------------------------------- #

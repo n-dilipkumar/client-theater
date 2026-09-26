@@ -303,6 +303,20 @@ def test_audit_records_actor_source_and_request_id(db):
     assert entry["request_id"] == "req-1"
 
 
+def test_audit_filters_by_request_id_to_read_one_request_as_a_unit(db):
+    with db.transaction(request_id="req-1", actor="dana") as tx:
+        room = tx.create("room", {"name": "Acme"})
+        tx.create("site", {"friendly_url": "acme"}, room_id=room["id"])
+    with db.transaction(request_id="req-2", actor="sam") as tx:
+        other = tx.create("room", {"name": "Contoso"})
+
+    first = db.audit(request_id="req-1")
+    assert {e["collection"] for e in first} == {"room", "site"}
+    assert all(e["request_id"] == "req-1" for e in first)
+    assert db.audit_count(request_id="req-1") == 2
+    assert [e["record_id"] for e in db.audit(request_id="req-2")] == [other["id"]]
+
+
 def test_jsonl_mirror_written_for_each_change(db, tmp_path):
     record = db.create("room", {"name": "A"})
     db.update(record["id"], {"name": "B"})
@@ -389,3 +403,112 @@ def test_closed_database_refuses_writes(tmp_path):
 
     with pytest.raises(AuditError, match="closed"):
         database.create("room", {"name": "A"})
+
+
+# -- transactions (multi-record atomic writes) ------------------------------- #
+
+
+def test_transaction_commits_every_write_and_audits_each(db):
+    with db.transaction(actor="dana") as tx:
+        room = tx.create("room", {"name": "Acme"})
+        site = tx.create("site", {"friendly_url": "acme"}, room_id=room["id"])
+
+    assert db.get(room["id"]) is not None
+    assert db.get(site["id"])["room_id"] == room["id"]
+    # One audit row per record, not one for the pair: the log stays as granular
+    # as it is for single-record writes.
+    assert db.audit_count() == 2
+    assert db.audit(record_id=room["id"])[0]["actor"] == "dana"
+    assert db.audit(record_id=site["id"])[0]["actor"] == "dana"
+
+
+def test_transaction_rolls_back_all_writes_and_audit_rows_on_failure(db):
+    with pytest.raises(RuntimeError, match="boom"):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Acme"})
+            raise RuntimeError("boom")
+
+    assert db.count("room") == 0
+    assert db.audit_count() == 0
+    # The dynamic index rolls back with the data, so a rolled-back room is not
+    # findable by any of its fields.
+    assert db.find("room", {"name": "Acme"}) == []
+
+
+def test_transaction_update_is_audited_and_rolled_back_together(db):
+    room = db.create("room", {"name": "Acme"})
+
+    with pytest.raises(RuntimeError):
+        with db.transaction() as tx:
+            tx.update(room["id"], {"name": "Renamed"})
+            tx.create("site", {"friendly_url": "acme"})
+            raise RuntimeError("boom")
+
+    assert db.get(room["id"])["data"]["name"] == "Acme"
+    assert db.count("site") == 0
+    assert db.audit_count() == 1  # only the original insert survives
+
+
+def test_transaction_index_reflects_writes_inside_the_block(db):
+    with db.transaction() as tx:
+        tx.create("room", {"name": "Acme", "status": "active"})
+        # Visible to reads on the same connection before the commit.
+        assert db.find("room", {"status": "active"}) != []
+
+    assert db.query_index("status", "active") != []
+
+
+def test_write_inside_a_transaction_is_refused_with_a_clear_error(db):
+    """A nested single-record write is a programming error, not a partial commit.
+
+    Refusing it rolls the whole block back, so a caller that ignores the error
+    still cannot end up with half a workflow committed.
+    """
+    with pytest.raises(AuditError, match="writer handle"):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Acme"})
+            db.create("room", {"name": "Sneaky"})
+
+    assert db.count("room") == 0
+    assert db.audit_count() == 0
+
+
+def test_transaction_mirror_is_written_only_after_commit(db, tmp_path):
+    with db.transaction(actor="api") as tx:
+        tx.create("room", {"name": "Acme"})
+        tx.create("site", {"friendly_url": "acme"})
+
+    mirrors = list((tmp_path / "mirror").glob("audit-*.jsonl"))
+    lines = [json.loads(line) for line in mirrors[0].read_text(encoding="utf-8").splitlines()]
+    assert [line["action"] for line in lines] == ["insert", "insert"]
+
+
+def test_transaction_mirror_is_not_written_when_rolled_back(db, tmp_path):
+    with pytest.raises(RuntimeError):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Acme"})
+            raise RuntimeError("boom")
+
+    assert list((tmp_path / "mirror").glob("audit-*.jsonl")) == []
+
+
+def test_transaction_per_call_actor_overrides_the_block_default(db):
+    with db.transaction(actor="dana") as tx:
+        room = tx.create("room", {"name": "Acme"})
+        tx.create("site", {"friendly_url": "acme"}, actor="system")
+
+    assert db.audit(record_id=room["id"])[0]["actor"] == "dana"
+    assert db.audit(collection="site")[0]["actor"] == "system"
+
+
+def test_transaction_rejects_duplicate_record_id_and_rolls_back(db):
+    with db.transaction() as tx:
+        tx.create("room", {"name": "Acme"}, record_id="room_fixed")
+
+    with pytest.raises(AuditError, match="already exists"):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Clash"}, record_id="room_fixed")
+            tx.create("site", {"friendly_url": "clash"})
+
+    assert db.get("room_fixed")["data"]["name"] == "Acme"
+    assert db.count("site") == 0
