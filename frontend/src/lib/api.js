@@ -29,6 +29,18 @@ async function request(path, options = {}) {
   return response.json()
 }
 
+/**
+ * Generic escape hatch for feature plugins.
+ *
+ * A feature under src/features/<id>/ calls this instead of adding a method to
+ * `api` below. That is what keeps this file stable: a hundred features can each
+ * talk to their own /api/<feature> routes without anyone editing a shared file.
+ *
+ *   import { apiRequest } from '@/lib/api'
+ *   const { features } = await apiRequest('/features')
+ */
+export const apiRequest = request
+
 export const api = {
   health: () => request('/health'),
   stats: () => request('/stats'),
