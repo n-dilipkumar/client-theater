@@ -86,6 +86,32 @@ decision = client.choose_approach(
 print(decision.verdict, decision.selected, decision.reason)
 ```
 
+## Features are added as files, never by editing shared files
+
+Every workflow ships as a plugin under `backend/dsr/features/` and
+`frontend/src/features/`. The host discovers them, so there is no registration
+step and nothing to merge into. **Read `docs/FEATURE-CONTRACT.md` before writing
+a feature.** The short version:
+
+* Backend: `backend/dsr/features/<ticket>_<slug>.py` exporting `FEATURE` and a
+  `router` whose `prefix` is `/api/<your-slug>` and unique.
+* Frontend: `frontend/src/features/<id>/index.jsx` whose default export is
+  `{ id, label, icon, Component }`. Import with `@/`.
+* Dependencies come from `dsr.deps`, never from `dsr.api`.
+* Never edit `dsr/api.py`, `dsr/deps.py`, `store.py`, `db/audited.py`,
+  `App.jsx`, `lib/api.js`, or `components/ui.jsx`. For a new icon use
+  `<Icon path="..." />`.
+
+Check your own branch before you open a PR:
+
+```sh
+../.venv/Scripts/python ../tools/check_feature_diff.py --base origin/main
+```
+
+This rule exists because a hundred features land at once. The previous run of
+this project stalled with twelve branches built and none merged, because all
+twelve edited the same three files.
+
 ## Schema flexibility is a hard requirement
 
 Record payloads are arbitrary JSON stored in `records.data`. **Do not add a

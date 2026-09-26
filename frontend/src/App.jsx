@@ -4,16 +4,32 @@ import Dashboard from './pages/Dashboard'
 import Rooms from './pages/Rooms'
 import SchemaExplorer from './pages/SchemaExplorer'
 import { Icon } from './components/ui'
+import { featureProblems, featureRoutes } from './lib/features'
 
 /**
  * Routes are hash-based to keep the dependency surface small; deep links still
  * work, which matters because the audit log is something people share.
+ *
+ * The core pages are listed here. Everything built as a workflow feature is
+ * discovered from src/features/ at build time and appended below, so a new
+ * feature ships by adding a folder and never edits this file.
  */
-const ROUTES = [
+const CORE_ROUTES = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', Component: Dashboard },
   { id: 'rooms', label: 'Sales rooms', icon: 'rooms', Component: Rooms },
   { id: 'audit', label: 'Audit log', icon: 'audit', Component: AuditLog },
   { id: 'schema', label: 'Schema explorer', icon: 'schema', Component: SchemaExplorer },
+]
+
+const ROUTES = [
+  ...CORE_ROUTES,
+  ...featureRoutes.map((feature) => ({
+    id: feature.id,
+    label: feature.label || feature.id,
+    icon: feature.icon,
+    iconPath: feature.iconPath,
+    Component: feature.Component,
+  })),
 ]
 
 function currentRoute() {
@@ -85,7 +101,7 @@ export default function App() {
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >
-                    <Icon name={item.icon} />
+                    <Icon name={item.icon} path={item.iconPath} />
                     {item.label}
                   </a>
                 </li>
@@ -105,6 +121,23 @@ export default function App() {
 
       <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
         <div className="mx-auto max-w-6xl">
+          {featureProblems.length > 0 && (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4"
+            >
+              <p className="text-sm font-semibold text-amber-300">
+                {featureProblems.length} feature{featureProblems.length > 1 ? 's' : ''} could not be loaded
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {featureProblems.map((problem) => (
+                  <li key={problem.path} className="font-mono text-xs text-muted-foreground">
+                    {problem.path}: {problem.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <Active />
         </div>
       </main>
