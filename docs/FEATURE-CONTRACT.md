@@ -32,6 +32,59 @@ Needing something that these files do not provide is a design signal, not a
 licence to edit them. Put it in your own module and raise it in your PR
 description.
 
+### Route collisions are refused, not silently shadowed
+
+Two features may share a prefix while their concrete paths differ — `/api/rooms`
+for room CRUD and `/api/rooms/{id}/documents` for documents is fine. A second
+`GET /api/rooms` is not, and neither is re-using a core path like `/api/health`:
+Starlette matches in registration order, so the later one would be dead code.
+The host compares `(method, path)` across every mounted feature and the core
+app, refuses a clash, and reports it as a failed feature.
+
+### Mapping your errors to HTTP
+
+FastAPI accepts exception handlers on the app object only, never on a router,
+so export them and let the host attach them:
+
+```python
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+from dsr.rules import RuleError
+
+
+def _rule_error(request: Request, exc: RuleError):
+    return JSONResponse(status_code=422, content={"error": "invalid_rule", "detail": str(exc)})
+
+
+EXCEPTION_HANDLERS = {RuleError: _rule_error}
+```
+
+Handlers take `(request, exc)`, the same Starlette signature the core handlers
+in `api.py` use. Two features may not map the same error type; the host refuses
+the second rather than letting load order decide.
+
+## Shared UI: use it, extend it through a PR
+
+`frontend/src/components/ui.jsx` carries the primitives every feature may use:
+`Button`, `Card`, `StatCard`, `Badge`, `Field`, `Modal`, `Notice`, `Toggle`,
+`Checkbox`, `Spinner`, `ErrorNote`, `EmptyState`, `inputClass`, `useAsync`,
+`JsonView`. Reach for these before writing your own — twelve features each
+shipping their own `Modal` means twelve subtly different dialogs in one product.
+
+If a primitive you need genuinely does not exist, build it inside your own
+feature folder and say so in the PR description. The integrator promotes
+recurring ones into `ui.jsx` as platform work, once. Do not edit `ui.jsx`
+yourself.
+
+For icons, pass a path rather than adding to the shared `PATHS` map:
+
+```jsx
+<Icon path="M12 2 2 7l10 5 10-5-10-5z" />
+```
+
+and in your descriptor, `iconPath: 'M12 2 2 7l10 5 10-5-10-5z'`.
+
 ## Backend feature
 
 Create `backend/dsr/features/<ticket>_<slug>.py`. The host imports every
