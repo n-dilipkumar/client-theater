@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import AccessSettings from './pages/AccessSettings'
 import AuditLog from './pages/AuditLog'
 import Dashboard from './pages/Dashboard'
+import Gate from './pages/Gate'
 import Rooms from './pages/Rooms'
 import SchemaExplorer from './pages/SchemaExplorer'
 import { Icon } from './components/ui'
@@ -12,13 +14,19 @@ import { Icon } from './components/ui'
 const ROUTES = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', Component: Dashboard },
   { id: 'rooms', label: 'Sales rooms', icon: 'rooms', Component: Rooms },
+  { id: 'access', label: 'Access and identity', icon: 'shield', Component: AccessSettings },
   { id: 'audit', label: 'Audit log', icon: 'audit', Component: AuditLog },
   { id: 'schema', label: 'Schema explorer', icon: 'schema', Component: SchemaExplorer },
 ]
 
+/** The buyer-facing gate. Not in the nav: a buyer never sees the seller's chrome. */
+const BUYER_ROUTE = /^view\/([^/?]+)/
+
 function currentRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '')
-  return ROUTES.find((route) => route.id === hash)?.id || 'dashboard'
+  const buyer = hash.match(BUYER_ROUTE)
+  if (buyer) return { view: 'gate', roomId: decodeURIComponent(buyer[1]) }
+  return { view: 'seller', id: ROUTES.find((route) => route.id === hash)?.id || 'dashboard' }
 }
 
 export default function App() {
@@ -34,7 +42,11 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  const Active = ROUTES.find((item) => item.id === route)?.Component || Dashboard
+  if (route.view === 'gate') {
+    return <Gate roomId={route.roomId} />
+  }
+
+  const Active = ROUTES.find((item) => item.id === route.id)?.Component || Dashboard
 
   return (
     <div className="min-h-screen lg:flex">
@@ -73,7 +85,7 @@ export default function App() {
 
           <ul className="flex flex-col gap-1">
             {ROUTES.map((item) => {
-              const active = item.id === route
+              const active = item.id === route.id
               return (
                 <li key={item.id}>
                   <a

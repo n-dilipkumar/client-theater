@@ -23,6 +23,14 @@ const PATHS = {
   close: 'M6 6l12 12M18 6L6 18',
   chevron: 'M9 6l6 6-6 6',
   database: 'M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3zm8-3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5m16 7c0 1.7-3.6 3-8 3s-8-1.3-8-3',
+  shield: 'M12 3l8 3v6c0 4.5-3.2 8.3-8 9-4.8-.7-8-4.5-8-9V6l8-3z',
+  mail: 'M3 6h18v12H3V6zm0 1l9 7 9-7',
+  check: 'M4 12l5 5L20 6',
+  ban: 'M12 3a9 9 0 100 18 9 9 0 000-18zM5.6 5.6l12.8 12.8',
+  link: 'M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1m-2 8a5 5 0 01-7 0 5 5 0 010-7l3-3a5 5 0 017 0',
+  clock: 'M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v5l3 2',
+  copy: 'M9 9h10v10H9V9zM5 15V5h10',
+  inbox: 'M3 13h5l2 3h4l2-3h5M3 13l3-8h12l3 8v6H3v-6z',
 }
 
 export function Icon({ name, size = 18, className = '' }) {
@@ -166,6 +174,142 @@ export function Field({ label, hint, children, id }) {
 export const inputClass =
   'min-h-11 w-full rounded-lg border border-border-subtle/50 bg-background/60 px-3 text-sm ' +
   'text-foreground placeholder:text-muted-foreground/60 focus:border-accent'
+
+/**
+ * Checkbox with a 44px hit area.
+ *
+ * The native input stays in the DOM (rather than being replaced by a styled
+ * span) so keyboard and screen-reader behaviour is the browser's own. The label
+ * is a separate element rather than a wrapping one so the whole row is the
+ * target, which is what makes a settings list usable on a phone.
+ */
+export function Checkbox({ id, label, description, checked, onChange, disabled = false }) {
+  return (
+    <div className={`flex gap-3 ${disabled ? 'opacity-60' : ''}`}>
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-describedby={description ? `${id}-hint` : undefined}
+        className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-[var(--color-accent)] disabled:cursor-not-allowed"
+      />
+      <div className="min-w-0">
+        <label
+          htmlFor={id}
+          className={`block text-sm font-medium ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}
+        >
+          {label}
+        </label>
+        {description && (
+          <p id={`${id}-hint`} className="mt-0.5 text-xs text-muted-foreground">
+            {description}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Radio group for a small set of mutually exclusive options. */
+export function RadioGroup({ name, legend, options, value, onChange, disabled = false }) {
+  return (
+    <fieldset disabled={disabled} className="min-w-0">
+      <legend className="text-xs font-medium text-muted-foreground">{legend}</legend>
+      <div className="mt-2 grid gap-2">
+        {options.map((option) => {
+          const id = `${name}-${option.value}`
+          const active = value === option.value
+          return (
+            <label
+              key={option.value}
+              htmlFor={id}
+              className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border p-3
+                transition-colors duration-200 ${
+                  active
+                    ? 'border-accent/60 bg-accent/10'
+                    : 'border-border-subtle/40 bg-background/40 hover:bg-muted/50'
+                }`}
+            >
+              <input
+                id={id}
+                type="radio"
+                name={name}
+                value={option.value}
+                checked={active}
+                onChange={() => onChange(option.value)}
+                className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-[var(--color-accent)]"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">{option.label}</span>
+                {option.description && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
+                )}
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </fieldset>
+  )
+}
+
+/** Inline note. `tone` maps to the palette's semantic colours, never to emoji. */
+export function Notice({ tone = 'info', title, children, action }) {
+  const tones = {
+    info: 'border-sky-500/40 bg-sky-500/10 text-sky-100',
+    warn: 'border-amber-500/40 bg-amber-500/10 text-amber-100',
+    good: 'border-accent/40 bg-accent/10 text-foreground',
+    bad: 'border-destructive/40 bg-destructive/10 text-foreground',
+  }
+  return (
+    <div
+      role={tone === 'bad' ? 'alert' : 'status'}
+      className={`flex flex-wrap items-start justify-between gap-3 rounded-lg border p-4 ${tones[tone]}`}
+    >
+      <div className="min-w-0">
+        {title && <p className="text-sm font-semibold">{title}</p>}
+        <div className={`text-sm ${title ? 'mt-1' : ''} text-muted-foreground`}>{children}</div>
+      </div>
+      {action}
+    </div>
+  )
+}
+
+/** Copyable value, for the verification link on a local install. */
+export function CopyField({ value, label }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard access can be refused; the value stays selectable either way.
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className="min-w-0">
+      {label && <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>}
+      <div className="flex items-stretch gap-2">
+        <input
+          readOnly
+          value={value}
+          aria-label={label || 'Verification link'}
+          onFocus={(event) => event.target.select()}
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-border-subtle/50 bg-background/60 px-3 font-mono text-xs text-foreground"
+        />
+        <Button icon={copied ? 'check' : 'copy'} onClick={copy} className="shrink-0">
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 /** Async data hook with explicit loading/error state and a manual refetch. */
 export function useAsync(loader, deps = []) {

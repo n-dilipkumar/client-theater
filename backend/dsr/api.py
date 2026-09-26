@@ -13,15 +13,17 @@ positional shapes.
 from __future__ import annotations
 
 import os
+import urllib.parse
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from dsr.access import AccessDenied, AccessGate, PolicyError
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound
 from dsr.store import RecordStore, parse_where
 
@@ -61,8 +63,17 @@ async def lifespan(app: FastAPI):
     db = AuditedDatabase(path, mirror_dir=_mirror_dir(), actor="api")
     app.state.db = db
     app.state.store = RecordStore(db)
+    app.state.access = AccessGate(app.state.store)
     yield
     db.close()
+
+
+def get_access(request: Request) -> AccessGate:
+    """The WF-015 identity gate, over the process-wide store."""
+    return request.app.state.access
+
+
+AccessDep = Depends(get_access)
 
 
 app = FastAPI(
@@ -99,6 +110,30 @@ async def _audit_error(request: Request, exc: AuditError) -> JSONResponse:
     # 409: the request was well-formed but conflicts with current state.
     status = 409 if "conflict" in str(exc).lower() or "exists" in str(exc).lower() else 400
     return JSONResponse(status_code=status, content={"error": "audit_error", "detail": str(exc)})
+
+
+@app.exception_handler(PolicyError)
+async def _policy_error(request: Request, exc: PolicyError) -> JSONResponse:
+    """400 with a field-keyed map, so the UI can put each message next to the
+    input that caused it rather than showing one combined string."""
+    return JSONResponse(
+        status_code=400,
+        content={"error": "policy_invalid", "detail": str(exc), "errors": exc.errors},
+    )
+
+
+@app.exception_handler(AccessDenied)
+async def _access_denied(request: Request, exc: AccessDenied) -> JSONResponse:
+    """403 for a buyer the gate will not let through.
+
+    The attempt is always recorded on a session; only the attribution is
+    withheld, so the response carries the reason and the session id and nothing
+    about who the buyer is.
+    """
+    return JSONResponse(
+        status_code=403,
+        content={"error": exc.reason, "detail": str(exc), "session_id": exc.session_id},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -294,6 +329,230 @@ def audit_entry(seq: int, store: RecordStore = StoreDep) -> dict[str, Any]:
         if entry["seq"] == seq:
             return entry
     raise HTTPException(status_code=404, detail=f"audit entry {seq} not found")
+
+
+# --------------------------------------------------------------------------- #
+# WF-015: buyer identity verification and email-domain restriction
+# --------------------------------------------------------------------------- #
+#
+# The policy itself is a record, so it is also reachable through the generic
+# /api/records/access_policy endpoints. These routes exist because the workflow
+# has behaviour (resolve a tier, run a gate, verify a token), not because the
+# data needs a schema.
+
+
+def _base_url(request: Request) -> str:
+    """Absolute base for links we hand a buyer.
+
+    An operator behind a proxy sets DSR_PUBLIC_URL; otherwise the request's own
+    host is used, which is right for a local install and for a single-host
+    deployment.
+    """
+    return os.environ.get("DSR_PUBLIC_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
+
+
+@app.get("/api/rooms/{room_id}/access", tags=["access"])
+def get_room_access(
+    room_id: str, access: AccessGate = AccessDep, store: RecordStore = StoreDep
+) -> dict[str, Any]:
+    """The policy in force for a room, and the level it resolved at.
+
+    `level` matters: a control inherited from a template and shown without its
+    origin is indistinguishable from one the seller set themselves.
+    """
+    _require_room(store, room_id)
+    return access.resolve(room_id).as_dict()
+
+
+@app.put("/api/rooms/{room_id}/access", tags=["access"])
+def put_room_access(
+    room_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    actor: str | None = Query(default=None),
+    access: AccessGate = AccessDep,
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """Validate, normalise, and store the room's own policy.
+
+    The whole policy is one payload, because a seller filling in a form is not
+    making a sequence of PATCHes. `PolicyError` becomes a 400 with a
+    field-keyed error map.
+    """
+    _require_room(store, room_id)
+    return access.set_policy("room", room_id, payload, actor=actor)
+
+
+@app.delete("/api/rooms/{room_id}/access", tags=["access"])
+def delete_room_access(
+    room_id: str,
+    actor: str | None = Query(default=None),
+    access: AccessGate = AccessDep,
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """Drop the room's own policy so it falls back to whatever it inherits."""
+    _require_room(store, room_id)
+    return access.clear_policy("room", room_id, actor=actor)
+
+
+@app.get("/api/templates/{template_id}/access", tags=["access"])
+def get_template_access(template_id: str, access: AccessGate = AccessDep) -> dict[str, Any]:
+    """The default policy a template applies to the rooms created from it.
+
+    No store dependency and no 404: a template id is a free string a team chose,
+    and "no policy set yet" is the honest answer rather than a missing record.
+    """
+    policy = access.template_policy(template_id)
+    if policy is None:
+        return {"policy": None, "level": "default", "source": None, "template_id": template_id}
+    return {"policy": policy, "level": "template", "source": None, "template_id": template_id}
+
+
+@app.put("/api/templates/{template_id}/access", tags=["access"])
+def put_template_access(
+    template_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    actor: str | None = Query(default=None),
+    access: AccessGate = AccessDep,
+) -> dict[str, Any]:
+    """Set the template default. Rooms that inherit pick it up on their next read."""
+    return access.set_policy("template", template_id, payload, actor=actor)
+
+
+@app.delete("/api/templates/{template_id}/access", tags=["access"])
+def delete_template_access(
+    template_id: str,
+    actor: str | None = Query(default=None),
+    access: AccessGate = AccessDep,
+) -> dict[str, Any]:
+    return access.clear_policy("template", template_id, actor=actor)
+
+
+@app.get("/api/rooms/{room_id}/access/requirements", tags=["access"])
+def access_requirements(
+    room_id: str, access: AccessGate = AccessDep, store: RecordStore = StoreDep
+) -> dict[str, Any]:
+    """What the buyer must do to get in.
+
+    The allowlist is deliberately absent: a form that says "only foo.example is
+    accepted" is a free allowlist oracle.
+    """
+    _require_room(store, room_id)
+    return access.requirements(room_id)
+
+
+@app.post("/api/rooms/{room_id}/access/sessions", status_code=201, tags=["access"])
+def create_access_session(
+    room_id: str,
+    request: Request,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    access: AccessGate = AccessDep,
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """Run a buyer's form submission through the gate.
+
+    The tier decides everything downstream: `open` grants and records nothing,
+    `identify` records the identity and grants without sending mail, and
+    `verify_email` leaves the room closed until the emailed link is followed. A
+    domain that is not on the list is refused with 403 and the attempt is
+    recorded without being attributed to anybody.
+    """
+    _require_room(store, room_id)
+    return access.open_session(
+        room_id,
+        payload,
+        headers=dict(request.headers),
+        method=str(payload.get("method") or "identified"),
+        base_url=_base_url(request),
+        deliver=os.environ.get("DSR_ACCESS_DELIVER", "1") not in ("0", "false", "no"),
+    )
+
+
+@app.get("/api/rooms/{room_id}/access/verify", tags=["access"])
+def verify_access_session(
+    room_id: str,
+    request: Request,
+    token: str = Query(default=""),
+    redirect: bool = Query(default=False),
+    access: AccessGate = AccessDep,
+    store: RecordStore = StoreDep,
+) -> Any:
+    """The link from the verification email.
+
+    Idempotent, because a buyer who clicks twice should not be punished, but
+    every presentation is counted and audited. The allowlist is re-checked here
+    as well as at the form, so a link that has been sitting in an inbox cannot
+    outlive a policy the seller has since tightened.
+
+    With ``redirect=1`` — the form the emailed link carries — a successful
+    verification sends the buyer on to the room in the app instead of returning
+    JSON to a human. A refusal still returns 403 rather than redirecting, so a
+    dead link tells the buyer why.
+    """
+    _require_room(store, room_id)
+    result = access.verify(room_id, token)
+    if redirect:
+        target = f"/#/view/{urllib.parse.quote(room_id)}?token={urllib.parse.quote(token)}"
+        return RedirectResponse(url=target, status_code=303)
+    return result
+
+
+@app.get("/api/rooms/{room_id}/access/session", tags=["access"])
+def check_access_session(
+    room_id: str,
+    token: str | None = Query(default=None),
+    access: AccessGate = AccessDep,
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """What a token is worth right now, and what is still owed.
+
+    A status endpoint rather than a command: it answers 200 with a body for every
+    state the buyer can legitimately be in, and reserves 4xx for an unknown token
+    or a refusal. `token` is optional, so this also answers "what does this room
+    need?" for a buyer who has no token yet.
+    """
+    _require_room(store, room_id)
+    return access.check(room_id, token)
+
+
+@app.get("/api/rooms/{room_id}/access/sessions", tags=["access"])
+def list_access_sessions(
+    room_id: str,
+    include_bots: bool = Query(default=False),
+    include_refused: bool = Query(default=False),
+    access: AccessGate = AccessDep,
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """Who has been let in, and who has been turned away.
+
+    Bot-flagged attempts are excluded by default: the research is explicit that
+    scanners "pollute analytics", and a flag is only useful if it changes what
+    the seller actually sees.
+    """
+    _require_room(store, room_id)
+    return access.sessions(
+        room_id, include_bots=include_bots, include_refused=include_refused
+    )
+
+
+@app.get("/api/rooms/{room_id}/access/outbox", tags=["access"])
+def list_access_outbox(
+    room_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    access: AccessGate = AccessDep,
+    store: RecordStore = StoreDep,
+) -> dict[str, Any]:
+    """The delivery seam, so the verification link is reachable in a local
+    install that has no mail server."""
+    _require_room(store, room_id)
+    messages = access.outbox(room_id, limit=limit)
+    return {"room_id": room_id, "count": len(messages), "messages": messages}
+
+
+def _require_room(store: RecordStore, room_id: str) -> None:
+    """404 unless the id names a live record in the `room` collection."""
+    record = store.get(room_id)
+    if record is None or record["collection"] != "room":
+        raise HTTPException(status_code=404, detail=f"room {room_id} not found")
 
 
 # --------------------------------------------------------------------------- #
