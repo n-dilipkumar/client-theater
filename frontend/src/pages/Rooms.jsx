@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { api, relativeTime } from '../lib/api'
+import { useMemo, useState } from 'react'
+import { api, accessApi, relativeTime } from '../lib/api'
+import { ShareDialog } from '../components/ShareDialog'
 import {
   Badge,
   Button,
@@ -19,6 +20,11 @@ import {
  * Creating a room here writes through the audited store, so the change is
  * visible in the audit log immediately. That round trip is the point of the
  * page, not a side effect.
+ *
+ * The Share action (WF-004) hangs off each room, and whether it is rendered at
+ * all depends on the acting user's role in that room: the research states that
+ * viewers have no Share button. The role comes from the server, not from
+ * anything this page decides.
  */
 export default function Rooms() {
   const rooms = useAsync(() => api.listRecords('room', { limit: 100 }), [])
@@ -27,6 +33,43 @@ export default function Rooms() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [selected, setSelected] = useState(null)
+  const [sharing, setSharing] = useState(null)
+  const [actor, setActor] = useState(null)
+
+  const records = rooms.data?.records || []
+
+  /**
+   * Who the console user is acting as. There is no authentication in this
+   * slice, so the identity is explicit rather than implied: the server resolves
+   * it against the room's owner field and its access grants, and refuses
+   * anything that role does not permit.
+   */
+  const identities = useMemo(() => {
+    const owners = records.map((room) => room.data?.owner).filter(Boolean)
+    const seen = new Set()
+    return [...owners, ...['dana', 'sam']].filter(
+      (name) => name && !seen.has(name) && seen.add(name),
+    )
+  }, [records])
+
+  const effectiveActor = actor || identities[0] || null
+
+  // One snapshot per room, so each card knows whether to offer Share. The
+  // endpoint is the only source of truth about who may share.
+  const capabilities = useAsync(async () => {
+    if (!records.length || !effectiveActor) return {}
+    const pairs = await Promise.all(
+      records.map(async (room) => {
+        try {
+          const snapshot = await accessApi.snapshot(room.id, effectiveActor)
+          return [room.id, snapshot.actor]
+        } catch {
+          return [room.id, { can_share: false }]
+        }
+      }),
+    )
+    return Object.fromEntries(pairs)
+  }, [records.map((room) => room.id).join(','), effectiveActor])
 
   async function createRoom(event) {
     event.preventDefault()
@@ -67,13 +110,31 @@ export default function Rooms() {
             Each room is a schema-flexible record; every edit is audited.
           </p>
         </div>
-        <Button
-          icon="plus"
-          variant={creating ? 'ghost' : 'primary'}
-          onClick={() => setCreating((value) => !value)}
-        >
-          {creating ? 'Cancel' : 'New room'}
-        </Button>
+        <div className="flex flex-wrap items-end gap-2">
+          {identities.length > 0 && (
+            <Field label="Viewing as" id="room-actor" hint="Decides who can share a room.">
+              <select
+                id="room-actor"
+                className={`${inputClass} min-w-44`}
+                value={effectiveActor || ''}
+                onChange={(event) => setActor(event.target.value)}
+              >
+                {identities.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          <Button
+            icon="plus"
+            variant={creating ? 'ghost' : 'primary'}
+            onClick={() => setCreating((value) => !value)}
+          >
+            {creating ? 'Cancel' : 'New room'}
+          </Button>
+        </div>
       </header>
 
       {creating && (
@@ -169,6 +230,13 @@ export default function Rooms() {
                       <Button onClick={() => setSelected(selected === room.id ? null : room.id)}>
                         {selected === room.id ? 'Hide payload' : 'View payload'}
                       </Button>
+                      {/* Only rendered when the server says this person can
+                          share the room: viewers have no Share action. */}
+                      {capabilities.data?.[room.id]?.can_share && (
+                        <Button icon="share" variant="primary" onClick={() => setSharing(room)}>
+                          Share
+                        </Button>
+                      )}
                       {room.data.stage !== 'closed' && (
                         <Button icon="chevron" onClick={() => advanceStage(room)}>
                           Advance stage
@@ -190,6 +258,10 @@ export default function Rooms() {
             </ul>
           )}
         </>
+      )}
+
+      {sharing && (
+        <ShareDialog room={sharing} actor={effectiveActor} onClose={() => setSharing(null)} />
       )}
     </div>
   )

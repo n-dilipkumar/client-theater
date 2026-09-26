@@ -22,6 +22,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from dsr.access import AccessError
+from dsr.access_api import router as access_router
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound
 from dsr.store import RecordStore, parse_where
 
@@ -99,6 +101,21 @@ async def _audit_error(request: Request, exc: AuditError) -> JSONResponse:
     # 409: the request was well-formed but conflicts with current state.
     status = 409 if "conflict" in str(exc).lower() or "exists" in str(exc).lower() else 400
     return JSONResponse(status_code=status, content={"error": "audit_error", "detail": str(exc)})
+
+
+@app.exception_handler(AccessError)
+async def _access_error(request: Request, exc: AccessError) -> JSONResponse:
+    """A refusal from the WF-004 access rules.
+
+    The status code is the exception's own: 403 when the actor's role does not
+    permit the action, 404 for a record that is gone, 409-adjacent 428 when a
+    destructive change arrived unconfirmed. Kept off the generic 400 so a
+    client can tell "you may not" from "that is not valid".
+    """
+    return JSONResponse(
+        status_code=exc.status,
+        content={"error": type(exc).__name__, "detail": str(exc)},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -294,6 +311,16 @@ def audit_entry(seq: int, store: RecordStore = StoreDep) -> dict[str, Any]:
         if entry["seq"] == seq:
             return entry
     raise HTTPException(status_code=404, detail=f"audit entry {seq} not found")
+
+
+# --------------------------------------------------------------------------- #
+# WF-004: Share dialog and Who Has Access
+# --------------------------------------------------------------------------- #
+
+# Registered before the SPA catch-all below. FastAPI matches routes in
+# registration order, so a router added after `/{full_path:path}` would be
+# unreachable.
+app.include_router(access_router)
 
 
 # --------------------------------------------------------------------------- #

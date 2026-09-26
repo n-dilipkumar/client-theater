@@ -6,7 +6,7 @@
  * alongside icons, and no emoji used as an icon.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 /** Inline SVG icon set. Icons are decorative and hidden from assistive tech;
  *  the surrounding control always carries its own text label. */
@@ -23,6 +23,15 @@ const PATHS = {
   close: 'M6 6l12 12M18 6L6 18',
   chevron: 'M9 6l6 6-6 6',
   database: 'M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3zm8-3v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5m16 7c0 1.7-3.6 3-8 3s-8-1.3-8-3',
+  share: 'M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zm12 7a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
+  mail: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm0 0l9 6 9-6',
+  pencil: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z',
+  users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+  warning: 'M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
+  clock: 'M12 21a9 9 0 100-18 9 9 0 000 18zm0-14v5l3 2',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.4 5.1L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.4-6.9A2 2 0 0016.8 4H7.2a2 2 0 00-1.8 1.1z',
 }
 
 export function Icon({ name, size = 18, className = '' }) {
@@ -215,5 +224,137 @@ export function JsonView({ value, depth = 0 }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modal                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A focus-managed dialog.
+ *
+ * Three behaviours the design system requires of any overlay: focus moves in
+ * on open and returns to the trigger on close, Escape closes, and the whole
+ * thing is reachable from the keyboard alone. Tab is wrapped so a keyboard
+ * user cannot end up interacting with the page behind the overlay.
+ */
+export function Modal({ title, description, onClose, children, footer, wide = false }) {
+  const panel = useRef(null)
+  const opener = useRef(null)
+  const closeRef = useRef(onClose)
+  const titleId = useId()
+
+  // Callers pass an inline arrow, so its identity changes on every parent
+  // render. Holding it in a ref keeps the mount effect from re-running, which
+  // would otherwise yank focus back to the first field mid-edit.
+  closeRef.current = onClose
+
+  useEffect(() => {
+    const close = () => closeRef.current?.()
+    opener.current = document.activeElement
+    const first = panel.current?.querySelector(
+      'input:not([type="hidden"]), select, textarea, button, [href], [tabindex]:not([tabindex="-1"])',
+    )
+    ;(first || panel.current)?.focus()
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        close()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = panel.current?.querySelectorAll(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusable?.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown, true)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      document.body.style.overflow = previousOverflow
+      if (opener.current instanceof HTMLElement) opener.current.focus()
+    }
+  }, [])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`glass my-auto w-full rounded-t-2xl sm:rounded-2xl ${wide ? 'max-w-3xl' : 'max-w-xl'} focus:outline-none`}
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-border-subtle/25 px-5 py-4">
+          <div className="min-w-0">
+            <h2 id={titleId} className="font-mono text-base font-semibold text-foreground">
+              {title}
+            </h2>
+            {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+          </div>
+          <Button
+            icon="close"
+            variant="ghost"
+            onClick={onClose}
+            aria-label={`Close ${title}`}
+            className="-mr-2 shrink-0"
+          >
+            <span className="sr-only sm:not-sr-only">Close</span>
+          </Button>
+        </header>
+
+        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
+
+        {footer && (
+          <footer className="border-t border-border-subtle/25 px-5 py-4">{footer}</footer>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Inline notice inside a surface. `tone` picks the palette; icons only, no emoji. */
+export function Notice({ tone = 'info', icon, title, children, actions }) {
+  const tones = {
+    info: 'border-sky-500/40 bg-sky-500/10 text-foreground',
+    warn: 'border-amber-500/40 bg-amber-500/10 text-foreground',
+    error: 'border-destructive/40 bg-destructive/10 text-foreground',
+    ok: 'border-accent/40 bg-accent/10 text-foreground',
+  }
+  return (
+    <div role="status" className={`rounded-lg border p-3 ${tones[tone] || tones.info}`}>
+      <div className="flex items-start gap-2.5">
+        {icon && (
+          <span className="mt-0.5 shrink-0 text-amber-400">
+            <Icon name={icon} />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          {title && <p className="text-sm font-semibold">{title}</p>}
+          {children && <div className="text-sm text-muted-foreground">{children}</div>}
+          {actions && <div className="mt-2 flex flex-wrap gap-2">{actions}</div>}
+        </div>
+      </div>
+    </div>
   )
 }

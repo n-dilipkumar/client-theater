@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
+from dsr.access import INVITATION_TTL_HOURS  # noqa: E402
 from dsr.db.audited import AuditedDatabase  # noqa: E402
 
 ROOMS = [
@@ -93,11 +94,37 @@ PEOPLE = [
     "lead@adventure.example",
 ]
 
+# WF-004 demo data. Each entry is (email, role, access_valid_until or None).
+# The mix is deliberate: one lapsed date so the seven-day banner has something to
+# count, one open-ended grant so the *No Expiration* row is visible, and one
+# without any grant at all so the immediate-join-on-send path can be tried.
+ROOM_ACCESS = {
+    "Northwind Traders": [
+        ("a.buyer@northwind.example", "content_contributor", "soon"),
+        ("b.buyer@northwind.example", "viewer", "far"),
+        ("legal@northwind.example", "room_collaborator", None),
+    ],
+    "Contoso Health": [
+        ("procurement@contoso.example", "viewer", "soon"),
+        ("ciso@contoso.example", "content_contributor", None),
+    ],
+    "Fabrikam Logistics": [
+        ("ops@fabrikam.example", "content_contributor", "far"),
+    ],
+    "Adventure Works": [
+        ("lead@adventure.example", "viewer", "far"),
+    ],
+}
+
 
 def main() -> int:
     rng = random.Random(20260926)  # deterministic demo data
     db_path = os.environ.get("DSR_DB_PATH", str(ROOT / "data" / "dsr.db"))
     mirror = os.environ.get("DSR_AUDIT_DIR", str(ROOT / "data" / "audit"))
+
+    # SQLite will not create the directory it is asked to write into, and the
+    # seed script is documented as runnable against a fresh checkout.
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
     db = AuditedDatabase(db_path, mirror_dir=mirror, actor="seed")
     print(f"seeding {db_path}")
@@ -154,6 +181,54 @@ def main() -> int:
             source="seed",
         )
     print("  activities 140")
+
+    # WF-004: who has access, with a spread of expiry outcomes. Written through
+    # the same audited store, so the Share dialog and the audit log agree.
+    access_count = 0
+    for room_id, account in room_ids:
+        for email, role, horizon in ROOM_ACCESS.get(account, []):
+            if horizon == "soon":
+                expiry = (now + timedelta(days=3)).strftime("%Y-%m-%d")
+            elif horizon == "far":
+                expiry = (now + timedelta(days=120)).strftime("%Y-%m-%d")
+            else:
+                expiry = None
+            db.create(
+                "room_access",
+                {
+                    "principal": email,
+                    "principal_type": "email",
+                    "role": role,
+                    "access_valid_until": expiry,
+                    "source": "invitation",
+                    "joined_immediately": True,
+                },
+                room_id=room_id,
+                actor="dana",
+                source="seed",
+            )
+            access_count += 1
+
+    # One invitation still in flight, so the 48-hour window is visible on load.
+    db.create(
+        "room_invitation",
+        {
+            "email": "new.buyer@northwind.example",
+            "role": "viewer",
+            "access_valid_until": None,
+            "state": "pending",
+            "token": "seed-demo-token-not-a-real-secret",
+            "sent_at": now.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "expires_at": (now + timedelta(hours=INVITATION_TTL_HOURS))
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z"),
+            "sent_by": "dana",
+        },
+        room_id=room_ids[0][0],
+        actor="dana",
+        source="seed",
+    )
+    print(f"  access grants {access_count}, pending invitations 1")
 
     stats = db.stats()
     print(f"\ndone: {stats['records']} live records, {stats['audit_entries']} audit entries")

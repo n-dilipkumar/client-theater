@@ -22,7 +22,13 @@ async function request(path, options = {}) {
     } catch {
       // Non-JSON error body; the status line is the best we have.
     }
-    throw new Error(detail)
+    // The status travels with the error so callers can react to a specific
+    // refusal rather than string-matching the message: the Share dialog needs
+    // to tell "you may not" (403) from "confirm this first" (428).
+    const error = new Error(detail)
+    error.status = response.status
+    error.code = detail
+    throw error
   }
 
   if (response.status === 204) return null
@@ -64,6 +70,50 @@ export const api = {
     const suffix = query.toString() ? `?${query}` : ''
     return request(`/audit${suffix}`)
   },
+}
+
+/**
+ * WF-004: the Share dialog and *Who Has Access*.
+ *
+ * These are workflow routes rather than generic record routes, because the
+ * server has to apply rules a client cannot: the delegation rule, the 48-hour
+ * acceptance window, and the end-of-day UTC expiry. `actor` is who the console
+ * user is acting as; the server resolves their role in the room and refuses
+ * anything that role does not permit.
+ */
+function withQuery(path, params = {}) {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') query.set(key, value)
+  }
+  return query.toString() ? `${path}?${query}` : path
+}
+
+export const accessApi = {
+  roles: (actorRole) => request(withQuery('/access/roles', { actor_role: actorRole })),
+
+  /** Members, pending invitations, and the imminent-expiry banner, in one read. */
+  snapshot: (roomId, actor) => request(withQuery(`/rooms/${roomId}/access`, { actor })),
+
+  invite: (roomId, { emails, role, access_valid_until }, actor) =>
+    request(withQuery(`/rooms/${roomId}/invitations`, { actor }), {
+      method: 'POST',
+      body: JSON.stringify({ emails, role, access_valid_until }),
+    }),
+
+  accept: (invitationId, actor) =>
+    request(withQuery(`/invitations/${invitationId}/accept`, { actor }), { method: 'POST' }),
+
+  updateAccess: (accessId, { role, access_valid_until, set_expiry }, { actor, confirm } = {}) =>
+    request(withQuery(`/access/${accessId}`, { actor, confirm: confirm || undefined }), {
+      method: 'PATCH',
+      body: JSON.stringify({ role, access_valid_until, set_expiry }),
+    }),
+
+  removeAccess: (accessId, { actor, confirm } = {}) =>
+    request(withQuery(`/access/${accessId}`, { actor, confirm: confirm || undefined }), {
+      method: 'DELETE',
+    }),
 }
 
 /** Format an ISO timestamp as a compact relative string plus absolute time. */

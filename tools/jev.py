@@ -133,6 +133,19 @@ def _opt_float(value: Any) -> float | None:
         return None
 
 
+def _is_gate_name(gate: Answer, pass_option: str) -> bool:
+    """Whether ``pass_option`` names the gate question rather than a criteria key.
+
+    A ``choice`` answer's ``legend`` maps each criteria key to its description.
+    When ``pass_option`` is absent from that legend but equals the question's
+    own name, the caller used the question-name convention, so the choice is
+    being compared by question rather than by criteria key.
+    """
+    if pass_option in gate.legend:
+        return False
+    return not gate.probabilities or pass_option not in gate.probabilities
+
+
 # --------------------------------------------------------------------------- #
 # Decision envelope
 # --------------------------------------------------------------------------- #
@@ -402,7 +415,11 @@ class Jev:
         threshold: float,
         mode: str = "option",
     ) -> tuple[str, bool, str, str | None]:
-        """Return ``(verdict, passed, reason, selected)`` for a gate answer."""
+        """Return ``(verdict, passed, reason, selected)`` for a gate answer.
+
+        For a ``choice`` gate, ``pass_option`` may be the winning criteria key
+        or the gate question's own name; see the note in the choice branch.
+        """
         confidence = gate.confidence if gate.confidence is not None else 0.0
 
         if mode == "confidence":
@@ -429,7 +446,17 @@ class Jev:
 
         if gate.type == "choice":
             chosen = gate.value
-            if chosen == pass_option:
+            # `pass_option` may be either the winning criteria key ("accept") or
+            # the gate question's own name ("verdict"). `decide` validates that
+            # the name exists in the answers, so the name is the only form that
+            # works for a question whose criteria keys differ from its name --
+            # which is every high-level helper here. When the name is used, any
+            # selection that is not an explicit failure counts as the pass,
+            # which is what `fail_options` is for.
+            passes = chosen == pass_option or (
+                chosen not in fail_options and mode == "option" and _is_gate_name(gate, pass_option)
+            )
+            if passes:
                 if confidence >= threshold:
                     return "pass", True, f"chose {chosen!r} at confidence {confidence:.2f}", chosen
                 return (
