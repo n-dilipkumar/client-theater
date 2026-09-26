@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
 from dsr.db.audited import AuditedDatabase  # noqa: E402
+from dsr.features import iter_feature_modules  # noqa: E402
 
 ROOMS = [
     {
@@ -155,11 +156,54 @@ def main() -> int:
         )
     print("  activities 140")
 
+    seeded = seed_features(db, room_ids=room_ids, now=now)
+    for label, detail in seeded:
+        print(f"  feature   {label}{detail}")
+
     stats = db.stats()
     print(f"\ndone: {stats['records']} live records, {stats['audit_entries']} audit entries")
     print(f"by action: {stats['by_action']}")
     db.close()
     return 0
+
+
+def seed_features(db, *, room_ids: list[tuple[str, str]], now: datetime) -> list[tuple[str, str]]:
+    """Let each feature contribute its own demo rows.
+
+    ``seed.py`` is a shared file, and ten of the first twelve features rewrote it
+    just to add their own demo data - the same collision the plugin host exists
+    to remove. A feature exports ``seed(db, context)`` in its own module instead,
+    so demo data stays with the feature that needs it and a feature that cannot
+    seed itself is visible rather than silently empty.
+
+    The context is deliberately plain data: ``room_ids`` and ``now`` cover what a
+    feature needs to attach rows to the demo dataset, and a per-feature seeded
+    ``rng`` keeps output reproducible without features sharing a random stream.
+    """
+    results: list[tuple[str, str]] = []
+
+    for name, module, error in iter_feature_modules():
+        if error:
+            print(f"  feature   {name} SKIPPED: {error}")
+            continue
+        seed = getattr(module, "seed", None)
+        if seed is None:
+            continue
+        try:
+            summary = seed(
+                db,
+                {
+                    "room_ids": room_ids,
+                    "now": now,
+                    "rng": random.Random(name),
+                },
+            )
+        except Exception as exc:  # one bad feature must not abort the whole seed
+            print(f"  feature   {name} seed FAILED: {type(exc).__name__}: {exc}")
+            continue
+        results.append((name, f" -> {summary}" if summary else ""))
+
+    return results
 
 
 if __name__ == "__main__":
