@@ -27,6 +27,9 @@ SHARED = {
     "backend/dsr/deps.py",
     "backend/dsr/store.py",
     "backend/dsr/db/audited.py",
+    # Rewritten by ten of the first twelve features, purely to add their own
+    # demo rows. Features export seed(db, context) in their own module instead.
+    "backend/seed.py",
     "frontend/src/App.jsx",
     "frontend/src/main.jsx",
     "frontend/src/lib/api.js",

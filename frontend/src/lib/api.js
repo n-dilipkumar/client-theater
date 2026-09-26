@@ -22,7 +22,12 @@ async function request(path, options = {}) {
     } catch {
       // Non-JSON error body; the status line is the best we have.
     }
-    throw new Error(detail)
+    // The status rides on the error so a caller can branch on it instead of
+    // pattern-matching the message: a feature needs to tell "not configured
+    // yet" (428) or "not allowed" (403) apart from "the request failed".
+    const error = new Error(detail)
+    error.status = response.status
+    throw error
   }
 
   if (response.status === 204) return null
