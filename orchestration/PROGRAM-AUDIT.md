@@ -334,3 +334,51 @@ skipped, and the guard run per branch.
 
 Merged as **PR #10 → `8920d2f`**, all four CI jobs green, 375 tests, 57 frontend
 modules, all 22 headless checks passing with four features mounted.
+
+---
+
+## 2026-09-27 — Set 2 dispatched; a backtick in a prompt ate two briefs
+
+WF-007, WF-009, WF-010 and WF-011 dispatched — the four held back as collisions
+until measurement showed 0 identical `(method, path)` pairs and Jev answered
+`port_all_four_as_is` at 0.79.
+
+### The defect
+
+The pointer prompt read:
+
+    Read `orchestration/ports/WF-007.md` in this repo and carry out ...
+
+An Orca terminal on Windows is a **cmd.exe pty**, and backticks are **command
+substitution** there. cmd tried to *execute* the word "Read", and the prompt
+arrived mangled. Two agents were affected:
+
+- **WF-010** sat idle at an empty prompt, having never received a brief
+- **WF-007** was gone entirely, its pty not having survived
+
+Neither failure is visible from git, from the worktree, or from the dispatch
+script's exit code. Only from **reading the agent's screen**. Set 1's pointer had
+the identical hazard and happened to survive — nothing about the two cases differed
+in a way that had been checked, so that was luck being mistaken for a working
+design.
+
+While writing the PR that documents this, the same failure reproduced in my own
+tooling: the first attempt to pass the PR body inline had backticks in it and
+`gh` rejected the whole argument as unquoted fragments. The `--body-file` form is
+the fix, which is a fitting way to ship a note about text a shell rewrites.
+
+`repair_set2.py` re-delivers briefs with no backticks **and no other character cmd
+treats specially**, asserts that before sending, and reads the screen back
+afterwards. It does not trust the receipt: `accepted` came back **empty on a
+successful send**, so it is not evidence of anything on its own.
+
+### State
+
+All four live and working, **none touching a shared file**. This is the first
+dispatch where two of the four deliberately share an API prefix — WF-007 and
+WF-010 under `/api/library`, WF-009 and WF-011 under `/api/publishing`. Safe
+precisely because their concrete paths differ: the case the host exists to allow,
+and the case `PORT-PLAN.md` wrongly flagged as a collision.
+
+Board corrected to match: 4 `in-progress` with live agents, 8 `completed`, 16
+`todo`, zero stale cards.
