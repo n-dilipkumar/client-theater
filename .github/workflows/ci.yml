@@ -49,8 +49,18 @@ jobs:
         with:
           python-version: '3.12'
 
+      # A shared-file edit is a violation unless the PR is *labelled* platform
+      # work, and the label is the record a reviewer sees. Deriving the exemption
+      # from a label rather than a hand-passed flag means the decision is written
+      # down in the PR, not typed into a CI invocation nobody reviews.
       - name: Refuse shared-file edits
-        run: python tools/check_feature_diff.py --base origin/main
+        run: |
+          if [ "${{ contains(github.event.pull_request.labels.*.name, 'platform-change') }}" = "true" ]; then
+            echo "PR carries the platform-change label; shared-file edits are a recorded decision."
+            python tools/check_feature_diff.py --base origin/main --platform-change
+          else
+            python tools/check_feature_diff.py --base origin/main
+          fi
 
   backend:
     name: Backend tests
