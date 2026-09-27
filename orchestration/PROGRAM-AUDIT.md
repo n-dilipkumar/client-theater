@@ -550,3 +550,76 @@ delivery retried and one failed, a run unresolved. Demo data that only contains
 success teaches a reviewer nothing about the feature.
 
 **WF-008 remains in progress** and is deliberately unmerged.
+
+---
+
+## 2026-09-27 — Ten features, and the prefix claim fully retired
+
+`7d2a5e7` (WF-008) and `cef3cca` (tooling). **10 features, 116 routes, 1011
+tests, 0 failed features.**
+
+Both shared prefixes now load two features each, read from the host's own
+registry rather than from a file count:
+
+```
+/api/library    : wf-007-content-library, wf-008-external-sync
+/api/publishing : wf-009-publishing,    wf-011-room-handover
+```
+
+`PORT-PLAN.md` called these *"researched twice"* and said the host *"will refuse
+the second regardless."* It refused neither. The claim came from comparing
+prefixes — the check `fd544e2` replaced precisely because it both wrongly
+blocked WF-003/WF-005 and missed genuine dead-code shadowing of core routes.
+Repeating that mistake is how four workflows nearly stayed unbuilt for no reason.
+
+### A duplicate that needs a human
+
+There are **two** worktrees for WF-008, `dsr-wf-008-external-sync` and
+`dsr-wf-008-external-sync-2`, each an **independent port of the same workflow by
+a different agent**, each writing `backend/dsr/features/wf008_external_sync.py`
+at the same path. They cannot both land. The verified one is merged; the other
+needs a decision about which implementation is better, and that is not a call
+to make by whichever branch happened to merge first.
+
+### Two hand-maintained lists, both wrong
+
+`merge_ports.py` held its port list as a constant. Hand-edited three times,
+silently reverted twice by shell restarts, each revert costing a merge cycle.
+`pending_ports.py` now regenerates it from the worktrees and `main`.
+
+`board_sync.py` asked the wrong question and **demoted nine shipped features to
+`todo`** in one pass. A port branch is merged through a *merge* branch rather than
+fast-forwarded, so its own commits stay reachable and `ahead` never reaches 0 —
+which has nothing to do with whether the workflow shipped. It now asks whether
+the feature module is on `main`, which is the measurable question, and the card
+comment says so explicitly so the ahead-count is not misread as pending work.
+
+---
+
+## Programme state
+
+| | |
+|---|---|
+| Features live | **10** of 17 researched |
+| Routes | **116** |
+| Suite | **1011 passed, 0 failed** |
+| Shared prefixes loading together | 2 (`/api/library`, `/api/publishing`) |
+| Failed features | **0** |
+| PRs this session | 27, all merged or closed-and-deleted |
+| Branch protection | all four checks required, `strict`, admins included |
+
+**Remaining of the 17 researched:** WF-001, WF-004, WF-005, WF-010, WF-014,
+WF-015, WF-017.
+
+- **WF-005 and WF-014** edit `db/audited.py` **and** `store.py` — the audit
+  guarantee itself. Held for a human read of what they changed to the core.
+- **WF-001, WF-004, WF-015, WF-017** were rescued from uncommitted working trees,
+  so have never been executed. WF-004 also modified `tools/jev.py`.
+- **WF-010** has a completed port in its worktree, verified, awaiting merge.
+- **The duplicate WF-008 port** needs a decision about which implementation wins.
+
+**Beyond the 17:** the brief asks for 100 workflows across 10 sets. Sets 1–3
+covered 10 of the 17 researched. The remaining 90 do not exist yet and would
+need new research to the standard the corpus holds — an explicitly-labelled
+hypothesis is permitted by `AGENTS.md`, but that is a scope decision, not an
+implementation detail.
