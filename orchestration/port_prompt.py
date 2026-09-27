@@ -77,6 +77,14 @@ will cost you the whole task:
    SQLite file. The audit row is written in the same transaction as the change,
    and that is the guarantee the whole product is built on.
 
+   **If your feature genuinely needs a new dependency, add it to
+   `backend/pyproject.toml`.** That file is not shared - it is not in the guard's
+   list - so you are allowed to edit it, and a feature that cannot work without
+   its dependency is not a shared-file problem. It is your own requirement. FastAPI
+   in particular needs `python-multipart` installed to accept a file upload, and
+   without it the host refuses to load your feature at all, taking its whole test
+   suite with it. Add it once, in your own PR, and say so in your report.
+
 4. **Pass `source=` from the HTTP layer.** If a domain function you are porting
    hardcodes a URL string as the `source` of a write, that is a defect, not a
    port detail. The audit row must name the route that actually served the write.
