@@ -369,7 +369,19 @@ class AuditedDatabase:
         if not include_deleted:
             sql += " AND deleted_at IS NULL"
         direction = "DESC" if descending else "ASC"
-        sql += f" ORDER BY {order_by} {direction} LIMIT ? OFFSET ?"
+        # The tie-break is not decoration. `updated_at` is a second-granularity
+        # timestamp, so rows written in the same second TIE, and `ORDER BY
+        # updated_at DESC` alone is not a total order - the order among tied rows
+        # is whatever SQLite's query plan happens to produce. That surfaced as a
+        # test that passed locally and failed on CI with the same data, on the
+        # same commit: locally the plan returned insertion order, on the runner
+        # it did not. Any caller that reverses the result, or documents an order
+        # it does not itself impose, inherits that coin flip.
+        #
+        # `id` is unique, so `ORDER BY <key> <dir>, id <dir>` is total. It
+        # changes nothing for rows that do not tie - those keep the order they
+        # always had - and makes the ones that do tie deterministic.
+        sql += f" ORDER BY {order_by} {direction}, id {direction} LIMIT ? OFFSET ?"
         params.extend([max(1, min(int(limit), 1000)), max(0, int(offset))])
         with self._lock:
             return [self._hydrate(r) for r in self._conn.execute(sql, params).fetchall()]
@@ -423,7 +435,10 @@ class AuditedDatabase:
             sql += " AND r.deleted_at IS NULL"
         if conditions:
             sql += " AND " + " AND ".join(conditions)
-        sql += " ORDER BY r.updated_at DESC LIMIT ?"
+        # Same tie-break as list(): without it, rows sharing an updated_at come
+        # back in whatever order the plan produces, and a caller that reverses or
+        # documents the order inherits a coin flip. See the note in list().
+        sql += " ORDER BY r.updated_at DESC, r.id DESC LIMIT ?"
         params.append(max(1, min(int(limit), 1000)))
         with self._lock:
             return [self._hydrate(r) for r in self._conn.execute(sql, params).fetchall()]
