@@ -448,3 +448,59 @@ closed the **set-3** agents instead. No work was lost — their worktrees were
 intact, WF-016 still holding its 10 uncommitted files — but three live agents lost
 their terminals. Relaunched with a prompt that says so explicitly, so a resumed
 agent does not read the new tab as a rejection of its work.
+
+---
+
+## 2026-09-27 — The guard was a lamp, not a barrier
+
+The seeder fix (`a13b1bb`) edits `backend/seed.py`, a shared file. The guard
+fired with exactly the right message —
+
+    FAIL: 1 shared file(s) edited.
+      - backend/seed.py
+
+— **and the PR merged anyway.**
+
+That PR was legitimate platform work and *should* have been allowed. The problem
+is not that it went through. The problem is that **nothing decided that.** The
+guard reported accurately, a merge happened regardless, and the judgement between
+a feature and platform work fell to whoever typed `gh pr merge` — which is exactly
+the judgement the CI job exists to make.
+
+Measured rather than guessed: `gh pr merge` does not consult CI status, and the
+repository had **no branch protection and no rulesets at all**.
+
+### Fixed, and proven
+
+Branch protection on `main`: all four checks required, `strict: true`,
+`enforce_admins: true` (so an admin cannot bypass it — which is how the seeder PR
+got through), force-push disabled.
+
+The exemption is a **label**, not a CI flag, so the decision is recorded where a
+reviewer sees it rather than typed into an invocation nobody reads.
+
+Both halves verified with real PRs, because the earlier probe had only shown the
+job going red and the actual failure was a red job that stopped nothing:
+
+| Probe | Expected | Result |
+|---|---|---|
+| Shared-file edit, no label | merge **refused** | `the base branch policy prohibits the merge` |
+| Shared-file edit, `platform-change` label | guard → NOTICE, check passes | passed; log shows the labelled path |
+
+The second probe's end-to-end job independently reported **`OK: 8 feature(s)
+loaded, 0 failed`**.
+
+### Also fixed: the seeder could not seed into a new directory
+
+`sqlite3.connect` does not create intermediate directories, so pointing
+`DSR_DB_PATH` at a path under a directory that did not exist died with *"unable to
+open database file"* — naming neither the file nor the directory. It bit this
+project during a routine check, and the verification script **filtered the
+seeder's own output**, so the traceback was discarded and only the symptom — an
+empty demo dataset — was left to interpret. A script that filters the output of
+the thing it is verifying will hide exactly the failure it exists to catch.
+
+Fixed with two regression tests, the first confirmed to fail with the fix
+reverted. That test asserts the seeder **wrote rooms**, not merely that it exited
+0 — an exit-code-only test would pass on a seeder that wrote nothing, which is
+precisely the failure that was nearly mistaken for a broken app.
