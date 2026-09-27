@@ -48,6 +48,11 @@ const REASON_COPY = {
   all_incomplete: 'Every condition is incomplete, so the block shows.',
   matched: 'Shown: the conditions matched.',
   unmatched: 'Hidden: the conditions did not match.',
+  // A fifth reason the server can return and the design doc does not enumerate:
+  // the block carries a rule that would not validate, so it fails open and shows.
+  // Saying "no rule" here would be a lie and would send a seller looking for a
+  // rule that is right there.
+  invalid_rule: 'This rule cannot be applied, so the block shows unhidden.',
 }
 
 const STATUS_TONES = {
@@ -56,6 +61,7 @@ const STATUS_TONES = {
   incomplete: 'restore',
   no_value: 'restore',
   not_numeric: 'restore',
+  invalid_rule: 'delete',
 }
 
 /** Human labels for the modifier slugs the API uses. */
@@ -637,6 +643,21 @@ export default function ConditionalRules() {
                 <ErrorNote error={previewError} />
               </div>
             )}
+
+            {(preview?.problems || []).length > 0 && (
+              <div className="mt-4">
+                <Notice tone="danger" title="A rule on this room cannot be applied">
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {preview.problems.map((problem) => (
+                      <li key={problem.block_id}>
+                        <span className="font-mono">{problem.title || problem.block_id}</span>:{' '}
+                        {problem.problem}. The block shows unhidden until the rule is fixed.
+                      </li>
+                    ))}
+                  </ul>
+                </Notice>
+              </div>
+            )}
           </Card>
 
           <section>
@@ -693,6 +714,11 @@ export default function ConditionalRules() {
                                 <p className="mb-1 text-xs text-muted-foreground">
                                   {REASON_COPY[decision.reason] || decision.reason}
                                 </p>
+                                {decision.problems && decision.problems.length > 0 && (
+                                  <Notice tone="danger" title="This rule cannot be applied">
+                                    {decision.problems.join('; ')}
+                                  </Notice>
+                                )}
                                 {decision.conditions.length > 0 && (
                                   <ul className="divide-y divide-border-subtle/20">
                                     {decision.conditions.map((condition, index) => (

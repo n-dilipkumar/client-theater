@@ -158,6 +158,21 @@ buyer-facing content.
 was not supplied), `not_numeric` (D5). The trace is returned on **every** call so
 a seller can see *why* a block hid, not just that it did.
 
+> **Ported, and one addition.** The four `reason` values above are unchanged. The
+> port adds a fifth, `invalid_rule`, for the case this document does not specify:
+> a block whose stored rule would not validate, because `rule` is a plain JSON
+> field and one can arrive through `/api/records/block` or from a store written by
+> an older version. `evaluate_rule` re-validates and raises, so uncontained, one
+> such block returned 422 for the **whole room's** `preview` and `personalise` —
+> every healthy block lost its decision to one broken one. That was measured on
+> the port, not hypothesised. The fix is in
+> `backend/dsr/features/wf013_rules.py`: an unusable rule is contained per block,
+> the block is shown, and the problem is reported at both block and room level
+> rather than raised. Failing open is what S8 and D5 argue for, so this extends
+> the sourced behaviour to a case the source does not cover rather than inventing
+> a new rule. It is a finding for the reviewer, because the enumeration above is
+> now incomplete by one value.
+
 ## 5. API surface
 
 | Method | Path | Writes? |

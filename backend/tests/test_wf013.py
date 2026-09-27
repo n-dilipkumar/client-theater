@@ -531,6 +531,107 @@ def test_an_unsupplied_variable_is_distinguishable_from_an_empty_one(client):
     assert empty["blocks"][0]["conditions"][0]["status"] == "matched"
 
 
+# -- a rule that reached storage unvalidated ----------------------------------------- #
+#
+# `rule` is a plain JSON field, so one can arrive without having passed today's
+# validation: written through /api/records/block, or stored by a version whose
+# vocabulary was narrower. These tests pin what the feature does about that, and
+# they are the ones that caught a real defect on this port: the first cut let one
+# such block 422 the whole room.
+
+
+def write_an_unvalidated_rule(client, block_id):
+    """The no-bypass gap, used deliberately: PATCH the generic record route."""
+    return client.patch(
+        f"/api/records/block/{block_id}",
+        json={"rule": {"join": "sideways", "conditions": [{"variable": "region", "modifier": "sounds_like"}]}},
+    )
+
+
+def test_one_unusable_rule_does_not_cost_the_room_its_decision(client):
+    """The regression this exists for: 422 for the whole room, healthy blocks lost.
+
+    `evaluate_rule` re-validates and raises, so before this was contained, one
+    block with a junk rule made `preview` and `personalise` return 422 for every
+    block in the room. S8 is explicit that a rule that cannot be applied must not
+    hide content; refusing to decide anything at all is the same failure with the
+    opposite sign.
+    """
+    room = make_room(client)
+    healthy = make_block(client, room, title="Healthy")
+    client.put(
+        f"{PREFIX}/rooms/{room}/blocks/{healthy['id']}/rule",
+        json=rule(text(value="Australia")),
+    )
+    broken = make_block(client, room, title="Broken")
+    write_an_unvalidated_rule(client, broken["id"])
+
+    response = client.post(f"{PREFIX}/rooms/{room}/preview", json={"region": "Australia"})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # The healthy block still gets its decision.
+    assert healthy["id"] in body["shown"]
+    assert healthy["id"] not in body["hidden"]
+    # The broken one fails open, and says so rather than claiming it has no rule.
+    assert broken["id"] in body["shown"]
+    entry = next(item for item in body["blocks"] if item["block_id"] == broken["id"])
+    assert entry["reason"] == "invalid_rule"
+    assert entry["problems"] and "sideways" in entry["problems"][0]
+
+
+def test_an_unusable_rule_is_reported_at_the_room_level_too(client):
+    room = make_room(client)
+    block = make_block(client, room, title="Broken")
+    write_an_unvalidated_rule(client, block["id"])
+
+    body = client.post(f"{PREFIX}/rooms/{room}/preview", json={"region": "Australia"}).json()
+
+    assert len(body["problems"]) == 1
+    assert body["problems"][0]["block_id"] == block["id"]
+    assert body["problems"][0]["title"] == "Broken"
+
+
+def test_personalise_still_records_a_room_with_an_unusable_rule(client):
+    """The recorded decision must survive the broken block too, and keep the problem."""
+    room = make_room(client)
+    healthy = make_block(client, room, title="Healthy")
+    client.put(
+        f"{PREFIX}/rooms/{room}/blocks/{healthy['id']}/rule", json=rule(text(value="Australia"))
+    )
+    broken = make_block(client, room, title="Broken")
+    write_an_unvalidated_rule(client, broken["id"])
+
+    response = client.post(f"{PREFIX}/rooms/{room}/personalise", json={"region": "Australia"})
+
+    assert response.status_code == 201, response.text
+    stored = response.json()["personalisation"]["data"]
+    assert healthy["id"] in stored["shown"]
+    assert [problem["block_id"] for problem in stored["problems"]] == [broken["id"]]
+
+
+def test_a_room_with_no_unusable_rules_reports_no_problems(client):
+    room = make_room(client)
+    block = make_block(client, room)
+    client.put(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text()))
+
+    body = client.post(f"{PREFIX}/rooms/{room}/preview", json={"region": "Australia"}).json()
+
+    assert body["problems"] == []
+    assert all("problems" not in entry for entry in body["blocks"])
+
+
+def test_an_accept_block_with_an_unvalidated_rule_still_shows(client):
+    """S10 holds on the read path as well as the write path."""
+    room = make_room(client)
+    block = make_block(client, room, type="accept")
+    write_an_unvalidated_rule(client, block["id"])
+
+    body = client.post(f"{PREFIX}/rooms/{room}/preview", json={"region": "Australia"}).json()
+
+    assert body["shown"] == [block["id"]]
+
+
 # -- personalise: the same decision, recorded ---------------------------------------- #
 
 

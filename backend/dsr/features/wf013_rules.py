@@ -33,6 +33,12 @@ Four deliberate departures from the branch, each required by the contract:
   wrapped every ``RuleError`` in a 422 by hand at each call site. Now
   ``RuleError`` propagates and the host-installed handler turns it into the
   response, which is what ``EXCEPTION_HANDLERS`` is for.
+* **An unusable stored rule is contained per block.** See
+  :func:`_evaluable_blocks`. Measured, not hypothetical: on this port's first
+  cut, one block whose rule had reached storage unvalidated returned 422 for the
+  entire room's ``preview`` and ``personalise``, so a single broken block cost
+  every healthy block its decision. That is the opposite of S8, the behaviour the
+  research is most explicit about, and it is fixed here rather than argued about.
 * **Demo data lives here.** See :func:`seed`.
 
 One thing the port could **not** carry over, and it is a finding rather than an
@@ -338,8 +344,63 @@ def delete_rule(
 
 
 def _decide(store: RecordStore, room_id: str, variables: Mapping[str, Any]) -> dict[str, Any]:
-    blocks = _ordered_blocks(store, room_id)
-    return {"room_id": room_id, **rules.personalise_blocks(blocks, variables)}
+    blocks, problems = _evaluable_blocks(_ordered_blocks(store, room_id))
+    decision = rules.personalise_blocks(blocks, variables)
+    by_id = {entry["block_id"]: entry for entry in decision["blocks"]}
+    for problem in problems:
+        entry = by_id.get(problem["block_id"])
+        if entry is not None:
+            # A fifth reason, which §4 of the design doc does not enumerate.
+            # Reporting `no_rule` here would be a lie: the block has a rule, and
+            # it is unusable. The reason is the seller's only clue.
+            entry["reason"] = "invalid_rule"
+            entry["problems"] = [problem["problem"]]
+    return {"room_id": room_id, "problems": problems, **decision}
+
+
+def _evaluable_blocks(
+    blocks: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Separate the blocks that can be evaluated from the ones that cannot.
+
+    ``rule`` is a plain JSON field, so a rule can reach storage without having
+    passed today's validation: through ``/api/records/block``, or from a store
+    written before a modifier existed. ``evaluate_rule`` re-validates and raises,
+    which without this function means one such block returns 422 for the *whole
+    room* - every healthy block's decision lost to one broken one. That is
+    measured, not hypothetical; see ``test_one_unusable_rule_does_not_cost_the_room_its_decision``.
+
+    So an unusable rule is contained per block: the block is evaluated as though
+    it had no rule, which shows it, and the problem is reported instead of raised.
+    Failing open is the sourced behaviour of this ticket (S8: an incomplete rule
+    is ignored and "the block of content will appear") and matches D5's reasoning
+    that a bad value should hide a block, never break the page.
+
+    The policy lives here, in the HTTP layer, rather than in :mod:`dsr.rules`,
+    which stays the pure researched specification.
+    """
+    evaluable: list[dict[str, Any]] = []
+    problems: list[dict[str, Any]] = []
+    for block in blocks:
+        data = block.get("data") or {}
+        stored = data.get("rule")
+        if not stored:
+            evaluable.append(block)
+            continue
+        try:
+            rules.validate_rule(stored, block=data)
+        except RuleError as exc:
+            problems.append(
+                {
+                    "block_id": block["id"],
+                    "title": data.get("title"),
+                    "problem": str(exc),
+                }
+            )
+            evaluable.append({**block, "data": {**data, "rule": None}})
+            continue
+        evaluable.append(block)
+    return evaluable, problems
 
 
 @router.post("/rooms/{room_id}/preview", summary="Evaluate the rules without writing")
@@ -380,6 +441,10 @@ def personalise_room(
             "shown": decision["shown"],
             "hidden": decision["hidden"],
             "block_count": decision["block_count"],
+            # Recorded, not just returned: a rule that would not validate is
+            # something a seller has to come back to, and this record is the
+            # replayable artifact of the decision.
+            "problems": decision["problems"],
         },
         room_id=room_id,
         actor=actor,
