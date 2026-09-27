@@ -286,8 +286,7 @@ def main():
                         f"Reviewed independently before merge: no shared file touched, full suite\n"
                         f"passes with the feature mounted, and the host reports it loaded with\n"
                         f"zero failed features. Merged one port at a time with the suite and the\n"
-                        f"registry check re-run after each, so a red result would name its cause.\n\n"
-                        f"Co-authored-by: CommandCodeBot noreply@commandcode.ai")
+                        f"registry check re-run after each, so a red result would name its cause.\n\n")
         if code != 0:
             print(f"  MERGE CONFLICT:\n{out[:1500]}")
             return 1
