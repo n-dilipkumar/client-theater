@@ -389,3 +389,251 @@ def test_closed_database_refuses_writes(tmp_path):
 
     with pytest.raises(AuditError, match="closed"):
         database.create("room", {"name": "A"})
+
+
+# --------------------------------------------------------------------
+# Tests promoted from the feature branches whose own implementations
+# supplied these host capabilities. They were written against the code
+# being promoted, so they travel with it rather than being retyped.
+# --------------------------------------------------------------------
+def test_count_where_counts_on_a_schema_free_nested_path(db):
+    for index in range(3):
+        db.create("room_view", {"subject_id": "room_a", "viewer": {"email": f"b{index}@x.test"}})
+    db.create("room_view", {"subject_id": "room_b"})
+
+    assert db.count_where("room_view", {"subject_id": "room_a"}) == 3
+    assert db.count_where("room_view", {"subject_id": "room_b"}) == 1
+    assert db.count_where("room_view", {"subject_id": "room_c"}) == 0
+
+
+def test_count_where_agrees_with_find(db):
+    for index in range(4):
+        db.create("document", {"kind": "deck", "tags": ["a"], "public": index % 2 == 0})
+
+    where = {"kind": "deck"}
+    assert db.count_where("document", where) == len(db.find("document", where))
+
+
+def test_count_where_matches_numbers_and_booleans_like_find(db):
+    db.create("room", {"seats": 12, "requires_nda": True})
+    db.create("room", {"seats": 12, "requires_nda": False})
+    db.create("room", {"seats": 40, "requires_nda": True})
+
+    assert db.count_where("room", {"seats": 12}) == 2
+    assert db.count_where("room", {"requires_nda": True}) == 2
+    assert db.count_where("room", {"seats": 12, "requires_nda": True}) == 1
+
+
+def test_count_where_with_no_conditions_falls_back_to_count(db):
+    db.create("room", {"name": "A"})
+    db.create("room", {"name": "B"})
+
+    assert db.count_where("room", {}) == 2
+
+
+def test_count_where_scopes_by_collection(db):
+    db.create("room", {"kind": "deck"})
+    db.create("document", {"kind": "deck"})
+
+    assert db.count_where("document", {"kind": "deck"}) == 1
+
+
+def test_count_where_excludes_soft_deleted_by_default(db):
+    record = db.create("room_view", {"subject_id": "room_a"})
+    db.delete(record["id"])
+
+    assert db.count_where("room_view", {"subject_id": "room_a"}) == 0
+    assert db.count_where("room_view", {"subject_id": "room_a"}, include_deleted=True) == 1
+
+
+def test_count_where_does_not_leak_across_subjects_sharing_a_room(db):
+    # The reason count_where filters on a JSON path rather than room_id: two
+    # subjects in one room must be counted apart.
+    room = db.create("room", {"name": "A"})
+    db.create("room_view", {"subject_id": "room_1", "owner_room": room["id"]})
+    db.create("room_view", {"subject_id": "document_1", "owner_room": room["id"]})
+
+    assert db.count_where("room_view", {"subject_id": "room_1"}) == 1
+    assert db.count_where("room_view", {"owner_room": room["id"]}) == 2
+
+
+def test_counted_records_are_readable_through_the_normal_api(db):
+    # A count that cannot be reconciled with a list is not worth much.
+    db.create("room_view", {"subject_id": "room_a"})
+    db.create("room_view", {"subject_id": "room_a"})
+    db.create("room_view", {"subject_id": "room_b"})
+
+    listed = db.find("room_view", {"subject_id": "room_a"})
+
+    assert len(listed) == db.count_where("room_view", {"subject_id": "room_a"})
+
+
+def test_bulk_delete_is_one_transaction_one_audit_row(db):
+    room = db.create("room", {"name": "Acme"})
+    docs = db.bulk_create("document", [{"title": "a"}, {"title": "b"}], room_id=room["id"])
+
+    result = db.bulk_delete([room["id"], *(d["id"] for d in docs)], hard=True, room_id=room["id"])
+
+    assert result["count"] == 3
+    assert result["ids"][0] == room["id"]
+    entries = db.audit(action="delete")
+    assert len(entries) == 1
+    assert entries[0]["room_id"] == room["id"]
+    assert entries[0]["before_state"]["count"] == 3
+    assert entries[0]["after_state"] is None
+
+
+def test_bulk_delete_rolls_back_the_whole_cascade_on_a_missing_id(db):
+    """The point of the method: a cascade never half-applies."""
+    room = db.create("room", {"name": "Acme"})
+    doc = db.create("document", {"title": "a"}, room_id=room["id"])
+    before = db.audit_count()
+
+    with pytest.raises(RecordNotFound):
+        db.bulk_delete([room["id"], "document_missing", doc["id"]], hard=True)
+
+    assert db.count("room") == 1
+    assert db.count("document") == 1
+    assert db.audit_count() == before
+
+
+def test_bulk_delete_defaults_to_soft_and_keeps_the_index(db):
+    room = db.create("room", {"name": "Acme", "status": "Active"})
+
+    result = db.bulk_delete([room["id"]])
+
+    assert result["hard"] is False
+    assert db.get(room["id"]) is None
+    assert db.find("room", {"status": "Active"}, include_deleted=True)[0]["id"] == room["id"]
+
+
+def test_bulk_delete_of_an_empty_list_is_a_noop(db):
+    assert db.bulk_delete([]) == {"count": 0, "hard": False, "room_id": None, "ids": [], "records": []}
+    assert db.audit_count() == 0
+
+
+def test_bulk_delete_ignores_blank_ids(db):
+    room = db.create("room", {"name": "Acme"})
+
+    assert db.bulk_delete(["", None], hard=True)["count"] == 0
+    assert db.count("room") == 1
+
+
+def test_audit_filters_by_request_id_to_read_one_request_as_a_unit(db):
+    with db.transaction(request_id="req-1", actor="dana") as tx:
+        room = tx.create("room", {"name": "Acme"})
+        tx.create("site", {"friendly_url": "acme"}, room_id=room["id"])
+    with db.transaction(request_id="req-2", actor="sam") as tx:
+        other = tx.create("room", {"name": "Contoso"})
+
+    first = db.audit(request_id="req-1")
+    assert {e["collection"] for e in first} == {"room", "site"}
+    assert all(e["request_id"] == "req-1" for e in first)
+    assert db.audit_count(request_id="req-1") == 2
+    assert [e["record_id"] for e in db.audit(request_id="req-2")] == [other["id"]]
+
+
+def test_transaction_commits_every_write_and_audits_each(db):
+    with db.transaction(actor="dana") as tx:
+        room = tx.create("room", {"name": "Acme"})
+        site = tx.create("site", {"friendly_url": "acme"}, room_id=room["id"])
+
+    assert db.get(room["id"]) is not None
+    assert db.get(site["id"])["room_id"] == room["id"]
+    # One audit row per record, not one for the pair: the log stays as granular
+    # as it is for single-record writes.
+    assert db.audit_count() == 2
+    assert db.audit(record_id=room["id"])[0]["actor"] == "dana"
+    assert db.audit(record_id=site["id"])[0]["actor"] == "dana"
+
+
+def test_transaction_rolls_back_all_writes_and_audit_rows_on_failure(db):
+    with pytest.raises(RuntimeError, match="boom"):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Acme"})
+            raise RuntimeError("boom")
+
+    assert db.count("room") == 0
+    assert db.audit_count() == 0
+    # The dynamic index rolls back with the data, so a rolled-back room is not
+    # findable by any of its fields.
+    assert db.find("room", {"name": "Acme"}) == []
+
+
+def test_transaction_update_is_audited_and_rolled_back_together(db):
+    room = db.create("room", {"name": "Acme"})
+
+    with pytest.raises(RuntimeError):
+        with db.transaction() as tx:
+            tx.update(room["id"], {"name": "Renamed"})
+            tx.create("site", {"friendly_url": "acme"})
+            raise RuntimeError("boom")
+
+    assert db.get(room["id"])["data"]["name"] == "Acme"
+    assert db.count("site") == 0
+    assert db.audit_count() == 1  # only the original insert survives
+
+
+def test_transaction_index_reflects_writes_inside_the_block(db):
+    with db.transaction() as tx:
+        tx.create("room", {"name": "Acme", "status": "active"})
+        # Visible to reads on the same connection before the commit.
+        assert db.find("room", {"status": "active"}) != []
+
+    assert db.query_index("status", "active") != []
+
+
+def test_write_inside_a_transaction_is_refused_with_a_clear_error(db):
+    """A nested single-record write is a programming error, not a partial commit.
+
+    Refusing it rolls the whole block back, so a caller that ignores the error
+    still cannot end up with half a workflow committed.
+    """
+    with pytest.raises(AuditError, match="writer handle"):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Acme"})
+            db.create("room", {"name": "Sneaky"})
+
+    assert db.count("room") == 0
+    assert db.audit_count() == 0
+
+
+def test_transaction_mirror_is_written_only_after_commit(db, tmp_path):
+    with db.transaction(actor="api") as tx:
+        tx.create("room", {"name": "Acme"})
+        tx.create("site", {"friendly_url": "acme"})
+
+    mirrors = list((tmp_path / "mirror").glob("audit-*.jsonl"))
+    lines = [json.loads(line) for line in mirrors[0].read_text(encoding="utf-8").splitlines()]
+    assert [line["action"] for line in lines] == ["insert", "insert"]
+
+
+def test_transaction_mirror_is_not_written_when_rolled_back(db, tmp_path):
+    with pytest.raises(RuntimeError):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Acme"})
+            raise RuntimeError("boom")
+
+    assert list((tmp_path / "mirror").glob("audit-*.jsonl")) == []
+
+
+def test_transaction_per_call_actor_overrides_the_block_default(db):
+    with db.transaction(actor="dana") as tx:
+        room = tx.create("room", {"name": "Acme"})
+        tx.create("site", {"friendly_url": "acme"}, actor="system")
+
+    assert db.audit(record_id=room["id"])[0]["actor"] == "dana"
+    assert db.audit(collection="site")[0]["actor"] == "system"
+
+
+def test_transaction_rejects_duplicate_record_id_and_rolls_back(db):
+    with db.transaction() as tx:
+        tx.create("room", {"name": "Acme"}, record_id="room_fixed")
+
+    with pytest.raises(AuditError, match="already exists"):
+        with db.transaction() as tx:
+            tx.create("room", {"name": "Clash"}, record_id="room_fixed")
+            tx.create("site", {"friendly_url": "clash"})
+
+    assert db.get("room_fixed")["data"]["name"] == "Acme"
+    assert db.count("site") == 0
