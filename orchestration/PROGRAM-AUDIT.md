@@ -821,3 +821,97 @@ it** — not because the check was clever but because seven simultaneous dead ag
 is a much less likely explanation than seven reads that returned nothing, which is
 exactly what has happened in this session before when the wrong JSON key was read.
 Opening two of them showed the splash screen immediately.
+
+---
+
+## 2026-09-27 — Twenty-four features, and three defects the tooling was built to find
+
+**`4fe7a64`. 25 features (24 + the registry), 317 routes, 3,989 tests, 0 failed
+features.** 38 PRs. Set 2 of the build programme dispatched: WF-028..WF-037.
+
+| | before this stretch | now |
+|---|---|---|
+| features | 11 | **24** |
+| routes | 116 | **317** |
+| tests | 1,211 | **3,989** |
+| demo records | 309 | **819** |
+| audit entries | 351 | **798** |
+| failed features | 0 | **0** |
+
+The verified local host app, on merged `main`: 152 frontend modules, a 665 KB
+bundle carrying **22 of 22** product feature ids, 819 live records across 60
+collections, 798 audit entries. Every one of the 24 features contributed its own
+seed data, and the states they chose are the interesting ones - a hot / warm /
+cooling / cold engagement spread, a section rule that hides an order form until it
+completes, a deal closed before it was created, an account with no client
+activity, **60 delivered / 40 failed-needing-a-human / 18 skipped** deliveries,
+one signal rendered in French and one through locale fallback, one emission
+refused for failing its own bound, a domain awaiting DNS. Demo data containing only
+success teaches a reviewer nothing about the feature.
+
+Both shared prefixes still hold: **`/api/library` carries three features**,
+`/api/publishing` carries two.
+
+### Defect one: a retry never cleared the row it was retrying
+
+CI went red with one failure and **branch protection refused the merge** - the
+barrier added in #20 doing the job it was installed for, on the first real
+violation it saw.
+
+    tests/test_wf026.py::test_a_manual_retry_clears_a_skipped_row_once_the_blocker_is_gone
+    AssertionError: assert 'skipped' == 'delivered'
+
+Locally the suite passed 3,659 twice, and the test passed alone and in its own
+file. It looked like CI-only flakiness. **It was a real defect and the test had
+been passing for the wrong reason.**
+
+A delivery's `event_key` includes the prospect id, so a row skipped for want of a
+prospect is keyed with an **empty** one. `retry_delivery` recomputed the key - and
+by then a prospect *had* been linked, so the recomputed key missed the row it was
+asked to clear and the retry wrote a **second** one. The original stayed `skipped`
+forever while a delivered duplicate appeared beside it, and because the two carry
+different keys a later publish no longer saw the event as a duplicate. The
+activity feed shows the event twice and the first card still claims it was never
+sent.
+
+The test had asserted `feed.deliveries()[0]` - index 0 of a query implemented as
+`store.find(...)`, **which takes no ordering argument**, though `deliveries()`
+documents itself "newest first". The retry's duplicate was the row at index 0, and
+it was delivered, so the assertion was reading the *duplicate* and passing on it.
+Addressing the row by its own id removed the ambiguity and **reproduced the defect
+locally, immediately**, which is how it was confirmed real rather than
+environmental. The fix: a named row wins over the key lookup. Reverting the fix
+makes the test fail with the module and line named, so the guard has teeth.
+
+### Defect two: a feature's test asserted a claim about the whole repository
+
+WF-004's suite carried `assert not (package / "access.py").exists()`. It reads like
+the right guard - and it is a much stronger claim: true only while WF-015 is absent,
+and WF-015 legitimately ships `access.py`, because keeping that name is the entire
+point of the rename. It went red the moment the sibling landed, in a suite
+unrelated to the failure.
+
+It is now a claim about what **this** feature owns: that `dsr.roles` exists and
+nothing in WF-004's files reaches for `dsr.access`. A companion test asserts WF-004
+neither creates nor deletes the module, because **a test that insists a file does
+not exist invites someone to "fix" a red suite by deleting it** - which would take
+WF-015's domain with it, the opposite of the collision prevention it was written
+to provide. Both proven by reintroducing the collision.
+
+### Defect three: the merge script could only be run once
+
+It decided what to skip against `origin/main`, while the merge target is a PR
+branch that may already carry ports. A re-run after a partial run re-merged a port
+already there, and the no-op guard correctly reported it. The guard was right and
+the question was about the wrong tree. Runs stop halfway *because* that guard
+exists, so the script has to be able to recover. It now asks about `HEAD` as well
+and prints what the target branch already carries.
+
+### What the one-at-a-time merge bought
+
+WF-015 passed alone - 1,324 tests, 0 failed - and broke one test in the merged
+tree. The script prints `VERDICT` after **each** merge, so a red result names the
+port that caused it. Ten features merging simultaneously would have produced one
+red build and no idea which of the ten was responsible, which is precisely the
+failure mode of the previous run of this project: twelve branches built, none
+merged, because all twelve edited the same three files.
