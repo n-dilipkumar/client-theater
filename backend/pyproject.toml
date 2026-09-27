@@ -9,6 +9,11 @@ description = "Open-source Digital Sales Room - audited SQLite backend"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
+    # Parses multipart/form-data request bodies, which is how a document or
+    # deck upload arrives. FastAPI requires this to be installed for a
+    # route that accepts one; without it the plugin host refuses to load
+    # the feature rather than mounting a route that would 500 on every use.
+    "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.27",
 ]
 
