@@ -13,7 +13,7 @@ specifications** (139 complete). Regenerate with
 
     workflows  [########..........................] 24/100
     routes     317
-    tests      4012 passed, 0 failed, 2 xfailed  (supplied)
+    tests      4012 passed, 0 failed, 2 xfailed
     features   0 failed to load
     to go      76
 
@@ -75,17 +75,17 @@ by luck.
 
 | Workflow | Worktree | Uncommitted files |
 |---|---|---|
-| WF-001 | `dsr-wf-001-build` | 1 |
+| WF-001 | `dsr-wf-001-build` | 2 |
 | WF-005 | `dsr-wf-005-build` | 0 |
 | WF-014 | `dsr-wf-014-build` | 0 |
 | WF-028 | `dsr-wf-028-build` | 1 |
 | WF-029 | `dsr-wf-029-build` | 2 |
 | WF-031 | `dsr-wf-031-build` | 1 |
 | WF-037 | `dsr-wf-037-build` | 1 |
-| WF-038 | `dsr-wf-038-build` | 1 |
+| WF-038 | `dsr-wf-038-build` | 2 |
 | WF-039 | `dsr-wf-039-build` | 9 |
 | WF-040 | `dsr-wf-040-build` | 5 |
-| WF-041 | `dsr-wf-041-build` | 2 |
+| WF-041 | `dsr-wf-041-build` | 3 |
 | WF-042 | `dsr-wf-042-build` | 0 |
 | WF-043 | `dsr-wf-043-build` | 4 |
 | WF-044 | `dsr-wf-044-build` | 0 |
