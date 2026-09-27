@@ -100,6 +100,17 @@ def main() -> int:
     db_path = os.environ.get("DSR_DB_PATH", str(ROOT / "data" / "dsr.db"))
     mirror = os.environ.get("DSR_AUDIT_DIR", str(ROOT / "data" / "audit"))
 
+    # sqlite3.connect does not create intermediate directories, so pointing
+    # DSR_DB_PATH at a path under a directory that does not exist yet dies with
+    # "unable to open database file" - a message that says nothing about which
+    # directory is missing. That is a trap for exactly the person most likely to
+    # set the variable: someone verifying the demo against a throwaway path.
+    # Create the parent rather than making them guess.
+    for path in (db_path, mirror):
+        parent = Path(path).parent
+        if str(parent):
+            parent.mkdir(parents=True, exist_ok=True)
+
     db = AuditedDatabase(db_path, mirror_dir=mirror, actor="seed")
     print(f"seeding {db_path}")
 
