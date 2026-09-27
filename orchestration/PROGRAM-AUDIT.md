@@ -504,3 +504,49 @@ Fixed with two regression tests, the first confirmed to fail with the fix
 reverted. That test asserts the seeder **wrote rooms**, not merely that it exited
 0 — an exit-code-only test would pass on a seeder that wrote nothing, which is
 precisely the failure that was nearly mistaken for a broken app.
+
+---
+
+## 2026-09-27 — Nine features live, 108 routes, 895 tests
+
+`96ccc79`. This is the first state where the product is demonstrably a *product*
+rather than a set of plugins: every feature contributes its own demo data, the
+seeder says what each one added, and the running server serves all of it.
+
+| | |
+|---|---|
+| Features | **9** (+ the core registry) |
+| Routes | **108** |
+| Suite | **895 passed, 0 failed** |
+| Demo records | 309 live, **351 audit entries** |
+| Failed features | **0** |
+| Frontend | 85 modules |
+
+**Every feature seeded its own data**, which is the test that the `seed(db,
+context)` hook actually works rather than merely existing — nine independent
+implementations of the same extension point, none of which edited
+`backend/seed.py`:
+
+```
+wf002_pages   -> 1 fragment set, 1 fragment, 8 pages, 4 published revisions
+wf003_library -> 8 documents given library metadata, 1 room archived, 1 gallery block
+wf006_analytics -> analytics_config, 10 timeline notes, 71 activity events
+wf007_library -> 3 documents ingested through the real path, 1 folder, 2 thumbnails
+wf009_publishing -> 1 approval process, 4 drafts, 2 folders, 2 subscribers, 2 workflows
+wf011_publishing -> 1 webhook subscriber, 3 rooms transitioned, 1 template
+wf012_generation -> 1 template, 3 generated rooms (draft, published, declined)
+wf013_rules   -> 4 variables, 8 blocks, 1 personalisation (3 shown, 1 hidden)
+wf016_crm_sync -> 5 CRM fields, 2 automations, 3 subscriptions, 2 events, 5 rows
+```
+
+Two prefixes are now shared by two features each — `/api/library` (WF-007 with
+WF-008 pending) and `/api/publishing` (WF-009, WF-011) — and both pairs load
+together. That was `PORT-PLAN.md`'s stated blocker, resolved by measuring the
+rule the host actually enforces rather than the prefix it was checking.
+
+Note the seeding of *interesting* states rather than only happy paths: a room
+archived, a generated room declined, an approval workflow left pending, a webhook
+delivery retried and one failed, a run unresolved. Demo data that only contains
+success teaches a reviewer nothing about the feature.
+
+**WF-008 remains in progress** and is deliberately unmerged.
