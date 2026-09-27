@@ -30,23 +30,24 @@ SHARED = [
     "frontend/vite.config.js",
 ]
 
-# Dispatch set 2. These four were held back in set 1 on the claim that they
-# collided. Measuring the actual mounted (method, path) pairs says otherwise: 0
-# identical pairs in either direction, and 0 overlapping path strings. The claim
-# came from comparing router PREFIXES, which is exactly the check fd544e2 replaced
-# with route-level comparison - prefix comparison both wrongly blocked WF-003/
-# WF-005 and missed genuine dead-code shadowing of core routes. Jev was asked
-# whether they were duplicate workflows and answered port_all_four_as_is at 0.79.
+# Dispatch set 3. WF-008, WF-013, WF-016.
 #
 # Held back on purpose, still:
 #
-#   WF-005  its branch edits db/audited.py and store.py - the audit guarantee
-#           itself. Needs a human read of what it changed before anything carries
-#           it across, not an agent port.
+#   WF-005, WF-014
+#           both branches edit db/audited.py AND store.py - the audit guarantee
+#           itself, written by a dozen different agents. A port is the wrong
+#           instrument: something has to read what they changed to the core and
+#           decide whether the change belongs in the feature or in the host. That
+#           is a human judgement about the product's central promise.
 #   WF-001, WF-004, WF-015, WF-017
 #           rescued this session from uncommitted working trees. Untrusted input
 #           until read: WF-004 also modified tools/jev.py, the validator every
 #           decision in this project goes through.
+#
+# WF-008 was measured against WF-007 and WF-010 before being added here, because
+# all three use /api/library and PORT-PLAN.md was wrong once for comparing
+# prefixes. Measured: 0 colliding (method, path) pairs in all three pairings.
 TICKETS = [
     {
         "ticket": "WF-002",
@@ -262,6 +263,108 @@ TICKETS = [
             "`frontend/src/lib/publish.js` is an API wrapper. Move it inside your feature "
             "folder as `api.js` and have it call `apiRequest` from `@/lib/api` - do NOT add "
             "methods to the shared `frontend/src/lib/api.js`, which is a shared file.",
+        ],
+    },
+    {
+        "ticket": "WF-008",
+        "source_branch": "feature/WF-008-auto-sync-an-external-cloud-file-into-the",
+        "feature_module": "wf008_external_sync.py",
+        "feature_id": "wf-008-external-sync",
+        "prefix": "library",
+        "name": "Auto-sync an external cloud file into the content library",
+        "description": "Keep an external cloud file in sync with the content library, on a connection the team configures.",
+        "additive": [
+            "backend/dsr/library/__init__.py",
+            "backend/dsr/library/errors.py",
+            "backend/dsr/library/ratelimit.py",
+            "backend/dsr/library/sources.py",
+            "backend/dsr/library/sync.py",
+            "backend/dsr/library_api.py",
+            "backend/tests/test_library_api.py",
+            "backend/tests/test_library_sync.py",
+            "frontend/src/pages/ExternalSync.jsx",
+        ],
+        "notes": [
+            "THREE features now share the /api/library prefix: you, WF-007 and WF-010. That is "
+            "safe, and it was measured rather than assumed - all three pairings have 0 "
+            "colliding (method, path) pairs. Your paths are /connections, /external, "
+            "/external/resync, /external/{content_id}, /external/{content_id}/sync-status, "
+            "/folders and /sources. WF-007 owns /rooms/{room_id}/documents, "
+            "/rooms/{room_id}/folders, /rooms/{room_id}/usage and /documents/{document_id}. "
+            "WF-010 owns /contract, /fields, /search, /assemble and /searches. Use the prefix "
+            "/api/library and stay inside your own paths.",
+            "You and WF-007 both add a library domain package. If you find yourself wanting "
+            "WF-007's ContentLibrary, do not import it and do not edit its module - you cannot "
+            "see its branch, and a cross-feature import is exactly the coupling the plugin host "
+            "removes. Keep yours self-contained and say so in your report if you think the two "
+            "should share a domain module later; that is a human decision about the product's "
+            "shape, not something to settle by reaching across a worktree.",
+            "The branch also modified `tools/verify_localhost.py`. Do NOT carry that over - "
+            "`tools/` is platform territory and another agent may be changing it right now. "
+            "Do carry your routes across, though: the two test files above are the payload.",
+        ],
+    },
+    {
+        "ticket": "WF-013",
+        "source_branch": "feature/WF-013-personalise-room-content-with-conditional-rules",
+        "feature_module": "wf013_rules.py",
+        "feature_id": "wf-013-conditional-rules",
+        "prefix": "wf-013",
+        "name": "Personalise room content with conditional rules",
+        "description": "Personalise what a buyer sees in a room with rules evaluated against the buyer's context.",
+        "additive": [
+            "backend/dsr/rules.py",
+            "backend/dsr/rules_api.py",
+            "backend/tests/test_rules.py",
+            "backend/tests/test_rules_api.py",
+            "docs/research/digital-sales-room-workflows/wf/WF-013-design.md",
+            "docs/research/digital-sales-room-workflows/wf/WF-013.md",
+            "frontend/src/pages/ConditionalRules.jsx",
+        ],
+        "notes": [
+            "This is a good-sized port: a domain module, a separate API module, and two test "
+            "files. The two `rules_api` routes families are likely the domain error types this "
+            "feature maps to HTTP - those belong in `EXCEPTION_HANDLERS`, which is how a "
+            "feature describes its error mapping without editing `api.py`.",
+            "The two research docs under docs/research/ are the spec. Read WF-013-design.md "
+            "before writing the port: it records the decisions the branch made, and the point of "
+            "a port is to land what was researched, not to redesign it.",
+            "The branch's two test files assume routes on the shared app. They will need "
+            "rewiring to your feature's own router - check them against the contract rather "
+            "than assuming they pass as written.",
+        ],
+    },
+    {
+        "ticket": "WF-016",
+        "source_branch": "feature/WF-016-sync-room-events-to-the-crm-via-webhooks",
+        "feature_module": "wf016_crm_sync.py",
+        "feature_id": "wf-016-crm-sync",
+        "prefix": "wf-016",
+        "name": "Sync room events to the CRM via webhooks and automations",
+        "description": "Sync room events to a CRM through webhooks, deliveries and automations.",
+        "additive": [
+            "backend/dsr/crm/__init__.py",
+            "backend/dsr/crm/automations.py",
+            "backend/dsr/crm/delivery.py",
+            "backend/dsr/crm/errors.py",
+            "backend/dsr/crm/subscriptions.py",
+            "backend/dsr/crm/sync.py",
+            "backend/dsr/crm/vocabulary.py",
+            "backend/tests/test_crm.py",
+            "backend/tests/test_crm_api.py",
+            "frontend/src/pages/CrmSync.jsx",
+        ],
+        "notes": [
+            "A seven-module crm package is the largest payload in this set. Copy it whole, then "
+            "read it before you wire it up - `vocabulary.py` and `delivery.py` in particular may "
+            "be doing work the feature module should be doing.",
+            "`crm/errors.py` almost certainly holds the domain error types for this feature. "
+            "Those go in `EXCEPTION_HANDLERS` so the mapping lives in your module rather than in "
+            "the shared `api.py`.",
+            "Webhooks mean retry and failure states. Whatever the branch did for delivery "
+            "retries, make sure it is a record rather than in-memory state, so it survives a "
+            "restart and every attempt is auditable. If it is in-memory, that is a finding worth "
+            "reporting even if you fix it.",
         ],
     },
 ]
