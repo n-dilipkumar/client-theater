@@ -603,6 +603,20 @@ class WorkflowEngine:
         Oldest first, deliberately: an evaluation reads them in the order they
         happened, and a list that reordered them would make the match count and the
         first-match reasoning depend on the sort.
+
+        Sorted by ``occurred_at``, NOT by reversing ``list()``. Those agree only
+        when events happen to be recorded in chronological order, and they are
+        recorded in whatever order they arrive - a backfill, a replay, a webhook
+        that was slow. ``list()`` orders by ``updated_at``, which is when the row
+        was written, not when the event happened; reversing it therefore yields
+        write order and calls it event order. That is the same defect as
+        ``deliveries()`` asserting "newest first" over a ``find()`` that takes no
+        ordering argument, and it surfaced the same way: a test that passed
+        locally and failed on CI, because the underlying order was a tie-break
+        coin flip rather than a promise.
+
+        ``id`` breaks ties so two events with the same ``occurred_at`` keep a
+        stable relative order across runs.
         """
         records = (
             self.store.list(ACTIVITY, room_id=room_id, limit=1000)
@@ -610,7 +624,7 @@ class WorkflowEngine:
             else self.store.list(ACTIVITY, limit=1000)
         )
         rows = [self.present_activity(record) for record in records]
-        rows.reverse()  # list() is newest first
+        rows.sort(key=lambda row: (str(row.get("occurred_at") or ""), str(row.get("id") or "")))
         if contact:
             wanted = contact.strip().lower()
             rows = [row for row in rows if str(row.get("contact") or "").lower() == wanted]
