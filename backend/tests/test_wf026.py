@@ -1445,13 +1445,72 @@ def test_the_delivery_log_never_carries_the_token(feed, store, quiet, event_type
 
 
 def test_the_delivery_log_filters_by_status(feed, store, quiet, event_type, linked, transport):
+    # Two prospects are linked (p_123 by the `linked` fixture, p_gone here), and
+    # publish fans out one delivery per prospect, consuming the scripted
+    # transport in whatever order the prospects are enumerated. That order comes
+    # from a query, and a query's order is not a promise - so this test used to
+    # assert that the FAILED row belonged to p_gone, which holds only if p_123
+    # happens to be attempted first.
+    #
+    # It passed locally for a long time because the enumeration order was an
+    # arbitrary tie-break, and it went red on CI the moment the tie-break in
+    # AuditedDatabase.find() was made total and therefore chose the other order.
+    # The test was not newly broken; it had been relying on a coin flip.
+    #
+    # So assert what the test means to test - that the log filters by status, and
+    # that each row is internally consistent - without pinning which prospect
+    # received which scripted response. test_the_room_feed_counts_by_status
+    # already asserts the counts, and does it the same way.
     feed.link_prospect(quiet["id"], {"prospect_id": "p_gone"}, source=SOURCE)
     transport.scripted = [ok(), not_found()]
     feed.publish(quiet["id"], source=SOURCE)
-    assert len(feed.deliveries(status=STATUS_DELIVERED)) == 1
+
+    delivered = feed.deliveries(status=STATUS_DELIVERED)
     failed = feed.deliveries(status=STATUS_FAILED)
+    assert len(delivered) == 1
     assert len(failed) == 1
-    assert failed[0]["prospect_id"] == "p_gone"
+
+    # Each row must be self-describing: the delivered one is the 201, the failed
+    # one is the 404 and is flagged for a human. This is a stronger claim than
+    # "the filter returned something", and it holds whichever row got which.
+    assert delivered[0]["http_status"] == 201
+    assert failed[0]["http_status"] == 404
+    assert failed[0]["needs_manual_update"] is True
+    assert failed[0]["error"] == "HTTP 404"
+
+    # Both prospects are represented exactly once between the two rows, so the
+    # fan-out really did reach both and neither was dropped or duplicated.
+    assert {delivered[0]["prospect_id"], failed[0]["prospect_id"]} == {"p_123", "p_gone"}
+
+
+@pytest.mark.parametrize("scripted_first", ["ok", "not_found"])
+def test_which_prospect_fails_does_not_depend_on_the_enumeration_order(
+    feed, quiet, event_type, linked, transport, scripted_first
+):
+    """Both scripted orders must give the same shape of result.
+
+    Without this, "the test no longer names a prospect" is indistinguishable from
+    "the test was weakened until it passed". Running the fan-out with the
+    responses the other way round and demanding the SAME invariant is what makes
+    the difference visible: whichever prospect the query enumerates first now
+    receives the first scripted response, and the result is identical in kind.
+
+    So this fails if the fan-out order is pinned to one prospect, and passes only
+    if the assertions above genuinely do not depend on it.
+    """
+    feed.link_prospect(quiet["id"], {"prospect_id": "p_gone"}, source=SOURCE)
+    first, second = (ok, not_found) if scripted_first == "ok" else (not_found, ok)
+    transport.scripted = [first(), second()]
+    feed.publish(quiet["id"], source=SOURCE)
+
+    delivered = feed.deliveries(status=STATUS_DELIVERED)
+    failed = feed.deliveries(status=STATUS_FAILED)
+    assert len(delivered) == 1
+    assert len(failed) == 1
+    assert delivered[0]["http_status"] == 201
+    assert failed[0]["http_status"] == 404
+    assert failed[0]["needs_manual_update"] is True
+    assert {delivered[0]["prospect_id"], failed[0]["prospect_id"]} == {"p_123", "p_gone"}
 
 
 def test_the_delivery_log_filters_by_needing_a_human(feed, quiet, event_type, linked, transport):
