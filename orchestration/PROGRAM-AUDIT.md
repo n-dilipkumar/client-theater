@@ -382,3 +382,69 @@ and the case `PORT-PLAN.md` wrongly flagged as a collision.
 
 Board corrected to match: 4 `in-progress` with live agents, 8 `completed`, 16
 `todo`, zero stale cards.
+
+---
+
+## 2026-09-27 — Set 2 merged; a brief of mine broke a feature
+
+**`fb30903`. Seven features, 81 routes, 604 tests, 0 failed.**
+
+| Workflow | Prefix | Routes | Suite in its worktree |
+|---|---|---|---|
+| WF-007 | `/api/library` | 12 | 437 passed |
+| WF-009 | `/api/publishing` | 13 | 445 passed |
+| WF-011 | `/api/publishing` | 10 | 472 passed |
+
+All three merged cleanly, one at a time, with the suite and registry re-checked
+after each. **WF-009 and WF-011 both mount `/api/publishing` and both load
+together** — the case `PORT-PLAN.md` blocked as "researched twice" on a *prefix*
+comparison. Measured on the rule the host enforces, `(method, path)` after
+prefixing, there are **0 colliding pairs**. The claim had come from repeating the
+exact mistake `fd544e2` fixed.
+
+### The defect was my brief, not the agent
+
+WF-007 **could not load at all**:
+
+```
+RuntimeError: WF-007 needs the 'python-multipart' package to serve its
+multipart ingest endpoint
+```
+
+51 of its tests failed with it. My WF-007 brief had said: *"Leave
+`backend/pyproject.toml` alone... not four agents each adding their own."*
+The agent obeyed. But `pyproject.toml` is **not** in the guard's shared list, so
+the feature was always allowed to edit it, and FastAPI needs `python-multipart`
+to parse a file upload — which is precisely what document ingest is.
+
+WF-007's **original branch** had already declared it, commented *"Required by
+FastAPI to parse the multipart ingest request (WF-007)."* The port reversed a
+decision the original author had made correctly, because I told it to. Fixed in
+`580dca6`, and the brief template corrected to say that a dependency a feature
+cannot work without is that feature's own requirement, not a coordination
+problem.
+
+**Blast radius worth knowing:** while WF-007 was unloaded,
+`test_the_feature_did_not_collide_with_anything` in **WF-003's** suite also
+failed — a different feature with nothing to do with uploads. It passed again once
+WF-007 loaded. So *"the suite is green"* is a statement about which features
+loaded at least as much as about the code, and a **silently skipped feature is
+not a green run**.
+
+### A false positive worth recording
+
+The set-3 dispatch reported `mangled=True` for WF-016. Reading the screen showed
+the agent had itself piped pytest into `| tail -n 20` — a Unix idiom unavailable in
+cmd — and had recovered unaided. The detector matched any *"not recognized as an
+internal or external command"*, which fires on an agent's own typo as well as on a
+mangled prompt. Three tools narrowed to match only the word that starts the
+prompt. A check that cries wolf is worse than no check, because it trains you to
+ignore it.
+
+### A mistake of my own
+
+Closing the finished set-2 tabs, I read the handle map for the wrong batch and
+closed the **set-3** agents instead. No work was lost — their worktrees were
+intact, WF-016 still holding its 10 uncommitted files — but three live agents lost
+their terminals. Relaunched with a prompt that says so explicitly, so a resumed
+agent does not read the new tab as a rejection of its work.
