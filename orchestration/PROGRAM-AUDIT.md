@@ -720,3 +720,104 @@ WF-017 was **blocked**, so it was unblocked and told where scratch files belong.
 WF-004 was **mid-port with correct content and a wrong filename**, so it was
 nudged, not restarted — restarting resets an agent's context and loses work where a
 note costs one round trip. It did the rename within a minute.
+
+---
+
+## 2026-09-27 — The corpus was always 138. I was counting branches.
+
+**`e376798`. 11 features, 116 routes, 1211 tests. 135 briefs on main. 13 agents
+live.**
+
+### The correction
+
+I had been tracking "17 researched workflows" and treating the other 83 of the
+100 as needing new research. `docs/research/digital-sales-room-workflows/wf/`
+holds **WF-001 through WF-138**, and:
+
+| | |
+|---|---|
+| research documents | **139** |
+| complete specifications (all nine sections) | **138** |
+| blocked | **0** |
+| fewer than two cited sources | **0** |
+| **median distinct primary-source URLs per spec** | **5** |
+
+WF-001–WF-017 were built as branches. **WF-018 onward have a finished
+specification and no code at all** — no branch, no feature module, no tests.
+
+So of the **89 workflows still needed to reach 100, none needs new research.** The
+research is done; the work is implementation.
+
+**I was reading the number of branches and calling it the number of workflows.**
+Twelve PRs and four port batches all reinforced the wrong number, because every
+tool I had written counted branches. Nothing was wrong with the corpus and nothing
+was wrong with the agents; the survey was counting the wrong thing.
+
+### Two bugs in the survey, and why they were believable
+
+Both produced plausible numbers, which is the whole difficulty:
+
+**The URL regex matched only the scheme prefix.** `re.compile(r"https?://")` finds
+the literal `https://`, so `set(findall(...))` collapses every specification in
+the corpus to a single element. The survey reported a median of **one** source per
+spec, which reads as a finding about a thin corpus rather than as a bug in a
+measuring instrument. Fixed to match the whole URL; the median is **five**.
+
+**The completeness regex required the colon inside the bold.** The corpus writes
+`- **user_flow**:` — colon outside the bold — so a pattern for
+`**user_flow:**` matches nothing, and **19 complete, well-sourced documents** were
+reported as having none of the nine sections. WF-051 was opened and read by hand
+and has all nine.
+
+A wrong check does not look wrong. It looks like a finding.
+
+### A second kind of brief
+
+Every brief so far was a **port**: take a branch that has an implementation and
+reshape it onto the plugin host. WF-018 onward have nothing to port, so the
+instruction has to change to *build this, and the spec is the specification*.
+
+**121 build briefs** are now generated, and each one is asserted individually to
+name its own spec document, to say build-not-port, to carry a ticket-derived
+prefix, and to carry the temp-directory warning. Then read back **out of git**,
+because the working copy is what has been reverting all session.
+
+Three things those briefs have to get right:
+
+- **The research is the spec, and the agent must not redesign it.** A build has
+  more licence to be creative than a port does, which is exactly why it needs
+  saying. Where the research is ambiguous the brief asks for *which reading you
+  took and why*, not a silent choice.
+- **The prefix is ticket-derived, `/api/wf-NNN`.** A spec does not declare its
+  routes, so a collision cannot be predicted the way it could for a port with a
+  known route table. The host refuses a colliding `(method, path)` and **reports**
+  it rather than shadowing, so a mistake surfaces as a failure rather than a
+  quietly broken route.
+- **Build-status checkboxes get ticked honestly, including the one the agent
+  cannot tick.** `Verified in localhost browser` — no browser is attached to this
+  session — is reported as not verified rather than claimed.
+
+### Seven prompts that went nowhere
+
+The first build batch was ten agents, and **seven never received their brief.**
+`send_ok=True` on all ten; the text was typed at a TUI still drawing its splash, so
+it went nowhere. Those seven sat on the startup screen with an empty `Ask anything…`
+box for several minutes.
+
+The cause is a wait that was long enough for three agents and not for ten: the
+dispatch creates each terminal, sleeps 9s, waits for `tui-idle`, and sends. Three
+agents give the TUI time to start. Ten, created while the machine is busy running
+the earlier ones, do not — and **`tui-idle` is satisfied by a splash screen that
+has not started**, because a screen that has not begun is not busy.
+
+The repair waits for the prompt box to actually be drawn rather than for a TUI
+condition, confirms the brief is absent before sending so a second run cannot
+duplicate a prompt that did land, and then re-reads the screens because
+`accepted` comes back empty on a successful send in this Orca build and proves
+nothing. All ten are working.
+
+**The first read-back said `active=False` for seven of them and I did not trust
+it** — not because the check was clever but because seven simultaneous dead agents
+is a much less likely explanation than seven reads that returned nothing, which is
+exactly what has happened in this session before when the wrong JSON key was read.
+Opening two of them showed the splash screen immediately.
