@@ -52,9 +52,15 @@ for _s in (sys.stdout, sys.stderr):
 ROOT = Path(r"C:\Users\Dilip\orca\projects\client-theater\client-theater")
 REPO_ID = "id:8964203a-831a-425f-8fd7-ebc3a0fc2e46"
 
-# Ten builds, WF-018..WF-027: the first ten researched workflows that have never
-# been built at all.
-BATCH = list(range(18, 28))
+# The batch is sized to ten because the goal asks for ten sets of ten, and the
+# range is a command-line argument so the next batch is a run rather than an edit
+# - edits to this file have been reverted by shell restarts repeatedly this
+# session, and a reverted batch number would silently re-dispatch work that has
+# already landed.
+#
+#   python orchestration/dispatch_build_batch.py 28 38
+BATCH = list(range(int(sys.argv[1]) if len(sys.argv) > 1 else 18,
+                   int(sys.argv[2]) if len(sys.argv) > 2 else 28))
 
 POINTER = (
     "Read the file orchestration/ports/WF-{n:03d}.md in this repo and carry out exactly "
