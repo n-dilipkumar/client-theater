@@ -251,3 +251,86 @@ differ — the case the host was built for.
 **Still held back: WF-005**, whose branch edits `db/audited.py` and `store.py`, the
 audit guarantee itself. That needs a human read before anything carries it across,
 and an agent port is the wrong instrument for it.
+
+---
+
+## 2026-09-27 — Three agent-dispatched ports merged: the host works
+
+The result the whole plugin host was built to produce, and the first time it has
+been demonstrated with features written by independent agents in parallel.
+
+Three workflows, each researched and built on its own branch by its own agent in
+its own worktree, **none of which had ever seen the others' code**. They merged
+with **zero shared-file conflicts**, one at a time, with the full suite and the
+feature registry re-checked after each merge so a red result would name its cause:
+
+| Step | Suite | Features live | Failed |
+|---|---|---|---|
+| baseline | 145 | 1 (WF-006) | 0 |
+| + WF-012 | 217 | 2 | 0 |
+| + WF-002 | 274 | 3 | 0 |
+| + WF-003 | **375** | **4** | **0** |
+
+44 routes across four features. The previous run of this project built twelve such
+branches and merged **none**.
+
+### One real conflict, and the fix that generalises
+
+The only conflict in three merges was not application code. Every agent runs a Jev
+gate, and the Jev client appends a row to
+`orchestration/decisions/jev-audit.jsonl` as a side effect. Three branches
+appending to the same file conflict textually even though no row contradicts
+another.
+
+This is not a one-off: **every one of the ~100 workflows runs a Jev gate**, so
+every one of them appends there. Left alone, the audit log alone would have
+conflicted on almost every merge — the exact class of problem the plugin host
+exists to remove, reappearing in a file nobody had thought of as contended. The
+guard missed it because no feature is *supposed* to edit that file by hand; the
+tool writes it as a side effect of doing its job.
+
+Fixed with `merge=union` in `.gitattributes` (`27ebd24`). An append-only log has
+no notion of a conflicting line, only of rows that were never merged. `union`
+concatenates both sides, loses no row, invents none, and each row carries its own
+`audit_id` and `decided_at` so the merged file stays a complete record whatever
+order they land in.
+
+### Two tooling defects worth recording
+
+**The agent monitor reported a stopped agent as working** — twice, for an agent
+that had been idle holding a finished port. The cause was ordering: an ended
+OpenCode turn leaves `… · interrupted` in the scrollback while the status bar
+*underneath* still shows the spinner strip, and the spinner test ran first. The
+spinner glyphs are the status bar, not evidence of activity. Found because the tool
+disagreed with a direct screen read, which is the argument for having both a
+summary tool and the ability to read the raw thing it summarises.
+
+**`merge_ports.py` began with `git checkout main`**, so work authored on a PR
+branch was silently moved onto `main` and the branch was left empty. The merges
+kept *succeeding* — three clean merges, no conflicts — and only the push reported
+`Everything up-to-date` while local was seven commits ahead. A reflog showed the
+branch had been created once and never moved. Three attempts to fix it with the
+edit tool failed silently because the shell restarted and reverted the working
+copy; each attempt presented identically, so nothing distinguished "not yet tried"
+from "tried and lost". The repair is now written by a script that reads the file
+back and refuses to claim success unless the line is actually gone — the artifact
+is the evidence, not the intention.
+
+### What the agents got right
+
+Each worked from its committed brief and each produced a feature module, a feature
+folder, and a test file. No exceptions, and none touched a shared file. Notably
+each threaded `source=` through its own domain layer so audit rows name the route
+that actually served the write — the defect the WF-006 rename exposed, which would
+otherwise have been replicated three more times.
+
+### Verification, before merge rather than after
+
+Each port was checked by running the checks, not by reading the agent's claim — an
+agent reporting "246 passed" is asserting a number. Suite in each agent's own
+worktree with the feature mounted (202 / 246 / 217), the host registry queried
+through `/api/features` to confirm the feature *loads* rather than being silently
+skipped, and the guard run per branch.
+
+Merged as **PR #10 → `8920d2f`**, all four CI jobs green, 375 tests, 57 frontend
+modules, all 22 headless checks passing with four features mounted.
