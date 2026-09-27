@@ -70,7 +70,7 @@ def live_features():
     live = set()
     for f in git("ls-tree", "-r", "--name-only", "origin/main",
                  "backend/dsr/features").splitlines():
-        m = re.search(r"wf(\d{3})", f)
+        m = re.search(r"wf[_-]?(\d{3})", f)
         if m:
             live.add(int(m.group(1)))
     return live
