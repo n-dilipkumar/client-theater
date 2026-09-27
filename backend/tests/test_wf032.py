@@ -1023,9 +1023,40 @@ def test_a_token_too_short_to_mask_safely_is_not_shown():
 def test_token_comparison_is_constant_time_and_correct():
     token = generate_token()
     assert token_matches(token, token) is True
-    assert token_matches(token, token[:-1] + "0") is False
+    # Build a token that is GUARANTEED different. This used to be
+    # `token[:-1] + "0"`, which is the same string as `token` whenever the
+    # generated token happens to end in "0" - and generate() ends in a hex digit,
+    # so that happened one time in sixteen. The assertion then failed, in a suite
+    # with nothing to do with tokens, roughly one run in sixteen. It surfaced
+    # while merging WF-034, which is how a coin flip gets blamed on whatever was
+    # happening at the time.
+    different = token[:-1] + ("1" if token[-1] != "1" else "2")
+    assert different != token
+    assert token_matches(token, different) is False
     assert token_matches(None, token) is False
     assert token_matches(token, None) is False
+
+
+def test_a_near_miss_token_is_never_the_token():
+    """The trap above, stated as a property rather than left to chance.
+
+    Over the sixteen hex digits a token can end with, exactly one of them
+    reproduces the token. A test that picks a digit without checking has a
+    one-in-sixteen chance of asserting that a token matches itself and failing.
+    This asserts the arithmetic directly, so the failure mode is a documented
+    fact about the construction rather than a mystery that surfaces in an
+    unrelated suite.
+    """
+    token = generate_token()
+    for digit in "0123456789abcdef":
+        candidate = token[:-1] + digit
+        same = candidate == token
+        assert same is (digit == token[-1]), (
+            f"appending {digit!r} to a token ending {token[-1]!r} "
+            f"{'should' if digit == token[-1] else 'should not'} produce the token"
+        )
+    # And the property that actually matters: a token only ever matches itself.
+    assert token_matches(token, token[:-1] + ("0" if token[-1] != "0" else "1")) is False
 
 
 def test_every_post_carries_the_token_header():
