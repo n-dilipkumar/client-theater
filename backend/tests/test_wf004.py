@@ -38,7 +38,7 @@ from dsr.features import load_feature
 from dsr.roles import ACCESS, INVITATIONS, AccessError, AccessService
 
 PREFIX = "/api/wf-004-invite-buyer"
-MODULE = "wf_004-invite-buyer"
+MODULE = "wf004_roles"
 NOW = datetime(2026, 9, 26, 12, 0, tzinfo=timezone.utc)
 
 
