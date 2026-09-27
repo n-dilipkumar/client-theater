@@ -1,0 +1,36 @@
+{
+  "set": 4,
+  "dispatched": [
+    "WF-004",
+    "WF-015",
+    "WF-017"
+  ],
+  "held": {
+    "WF-001": "its branch edits backend/dsr/db/audited.py, the audit guarantee itself. A port is a mechanical transformation and is the wrong instrument for deciding what a change to the core means. Same reason as WF-005 and WF-014."
+  },
+  "decided_before_dispatch": {
+    "WF-004_vs_WF-015": {
+      "collision": "both add backend/dsr/access.py; both serve GET /api/rooms/{room_id}/access",
+      "measured_overlap": {
+        "access.py": 3.2,
+        "test_access.py": 1.0,
+        "test_access_api.py": 4.8
+      },
+      "shared_symbols": "2 of 74, one of them __init__",
+      "jev_first_ask": {
+        "verdict": "uncertain",
+        "confidence": 0.68,
+        "threshold": 0.75,
+        "audit_id": "jev-20260927T052726-8696-46556",
+        "why": "content overlap had not been measured"
+      },
+      "jev_second_ask": {
+        "verdict": "pass",
+        "confidence": 1.0,
+        "selected": "B_two_features_self_contained",
+        "audit_id": "jev-20260927T052837-24152-17484"
+      },
+      "outcome": "two self-contained features. WF-004's module is renamed to roles.py; WF-015 keeps access.py. The shared route resolves when each takes its own prefix."
+    }
+  }
+}
