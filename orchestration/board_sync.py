@@ -61,11 +61,44 @@ def git(*args, cwd=ROOT):
     return p.stdout
 
 
+DSR_PREFIX = "n-dilipkumar/dsr-"
+
+
+def branch_name(wt):
+    """The short branch name for a worktree, with the ref prefix stripped.
+
+    One place, because two loops that strip it differently will eventually
+    disagree - and they do so silently. The JSON carries `refs/heads/<name>`, and a
+    loop that forgets the prefix matches nothing: `claims` came back empty on every
+    run, every ticket looked uncontested, and an unreviewed duplicate port was
+    reported as shipped with a confident and entirely invented explanation.
+    """
+    return (wt.get("branch") or "").removeprefix("refs/heads/")
+
+
+def is_agent_worktree(wt):
+    return branch_name(wt).startswith(DSR_PREFIX)
+
+
 def on_main(path):
     """Does this file path exist on origin/main?"""
     p = subprocess.run(["git", "cat-file", "-e", f"origin/main:{path}"], cwd=ROOT,
                        capture_output=True, timeout=60)
     return p.returncode == 0
+
+
+def main_features():
+    """Workflows whose feature module is already on main.
+
+    Keyed on the ticket rather than on a file path, which is what makes it survive
+    a rename: WF-004's module was renamed so the tooling's regex could see it, and
+    a path-keyed check then reported a shipped feature as unlanded. The pattern
+    tolerates `wf004`, `wf_004` and `wf-004` for the same reason - with a hundred
+    agents each picking their own spelling, no single one can be relied on.
+    """
+    out = git("ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features")
+    return {f"WF-{m.group(1)}" for line in out.splitlines()
+            if (m := re.search(r"wf[_-]?(\d{3})", line))}
 
 
 def orca(args, timeout=120):
@@ -77,7 +110,32 @@ def orca(args, timeout=120):
         return {"ok": False}
 
 
-def classify(wt, path, branch):
+def classify(wt, path, branch, contested=False):
+    """(status, note) for one worktree, from what is actually on disk.
+
+    `contested` means another worktree claims the same ticket, and that single fact
+    changes which question decides the card. Getting it wrong has produced both a
+    false negative and a false positive:
+
+    * **Uncontested**, the ticket being on `main` is the whole answer. A file can
+      be absent from `main` for reasons that have nothing to do with whether the
+      work landed - a rename, a move. WF-004's module was renamed
+      `wf_004-invite-buyer.py` -> `wf004_roles.py` *so the tooling's regex could
+      see it at all*, which is exactly that case, and it put a shipped feature on
+      the board as `todo`.
+    * **Contested**, the files are the only thing that can decide it. WF-008 has
+      two worktrees writing `wf008_external_sync.py` at the same path, so path
+      existence and commit reachability are identical for them and only the
+      content differs. Skipping the path test there would mark an unreviewed
+      duplicate as shipped.
+    """
+    ticket = f"WF-{TICKET_RE.search(path.name).group(1)}"
+    own = [f.strip().replace("\\", "/")
+           for f in git("diff", "--name-only", "origin/main...HEAD", cwd=path).splitlines()
+           if f.strip() and not f.strip().replace("\\", "/").startswith(NOT_THE_FEATURES)]
+    absent = [f for f in own if not on_main(f)]
+    shipped = ticket in main_features()
+
     """(status, note) for one worktree, from what is actually on disk."""
     ticket = f"WF-{TICKET_RE.search(path.name).group(1)}"
     own = [f.strip().replace("\\", "/")
@@ -90,21 +148,39 @@ def classify(wt, path, branch):
     live = [t for t in terms.get("result", {}).get("terminals", [])
             if t.get("agentIdentity") == "opencode"]
 
-    if absent:
-        # Some of this worktree's own files are not on main.
+    if absent and (contested or not shipped):
+        # Either a second implementation of the same workflow, or one that has
+        # genuinely not shipped. The reason a reader needs differs, so say which.
         if live:
             return "in-progress", (
                 f"{ticket}: live OpenCode agent porting it. Brief "
                 f"orchestration/ports/{ticket}.md. {len(own) - len(absent)}/{len(own)} of "
                 f"its files already on main, {len(absent)} still to write, {dirty} "
                 f"uncommitted. Commits locally and stops; a human reviews and merges.")
+        if contested and shipped:
+            return "todo", (
+                f"{ticket} is ALREADY LIVE on main from a DIFFERENT worktree. This one "
+                f"holds a second implementation that never landed: {len(absent)} of its "
+                f"{len(own)} file(s) are absent from main "
+                f"({', '.join(Path(a).name for a in absent[:3])}"
+                f"{', ...' if len(absent) > 3 else ''}), {dirty} uncommitted. Needs a "
+                f"human decision about which implementation is better - not to be "
+                f"merged on top of the one that shipped.")
         return "todo", (
             f"{ticket}: not landed. {len(absent)} of its {len(own)} file(s) are absent from "
             f"main ({', '.join(Path(a).name for a in absent[:3])}"
             f"{', ...' if len(absent) > 3 else ''}), {dirty} uncommitted. No live agent. "
-            f"Needs dispatch, or a decision if it duplicates work that already shipped.")
+            f"Needs dispatch.")
 
-    if own:
+    if own or shipped:
+        if shipped and absent:
+            return "completed", (
+                f"{ticket} is MERGED and live: its feature module is on main. Some of "
+                f"this worktree's file PATHS are not - {len(absent)} of {len(own)} - "
+                f"because a file was renamed or moved after the merge "
+                f"({', '.join(Path(a).name for a in absent[:2])}"
+                f"{', ...' if len(absent) > 2 else ''}). The workflow shipped; a path "
+                f"difference is not outstanding work.")
         return "completed", (
             f"{ticket} is MERGED and live: all {len(own)} of its feature files are on main. "
             f"0 uncommitted. The branch itself is kept for history and is expected to read "
@@ -130,16 +206,29 @@ def main():
     print("   are squash-merged, so a port's commit is never an ancestor of main)")
     print()
 
+    # How many worktrees claim each ticket, counted before any card is judged -
+    # a card cannot know whether its ticket is contested until every card's ticket
+    # is known.
+    claims: dict[str, int] = {}
+    for wt in worktrees:
+        m = TICKET_RE.search(Path(wt["path"]).name)
+        if m and is_agent_worktree(wt):
+            t = f"WF-{m.group(1)}"
+            claims[t] = claims.get(t, 0) + 1
+
     changed = 0
     for wt in worktrees:
         path = Path(wt["path"])
-        branch = (wt.get("branch") or "").replace("refs/heads/", "")
-        if not branch.startswith("n-dilipkumar/dsr-"):
+        branch = branch_name(wt)
+        if not is_agent_worktree(wt):
             continue
         if not TICKET_RE.search(path.name) or not path.exists():
             continue
 
-        status, note = classify(wt, path, branch)
+        status, note = classify(
+            wt, path, branch,
+            contested=claims.get(f"WF-{TICKET_RE.search(path.name).group(1)}", 0) > 1,
+        )
         if wt.get("workspaceStatus") != status or wt.get("comment") != note:
             orca(["orca", "worktree", "set", "--worktree", wt["id"],
                   "--workspace-status", status, "--comment", note, "--json"])
