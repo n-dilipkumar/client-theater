@@ -69,6 +69,9 @@ class RecordStore:
     def find(self, collection: str, where: Mapping[str, Any], **kwargs: Any) -> list[dict[str, Any]]:
         return self.db.find(collection, where, **kwargs)
 
+    def count_where(self, collection: str, where: Mapping[str, Any], **kwargs: Any) -> int:
+        return self.db.count_where(collection, where, **kwargs)
+
     def update(self, record_id: str, patch: Mapping[str, Any], **kwargs: Any) -> dict[str, Any]:
         return self.db.update(record_id, patch, **kwargs)
 
@@ -80,6 +83,9 @@ class RecordStore:
 
     def bulk_create(self, collection: str, items: Any, **kwargs: Any) -> list[dict[str, Any]]:
         return self.db.bulk_create(collection, items, **kwargs)
+
+    def bulk_delete(self, record_ids: Any, **kwargs: Any) -> dict[str, Any]:
+        return self.db.bulk_delete(record_ids, **kwargs)
 
     def audit(self, **kwargs: Any) -> list[dict[str, Any]]:
         return self.db.audit(**kwargs)
