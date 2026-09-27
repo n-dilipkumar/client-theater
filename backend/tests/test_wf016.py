@@ -48,7 +48,17 @@ from fastapi.testclient import TestClient
 from dsr.api import app
 from dsr.crm import CRMSync
 from dsr.crm.automations import AutomationError, lint
-from dsr.crm.delivery import BODY_SAMPLE, DeliveryResult, deliver, sign
+from dsr.crm.delivery import (
+    BODY_SAMPLE,
+    DEFAULT_BACKOFF,
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_TIMEOUT,
+    RETRYABLE_STATUS,
+    DeliveryResult,
+    deliver,
+    sign,
+)
+from dsr.crm.inferences import INFERENCES
 from dsr.crm.subscriptions import SubscriptionError
 from dsr.crm.sync import FANOUT_NOTE, FieldRegistryError, fanout_source
 from dsr.crm.vocabulary import (
@@ -79,6 +89,11 @@ SOURCE = f"POST {PREFIX}/events"
 # --------------------------------------------------------------------------- #
 # Fixtures
 # --------------------------------------------------------------------------- #
+
+
+def inferences_by_id(inference_id: str):
+    return next((entry for entry in INFERENCES if entry["id"] == inference_id), None)
+
 
 # A room payload with nothing enforced on it but the fields this workflow reads.
 ROOM = {
@@ -217,7 +232,7 @@ def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-016"
     assert entry["exception_handlers"] == ["CrmError"]
-    assert len(entry["routes"]) == 15
+    assert len(entry["routes"]) == 16
 
 
 def test_frontend_descriptor_id_matches_the_backend_feature_id():
@@ -255,7 +270,7 @@ def test_the_prefix_is_ours_alone(http):
     mine = {key for key in served if key[1].startswith(PREFIX)}
     others = {key for key in served if not key[1].startswith(PREFIX)}
 
-    assert len(mine) == 15
+    assert len(mine) == 16
     assert not mine & others
 
 
@@ -936,6 +951,199 @@ def test_presets_are_listed(http):
         "sync-payment-details",
         "sync-view-count",
     }
+
+
+# --------------------------------------------------------------------------- #
+# The inferences, declared
+# --------------------------------------------------------------------------- #
+#
+# The Jev gate for this port returned `uncertain` twice and, asked what the
+# `fix` option pointed at, named unverified_inferences: behaviour resting on an
+# unchecked judgement call, declared only in prose comments. These tests are the
+# answer to that. They cannot make an inference sourced, but they make each one
+# named, bounded, and overridable, and they fail if one is quietly deleted or
+# quietly changed.
+
+
+def test_every_inference_is_named_and_traceable():
+    for entry in INFERENCES:
+        assert entry["id"], "an inference with no id cannot be argued with by name"
+        assert entry["basis"].strip(), f"{entry['id']} does not say what the research does or does not say"
+        assert entry["why"].strip(), f"{entry['id']} does not say why this value was chosen"
+        assert entry["change_it"].strip(), f"{entry['id']} does not say how to change it"
+        assert entry["blast_radius"].strip(), f"{entry['id']} does not say what it affects"
+        assert "value" in entry, f"{entry['id']} does not say what this build chose"
+        # No entry may smuggle a route path back in, for the reason the two
+        # user-facing messages were rewritten during the port.
+        assert "/api/" not in json.dumps(entry)
+
+
+def test_inference_ids_are_unique():
+    ids = [entry["id"] for entry in INFERENCES]
+    assert len(ids) == len(set(ids))
+
+
+def test_the_largest_inference_is_flagged_as_such():
+    """The one the research explicitly declines to support, called out by name."""
+    entry = inferences_by_id("automation-run-is-resolve-only")
+
+    assert entry is not None
+    assert "no claims" in entry["basis"]
+
+
+def test_inferences_endpoint_serves_the_registry_next_to_the_sourced_half(http):
+    body = http.get(f"{PREFIX}/inferences").json()
+
+    assert body["count"] == len(INFERENCES)
+    assert {entry["id"] for entry in body["inferences"]} == {e["id"] for e in INFERENCES}
+    # The point of the endpoint is the line between the two halves, so the
+    # sourced vocabulary ships in the same payload.
+    assert body["sourced"]["events"] == list(EVENTS)
+    assert body["sourced"]["page_statuses"] == list(PAGE_STATUSES)
+    assert "no claims" in body["sourced_quote"]
+
+
+def test_inferences_endpoint_writes_nothing(http):
+    http.get(f"{PREFIX}/inferences")
+
+    assert http.get("/api/audit", params={"limit": 50}).json()["count"] == 0
+
+
+def test_the_declared_retry_policy_is_the_one_that_runs(crm, store, room):
+    """The registry must not drift from the code. If someone changes the retry
+    constants, this fails rather than leaving the endpoint quietly lying."""
+    declared = inferences_by_id("retry-policy")["value"]
+
+    assert declared["max_attempts"] == DEFAULT_MAX_ATTEMPTS
+    assert declared["backoff_seconds"] == DEFAULT_BACKOFF
+    assert declared["timeout_seconds"] == DEFAULT_TIMEOUT
+    assert declared["retryable_statuses"] == sorted(RETRYABLE_STATUS)
+    assert declared["honours_retry_after"] is True
+
+    # And the declared budget is what a real run actually spends.
+    crm.transport = FakeTransport(*[server_error()] * 5)
+    crm.subscribe("pageAccepted", "https://crm.example/hook", source=SOURCE)
+    entry = crm.record_event("pageAccepted", room_id=room["id"], source=SOURCE)["activity"][0]
+
+    assert entry["data"]["attempts"] == DEFAULT_MAX_ATTEMPTS
+    assert entry["data"]["attempt_statuses"] == [503] * DEFAULT_MAX_ATTEMPTS
+
+
+def test_the_declared_signature_matches_what_is_sent(crm, transport, room):
+    declared = inferences_by_id("hmac-signature")["value"]
+    crm.subscribe(
+        "pageAccepted", "https://crm.example/hook", secret="s3cret", source=SOURCE
+    )
+
+    crm.record_event("pageAccepted", room_id=room["id"], source=SOURCE)
+
+    sent = transport.calls[0]
+    assert sent["headers"][declared["header"]] == sign("s3cret", sent["raw"])
+    assert sent["headers"][declared["header"]].startswith("sha256=")
+    assert declared["algorithm"] == "HMAC-SHA256"
+
+
+def test_the_declared_headers_match_what_is_sent(crm, transport, room):
+    declared = inferences_by_id("delivery-headers")["value"]
+    crm.subscribe("pageAccepted", "https://crm.example/hook", source=SOURCE)
+
+    crm.record_event("pageAccepted", room_id=room["id"], source=SOURCE)
+
+    headers = transport.calls[0]["headers"]
+    assert headers["X-DSR-Event"] == "pageAccepted"
+    assert headers["X-DSR-Delivery"].count(":") == 1
+    assert set(declared) == {"X-DSR-Event", "X-DSR-Delivery"}
+
+
+def test_the_declared_envelope_matches_what_is_sent(crm, transport, room):
+    declared = inferences_by_id("delivery-envelope")["value"]
+    crm.subscribe("pageAccepted", "https://crm.example/hook", source=SOURCE)
+
+    crm.record_event("pageAccepted", room_id=room["id"], source=SOURCE)
+
+    assert set(transport.calls[0]["body"]) == set(declared)
+
+
+def test_the_debatable_status_inference_is_overridable_per_event(crm, transport, room):
+    """``pagePreviewAccepted`` -> 'partially accepted' is a judgement call, so it
+    has to be changeable without editing the vocabulary."""
+    declared = inferences_by_id("page-preview-accepted-status")["value"]
+    crm.subscribe("pagePreviewAccepted", "https://crm.example/hook", source=SOURCE)
+
+    crm.record_event("pagePreviewAccepted", room_id=room["id"], source=SOURCE)
+    assert transport.calls[0]["body"]["status"] == declared["pagePreviewAccepted"]
+
+    transport.calls.clear()
+    crm.record_event(
+        "pagePreviewAccepted", room_id=room["id"], status="accepted", source=SOURCE
+    )
+    assert transport.calls[0]["body"]["status"] == "accepted"
+
+
+def test_the_room_scope_inference_is_the_documented_one(crm, transport, room, store):
+    """Unscoped receives everything, scoped receives only its room. The registry
+    claims that, so the two cases are asserted together."""
+    declared = inferences_by_id("room-scope-is-a-filter-not-an-only")["value"]
+    other = store.create("room", {"name": "Contoso"})
+
+    assert declared["room_id_null"].startswith("receives every")
+    crm.subscribe("pageViewed", "https://crm.example/hook", source=SOURCE)
+    scoped = crm.subscribe(
+        "pageViewed", "https://crm.example/hook", room_id=room["id"], source=SOURCE
+    )
+
+    crm.record_event("pageViewed", room_id=room["id"], source=SOURCE)
+    crm.record_event("pageViewed", room_id=other["id"], source=SOURCE)
+
+    # Three deliveries: the unscoped one twice, the scoped one only for its room.
+    assert len(transport.calls) == 3
+    delivered_to_scoped = [
+        call for call in transport.calls if call["url"] and scoped["id"] in call["headers"]["X-DSR-Delivery"]
+    ]
+    assert len(delivered_to_scoped) == 1
+
+
+def test_the_unresolved_fact_inference_is_the_rule_that_runs(crm, store):
+    """A run that resolved nothing is an error, not a success with empty fields."""
+    declared = inferences_by_id("unresolved-fact-is-an-error")["value"]
+    assert "unresolved_fact" in declared["rule"]
+
+    room = store.create("room", {"name": "Unpaid"})
+    crm.create_automation(crm.presets()[1], source=SOURCE)
+
+    entry = crm.record_event("pageAccepted", room_id=room["id"], source=SOURCE)["activity"][0]
+
+    assert entry["data"]["status"] == "error"
+    assert entry["data"]["needs_manual_update"] is True
+
+
+def test_the_summary_inference_is_the_rule_that_runs(http, http_room):
+    """The summary covers the rows the filter returned, not the whole log."""
+    declared = inferences_by_id("activity-summary-is-scoped")["value"]
+    assert "filters returned" in declared["over"]
+
+    subscribe(http, event="pageViewed")
+    http.post(f"{PREFIX}/automations", json={"preset_id": "sync-page-urls"})
+    # One event the webhook is subscribed to, on a room with links; one the
+    # automation fires on, on a room with none, so its run cannot resolve and is
+    # the row that needs a human. Two rows in total, across both channels.
+    http.post(f"{PREFIX}/events", json={"event": "pageViewed"}, params={"room_id": http_room["id"]})
+    bare = http.post("/api/records/room", json={"name": "Unpaid"}).json()
+    http.post(
+        f"{PREFIX}/events", json={"event": "pageAccepted"}, params={"room_id": bare["id"]}
+    )
+
+    everything = http.get(f"{PREFIX}/activity").json()
+    only_webhooks = http.get(f"{PREFIX}/activity", params={"channel": "webhook"}).json()
+
+    assert everything["count"] == 2
+    assert everything["summary"]["success"] + everything["summary"]["error"] == 2
+    assert only_webhooks["count"] == 1
+    assert only_webhooks["summary"]["success"] + only_webhooks["summary"]["error"] == 1
+    # The automation's run errored on a room with no links, so it is the one row
+    # that needs a human, and it is not in the webhook view.
+    assert everything["summary"]["needs_manual_update"] == 1
+    assert only_webhooks["summary"]["needs_manual_update"] == 0
 
 
 # --------------------------------------------------------------------------- #

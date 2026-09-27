@@ -79,6 +79,7 @@ from fastapi.responses import JSONResponse
 from dsr.crm import CRMSync, CrmError
 from dsr.crm.automations import from_preset
 from dsr.crm.delivery import DeliveryResult
+from dsr.crm.inferences import describe as describe_inferences
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
 from dsr.store import RecordStore
@@ -152,6 +153,25 @@ def presets(crm: CRMSync = CrmDep) -> dict[str, Any]:
     """Recommended Automations a rep can start from with one click."""
     listed = crm.presets()
     return {"presets": listed, "count": len(listed)}
+
+
+@router.get("/inferences")
+def inferences() -> dict[str, Any]:
+    """Every design inference this workflow rests on, and how to change each one.
+
+    The research for WF-016 states its own limits: it documents the webhook
+    contract and the five page statuses, and explicitly makes no claims about a
+    Salesforce endpoint. The parts of this feature that are therefore judgement
+    calls - the retry policy, the signature, the delivery envelope, the fact that
+    an automation run resolves rather than executes - are collected in
+    :mod:`dsr.crm.inferences` and served here.
+
+    It is a read with no side effect, so it needs no store. Publishing it is the
+    difference between "we inferred this, see the comment" and "we inferred this,
+    here it is, here is what would change it". A reviewer can disagree with a
+    named entry instead of having to find it.
+    """
+    return describe_inferences()
 
 
 # --------------------------------------------------------------------------- #

@@ -35,6 +35,17 @@ export const crmApi = {
   vocabulary: () => apiRequest(`${PREFIX}/vocabulary`),
   presets: () => apiRequest(`${PREFIX}/presets`),
 
+  /**
+   * Every design inference the workflow rests on, and how to change each one.
+   *
+   * The research for this workflow states its own limits: it documents the
+   * webhook contract and the five page statuses, and explicitly makes no claims
+   * about a Salesforce endpoint. The parts that are therefore judgement calls
+   * are served as data rather than buried in comments, so a rep or a reviewer
+   * can disagree with a named entry instead of having to find it in a diff.
+   */
+  inferences: () => apiRequest(`${PREFIX}/inferences`),
+
   /** Declared CRM fields. Optional, but it is what makes the lint specific. */
   listFields: () => apiRequest(`${PREFIX}/fields`),
   registerField: (payload) =>

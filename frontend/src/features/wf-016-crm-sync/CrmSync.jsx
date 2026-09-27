@@ -45,7 +45,62 @@ const SECTIONS = [
   { id: 'automations', label: 'Automations', icon: 'automation' },
   { id: 'webhooks', label: 'Webhooks', icon: 'webhook' },
   { id: 'activity', label: 'Activity log', icon: 'activity' },
+  { id: 'inferences', label: 'What this infers', icon: 'warning' },
 ]
+
+/** One inferred behaviour: what it is, what the research says, and how to change
+ *  it. Kept in the product rather than in a code comment, because a judgement
+ *  call nobody can find is a judgement call nobody can disagree with. */
+function InferenceRow({ entry }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <li className="border-b border-border-subtle/15 last:border-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full min-h-11 items-center gap-3 py-2 text-left transition-colors duration-150 hover:bg-muted/40"
+      >
+        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-foreground">
+          {entry.topic}
+        </span>
+        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{entry.id}</span>
+      </button>
+
+      {open && (
+        <div className="space-y-2 rounded-lg border border-border-subtle/25 bg-background/40 p-3 text-xs">
+          <div>
+            <p className="font-medium tracking-wide text-muted-foreground uppercase">Why</p>
+            <p className="mt-0.5 text-foreground/90">{entry.why}</p>
+          </div>
+          <div>
+            <p className="font-medium tracking-wide text-muted-foreground uppercase">
+              What the research says
+            </p>
+            <p className="mt-0.5 text-foreground/90">{entry.basis}</p>
+          </div>
+          <div>
+            <p className="font-medium tracking-wide text-muted-foreground uppercase">
+              What this build chose
+            </p>
+            <JsonView value={entry.value} />
+          </div>
+          <div>
+            <p className="font-medium tracking-wide text-muted-foreground uppercase">
+              How to change it
+            </p>
+            <p className="mt-0.5 font-mono text-foreground/90">{entry.change_it}</p>
+          </div>
+          <div>
+            <p className="font-medium tracking-wide text-muted-foreground uppercase">Affects</p>
+            <p className="mt-0.5 text-foreground/90">{entry.blast_radius}</p>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
 
 /** One delivery attempt, as the Activity Log recorded it. */
 function AttemptRow({ attempt }) {
@@ -564,6 +619,7 @@ export default function CrmSync() {
   const automations = useAsync(() => crmApi.listAutomations(), [])
   const subscriptions = useAsync(() => crmApi.listSubscriptions(), [])
   const activity = useAsync(() => crmApi.activity({ channel, status, limit: 60 }), [channel, status])
+  const inferences = useAsync(() => crmApi.inferences(), [])
 
   const events = vocabulary.data?.events || []
 
@@ -1047,6 +1103,48 @@ export default function CrmSync() {
                 ))}
               </ul>
             </Card>
+          )}
+        </div>
+      )}
+
+      {/* -- what this infers -- */}
+      {section === 'inferences' && (
+        <div
+          id="panel-inferences"
+          role="tabpanel"
+          aria-labelledby="tab-inferences"
+          className="space-y-4"
+        >
+          <div>
+            <h2 className="font-mono text-lg font-semibold">What this infers</h2>
+            <p className="text-sm text-muted-foreground">
+              The published event enum, the five page statuses, and the subscribe, list and cancel
+              contract are all sourced. The rest is judgement: the parts of this workflow the
+              research makes no claims about. Each one is listed here with the reason for the
+              choice and how to change it.
+            </p>
+          </div>
+
+          {inferences.loading && <Spinner label="Loading inferences" />}
+          {inferences.error && <ErrorNote error={inferences.error} onRetry={inferences.refetch} />}
+
+          {inferences.data && (
+            <>
+              <Card className="p-4">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  <span className="font-medium text-foreground">From the research: </span>
+                  &ldquo;{inferences.data.sourced_quote}&rdquo;
+                </p>
+              </Card>
+
+              <Card className="p-4">
+                <ul>
+                  {(inferences.data.inferences || []).map((entry) => (
+                    <InferenceRow key={entry.id} entry={entry} />
+                  ))}
+                </ul>
+              </Card>
+            </>
           )}
         </div>
       )}
