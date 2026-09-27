@@ -92,7 +92,12 @@ def brief_title(n):
     if not p.exists():
         return None
     first = p.read_text(encoding="utf-8", errors="replace").splitlines()[0]
-    m = re.match(r"#\s*Build brief:\s*WF-\d+\s*-\s*(.+)", first)
+    # Tolerant of the brief KIND as well as the ticket spelling, because there
+    # are two kinds of brief in this directory and a build dispatcher that
+    # silently skips every port brief looks exactly like a dispatcher that found
+    # no work. WF-001, WF-005 and WF-014 are ports whose headers say
+    # "Port brief:" - a strict "Build brief" match skipped all three, quietly.
+    m = re.match(r"#\s*(?:Build|Port)\s*brief:\s*WF[-_]?\d+\s*-\s*(.+)", first, re.I)
     return m.group(1).strip() if m else None
 
 
