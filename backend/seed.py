@@ -219,3 +219,6 @@ def seed_features(db, *, room_ids: list[tuple[str, str]], now: datetime) -> list
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# probe: a labelled platform change, which the guard must permit
+
