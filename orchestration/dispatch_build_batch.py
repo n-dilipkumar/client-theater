@@ -147,11 +147,28 @@ def main():
                          "title": tab, "workflow": title,
                          "brief": f"orchestration/ports/{ticket}.md"})
 
-    (ROOT / "data" / "dispatched_batch.json").write_text(
-        json.dumps(launched, indent=2), encoding="utf-8")
+    # MERGE into the handle file, do not overwrite it. It used to write the
+    # current batch only, so every dispatch erased the record of the agents
+    # already running - which is exactly how agent_watch came to report 13
+    # dispatched when 20 were in flight, and why a batch of ten looked like it
+    # had never started. A log that forgets is worse than no log.
+    handles_path = ROOT / "data" / "dispatched_batch.json"
+    known: dict[str, dict] = {}
+    if handles_path.exists():
+        try:
+            for rec in json.loads(handles_path.read_text(encoding="utf-8")):
+                if isinstance(rec, dict) and rec.get("ticket"):
+                    known[rec["ticket"]] = rec
+        except (json.JSONDecodeError, OSError):
+            pass          # a corrupt log must not stop a dispatch
+    for a in launched:
+        known[a["ticket"]] = a
+    handles_path.write_text(
+        json.dumps(list(known.values()), indent=2), encoding="utf-8")
 
     print()
-    print(f"=== {len(launched)} agent tab(s) launched ===")
+    print(f"=== {len(launched)} agent tab(s) launched this run, "
+          f"{len(known)} known in total ===")
     for a in launched:
         print(f"  {a['ticket']}  {a['handle']}  {a['title']}")
 

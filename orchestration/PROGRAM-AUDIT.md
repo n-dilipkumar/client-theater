@@ -7,47 +7,47 @@ state was actually arrived at rather than a tidy after-the-fact summary.
 Scope note: this file records *program* decisions and milestones. Two other
 records exist and are not duplicated here:
 
-* `orchestration/decisions/jev-audit.jsonl` — the append-only JSONL log of every
+* `orchestration/decisions/jev-audit.jsonl` â€” the append-only JSONL log of every
   typed Jev judgment. Written by `tools/jev.py`. Never hand-edited.
-* `git log` — what changed in the code, and why, in the commit message.
+* `git log` â€” what changed in the code, and why, in the commit message.
 
 ---
 
-## 2026-09-26 — Program start: infrastructure before scale
+## 2026-09-26 â€” Program start: infrastructure before scale
 
 **Starting state, measured rather than assumed:**
 
 | Fact | Value | How established |
 |---|---|---|
-| Researched workflows | 17 (WF-001…WF-017) | `docs/research/digital-sales-room-workflows/wf/` |
+| Researched workflows | 17 (WF-001â€¦WF-017) | `docs/research/digital-sales-room-workflows/wf/` |
 | Raw research documents | 9 | `docs/research/raw/` |
-| Features ported and merged | 1 (WF-006) | `git log` — `f854a79` |
+| Features ported and merged | 1 (WF-006) | `git log` â€” `f854a79` |
 | Backend tests | 145 passing (was 81) | `pytest -q` |
 | Headless localhost checks | 22 passing | `tools/verify_localhost.py` |
 | Orca worktrees | 22, **all** claiming `in-progress` | `orca worktree list` |
-| Worktrees with a live agent | **0** | `orca worktree ps` — every one `live:0 pty:no` |
+| Worktrees with a live agent | **0** | `orca worktree ps` â€” every one `live:0 pty:no` |
 | Branches with unported code | 11 | `git rev-list --count origin/main..<branch>` |
 | Branches empty (never built) | 6 | same, `ahead=0 files=0` |
 | `n-dilipkumar/*` branches | 21, all empty and already merged | same |
-| CI / `.github/` | **did not exist** | `dir .github` → not found |
+| CI / `.github/` | **did not exist** | `dir .github` â†’ not found |
 | Open PRs | 0 | `gh pr list` |
 
 **Scope decision.** The brief asks for 10 sets of 10 workflows (100). Only 17 are
 researched, and the project's own standard in `AGENTS.md` separates a *sourced*
 workflow from a *hypothesis*. Resolved with the user: **port the 16 researched
-workflows first, then research sets 2–10 as new batches** with the same
+workflows first, then research sets 2â€“10 as new batches** with the same
 primary-source discipline. Generating 83 unsourced workflows up front would have
 been faster and would have violated the corpus's own provenance rule.
 
 **Branching inconsistency found and fixed.** The Orca repo base ref was
 normalised to `origin/main`. Worktrees from the failed run were split between base
 `main` and `refs/remotes/origin/main`, so a new agent could branch from a local
-`main` that had not been pushed and silently start nine commits behind — the
+`main` that had not been pushed and silently start nine commits behind â€” the
 exact class of drift that makes a batch look broken.
 
 ---
 
-## 2026-09-26 — CI: the feature contract is now enforced, not remembered
+## 2026-09-26 â€” CI: the feature contract is now enforced, not remembered
 
 The plugin host lets N features merge without conflict, but only while no feature
 edits a shared file. Until now that was a rule in a markdown file, checked by
@@ -55,7 +55,7 @@ whoever remembered to run `tools/check_feature_diff.py`. WF-006 proved the rule 
 followable; nothing proved it would be *followed*. At 100 workflows, an unenforced
 convention is a hope.
 
-**PR #1 — `420ba54` — merged.** Adds `.github/workflows/ci.yml` (4 jobs) and
+**PR #1 â€” `420ba54` â€” merged.** Adds `.github/workflows/ci.yml` (4 jobs) and
 `.github/PULL_REQUEST_TEMPLATE.md`.
 
 | Job | Runs on | Catches |
@@ -67,7 +67,7 @@ convention is a hope.
 
 Two asymmetries, both deliberate:
 
-* **The guard skips `main`.** Platform work legitimately edits shared files —
+* **The guard skips `main`.** Platform work legitimately edits shared files â€”
   that is how a new extension point gets added (`44555cd`, the seed hook). A guard
   that must be overridden on every legitimate platform PR trains people to
   override it on illegitimate ones. Tests have no such escape hatch, because the
@@ -76,7 +76,7 @@ Two asymmetries, both deliberate:
   shallow clone of the PR branch alone would make it **silently pass**. A guard
   that passes when it cannot see is worse than no guard.
 
-**PR #2 — probe, closed and deleted.** A guard that has only ever passed is
+**PR #2 â€” probe, closed and deleted.** A guard that has only ever passed is
 untested. A one-line edit to `backend/dsr/api.py` was pushed deliberately.
 
 | Job | Result |
@@ -87,8 +87,8 @@ untested. A one-line edit to `backend/dsr/api.py` was pushed deliberately.
 | `Local host app (headless)` | pass |
 
 This is the discrimination that matters. A shared-file edit compiles, passes every
-test, and builds — so nothing except the guard would have caught it. CI log
-confirmed the right reason: `FAIL: 1 shared file(s) edited … - backend/dsr/api.py`,
+test, and builds â€” so nothing except the guard would have caught it. CI log
+confirmed the right reason: `FAIL: 1 shared file(s) edited â€¦ - backend/dsr/api.py`,
 with the failure message pointing the author at the two files to add instead.
 
 **Evidence for the CI file itself.** A green run on the PR that introduces it is
@@ -107,21 +107,21 @@ state, with Jev consulted on the status policy rather than applying it by feel.
 
 ---
 
-## 2026-09-26 — Five workflows were never empty
+## 2026-09-26 â€” Five workflows were never empty
 
 Jev was asked for the board-status policy and returned **`uncertain`** (0.52
 confidence, 0.46 margin between options). `AGENTS.md` says an `uncertain` verdict
-must not be overridden — gather more evidence or escalate. It was not overridden.
+must not be overridden â€” gather more evidence or escalate. It was not overridden.
 
 The evidence Jev was missing: whether removing a "dead" worktree would actually
 destroy anything. A branch can be empty *at the ref level* while its *working
-tree* holds real work, and `git rev-list origin/main..<branch>` — the only triage
-that had been done — cannot see that.
+tree* holds real work, and `git rev-list origin/main..<branch>` â€” the only triage
+that had been done â€” cannot see that.
 
 It checked, and the answer reversed the plan:
 
 **`orchestration/PORT-PLAN.md` records WF-001, WF-004, WF-012, WF-015 and WF-017 as
-"no commits — re-run from scratch".** Their refs are empty. Their directories are
+"no commits â€” re-run from scratch".** Their refs are empty. Their directories are
 not:
 
 | Workflow | Modified | Untracked | Ref commits |
@@ -144,9 +144,9 @@ workflows' worth of work.
 what was recovered and that the ref-level triage was misleading, then pushed to
 `origin`. They are recoverable off-machine now.
 
-They remain **unported and untrusted**. Every one edits shared files — `api.py`,
+They remain **unported and untrusted**. Every one edits shared files â€” `api.py`,
 `seed.py`, `ui.jsx`, `lib/api.js`, `App.jsx`, and in WF-001's case
-`db/audited.py` — which is the exact pattern that stalled the previous run. WF-004
+`db/audited.py` â€” which is the exact pattern that stalled the previous run. WF-004
 also modified `tools/jev.py`, the shared validator every decision in this project
 goes through; that needs reading before any of it is trusted.
 
@@ -158,29 +158,29 @@ project must check `git status --porcelain` in the worktree, not only
 
 ---
 
-## 2026-09-26 — Dispatch set 1: three agents, three environment bugs
+## 2026-09-26 â€” Dispatch set 1: three agents, three environment bugs
 
 The mechanics were established by probing rather than assumed, and two of the
 three probes found something that changed the design.
 
 **`orca worktree create --agent opencode` does not work.** It fails with *"Selected
-agent is disabled"* — only `pi` is enabled in Orca's settings, and that is a
+agent is disabled"* â€” only `pi` is enabled in Orca's settings, and that is a
 desktop-app toggle with no CLI surface. The working path is
 `orca terminal create --worktree <id> --command opencode`, which launches the real
 TUI in a real tab; `terminal show` then reports `agentIdentity: opencode` and the
-status bar reads **Build · Space Bunny Free**. So the agent is a genuine OpenCode
+status bar reads **Build Â· Space Bunny Free**. So the agent is a genuine OpenCode
 agent on the model `AGENTS.md` requires, in a tab, with no settings change needed.
 Verified end to end before relying on it: a probe agent was sent a prompt and
 answered `TAB-AGENT-OK`.
 
 **`terminal read --json` returns the screen under `result.terminal.tail`** as an
 array of lines, not `result.text`. Reading the wrong key returns empty and looks
-like a dead agent — which briefly read as a broken dispatch.
+like a dead agent â€” which briefly read as a broken dispatch.
 
 **A server restart interrupted the dispatch mid-run**, after the worktrees and
 agent tabs were created but before the run finished. Reading each screen showed
 WF-003 and WF-012 had received their briefs and were working, while WF-002 sat at
-an empty prompt. Resuming meant sending WF-002's brief, not re-dispatching —
+an empty prompt. Resuming meant sending WF-002's brief, not re-dispatching â€”
 re-dispatching would have left two agents already working on a third that was not
 needed. The handle map is now written to `data/dispatched.json` before the sends
 rather than after, so an interruption cannot lose it.
@@ -199,13 +199,13 @@ three across the whole programme:
    the port briefs both said `cd backend && ../.venv/Scripts/python -m pytest`,
    which does not resolve in a worktree. The briefs now carry the absolute
    interpreter path, and say plainly that no sibling worktree may be read to find
-   a venv — the negative instruction matters as much as the positive one, because
+   a venv â€” the negative instruction matters as much as the positive one, because
    the wandering is what raised the prompt.
 2. **`opencode.json` used V1 syntax in a V2 config.** It had `permission` with a
    `bash` sub-object; V2 wants a `permissions` array of `{action, resource,
    effect}` with actions like `shell`, and explicitly warns that V1's
-   `permission`/`bash`/`task` are not the V2 names. The intended policy — allow
-   `git push` but ask, ask on `gh pr merge` — **was not in force at all**.
+   `permission`/`bash`/`task` are not the V2 names. The intended policy â€” allow
+   `git push` but ask, ask on `gh pr merge` â€” **was not in force at all**.
    Rewritten as V2 rules plus the missing piece: an `external_directory` allow for
    this repo's two directories. That action is what OpenCode checks before any read
    outside the active worktree, and it defaults to `ask`, which is exactly why
@@ -216,11 +216,11 @@ it merged, so the three running agents were redirected by hand.
 
 ---
 
-## 2026-09-26 — The four "collisions" were not collisions
+## 2026-09-26 â€” The four "collisions" were not collisions
 
 `PORT-PLAN.md` blocked WF-007, WF-010, WF-009 and WF-011 on the claim that
 *"WF-007 and WF-010 genuinely both own /api/library, and WF-009 and WF-011 both
-define a publishing router — the host will refuse the second regardless."*
+define a publishing router â€” the host will refuse the second regardless."*
 
 Measured against the host's actual rule, which refuses on `(method, path)` **after
 prefixing**:
@@ -236,7 +236,7 @@ owns `/api/publishing/processes`, `/submissions`, `/workflows`, `/publish`,
 `/publications`. WF-011 owns `/api/publishing/rooms`, `/status`, `/share-link`,
 `/access`, `/events`, `/webhooks`.
 
-The claim came from comparing **prefixes** — the exact check `fd544e2` replaced
+The claim came from comparing **prefixes** â€” the exact check `fd544e2` replaced
 with route-level comparison, because prefix comparison both wrongly blocked
 WF-003/WF-005 and missed genuine dead-code shadowing of core routes. Judging these
 pairs by prefix repeated the mistake that fix exists to stop repeating.
@@ -246,7 +246,7 @@ Jev was asked whether they were duplicate workflows and answered
 `backend/dsr/publishing.py` also stops being a conflict: each becomes its own module
 under `backend/dsr/features/`. Both features keep the `/api/library` and
 `/api/publishing` prefixes, which is safe precisely *because* their concrete paths
-differ — the case the host was built for.
+differ â€” the case the host was built for.
 
 **Still held back: WF-005**, whose branch edits `db/audited.py` and `store.py`, the
 audit guarantee itself. That needs a human read before anything carries it across,
@@ -254,7 +254,7 @@ and an agent port is the wrong instrument for it.
 
 ---
 
-## 2026-09-27 — Three agent-dispatched ports merged: the host works
+## 2026-09-27 â€” Three agent-dispatched ports merged: the host works
 
 The result the whole plugin host was built to produce, and the first time it has
 been demonstrated with features written by independent agents in parallel.
@@ -284,7 +284,7 @@ another.
 
 This is not a one-off: **every one of the ~100 workflows runs a Jev gate**, so
 every one of them appends there. Left alone, the audit log alone would have
-conflicted on almost every merge — the exact class of problem the plugin host
+conflicted on almost every merge â€” the exact class of problem the plugin host
 exists to remove, reappearing in a file nobody had thought of as contended. The
 guard missed it because no feature is *supposed* to edit that file by hand; the
 tool writes it as a side effect of doing its job.
@@ -297,9 +297,9 @@ order they land in.
 
 ### Two tooling defects worth recording
 
-**The agent monitor reported a stopped agent as working** — twice, for an agent
+**The agent monitor reported a stopped agent as working** â€” twice, for an agent
 that had been idle holding a finished port. The cause was ordering: an ended
-OpenCode turn leaves `… · interrupted` in the scrollback while the status bar
+OpenCode turn leaves `â€¦ Â· interrupted` in the scrollback while the status bar
 *underneath* still shows the spinner strip, and the spinner test ran first. The
 spinner glyphs are the status bar, not evidence of activity. Found because the tool
 disagreed with a direct screen read, which is the argument for having both a
@@ -307,13 +307,13 @@ summary tool and the ability to read the raw thing it summarises.
 
 **`merge_ports.py` began with `git checkout main`**, so work authored on a PR
 branch was silently moved onto `main` and the branch was left empty. The merges
-kept *succeeding* — three clean merges, no conflicts — and only the push reported
+kept *succeeding* â€” three clean merges, no conflicts â€” and only the push reported
 `Everything up-to-date` while local was seven commits ahead. A reflog showed the
 branch had been created once and never moved. Three attempts to fix it with the
 edit tool failed silently because the shell restarted and reverted the working
 copy; each attempt presented identically, so nothing distinguished "not yet tried"
 from "tried and lost". The repair is now written by a script that reads the file
-back and refuses to claim success unless the line is actually gone — the artifact
+back and refuses to claim success unless the line is actually gone â€” the artifact
 is the evidence, not the intention.
 
 ### What the agents got right
@@ -321,25 +321,25 @@ is the evidence, not the intention.
 Each worked from its committed brief and each produced a feature module, a feature
 folder, and a test file. No exceptions, and none touched a shared file. Notably
 each threaded `source=` through its own domain layer so audit rows name the route
-that actually served the write — the defect the WF-006 rename exposed, which would
+that actually served the write â€” the defect the WF-006 rename exposed, which would
 otherwise have been replicated three more times.
 
 ### Verification, before merge rather than after
 
-Each port was checked by running the checks, not by reading the agent's claim — an
+Each port was checked by running the checks, not by reading the agent's claim â€” an
 agent reporting "246 passed" is asserting a number. Suite in each agent's own
 worktree with the feature mounted (202 / 246 / 217), the host registry queried
 through `/api/features` to confirm the feature *loads* rather than being silently
 skipped, and the guard run per branch.
 
-Merged as **PR #10 → `8920d2f`**, all four CI jobs green, 375 tests, 57 frontend
+Merged as **PR #10 â†’ `8920d2f`**, all four CI jobs green, 375 tests, 57 frontend
 modules, all 22 headless checks passing with four features mounted.
 
 ---
 
-## 2026-09-27 — Set 2 dispatched; a backtick in a prompt ate two briefs
+## 2026-09-27 â€” Set 2 dispatched; a backtick in a prompt ate two briefs
 
-WF-007, WF-009, WF-010 and WF-011 dispatched — the four held back as collisions
+WF-007, WF-009, WF-010 and WF-011 dispatched â€” the four held back as collisions
 until measurement showed 0 identical `(method, path)` pairs and Jev answered
 `port_all_four_as_is` at 0.79.
 
@@ -358,7 +358,7 @@ arrived mangled. Two agents were affected:
 
 Neither failure is visible from git, from the worktree, or from the dispatch
 script's exit code. Only from **reading the agent's screen**. Set 1's pointer had
-the identical hazard and happened to survive — nothing about the two cases differed
+the identical hazard and happened to survive â€” nothing about the two cases differed
 in a way that had been checked, so that was luck being mistaken for a working
 design.
 
@@ -375,7 +375,7 @@ successful send**, so it is not evidence of anything on its own.
 ### State
 
 All four live and working, **none touching a shared file**. This is the first
-dispatch where two of the four deliberately share an API prefix — WF-007 and
+dispatch where two of the four deliberately share an API prefix â€” WF-007 and
 WF-010 under `/api/library`, WF-009 and WF-011 under `/api/publishing`. Safe
 precisely because their concrete paths differ: the case the host exists to allow,
 and the case `PORT-PLAN.md` wrongly flagged as a collision.
@@ -385,7 +385,7 @@ Board corrected to match: 4 `in-progress` with live agents, 8 `completed`, 16
 
 ---
 
-## 2026-09-27 — Set 2 merged; a brief of mine broke a feature
+## 2026-09-27 â€” Set 2 merged; a brief of mine broke a feature
 
 **`fb30903`. Seven features, 81 routes, 604 tests, 0 failed.**
 
@@ -397,7 +397,7 @@ Board corrected to match: 4 `in-progress` with live agents, 8 `completed`, 16
 
 All three merged cleanly, one at a time, with the suite and registry re-checked
 after each. **WF-009 and WF-011 both mount `/api/publishing` and both load
-together** — the case `PORT-PLAN.md` blocked as "researched twice" on a *prefix*
+together** â€” the case `PORT-PLAN.md` blocked as "researched twice" on a *prefix*
 comparison. Measured on the rule the host enforces, `(method, path)` after
 prefixing, there are **0 colliding pairs**. The claim had come from repeating the
 exact mistake `fd544e2` fixed.
@@ -415,7 +415,7 @@ multipart ingest endpoint
 `backend/pyproject.toml` alone... not four agents each adding their own."*
 The agent obeyed. But `pyproject.toml` is **not** in the guard's shared list, so
 the feature was always allowed to edit it, and FastAPI needs `python-multipart`
-to parse a file upload — which is precisely what document ingest is.
+to parse a file upload â€” which is precisely what document ingest is.
 
 WF-007's **original branch** had already declared it, commented *"Required by
 FastAPI to parse the multipart ingest request (WF-007)."* The port reversed a
@@ -426,7 +426,7 @@ problem.
 
 **Blast radius worth knowing:** while WF-007 was unloaded,
 `test_the_feature_did_not_collide_with_anything` in **WF-003's** suite also
-failed — a different feature with nothing to do with uploads. It passed again once
+failed â€” a different feature with nothing to do with uploads. It passed again once
 WF-007 loaded. So *"the suite is green"* is a statement about which features
 loaded at least as much as about the code, and a **silently skipped feature is
 not a green run**.
@@ -434,8 +434,8 @@ not a green run**.
 ### A false positive worth recording
 
 The set-3 dispatch reported `mangled=True` for WF-016. Reading the screen showed
-the agent had itself piped pytest into `| tail -n 20` — a Unix idiom unavailable in
-cmd — and had recovered unaided. The detector matched any *"not recognized as an
+the agent had itself piped pytest into `| tail -n 20` â€” a Unix idiom unavailable in
+cmd â€” and had recovered unaided. The detector matched any *"not recognized as an
 internal or external command"*, which fires on an agent's own typo as well as on a
 mangled prompt. Three tools narrowed to match only the word that starts the
 prompt. A check that cries wolf is worse than no check, because it trains you to
@@ -444,27 +444,27 @@ ignore it.
 ### A mistake of my own
 
 Closing the finished set-2 tabs, I read the handle map for the wrong batch and
-closed the **set-3** agents instead. No work was lost — their worktrees were
-intact, WF-016 still holding its 10 uncommitted files — but three live agents lost
+closed the **set-3** agents instead. No work was lost â€” their worktrees were
+intact, WF-016 still holding its 10 uncommitted files â€” but three live agents lost
 their terminals. Relaunched with a prompt that says so explicitly, so a resumed
 agent does not read the new tab as a rejection of its work.
 
 ---
 
-## 2026-09-27 — The guard was a lamp, not a barrier
+## 2026-09-27 â€” The guard was a lamp, not a barrier
 
 The seeder fix (`a13b1bb`) edits `backend/seed.py`, a shared file. The guard
-fired with exactly the right message —
+fired with exactly the right message â€”
 
     FAIL: 1 shared file(s) edited.
       - backend/seed.py
 
-— **and the PR merged anyway.**
+â€” **and the PR merged anyway.**
 
 That PR was legitimate platform work and *should* have been allowed. The problem
 is not that it went through. The problem is that **nothing decided that.** The
 guard reported accurately, a merge happened regardless, and the judgement between
-a feature and platform work fell to whoever typed `gh pr merge` — which is exactly
+a feature and platform work fell to whoever typed `gh pr merge` â€” which is exactly
 the judgement the CI job exists to make.
 
 Measured rather than guessed: `gh pr merge` does not consult CI status, and the
@@ -473,7 +473,7 @@ repository had **no branch protection and no rulesets at all**.
 ### Fixed, and proven
 
 Branch protection on `main`: all four checks required, `strict: true`,
-`enforce_admins: true` (so an admin cannot bypass it — which is how the seeder PR
+`enforce_admins: true` (so an admin cannot bypass it â€” which is how the seeder PR
 got through), force-push disabled.
 
 The exemption is a **label**, not a CI flag, so the decision is recorded where a
@@ -485,7 +485,7 @@ job going red and the actual failure was a red job that stopped nothing:
 | Probe | Expected | Result |
 |---|---|---|
 | Shared-file edit, no label | merge **refused** | `the base branch policy prohibits the merge` |
-| Shared-file edit, `platform-change` label | guard → NOTICE, check passes | passed; log shows the labelled path |
+| Shared-file edit, `platform-change` label | guard â†’ NOTICE, check passes | passed; log shows the labelled path |
 
 The second probe's end-to-end job independently reported **`OK: 8 feature(s)
 loaded, 0 failed`**.
@@ -494,20 +494,20 @@ loaded, 0 failed`**.
 
 `sqlite3.connect` does not create intermediate directories, so pointing
 `DSR_DB_PATH` at a path under a directory that did not exist died with *"unable to
-open database file"* — naming neither the file nor the directory. It bit this
+open database file"* â€” naming neither the file nor the directory. It bit this
 project during a routine check, and the verification script **filtered the
-seeder's own output**, so the traceback was discarded and only the symptom — an
-empty demo dataset — was left to interpret. A script that filters the output of
+seeder's own output**, so the traceback was discarded and only the symptom â€” an
+empty demo dataset â€” was left to interpret. A script that filters the output of
 the thing it is verifying will hide exactly the failure it exists to catch.
 
 Fixed with two regression tests, the first confirmed to fail with the fix
 reverted. That test asserts the seeder **wrote rooms**, not merely that it exited
-0 — an exit-code-only test would pass on a seeder that wrote nothing, which is
+0 â€” an exit-code-only test would pass on a seeder that wrote nothing, which is
 precisely the failure that was nearly mistaken for a broken app.
 
 ---
 
-## 2026-09-27 — Nine features live, 108 routes, 895 tests
+## 2026-09-27 â€” Nine features live, 108 routes, 895 tests
 
 `96ccc79`. This is the first state where the product is demonstrably a *product*
 rather than a set of plugins: every feature contributes its own demo data, the
@@ -523,7 +523,7 @@ seeder says what each one added, and the running server serves all of it.
 | Frontend | 85 modules |
 
 **Every feature seeded its own data**, which is the test that the `seed(db,
-context)` hook actually works rather than merely existing — nine independent
+context)` hook actually works rather than merely existing â€” nine independent
 implementations of the same extension point, none of which edited
 `backend/seed.py`:
 
@@ -539,8 +539,8 @@ wf013_rules   -> 4 variables, 8 blocks, 1 personalisation (3 shown, 1 hidden)
 wf016_crm_sync -> 5 CRM fields, 2 automations, 3 subscriptions, 2 events, 5 rows
 ```
 
-Two prefixes are now shared by two features each — `/api/library` (WF-007 with
-WF-008 pending) and `/api/publishing` (WF-009, WF-011) — and both pairs load
+Two prefixes are now shared by two features each â€” `/api/library` (WF-007 with
+WF-008 pending) and `/api/publishing` (WF-009, WF-011) â€” and both pairs load
 together. That was `PORT-PLAN.md`'s stated blocker, resolved by measuring the
 rule the host actually enforces rather than the prefix it was checking.
 
@@ -553,7 +553,7 @@ success teaches a reviewer nothing about the feature.
 
 ---
 
-## 2026-09-27 — Ten features, and the prefix claim fully retired
+## 2026-09-27 â€” Ten features, and the prefix claim fully retired
 
 `7d2a5e7` (WF-008) and `cef3cca` (tooling). **10 features, 116 routes, 1011
 tests, 0 failed features.**
@@ -568,7 +568,7 @@ registry rather than from a file count:
 
 `PORT-PLAN.md` called these *"researched twice"* and said the host *"will refuse
 the second regardless."* It refused neither. The claim came from comparing
-prefixes — the check `fd544e2` replaced precisely because it both wrongly
+prefixes â€” the check `fd544e2` replaced precisely because it both wrongly
 blocked WF-003/WF-005 and missed genuine dead-code shadowing of core routes.
 Repeating that mistake is how four workflows nearly stayed unbuilt for no reason.
 
@@ -589,7 +589,7 @@ silently reverted twice by shell restarts, each revert costing a merge cycle.
 
 `board_sync.py` asked the wrong question and **demoted nine shipped features to
 `todo`** in one pass. A port branch is merged through a *merge* branch rather than
-fast-forwarded, so its own commits stay reachable and `ahead` never reaches 0 —
+fast-forwarded, so its own commits stay reachable and `ahead` never reaches 0 â€”
 which has nothing to do with whether the workflow shipped. It now asks whether
 the feature module is on `main`, which is the measurable question, and the card
 comment says so explicitly so the ahead-count is not misread as pending work.
@@ -611,27 +611,27 @@ comment says so explicitly so the ahead-count is not misread as pending work.
 **Remaining of the 17 researched:** WF-001, WF-004, WF-005, WF-010, WF-014,
 WF-015, WF-017.
 
-- **WF-005 and WF-014** edit `db/audited.py` **and** `store.py` — the audit
+- **WF-005 and WF-014** edit `db/audited.py` **and** `store.py` â€” the audit
   guarantee itself. Held for a human read of what they changed to the core.
 - **WF-001, WF-004, WF-015, WF-017** were rescued from uncommitted working trees,
   so have never been executed. WF-004 also modified `tools/jev.py`.
 - **WF-010** has a completed port in its worktree, verified, awaiting merge.
 - **The duplicate WF-008 port** needs a decision about which implementation wins.
 
-**Beyond the 17:** the brief asks for 100 workflows across 10 sets. Sets 1–3
+**Beyond the 17:** the brief asks for 100 workflows across 10 sets. Sets 1â€“3
 covered 10 of the 17 researched. The remaining 90 do not exist yet and would
-need new research to the standard the corpus holds — an explicitly-labelled
+need new research to the standard the corpus holds â€” an explicitly-labelled
 hypothesis is permitted by `AGENTS.md`, but that is a scope decision, not an
 implementation detail.
 
 ---
 
-## 2026-09-27 — Set 4: the collision decided before dispatch, and a fourth wrong board test
+## 2026-09-27 â€” Set 4: the collision decided before dispatch, and a fourth wrong board test
 
-**`77fe14f` — 11 features, 116 routes, 1211 tests, 0 failed features.**
+**`77fe14f` â€” 11 features, 116 routes, 1211 tests, 0 failed features.**
 
-WF-010 merged, and `/api/library` now carries **three** features at once — WF-007
-(12 routes), WF-008 (8), WF-010 (8) — all loading together. That is the furthest
+WF-010 merged, and `/api/library` now carries **three** features at once â€” WF-007
+(12 routes), WF-008 (8), WF-010 (8) â€” all loading together. That is the furthest
 `PORT-PLAN.md` is from being right about shared prefixes, and it was blocked on a
 comparison the host never makes.
 
@@ -646,14 +646,14 @@ were silently reverted by a shell restart before being committed, and the fourth
 reverted to a list naming shipped ports. It now reads
 `data/pending_ports.json`, regenerated from the worktrees, and refuses a port
 already on `main`, refuses a shared-file edit, and **fails if a merge added no new
-feature** — because that is what a no-op merge looks like from the outside.
+feature** â€” because that is what a no-op merge looks like from the outside.
 
 ### A collision found by measuring, then decided by Jev
 
 WF-004 and WF-015 both add `backend/dsr/access.py` and both serve
 `GET /api/rooms/{room_id}/access`.
 
-Jev's first ask returned **`uncertain`** — 0.68 against 0.75, `is_confident` 0.43,
+Jev's first ask returned **`uncertain`** â€” 0.68 against 0.75, `is_confident` 0.43,
 *"options too close to decide on this evidence"*. `AGENTS.md` forbids overriding
 that, so the missing evidence was gathered rather than the answer guessed.
 
@@ -667,7 +667,7 @@ things in each.
 
 Second ask: **`pass` at confidence 1.00**, margin 1.00, `is_confident` 0.88, for two
 self-contained features (`jev-20260927T052837-24152-17484`). So WF-004 renames to
-`roles.py` and WF-015 keeps `access.py` — and both briefs say so explicitly, in
+`roles.py` and WF-015 keeps `access.py` â€” and both briefs say so explicitly, in
 opposite directions, because the failure mode is both agents keeping it.
 
 **And that is now tested rather than asserted:** both were dispatched at once, and
@@ -682,18 +682,18 @@ considered decision in the output:
 |---|---|
 | ticket on main **and** `ahead == 0` | demoted **9** shipped features to `todo` |
 | ticket on main, alone | promoted a **duplicate** port to `completed` |
-| `origin/main --contains <tip>` | demoted **all 11** — see below |
+| `origin/main --contains <tip>` | demoted **all 11** â€” see below |
 | **are this worktree's files on main?** | correct |
 
 The third is the instructive one. PRs here are **squash**-merged, so a port's own
-commit SHA is never an ancestor of `main` — verified: the WF-007 tip `9b931c49` is
+commit SHA is never an ancestor of `main` â€” verified: the WF-007 tip `9b931c49` is
 contained in *no* remote branch. Commit identity cannot answer this in either
 direction, and the same class of bug bit `merge_ports.py` too.
 
 The content test separates the two WF-008 worktrees exactly, which nothing else
 could: both write `wf008_external_sync.py` at the same path, so path existence and
 commit reachability are **identical** for them. The shipped one contributes 0
-files absent from `main`; the duplicate contributes **7** — its own
+files absent from `main`; the duplicate contributes **7** â€” its own
 `backend/dsr/library/`, where `main` has `external_library/`. It is now `todo`
 with a comment saying a human has to choose, rather than `completed` claiming work
 shipped that never did.
@@ -702,14 +702,14 @@ shipped that never did.
 
 It used `%TEMP%` as a scratch directory and hit *Access external directory*.
 
-`orca terminal send` has **no key option** — only `--text` and `--enter` — and a
+`orca terminal send` has **no key option** â€” only `--text` and `--enter` â€” and a
 tab sent as text is not the bytes a TUI reads, so the first attempt did nothing.
-Sending the escape sequences a TUI actually reads (right arrow ×2) reached
+Sending the escape sequences a TUI actually reads (right arrow Ã—2) reached
 `Reject`.
 
 `Always allow` was one keystroke away and would have granted a **standing**
 permission to `%TEMP%\*` for this project, to save one agent one keystroke. The
-screen shows no highlight, so which option was taken cannot be read from it —
+screen shows no highlight, so which option was taken cannot be read from it â€”
 `opencode.json` can, and Temp was verified still absent afterwards. **The screen
 cannot tell you what a dialog did; the config can.**
 
@@ -718,12 +718,12 @@ cannot tell you what a dialog did; the config can.**
 WF-017 was **blocked**, so it was unblocked and told where scratch files belong.
 
 WF-004 was **mid-port with correct content and a wrong filename**, so it was
-nudged, not restarted — restarting resets an agent's context and loses work where a
+nudged, not restarted â€” restarting resets an agent's context and loses work where a
 note costs one round trip. It did the rename within a minute.
 
 ---
 
-## 2026-09-27 — The corpus was always 138. I was counting branches.
+## 2026-09-27 â€” The corpus was always 138. I was counting branches.
 
 **`e376798`. 11 features, 116 routes, 1211 tests. 135 briefs on main. 13 agents
 live.**
@@ -742,8 +742,8 @@ holds **WF-001 through WF-138**, and:
 | fewer than two cited sources | **0** |
 | **median distinct primary-source URLs per spec** | **5** |
 
-WF-001–WF-017 were built as branches. **WF-018 onward have a finished
-specification and no code at all** — no branch, no feature module, no tests.
+WF-001â€“WF-017 were built as branches. **WF-018 onward have a finished
+specification and no code at all** â€” no branch, no feature module, no tests.
 
 So of the **89 workflows still needed to reach 100, none needs new research.** The
 research is done; the work is implementation.
@@ -764,7 +764,7 @@ spec, which reads as a finding about a thin corpus rather than as a bug in a
 measuring instrument. Fixed to match the whole URL; the median is **five**.
 
 **The completeness regex required the colon inside the bold.** The corpus writes
-`- **user_flow**:` — colon outside the bold — so a pattern for
+`- **user_flow**:` â€” colon outside the bold â€” so a pattern for
 `**user_flow:**` matches nothing, and **19 complete, well-sourced documents** were
 reported as having none of the nine sections. WF-051 was opened and read by hand
 and has all nine.
@@ -794,20 +794,20 @@ Three things those briefs have to get right:
   it rather than shadowing, so a mistake surfaces as a failure rather than a
   quietly broken route.
 - **Build-status checkboxes get ticked honestly, including the one the agent
-  cannot tick.** `Verified in localhost browser` — no browser is attached to this
-  session — is reported as not verified rather than claimed.
+  cannot tick.** `Verified in localhost browser` â€” no browser is attached to this
+  session â€” is reported as not verified rather than claimed.
 
 ### Seven prompts that went nowhere
 
 The first build batch was ten agents, and **seven never received their brief.**
 `send_ok=True` on all ten; the text was typed at a TUI still drawing its splash, so
-it went nowhere. Those seven sat on the startup screen with an empty `Ask anything…`
+it went nowhere. Those seven sat on the startup screen with an empty `Ask anythingâ€¦`
 box for several minutes.
 
 The cause is a wait that was long enough for three agents and not for ten: the
 dispatch creates each terminal, sleeps 9s, waits for `tui-idle`, and sends. Three
 agents give the TUI time to start. Ten, created while the machine is busy running
-the earlier ones, do not — and **`tui-idle` is satisfied by a splash screen that
+the earlier ones, do not â€” and **`tui-idle` is satisfied by a splash screen that
 has not started**, because a screen that has not begun is not busy.
 
 The repair waits for the prompt box to actually be drawn rather than for a TUI
@@ -817,14 +817,14 @@ duplicate a prompt that did land, and then re-reads the screens because
 nothing. All ten are working.
 
 **The first read-back said `active=False` for seven of them and I did not trust
-it** — not because the check was clever but because seven simultaneous dead agents
+it** â€” not because the check was clever but because seven simultaneous dead agents
 is a much less likely explanation than seven reads that returned nothing, which is
 exactly what has happened in this session before when the wrong JSON key was read.
 Opening two of them showed the splash screen immediately.
 
 ---
 
-## 2026-09-27 — Twenty-four features, and three defects the tooling was built to find
+## 2026-09-27 â€” Twenty-four features, and three defects the tooling was built to find
 
 **`4fe7a64`. 25 features (24 + the registry), 317 routes, 3,989 tests, 0 failed
 features.** 38 PRs. Set 2 of the build programme dispatched: WF-028..WF-037.
@@ -915,3 +915,157 @@ port that caused it. Ten features merging simultaneously would have produced one
 red build and no idea which of the ten was responsible, which is precisely the
 failure mode of the previous run of this project: twelve branches built, none
 merged, because all twelve edited the same three files.
+
+---
+
+## The three held workflows, and a hold that turned out to be wrong
+
+**PR #41, commit `182f56e`. Suite 3,989 to 4,012. PR #42 lifts the hold and
+carries the briefs.**
+
+WF-001, WF-005 and WF-014 had been parked on a claim, repeated often enough to
+have become a blocker: their branches edit `db/audited.py` and `store.py`, and a
+port is a mechanical transformation, which is the wrong instrument for deciding
+what a change to the audit core means. The reasoning was sound. **The conclusion
+was wrong, and so was the fact underneath it.**
+
+Read the diffs and all three add *missing host capabilities that the core's own
+documented guarantee requires* â€” not domain concepts reaching in from a feature:
+
+| Workflow | Adds | The core's own words |
+|---|---|---|
+| WF-001 | `transaction()`, `AuditedWriter`, `_tx_depth` | N audited writes in ONE all-or-nothing transaction, each still audited, and it **refuses** single-record writes while open so the guarantee cannot be bypassed. *"A workflow that must produce more than one record cannot half-succeed through this handle."* |
+| WF-005 | `bulk_delete()` | Many records, ONE transaction, ONE audit row. *"Deleting a room and the documents it owns one call at a time would let the audit log describe work that only partly happened, which is the exact failure mode the guarantee exists to prevent."* |
+| WF-014 | `count_where()` | The counting twin of `find()` over the dynamic index, *"so a caller that needs an aggregate over schema-flexible data does not have to fetch rows to measure them, and does not have to reach around this wrapper to write the SQL itself."* |
+
+WF-014's gap was **already known and already recorded in the repository**.
+WF-009, merged, says so in its own commit message: *"The other, count, has no
+honest equivalent on the facade ... a capped `len(list(...))` would quietly
+downgrade it."* A shipped feature had documented a missing primitive and shipped
+a workaround for it. That is the strongest possible evidence the primitive
+belongs in the host: a feature already had to route around its absence.
+
+So dropping these changes would drop the guarantee, and they were promoted into
+the host deliberately as a labelled `platform-change` â€” **PR #41, merged, all
+four checks green.** Jev: `promote_deliberately` at **0.99**, margin 1.00.
+
+**The lesson is about the hold, not the merge.** A blocker that is never examined
+is a story, and this one had been carried through a dozen status reports as
+though it were a fact about the code. It was a fact about a summary, written once
+and inherited thereafter. The same reasoning that demanded a human read is what
+should have demanded the diff be read first.
+
+### Three approaches that fail, and the one that works
+
+- **A patch does not apply.** All three branches are **47 commits behind `main`**,
+  so a 3-dot diff's context is a merge base that no longer exists in the tree.
+  The refusal reads like a conflict and is actually a stale base.
+- **A whole-file merge of `test_audited.py` conflicts from line 1.** Twenty-four
+  features have landed and every one appended to that file, so a file-level merge
+  cannot tell an append from an edit. The tests therefore move at the granularity
+  of a **test function**, which is the unit that is actually independent.
+- **The first merge loop was wrong and looked right.** Using pristine `main` as
+  *ours* and overwriting the result each time meant the **last branch won and the
+  earlier two capabilities were silently dropped** â€” with plausible line counts
+  (787, 830, 962), because each result was a superset of `main` alone. The merge is
+  cumulative now, and every capability is **asserted present in the file
+  afterwards** rather than inferred from a clean exit code. *A clean merge that
+  drops a capability is still a clean merge.*
+
+The 23 tests travelled with the code rather than being retyped, because retyping
+is a way to end up testing something subtly different from what shipped.
+
+### The two collisions that were waiting behind the hold
+
+**`rooms.py` â€” WF-001 and WF-005 both add it.** Neither exists on `main`, so this
+was never a merge, only a naming decision. Measured: WF-001's is 438 lines with
+**82** mentions of templates and **2** of lifecycle; WF-005's is 640 lines with
+**84** of lifecycle and **0** of templates. Neither is a superset, so the
+more-general-takes-the-neutral-name rule did not decide it.
+
+**WF-005 keeps `rooms.py`.** Its module defines the room *state machine* â€”
+`RoomWorkflow`, `status_of`, `available_actions`, `capabilities_for`, `Principal`
+â€” which is what the neutral name means, and WF-001's `create_room` needs somewhere
+to put a room's status. WF-001 becomes `room_templates.py`, which is exactly what
+it is. A module named `rooms.py` that can only create rooms from templates
+misleads the next reader, and **the archive path is the one that has to be
+findable when a room comes back.** Jev: **1.00**.
+
+**`access.py` â€” WF-014 adds it; `main` already has it from WF-015.** **WF-015
+keeps it.** Renaming shipped, tested code to accommodate an unbuilt workflow is
+backwards. WF-014 becomes `access_controls.py` â€” which is the name its own design
+document already uses. Same collision as WF-004 versus WF-015, where WF-004 became
+`roles.py` for exactly this reason. Jev: **1.00**.
+
+## The duplicate WF-008: superseded, not a second design
+
+`dsr-wf-008-external-sync-2` held a second, unreviewed WF-008. Decided on
+measurement:
+
+- **Both branches are the same port.** The worktree's commit reads *"Port WF-008
+  to the plugin host so it can merge at all"*; `main`'s merged commit reads
+  *"Port WF-008 onto the plugin host so it can merge without a conflict (#26)"*.
+  One landed, one did not. 1 of 5 domain files is byte-identical to `main`'s and
+  the other 4 differ within a few lines.
+- **The collision is silent, and that is what made it worth measuring.** With the
+  branch's `dsr/library/` package in place, `import dsr.library` resolves to
+  `library/__init__.py` instead of `main`'s 931-line `library.py` â€” which WF-007
+  imports â€” **and the import succeeds.** Nothing reports it. A directory and a
+  module of the same name cannot coexist in one package, and the failure mode is
+  not an error but the wrong code quietly running.
+- **`main` carries more tests**: 71 in `test_wf008.py` plus 45 in
+  `test_wf008_http.py`, against the branch's 50.
+- **The one file `main` lacks is redundant.** The branch's `test_library_sync.py`
+  has 58 tests of the sync engine directly. Run against `main`'s implementation
+  in a scratch copy, **all 58 pass.** `main` already satisfies them.
+
+So: keep `main`'s, salvage nothing, and **delete the worktree last** â€” it is the
+one irreversible step, and until the tests and frontend were assessed on their own
+merits there was a real chance the branch held something worth keeping.
+
+### A misreading caught in the same pass
+
+An earlier comparison in this same session reported the branch's tests and
+frontend as *"absent from `main`"*. **That was wrong.** In `git diff
+origin/main...HEAD`, the `A` status means added in the HEAD *relative to a
+47-commit-old merge base* â€” not absent from `main`, which has since landed its own
+versions of both. A 3-dot diff reports the base's state, and reading it as
+`main`'s produces a confident, wrong inventory. It nearly sent a decision the
+wrong way.
+
+## Two tooling defects, both of which hid work rather than causing it
+
+**`dispatch_build_batch.py` overwrote the agent handle log.** It wrote the current
+batch only, so every dispatch erased the record of the agents already running.
+`agent_watch` consequently reported 13 dispatched when 20 were in flight â€” which is
+why a batch of ten looked as though it had never started. It merges by ticket now.
+It earned its place immediately: a server restart killed the shell mid-dispatch of
+WF-048..055, and **all eight were still on record** even though the output was
+lost.
+
+**`brief_title()` matched only `Build brief:`.** The three newly-lifted briefs say
+`Port brief:`, so all three were **skipped silently** â€” a dispatcher reporting
+nothing to do while three briefs sat on disk. The match is now tolerant of the
+brief *kind* as well as the ticket spelling, which is the same lesson already
+learned once: WF-004's `wf_004-invite-buyer.py` filename led to every `wf(\d{3})`
+pattern in the tooling being widened to `wf[_-]?(\d{3})`, so one odd name could not
+hide a feature. **The same class of bug, found by the same class of check, in
+tooling that had already been fixed once.**
+
+Two verification bugs were also caught in this stretch, both recorded because both
+reported a problem that was not there: a regex `3,989 to (\d+)` that matched `4`
+and stopped at the comma in `4,012`; and `@()` around `ConvertFrom-Json` output,
+which wrapped a 13-element array as one object so `.Count` read 1 and the handle
+log looked destroyed when it had merged correctly. **A check with a bug in it is
+worse than no check**, because it invites a second, worse fix.
+
+## Where this leaves the programme
+
+**24 features live**, 317 routes, **4,012 tests**, 0 failed. Two platform
+capabilities added to the host. Three workflows unblocked and dispatched. One
+duplicate adjudicated and closed out. **21 agents in flight** â€” WF-001, WF-005,
+WF-014 (the lifted ports) plus WF-038..047 and WF-048..055 (builds).
+
+`orchestration/STATUS.md` is generated and self-asserting: every number in it is
+measured, and the generator checks the rendered file against what it just
+measured, because a dashboard nobody checks is how a dashboard goes stale.
