@@ -7,21 +7,22 @@
 specifications** (139 complete). Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `4f5be00 Lift the hold on WF-001, WF-005 and WF-014, and record how it was resolved (#42)` &middot; measured 2026-09-27T19:08:06+05:30
+`main` at `84a2a14 WF-036, WF-037, WF-028, WF-039: CRM provisioning, engagement events, signal-to-action, atomic writes (#48)` &middot; measured 2026-09-28T01:52:22+05:30
 
 ## Progress
 
-    workflows  [########..........................] 24/100
-    routes     317
-    tests      4012 passed, 0 failed, 2 xfailed
+    workflows  [###########.......................] 33/100
+    routes     501
+    tests      6724 passed, 0 failed, 2 xfailed  (supplied)
     features   0 failed to load
-    to go      76
+    to go      67
 
 ## Every feature the host loads
 
 | Feature | Prefix | Routes |
 |---|---|---|
 | `core-feature-registry` | `/api/features` | 2 |
+| `wf-001-room-templates` | `/api/wf-001` | 4 |
 | `wf-002-buyer-pages` | `/api/wf-002` | 17 |
 | `wf-003-document-library` | `/api/wf-003` | 10 |
 | `wf-004-invite-buyer` | `/api/wf-004-invite-buyer` | 6 |
@@ -46,6 +47,14 @@ specifications** (139 complete). Regenerate with
 | `wf-025-stream-workspace-activity-events-to-yo` | `/api/wf-025` | 32 |
 | `wf-026-write-dsr-events-into-the-seller-activ` | `/api/wf-026` | 24 |
 | `wf-027-emit-buyer-intent-signals-with-indicat` | `/api/wf-027` | 13 |
+| `wf-028-turn-a-signal-into-an-automatic-seller` | `/api/wf-028` | 19 |
+| `wf-030-fire-crm-workflows-off-dsr-activity` | `/api/wf-030` | 18 |
+| `wf-032-stream-identified-company-contact-inte` | `/api/wf-032` | 36 |
+| `wf-034-connect-a-crm-org-to-the-sales-room-oa` | `/api/wf-034` | 20 |
+| `wf-036-provision-the-sales-room-engagement-ob` | `/api/wf-036` | 22 |
+| `wf-037-log-a-single-buyer-engagement-event-in` | `/api/wf-037` | 28 |
+| `wf-039-write-account-contact-opportunity-as-o` | `/api/wf-039` | 17 |
+| `wf-041-detect-and-block-duplicate-records-dur` | `/api/wf-041` | 20 |
 
 ### Prefixes carrying more than one feature
 
@@ -60,46 +69,37 @@ by luck.
 
 ## In flight
 
-### Ready to verify and merge (6)
+### Ready to verify and merge (19)
 
 | Workflow | Worktree | Commits |
 |---|---|---|
-| WF-030 | `dsr-wf-030-build` | 1 |
-| WF-032 | `dsr-wf-032-build` | 1 |
-| WF-033 | `dsr-wf-033-build` | 1 |
-| WF-034 | `dsr-wf-034-build` | 1 |
-| WF-035 | `dsr-wf-035-build` | 1 |
-| WF-036 | `dsr-wf-036-build` | 1 |
+| WF-005 | `dsr-wf-005-build` | 54 |
+| WF-014 | `dsr-wf-014-build` | 54 |
+| WF-033 | `dsr-wf-033-build` | 51 |
+| WF-035 | `dsr-wf-035-build` | 51 |
+| WF-040 | `dsr-wf-040-build` | 53 |
+| WF-042 | `dsr-wf-042-build` | 52 |
+| WF-043 | `dsr-wf-043-build` | 53 |
+| WF-044 | `dsr-wf-044-build` | 52 |
+| WF-045 | `dsr-wf-045-build` | 53 |
+| WF-046 | `dsr-wf-046-build` | 52 |
+| WF-047 | `dsr-wf-047-build` | 52 |
+| WF-048 | `dsr-wf-048-build` | 54 |
+| WF-049 | `dsr-wf-049-build` | 54 |
+| WF-050 | `dsr-wf-050-build` | 54 |
+| WF-051 | `dsr-wf-051-build` | 54 |
+| WF-052 | `dsr-wf-052-build` | 54 |
+| WF-053 | `dsr-wf-053-build` | 54 |
+| WF-054 | `dsr-wf-054-build` | 54 |
+| WF-055 | `dsr-wf-055-build` | 54 |
 
-### Being written (25)
+### Being written (3)
 
 | Workflow | Worktree | Uncommitted files |
 |---|---|---|
-| WF-001 | `dsr-wf-001-build` | 2 |
-| WF-005 | `dsr-wf-005-build` | 0 |
-| WF-014 | `dsr-wf-014-build` | 0 |
-| WF-028 | `dsr-wf-028-build` | 1 |
 | WF-029 | `dsr-wf-029-build` | 2 |
 | WF-031 | `dsr-wf-031-build` | 1 |
-| WF-037 | `dsr-wf-037-build` | 1 |
-| WF-038 | `dsr-wf-038-build` | 2 |
-| WF-039 | `dsr-wf-039-build` | 9 |
-| WF-040 | `dsr-wf-040-build` | 5 |
-| WF-041 | `dsr-wf-041-build` | 3 |
-| WF-042 | `dsr-wf-042-build` | 0 |
-| WF-043 | `dsr-wf-043-build` | 4 |
-| WF-044 | `dsr-wf-044-build` | 0 |
-| WF-045 | `dsr-wf-045-build` | 6 |
-| WF-046 | `dsr-wf-046-build` | 0 |
-| WF-047 | `dsr-wf-047-build` | 0 |
-| WF-048 | `dsr-wf-048-build` | 0 |
-| WF-049 | `dsr-wf-049-build` | 0 |
-| WF-050 | `dsr-wf-050-build` | 0 |
-| WF-051 | `dsr-wf-051-build` | 0 |
-| WF-052 | `dsr-wf-052-build` | 0 |
-| WF-053 | `dsr-wf-053-build` | 0 |
-| WF-054 | `dsr-wf-054-build` | 0 |
-| WF-055 | `dsr-wf-055-build` | 0 |
+| WF-038 | `dsr-wf-038-build` | 1 |
 
 ## Board
 
@@ -124,9 +124,9 @@ with its reasoning in `orchestration/PROGRAM-AUDIT.md` once taken.
 
 ## Remaining work
 
-- **76** workflows to build to reach 100
-- **117** researched specifications have no code at all
-- **117** of the 141 specifications are unbuilt, which is more than the 76 still needed
+- **67** workflows to build to reach 100
+- **108** researched specifications have no code at all
+- **108** of the 141 specifications are unbuilt, which is more than the 67 still needed
 
 The corpus is larger than the target, so this is an implementation pipeline
 rather than a research programme. An earlier count of *17 workflows* was a
