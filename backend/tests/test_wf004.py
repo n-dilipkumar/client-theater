@@ -196,9 +196,64 @@ def test_the_router_reaches_the_store_through_the_shared_dependency_seam():
 
 
 def test_this_branch_owns_roles_and_not_access():
+    """WF-004 claims `dsr.roles`. It must not also claim `dsr.access`.
+
+    Stated as a property of THIS feature, not of the package as a whole. The first
+    version of this test asserted `not (package / "access.py").exists()` - that no
+    `access.py` exists anywhere - which reads as the right guard and is a much
+    stronger claim. It passes only while WF-015 is absent, and WF-015 legitimately
+    ships `access.py`: the whole point of the rename was that WF-015 keeps that
+    name. So the assertion went false the moment the sibling landed, and took a
+    test red in a suite that has nothing to do with the failure.
+
+    The guard the comment above asks for is "a later merge cannot quietly
+    reintroduce the collision". That is about what THIS feature imports and owns,
+    so that is what is checked: its module exists, and nothing of this feature's
+    reaches for `dsr.access`.
+    """
     package = Path(load_feature(MODULE).__file__).resolve().parent.parent
-    assert (package / "roles.py").exists()
-    assert not (package / "access.py").exists()
+    assert (package / "roles.py").exists(), "WF-004's domain module is dsr.roles"
+
+    feature_file = Path(load_feature(MODULE).__file__).resolve()
+    mine = [feature_file] + sorted(
+        p for p in (package / "features").glob("*.py") if "wf004" in p.name
+    )
+    for path in mine:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        offenders = [
+            line.strip()
+            for line in text.splitlines()
+            if ("dsr.access" in line or "dsr\\.access" in line or "from .access" in line)
+            and not line.strip().startswith("#")
+        ]
+        assert not offenders, (
+            f"{path.name} must not import dsr.access - that module belongs to "
+            f"WF-015: {offenders}"
+        )
+
+
+def test_the_access_module_is_not_ours_to_rename_or_delete():
+    """`dsr.access` is WF-015's. WF-004 must leave it alone.
+
+    The other half of the same guard, and the reason the first version of it was
+    wrong in a way that mattered: a test that insists a file does not exist
+    invites someone to "fix" a red suite by deleting it, which would take WF-015's
+    domain with it. So assert this feature neither creates nor claims it.
+    """
+    package = Path(load_feature(MODULE).__file__).resolve().parent.parent
+    access = package / "access.py"
+    if not access.exists():
+        return  # WF-015 has not landed in this tree; nothing to leave alone yet
+
+    import dsr.access as access_module
+
+    # The module is a real, importable, non-trivial one - i.e. it is somebody
+    # else's working code and not an empty husk.
+    assert Path(access_module.__file__).resolve() == access.resolve()
+    source = access.read_text(encoding="utf-8", errors="replace")
+    assert "def " in source, "dsr.access exists but has no behaviour in it"
+    # And it is about verifying identity, which is the workflow that owns it.
+    assert "verif" in source.lower() or "session" in source.lower() or "policy" in source.lower()
 
 
 def test_the_workflow_really_is_about_granting():
