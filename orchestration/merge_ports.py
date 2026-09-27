@@ -92,9 +92,18 @@ def suite_and_host(label):
 
 
 def main():
-    code, out = git("checkout", "main")
+    # Merge into whatever branch is checked out. This script used to do
+    # `git checkout main` first, which silently moved work authored on a PR branch
+    # onto main and left the branch empty - so the PR had nothing to contain. It
+    # took three attempts to spot, because the merges kept succeeding and only the
+    # push said "up-to-date".
+    code, out = git("rev-parse", "--abbrev-ref", "HEAD")
+    target = out.strip()
+    if target in ("", "HEAD"):
+        print("  detached HEAD; refusing to guess a merge target")
+        return 1
     code, out = git("fetch", "origin")
-    print("=== baseline on main ===")
+    print(f"=== merging into: {target} ===")
     p, f, reg = suite_and_host("baseline")
     print(f"  suite : {p} passed, {f} failed")
     if reg:
