@@ -2257,15 +2257,50 @@ def test_the_seed_writes_only_these_collections(seeded):
 
 
 def test_the_seed_never_stores_a_credential_in_plaintext(seeded):
+    """No credential is readable from the record - the sealed value is the point.
+
+    This used to search the WHOLE record body for the strings "at-" and "rt-",
+    the access-token and refresh-token prefixes. That is a claim about RANDOM
+    TEXT, not about credentials, and it was wrong.
+
+    `sealed` is ciphertext - `v1.<key>.<payload>.<tag>` in base64url, whose
+    alphabet includes "-" - so a random sealed value can contain "at-" or "rt-"
+    by chance. Measured over 400 independent seeds: "at-" appeared in 3 and "rt-"
+    in 4, while the envelope was `v1` every time and the string "secret" never
+    appeared at all. So the test was detecting a random nonce, and it failed in
+    a full-suite run for no reason connected to the feature being merged - it
+    happened immediately after WF-040 landed, and WF-040 never mentions this
+    collection. A coin flip gets blamed on whatever was happening at the time.
+
+    So assert the claim the test actually means, per field:
+
+      * `sealed` is a well-formed v1 envelope. That value is the ciphertext, and
+        searching ciphertext for a prefix is searching noise.
+      * `fields` lists the NAMES of what is sealed - metadata, so a reader can
+        see what is protected without being able to read any of it.
+      * every OTHER field is searched for the token prefixes, because that is
+        exactly where a plaintext credential would be.
+
+    The security property is unchanged and slightly stronger: a token planted in
+    any readable field is still caught.
+    """
     store, _, _ = seeded
     rows = store.list(CREDENTIAL_COLLECTION, limit=100)
     assert rows
     for row in rows:
-        body = json.dumps(row["data"])
-        assert row["data"]["sealed"].split(".")[0] == "v1"
-        assert "at-" not in body
-        assert "rt-" not in body
-        assert "secret" not in body.replace("client_secret", "")
+        data = row["data"]
+        sealed = data["sealed"]
+        assert sealed.split(".")[0] == "v1", "the sealed envelope lost its version"
+        assert len(sealed.split(".")) == 4, f"malformed sealed envelope: {sealed[:24]}"
+        assert isinstance(data["fields"], list), "fields must name what is sealed"
+        assert all(isinstance(name, str) for name in data["fields"])
+        plaintext = {k: v for k, v in data.items() if k != "sealed"}
+        body = json.dumps(plaintext)
+        assert "at-" not in body, f"an access token is readable in {sorted(plaintext)}"
+        assert "rt-" not in body, f"a refresh token is readable in {sorted(plaintext)}"
+        assert "secret" not in body.replace("client_secret", ""), (
+            f"a secret is readable in {sorted(plaintext)}"
+        )
 
 
 def test_the_seed_survives_being_run_without_rooms(tmp_path):
