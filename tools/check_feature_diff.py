@@ -66,6 +66,15 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="platform change: shared-file edits are intentional",
     )
+    parser.add_argument(
+        "--platform-change",
+        action="store_true",
+        help=(
+            "CI-only: the PR carries the 'platform-change' label, so shared-file "
+            "edits are a recorded decision rather than a violation. Never pass this "
+            "by hand - the label is the record, and it is what a reviewer sees."
+        ),
+    )
     args = parser.parse_args(argv)
 
     files = args.files if args.files else changed_files(args.base)
@@ -76,9 +85,15 @@ def main(argv: list[str]) -> int:
         print(f"OK: {len(normalised)} changed file(s), none shared")
         return 0
 
-    if args.allow_shared:
+    if args.allow_shared or args.platform_change:
+        reason = "--allow-shared" if args.allow_shared else "the platform-change label"
         joined = "\n  - ".join(offenders)
-        print(f"NOTICE: platform change (--allow-shared) edits shared file(s):\n  - {joined}")
+        print(f"NOTICE: platform change ({reason}) edits shared file(s):\n  - {joined}")
+        print(
+            "\nThis is allowed ONLY for deliberate platform work that adds an extension "
+            "point. A feature that needs a shared-file change is a finding to report, "
+            "not a change to make."
+        )
         return 0
 
     print(
