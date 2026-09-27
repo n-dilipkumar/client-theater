@@ -1,0 +1,25 @@
+# Merge drivers, chosen per file by what the file *is* rather than by what is
+# convenient.
+#
+# The first port merge in this project produced exactly one conflict, and it was
+# not in application code: three agents had each called the Jev client, and the
+# client appends a row to this log as a side effect. Because every row goes on the
+# end of the same file, three branches appending at once conflict textually even
+# though no row contradicts another.
+#
+# That is not a one-off. Every one of the ~100 workflows runs a Jev gate, so every
+# one of them appends here. Left to the default driver, the audit log alone would
+# have produced a conflict on almost every merge - which is precisely the class of
+# problem the plugin host was built to remove, reappearing in a file nobody
+# thought of as contended.
+#
+# `union` is the correct driver for an append-only log: it concatenates both sides
+# and never emits a conflict marker. No row is lost and none is invented. Each row
+# carries its own `audit_id` and `decided_at`, so the merged file stays a complete
+# and unambiguous record regardless of the order rows end up in.
+orchestration/decisions/*.jsonl merge=union
+
+# Same reasoning, one file per workflow. The port briefs and the program audit are
+# append-only Markdown: a new section is added, never an old one rewritten, so a
+# union merge preserves both sides' text instead of interleaving it.
+orchestration/PROGRAM-AUDIT.md merge=union
