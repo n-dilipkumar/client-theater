@@ -161,10 +161,16 @@ TICKETS = [
             "`tools/verify_localhost.py`. Do NOT carry any of those over. `tools/` and "
             "`orchestration/` are platform territory, and another agent may be changing "
             "them at the same time.",
-            "The branch modified `backend/pyproject.toml` and `.gitignore`. Leave both "
-            "alone. If this feature genuinely needs a new dependency, say so in your "
-            "report and let a human add it once, deliberately - not four agents each "
-            "adding their own.",
+            "The branch modified `backend/pyproject.toml` and `.gitignore`. Leave "
+            "`.gitignore` alone. For `pyproject.toml`: this feature's original branch "
+            "declared `python-multipart` there, because FastAPI needs it to parse a "
+            "multipart/form-data request body - which is exactly what ingesting a "
+            "document or deck is. Keep that declaration. Without the package installed "
+            "the plugin host refuses to load this feature at all, which takes its entire "
+            "test suite down with it. `backend/pyproject.toml` is NOT a shared file, so "
+            "you are allowed to edit it, and a dependency you genuinely cannot work "
+            "without is your feature's own requirement rather than a coordination "
+            "problem.",
         ],
     },
     {
