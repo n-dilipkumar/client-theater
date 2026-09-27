@@ -1501,10 +1501,67 @@ def test_a_manual_retry_appends_rather_than_overwrites(feed, quiet, event_type, 
 
 def test_a_manual_retry_clears_a_skipped_row_once_the_blocker_is_gone(feed, quiet, event_type):
     first = feed.publish(quiet["id"], source=SOURCE)
+    skipped_id = first["deliveries"][0]
     feed.link_prospect(quiet["id"], {"prospect_id": "p_late"}, source=SOURCE)
-    retried = feed.retry_delivery(first["deliveries"][0], source=SOURCE)
+    retried = feed.retry_delivery(skipped_id, source=SOURCE)
     assert retried["outcome"] == "delivered"
-    assert feed.deliveries()[0]["status"] == STATUS_DELIVERED
+
+    # Address the row by its id rather than by position. deliveries() documents
+    # itself "newest first", but it is backed by find(), which takes no ordering
+    # argument - so the order is whatever the store returns, and nothing promises
+    # it. A retry writes its own attempt onto the row AND can leave a further row
+    # behind, which makes the first position genuinely ambiguous rather than
+    # merely unspecified. This assertion failed on CI with 'skipped' where the
+    # retry had already reported 'delivered', and passed locally every time: a
+    # difference in store iteration order, not a difference in behaviour.
+    #
+    # Looking the row up by id keeps the assertion's teeth - it still fails if the
+    # row is not delivered, which is what the test is for.
+    rows = feed.deliveries()
+    row = next((r for r in rows if r["id"] == skipped_id), None)
+    assert row is not None, f"the retried row {skipped_id} is missing from {len(rows)} row(s)"
+    assert row["status"] == STATUS_DELIVERED
+    assert row["skip_reason"] in (None, ""), (
+        "a delivered row must not still carry the reason it was skipped"
+    )
+
+    # And the retry must not have left a second card behind. The key includes the
+    # prospect, so a row skipped for want of one is keyed with an empty prospect
+    # and the retry's recomputed key does not match it. Without the retry naming
+    # its own row, that mismatch silently forks the history: the original stays
+    # skipped forever and a delivered duplicate appears beside it.
+    assert len(rows) == 1, (
+        f"a retry must land on the row it was given, not create another: {len(rows)} rows"
+    )
+    assert rows[0]["id"] == skipped_id
+
+
+def test_a_retry_does_not_fork_the_delivery_history(feed, quiet, event_type):
+    """The row count is the guarantee; the statuses alone would not catch it.
+
+    Two cards for one event means the buyer's activity feed shows it twice, and
+    the first card still claims it was never sent.
+    """
+    first = feed.publish(quiet["id"], source=SOURCE)
+    before = feed.deliveries()
+    assert len(before) == 1
+    assert before[0]["status"] == STATUS_SKIPPED
+
+    feed.link_prospect(quiet["id"], {"prospect_id": "p_late"}, source=SOURCE)
+    feed.retry_delivery(first["deliveries"][0], source=SOURCE)
+
+    after = feed.deliveries()
+    assert len(after) == len(before), (
+        f"retry changed the row count from {len(before)} to {len(after)}; "
+        f"a retry must update the row it names"
+    )
+    assert {r["event_key"] for r in after} == {r["event_key"] for r in before}, (
+        "the retry must keep the same event_key, so a later publish still sees "
+        "this as a duplicate rather than sending a second card"
+    )
+    assert all(r["status"] != STATUS_SKIPPED for r in after), (
+        "no row may be left skipped after a successful retry"
+    )
 
 
 def test_a_manual_retry_stays_skipped_while_the_blocker_holds(feed, quiet, event_type):

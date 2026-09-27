@@ -1257,6 +1257,7 @@ class FeedPublisher:
         dry_run: bool,
         actor: str | None,
         source: str,
+        retry_of: Mapping[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """One (DSR event, configured custom event, prospect) set of decisions.
 
@@ -1283,6 +1284,29 @@ class FeedPublisher:
             "body": body,
         }
 
+        def resolve_row(prospect_id: str) -> tuple[str, Mapping[str, Any] | None]:
+            """Which row does this decision belong to: its (event_key, record).
+
+            Normally the key is computed and the row looked up by it, which is what
+            makes a second publish of the same event a duplicate rather than a
+            second card.
+
+            But a manual retry names the row it is retrying, and that has to win.
+            The key includes the prospect, and a row skipped for want of a prospect
+            is keyed with an EMPTY one. Once the prospect is linked the recomputed
+            key no longer matches the original, so the lookup misses and the retry
+            writes a SECOND row - leaving the original stuck at ``skipped`` forever,
+            which is precisely the thing ``retry_delivery`` exists to fix, and which
+            its own docstring promises it does.
+
+            So when a row is named, that is the row. It keeps its own key too, so
+            the retry lands on the same card rather than forking the history.
+            """
+            key = delivery_key(room_id, str(event.get("id")), name, prospect_id)
+            if retry_of is not None:
+                return _as_text((retry_of.get("data") or {}).get("event_key")) or key, retry_of
+            return key, self._find_delivery(key)
+
         def outcome_for(
             kind: str,
             *,
@@ -1308,8 +1332,7 @@ class FeedPublisher:
             return row
 
         def blocked(reason: str, detail: str, *, prospect_id: str = "") -> dict[str, Any]:
-            key = delivery_key(room_id, str(event.get("id")), name, prospect_id)
-            existing = self._find_delivery(key)
+            key, existing = resolve_row(prospect_id)
             if dry_run:
                 return outcome_for("skipped", key=key, prospect_id=prospect_id, reason=reason, detail=detail)
             record = self._upsert_delivery(
@@ -1354,8 +1377,7 @@ class FeedPublisher:
         results: list[dict[str, Any]] = []
         for link in links:
             prospect_id = _as_text(link.get("prospect_id"))
-            key = delivery_key(room_id, str(event.get("id")), name, prospect_id)
-            existing = self._find_delivery(key)
+            key, existing = resolve_row(prospect_id)
             if existing is not None and _as_text((existing.get("data") or {}).get("status")) == STATUS_DELIVERED:
                 results.append(
                     outcome_for(
@@ -1561,6 +1583,10 @@ class FeedPublisher:
             dry_run=False,
             actor=actor,
             source=source,
+            # This row, named explicitly. Without it the retry recomputes the key
+            # with the prospect that has since been linked, misses the row it was
+            # asked to clear, and writes a duplicate beside it.
+            retry_of=record,
         )
         for entry in outcomes:
             entry["retried"] = True
