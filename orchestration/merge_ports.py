@@ -57,14 +57,17 @@ def git(*args, **kw):
     return run(["git", *args], **kw)
 
 
-def features_on_main():
-    """Workflows whose feature module is already on main.
+def features_on(ref: str = "origin/main") -> set[str]:
+    """Workflows whose feature module is already present at `ref`.
 
-    Checked here as well as in pending_ports.py, because the two can disagree if a
-    port is merged between the two runs, and re-merging a shipped port is exactly
-    the silent no-op this file was rewritten to stop.
+    Defaults to origin/main, but the merge target is usually a PR branch that
+    already carries some of the ports - after a run that stopped halfway, or after
+    a reviewer pushed a fix and re-ran the check. Skipping was decided against
+    origin/main alone, so a re-run re-merged a port that was already on the branch
+    being merged into, and the "no new feature" guard then correctly reported a
+    no-op merge. The guard was right; the question was asked about the wrong tree.
     """
-    code, out = git("ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features")
+    code, out = git("ls-tree", "-r", "--name-only", ref, "backend/dsr/features")
     return {f"WF-{m.group(1)}" for f in out.splitlines()
             if (m := re.search(r"wf[_-]?(\d{3})", f))}
 
@@ -77,7 +80,9 @@ def load_ports():
         return None
 
     entries = json.loads(PENDING.read_text(encoding="utf-8"))
-    already = features_on_main()
+    # Ask about the tree being merged INTO, not only about origin/main, so a re-run
+    # after a partial run does not re-merge what it already merged.
+    already = features_on("HEAD") | features_on("origin/main")
     todo = []
     for e in entries:
         if e["ticket"] in already:
@@ -157,6 +162,12 @@ def main():
     if not ports:
         print("  nothing pending: every port in data/pending_ports.json is already on main")
         return 0
+
+    # What the tree being merged into already carries, before anything is fetched.
+    already_here = features_on("HEAD")
+    if already_here:
+        print(f"  {target} already carries {len(already_here)} feature(s): "
+              f"{sorted(already_here)}")
 
     print(f"=== merging into: {target} ===")
     print(f"  ports to merge: {', '.join(t for t, _, _ in ports)}")
