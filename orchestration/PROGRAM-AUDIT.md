@@ -623,3 +623,100 @@ covered 10 of the 17 researched. The remaining 90 do not exist yet and would
 need new research to the standard the corpus holds — an explicitly-labelled
 hypothesis is permitted by `AGENTS.md`, but that is a scope decision, not an
 implementation detail.
+
+---
+
+## 2026-09-27 — Set 4: the collision decided before dispatch, and a fourth wrong board test
+
+**`77fe14f` — 11 features, 116 routes, 1211 tests, 0 failed features.**
+
+WF-010 merged, and `/api/library` now carries **three** features at once — WF-007
+(12 routes), WF-008 (8), WF-010 (8) — all loading together. That is the furthest
+`PORT-PLAN.md` is from being right about shared prefixes, and it was blocked on a
+comparison the host never makes.
+
+### The merge script was lying, in the most dangerous way
+
+Invoked to merge WF-010, `merge_ports.py` re-merged **three ports already on
+`main`**, printed `merged cleanly` three times, and never touched WF-010. Exit 0.
+Every step looked like success.
+
+The list was a hardcoded constant, hand-edited four times; three of those edits
+were silently reverted by a shell restart before being committed, and the fourth
+reverted to a list naming shipped ports. It now reads
+`data/pending_ports.json`, regenerated from the worktrees, and refuses a port
+already on `main`, refuses a shared-file edit, and **fails if a merge added no new
+feature** — because that is what a no-op merge looks like from the outside.
+
+### A collision found by measuring, then decided by Jev
+
+WF-004 and WF-015 both add `backend/dsr/access.py` and both serve
+`GET /api/rooms/{room_id}/access`.
+
+Jev's first ask returned **`uncertain`** — 0.68 against 0.75, `is_confident` 0.43,
+*"options too close to decide on this evidence"*. `AGENTS.md` forbids overriding
+that, so the missing evidence was gathered rather than the answer guessed.
+
+**What was missing was the content overlap**, which is what the cost of keeping
+them separate turns on. The first ask gave the path collision and the route
+collision but not that number, and the gap was mine. Measured: **3.2%** in the
+domain module, 1.0% in the domain tests, 4.8% in the HTTP tests, **2 shared
+symbols of 74**, one of them `__init__`. WF-004's 37 unique symbols are all about
+*granting*; WF-015's 35 are all about *verifying*, and "expiry" means different
+things in each.
+
+Second ask: **`pass` at confidence 1.00**, margin 1.00, `is_confident` 0.88, for two
+self-contained features (`jev-20260927T052837-24152-17484`). So WF-004 renames to
+`roles.py` and WF-015 keeps `access.py` — and both briefs say so explicitly, in
+opposite directions, because the failure mode is both agents keeping it.
+
+**And that is now tested rather than asserted:** both were dispatched at once, and
+WF-004's worktree has `roles.py` with 6/6 granting symbols and 0/8 verifying ones.
+
+### Four wrong answers about whether work landed
+
+`board_sync.py` has put a wrong card on the board four times, each looking like a
+considered decision in the output:
+
+| Test | Result |
+|---|---|
+| ticket on main **and** `ahead == 0` | demoted **9** shipped features to `todo` |
+| ticket on main, alone | promoted a **duplicate** port to `completed` |
+| `origin/main --contains <tip>` | demoted **all 11** — see below |
+| **are this worktree's files on main?** | correct |
+
+The third is the instructive one. PRs here are **squash**-merged, so a port's own
+commit SHA is never an ancestor of `main` — verified: the WF-007 tip `9b931c49` is
+contained in *no* remote branch. Commit identity cannot answer this in either
+direction, and the same class of bug bit `merge_ports.py` too.
+
+The content test separates the two WF-008 worktrees exactly, which nothing else
+could: both write `wf008_external_sync.py` at the same path, so path existence and
+commit reachability are **identical** for them. The shipped one contributes 0
+files absent from `main`; the duplicate contributes **7** — its own
+`backend/dsr/library/`, where `main` has `external_library/`. It is now `todo`
+with a comment saying a human has to choose, rather than `completed` claiming work
+shipped that never did.
+
+### WF-017 was blocked on a permission dialog, and the boundary held
+
+It used `%TEMP%` as a scratch directory and hit *Access external directory*.
+
+`orca terminal send` has **no key option** — only `--text` and `--enter` — and a
+tab sent as text is not the bytes a TUI reads, so the first attempt did nothing.
+Sending the escape sequences a TUI actually reads (right arrow ×2) reached
+`Reject`.
+
+`Always allow` was one keystroke away and would have granted a **standing**
+permission to `%TEMP%\*` for this project, to save one agent one keystroke. The
+screen shows no highlight, so which option was taken cannot be read from it —
+`opencode.json` can, and Temp was verified still absent afterwards. **The screen
+cannot tell you what a dialog did; the config can.**
+
+### Two agents, two different interventions
+
+WF-017 was **blocked**, so it was unblocked and told where scratch files belong.
+
+WF-004 was **mid-port with correct content and a wrong filename**, so it was
+nudged, not restarted — restarting resets an agent's context and loses work where a
+note costs one round trip. It did the rename within a minute.
