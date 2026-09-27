@@ -83,13 +83,33 @@ def load_ports():
     # Ask about the tree being merged INTO, not only about origin/main, so a re-run
     # after a partial run does not re-merge what it already merged.
     already = features_on("HEAD") | features_on("origin/main")
-    todo = []
+    todo, not_ready = [], []
     for e in entries:
         if e["ticket"] in already:
             print(f"  SKIP {e['ticket']}: already on main. Re-merging it would be a no-op "
                   f"that reports success, which is the failure this file was rewritten to stop.")
             continue
+        # A workflow an agent is still writing is not a port yet. Offering it here
+        # is how WF-001 came to be merged: it had ZERO commits, so the staging ref
+        # was identical to main, `git merge` succeeded without changing anything,
+        # and the script printed "merged cleanly" and a passing suite for a merge
+        # that never happened. Only the final no-new-feature verdict caught it,
+        # after a full baseline suite and a full post-merge suite spent on
+        # nothing. Uncommitted work is excluded here so it is never attempted.
+        if not e.get("commits_ahead"):
+            not_ready.append(e)
+            continue
         todo.append(e)
+
+    if not_ready:
+        print()
+        print(f"  {len(not_ready)} workflow(s) are still being written and are NOT "
+              f"mergeable yet - 0 commits:")
+        for e in not_ready:
+            print(f"    {e['ticket']:8} {e['worktree']:28} "
+                  f"{e.get('uncommitted', 0)} uncommitted file(s)")
+        print("  They are listed so it is visible they were considered and why they "
+              "were left out, rather than silently absent.")
 
     if not todo:
         return []
@@ -174,6 +194,38 @@ def main():
     print()
 
     git("fetch", "origin")
+
+    # --preflight walks every step except the suite and the merge itself.
+    #
+    # It exists because a one-character slip - unpacking git()'s two return
+    # values as three - crashed on the first real merge, AFTER a full baseline
+    # suite had already run. Five minutes spent finding out that the merge loop
+    # could not start is the cost of not having a dry run, paid once here and
+    # then again every time the loop changes.
+    if "--preflight" in sys.argv:
+        print("  PREFLIGHT: no suite, no merge. Checking every step can run.")
+        for ticket, folder, branch in ports:
+            staging = f"refs/dsr-staging/{ticket}"
+            code, out = git("fetch", str(WORKSPACES / folder), f"{branch}:{staging}")
+            if code != 0:
+                print(f"  {ticket:8} fetch FAILED: {out.strip()[:160]}")
+                return 1
+            _, log_out = git("log", "--oneline", f"origin/main..{staging}")
+            incoming = [l for l in log_out.splitlines() if l.strip()]
+            _, diff_out = git("diff", "--name-only", f"origin/main...{staging}")
+            offenders = sorted({f.replace("\\", "/") for f in diff_out.splitlines()
+                                if f.strip()} & SHARED)
+            _, hb = git("rev-parse", "HEAD")
+            print(f"  {ticket:8} {len(incoming):>2} commit(s), "
+                  f"{len([f for f in diff_out.splitlines() if f.strip()]):>2} file(s), "
+                  f"shared={offenders or 'none'}, HEAD={hb.strip()[:8]}")
+            if not incoming:
+                print(f"  {ticket:8} WOULD REFUSE: no commits ahead of main")
+            if offenders:
+                print(f"  {ticket:8} WOULD REFUSE: touches {', '.join(offenders)}")
+        print("  preflight clean. The merge loop can start.")
+        return 0
+
     p, f, reg = suite_and_host()
     print(f"  baseline suite : {p} passed, {f} failed")
     for fid, prefix, n in (reg["loaded"] if reg else []):
@@ -199,9 +251,19 @@ def main():
             print(f"  fetch FAILED: {out.strip()[:300]}")
             return 1
         code, out = git("log", "--oneline", f"origin/main..{staging}")
+        incoming = [l for l in out.splitlines() if l.strip()]
         print("  incoming commits:")
-        for line in out.splitlines():
+        for line in incoming:
             print(f"      {line}")
+        if not incoming:
+            # Belt to the braces of load_ports(). A staging ref with nothing
+            # ahead of main is main, and merging main is a no-op that exits 0 -
+            # so without this the script would go on to print "merged cleanly"
+            # for a merge that did not happen.
+            print(f"  REFUSING: {ticket} has no commits ahead of main. The staging ref is "
+                  f"identical to main, so merging it would report success while "
+                  f"changing nothing. The agent has not committed yet.")
+            return 1
 
         # The shared-file guard, run on the incoming diff rather than trusted. The
         # guard is a CI job too, but this runs before the merge so a violation is
@@ -213,6 +275,12 @@ def main():
             print("  A port is not the instrument for changing the host. See docs/FEATURE-CONTRACT.md.")
             return 1
 
+        # git() returns (returncode, output) - two values, not three. Unpacking
+        # three raised ValueError on the first real merge this guard was used for,
+        # which is how a one-character slip in a safety check goes unnoticed until
+        # the thing it was written to prevent actually happens.
+        _, head_before = git("rev-parse", "HEAD")
+        head_before = head_before.strip()
         code, out = git("merge", "--no-ff", staging, "-m",
                         f"Merge {ticket} ported onto the plugin host\n\n"
                         f"Reviewed independently before merge: no shared file touched, full suite\n"
@@ -223,7 +291,16 @@ def main():
         if code != 0:
             print(f"  MERGE CONFLICT:\n{out[:1500]}")
             return 1
-        print("  merged cleanly")
+        _, head_after = git("rev-parse", "HEAD")
+        head_after = head_after.strip()
+        if head_after == head_before:
+            # git merge exits 0 when there is nothing to do. That is a success
+            # code for a no-op, and reporting it as "merged cleanly" is how a
+            # feature that never landed gets counted as landed.
+            print(f"  REFUSING: git merge exited 0 but HEAD did not move "
+                  f"({head_before[:8]}). It had nothing to merge.")
+            return 1
+        print(f"  merged cleanly  ({len(incoming)} commit(s), {head_before[:8]} -> {head_after[:8]})")
 
         p, f, reg = suite_and_host()
         print(f"  suite after merge : {p} passed, {f} failed")
@@ -240,7 +317,9 @@ def main():
         base_features |= new
 
         if not new:
-            print(f"  VERDICT: {ticket} added NO new feature - the merge changed nothing the host loads")
+            print(f"  VERDICT: {ticket} moved {head_before[:8]} -> {head_after[:8]} but added "
+                  f"NO new feature the host loads. A merge that changes the tree without "
+                  f"changing what the product serves is not a landed feature.")
             return 1
         if f or not reg or reg["failed"]:
             print(f"  VERDICT: BROKEN after merging {ticket}")
