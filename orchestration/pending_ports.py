@@ -45,7 +45,7 @@ def main():
     on_main = set()
     for f in git("ls-tree", "-r", "--name-only", "origin/main",
                  "backend/dsr/features").splitlines():
-        m = re.search(r"wf(\d{3})", f)
+        m = re.search(r"wf[_-]?(\d{3})", f)
         if m:
             on_main.add(f"WF-{m.group(1)}")
 

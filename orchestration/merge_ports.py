@@ -66,7 +66,7 @@ def features_on_main():
     """
     code, out = git("ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features")
     return {f"WF-{m.group(1)}" for f in out.splitlines()
-            if (m := re.search(r"wf(\d{3})", f))}
+            if (m := re.search(r"wf[_-]?(\d{3})", f))}
 
 
 def load_ports():
