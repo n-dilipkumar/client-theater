@@ -103,6 +103,101 @@ def test_audit_accumulates_across_lifecycle(db):
     assert actions == ["insert", "update", "delete", "restore"]
 
 
+# -- ordering is a guarantee, not an accident ------------------------------- #
+
+# `utcnow()` is millisecond-precision, so two rows written in a tight loop
+# usually get *different* timestamps and never tie. That is exactly what makes
+# this worth pinning down: a tie-break is therefore a rare code path, and a rare
+# code path is one that looks unnecessary until it produces a wrong answer on the
+# busiest machine instead of the quiet one. A loop that simply writes rows will
+# pass whether or not the tie-break is correct, so these tests force the tie
+# rather than hoping for one.
+#
+# Ties are not exotic here. Every batch write in this system updates all of a
+# chunk's rows inside one transaction, and a transaction that takes longer than a
+# millisecond puts several rows in the same millisecond. That is the shape CI hit.
+TIED = "2026-01-01T00:00:00.000+00:00"
+
+
+def _write_tied_rows(db, collection, count):
+    """Insert rows that all carry the identical timestamp, then stamp them back.
+
+    Written directly rather than through `create`, because `create` stamps
+    `utcnow()` per row and that is the whole thing under test.
+    """
+    ids = [db.create(collection, {"n": n})["id"] for n in range(count)]
+    with db._write() as conn:  # noqa: SLF001 - the tie is the point of the test
+        for record_id in ids:
+            conn.execute(
+                "UPDATE records SET created_at = ?, updated_at = ? WHERE id = ?",
+                (TIED, TIED, record_id),
+            )
+    return ids
+
+
+def test_tied_rows_come_back_insertion_ordered(db):
+    """Ties resolve to insertion order, not to whatever `id` happens to be.
+
+    `id` is `uuid4().hex`: unique, so the order is total, but random with respect
+    to insertion. Asserting against the order the rows were written - rather than
+    against any order the ids imply - is what makes this test fail when the
+    tie-break stops meaning something, and pass when it happens to be right.
+    """
+    written = _write_tied_rows(db, "room", 10)
+
+    ascending = db.list("room", order_by="created_at", descending=False)
+    assert [r["id"] for r in ascending] == written
+
+    descending = db.list("room", order_by="created_at", descending=True)
+    assert [r["id"] for r in descending] == list(reversed(written))
+
+
+def test_tied_rows_are_identical_on_the_column_being_ordered(db):
+    """Guard the guard: if the rows stopped tying, the tests above prove nothing.
+
+    Without this, a change that made `created_at` microsecond-precision would
+    turn the ordering tests into tautologies and they would still be green.
+    """
+    written = _write_tied_rows(db, "room", 5)
+    stamps = {r["created_at"] for r in db.list("room", limit=50)}
+    assert stamps == {TIED}, f"the rows no longer tie, so this file tests nothing: {stamps}"
+    assert len(written) == 5
+
+
+def test_paging_a_tied_range_covers_every_row_exactly_once(db):
+    """Paging with `offset` over tied rows must not skip or repeat a row.
+
+    A tie-break that is stable within a run but arbitrary across runs still
+    satisfies any single-read test and still breaks this one: the pages are
+    separate queries, and a range with no fixed total order can put one row on
+    two pages and leave another on none.
+    """
+    written = _write_tied_rows(db, "room", 25)
+
+    paged: list[str] = []
+    offset = 0
+    while True:
+        page = db.list("room", order_by="created_at", descending=False, limit=10, offset=offset)
+        if not page:
+            break
+        paged.extend(r["id"] for r in page)
+        offset += 10
+
+    assert len(paged) == len(set(paged)), "a row was returned by two different pages"
+    assert set(paged) == set(written), "paging lost a row"
+    assert len(paged) == 25
+
+
+def test_find_breaks_ties_by_insertion(db):
+    """`find` has the same guarantee as `list`, and the same fix.
+
+    `find` filters through the dynamic index, so an empty `where` is how you ask
+    for every record in a collection - there is no separate "get all".
+    """
+    written = _write_tied_rows(db, "doc", 6)
+    assert [r["id"] for r in db.find("doc", {})] == list(reversed(written))
+
+
 # -- the atomicity guarantee ------------------------------------------------ #
 
 

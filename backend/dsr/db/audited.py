@@ -369,19 +369,41 @@ class AuditedDatabase:
         if not include_deleted:
             sql += " AND deleted_at IS NULL"
         direction = "DESC" if descending else "ASC"
-        # The tie-break is not decoration. `updated_at` is a second-granularity
-        # timestamp, so rows written in the same second TIE, and `ORDER BY
-        # updated_at DESC` alone is not a total order - the order among tied rows
-        # is whatever SQLite's query plan happens to produce. That surfaced as a
-        # test that passed locally and failed on CI with the same data, on the
-        # same commit: locally the plan returned insertion order, on the runner
-        # it did not. Any caller that reverses the result, or documents an order
-        # it does not itself impose, inherits that coin flip.
+        # The tie-break is the whole point of this line, and getting it wrong is
+        # invisible until a test disagrees with itself.
         #
-        # `id` is unique, so `ORDER BY <key> <dir>, id <dir>` is total. It
-        # changes nothing for rows that do not tie - those keep the order they
-        # always had - and makes the ones that do tie deterministic.
-        sql += f" ORDER BY {order_by} {direction}, id {direction} LIMIT ? OFFSET ?"
+        # `created_at` and `updated_at` are millisecond-precision, so two rows
+        # written in the same millisecond TIE. A loop that writes rows usually
+        # gives each one a distinct millisecond and never ties - which is exactly
+        # why a tie-break looks like dead code, and then produces a wrong answer
+        # on the busiest machine instead of the quiet one. Ties are not exotic
+        # here either: every batch write updates a whole chunk's rows inside one
+        # transaction, and a transaction that runs longer than a millisecond puts
+        # several rows in the same millisecond.
+        #
+        # This used to break ties on `id`. `id` is `uuid4().hex` (see `new_id`),
+        # so it is unique - the order was total - but random with respect to
+        # insertion, so it was meaningless. That is the worst of both: stable
+        # within a run and arbitrary across runs, on identical data. A caller that
+        # pages with `offset` can read the same row twice and skip another, and a
+        # caller matching a response to a request *by position* silently attaches
+        # the wrong answer to the wrong row. It surfaced as seven CI failures
+        # across three features, with the same tests green locally - a two-row
+        # case is a coin flip, and four green runs in a row is 1-in-16, not
+        # evidence.
+        #
+        # `records` is declared `id TEXT PRIMARY KEY` with no `WITHOUT ROWID`, so
+        # SQLite keeps an implicit `rowid` that is the true insertion sequence:
+        # monotonic, independent of the query plan, identical on every machine.
+        # Ordering ties by it makes "oldest first" mean oldest *inserted* rather
+        # than smallest uuid, which is what every caller asking for
+        # `created_at ASC` actually means - see `crm_upsert.connections._page`,
+        # which pages a queue with `offset` and depends on exactly this.
+        #
+        # `rowid` takes the caller's direction so the pair reads as one order:
+        # `DESC` means most-recently-changed first and, among rows changed in the
+        # same millisecond, the one changed last.
+        sql += f" ORDER BY {order_by} {direction}, rowid {direction} LIMIT ? OFFSET ?"
         params.extend([max(1, min(int(limit), 1000)), max(0, int(offset))])
         with self._lock:
             return [self._hydrate(r) for r in self._conn.execute(sql, params).fetchall()]
@@ -435,10 +457,10 @@ class AuditedDatabase:
             sql += " AND r.deleted_at IS NULL"
         if conditions:
             sql += " AND " + " AND ".join(conditions)
-        # Same tie-break as list(): without it, rows sharing an updated_at come
-        # back in whatever order the plan produces, and a caller that reverses or
-        # documents the order inherits a coin flip. See the note in list().
-        sql += " ORDER BY r.updated_at DESC, r.id DESC LIMIT ?"
+        # Same tie-break as list(), and for the same reason: `r.id` is a random
+        # uuid, so tying on it makes the order total but arbitrary. `r.rowid` is
+        # SQLite's insertion sequence. See the note in list().
+        sql += " ORDER BY r.updated_at DESC, r.rowid DESC LIMIT ?"
         params.append(max(1, min(int(limit), 1000)))
         with self._lock:
             return [self._hydrate(r) for r in self._conn.execute(sql, params).fetchall()]
