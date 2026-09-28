@@ -1273,6 +1273,55 @@ def test_a_connection_needs_a_vendor(engine):
         engine.create_connection({"name": "nameless"}, source=SOURCE)
 
 
+def test_the_transcript_survives_every_line_sharing_one_timestamp(store, engine, dataverse):
+    """The log is a story, so its order must not depend on a millisecond.
+
+    `created_at` is millisecond-precision. When the four lines the opening wizard
+    writes land in the same millisecond they tie, and the order was decided by
+    `id` - a uuid4, so arbitrary. That put `run_created` third in the transcript
+    on CI while this same test passed locally, where the four lines happened to
+    land in four different milliseconds and the tie-break was never consulted.
+
+    A test that opens a run and reads the log back is a **coin flip** whenever
+    the lines tie, and coin flips pass. So the tie is forced here: every line is
+    stamped with one identical value, and the order has to come from the line
+    numbers the log itself stamps.
+    """
+    run = open_run(engine, dataverse)
+    stale = "2026-01-01T00:00:00.000+00:00"
+    ids = [record["id"] for record in store.list(EVENTS, limit=1000)]
+    with store.db._write() as conn:  # noqa: SLF001 - the tie is the point
+        for record_id in ids:
+            conn.execute(
+                "UPDATE records SET created_at = ?, updated_at = ? WHERE id = ?",
+                (stale, stale, record_id),
+            )
+
+    events = [entry["data"]["event"] for entry in engine.events(run["id"])]
+    assert events[:4] == ["run_created", "connection_checked", "strategy_selected", "job_created"]
+    # The wizard's four decisions, in the order a reader meets them. Not the
+    # whole log: open_run stops before the run is driven, so the tail depends on
+    # how far the run got. The property under test is the ORDER, not which event
+    # happens to be last.
+    seqs = [entry["data"].get("seq") for entry in engine.events(run["id"])]
+    assert seqs == sorted(seqs), f"the line numbers are out of order: {seqs}"
+
+
+def test_every_log_line_carries_its_own_number(store, engine, dataverse):
+    """The transcript's order rests on `seq`, so `seq` has to be there.
+
+    Without this, a change that dropped `seq` from `log` would leave
+    `events()` sorting on a missing key: every line reads as 0, the sort
+    becomes a no-op, and the order falls back to whatever `find` returned - a
+    regression that would only show up when the lines tie.
+    """
+    run = drive(engine, "room-1", open_run(engine, dataverse))
+    seqs = [entry["data"].get("seq") for entry in engine.events(run["id"])]
+    assert all(isinstance(s, int) for s in seqs), f"a line has no number: {seqs}"
+    assert seqs == sorted(seqs), f"the numbers are not monotonic: {seqs}"
+    assert seqs == list(range(1, len(seqs) + 1)), f"the numbers are not consecutive: {seqs}"
+
+
 def test_opening_a_run_stores_the_wizards_four_decisions_as_a_transcript(engine, dataverse):
     run = open_run(engine, dataverse)
     events = [entry["data"]["event"] for entry in engine.events(run["id"])]

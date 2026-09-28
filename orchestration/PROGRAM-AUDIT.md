@@ -1549,3 +1549,200 @@ every feature to be written, which is a hundred workflows' worth of it.
 
 This is a `platform-change`: `db/audited.py` is a protected shared file, and the
 guarantee the audit core makes about order is not honest without it.
+
+## Squash-merge puts a bot on every commit, and a `reset` moved `main` by accident
+
+Two things happened while finishing the ordering fix, and the second one is the
+reason this entry is longer than it should be.
+
+### `gh pr merge --squash` re-creates the problem it was supposed to fix
+
+The rewrite put all 60 commits on `main` onto the one address. Then PR #51 was
+merged with `--squash`, and the squash produced a **new** commit:
+
+```
+Dilipkumar <45650186+n-dilipkumar@users.noreply.github.com>
+GitHub      <noreply@github.com>
+```
+
+This is not a one-off. It is what the command does every time: GitHub mints a
+fresh commit on merge and signs it with the account's noreply address, with
+itself as committer. **An identity constraint cannot be satisfied by a workflow
+whose merge button re-introduces a second identity on every use.**
+
+The fix is to stop letting GitHub author anything:
+
+1. rebase the feature branch onto `main` **locally**,
+2. `git update-ref` / fast-forward `main` to it,
+3. push `main`.
+
+A fast-forward creates no commit, so the commit on `main` is the one that was
+already written, with its original author *and* committer. GitHub still marks
+the PR merged, because it detects the head is contained in the base. Cost: the
+PR shows individual commits rather than one tidy squashed commit. That is a
+better trade than a wrong author on every merge.
+
+### Then a `git reset` moved `main` onto a feature branch
+
+Rewriting the history again, to clear the squash commit, ended with:
+
+```
+4ccb1b7 refs/heads/main@{08:08:54}: reset: moving to refs/heads/features/land-batch-1
+```
+
+`git reset --hard <branch>` moves **whichever branch is checked out**, not the
+one named. `git filter-repo` had left `HEAD` on `main`, and a line written to
+re-sync a worktree moved `main` onto the four-feature branch. The push reported
+success, and the verifier reported **PASS** â€” because the identities genuinely
+were all correct on whatever was now at the tip. Nothing in that pipeline asked
+whether `main` was still `main`.
+
+The state it left: `origin/main` byte-identical to `features/land-batch-1`, the
+four unvetted features on `main`, and **the ordering fix gone** â€” silently
+undone by a repair script, minutes after being merged green.
+
+**This is the same defect this project has now found five separate times**: a
+tool reporting success while something other than the thing it checked had
+changed. A verifier that asks "are the identities right?" and passes when
+`main` has been replaced by a feature branch is not a verifier.
+
+Two corrections followed, and both are now assertions rather than intentions:
+
+* **`git reset --hard` is never given a branch name again.** A commit id is
+  named, and the branch is asserted afterwards. The one place it is unavoidable
+  - re-syncing a worktree onto a rewritten tip - checks which branch is checked
+  out first and refuses to run if it is not the expected one.
+* **Every repair verifies what `main` *is*, not only what it is not.** The
+  recovery asserted: 33 workflows, the tie-break on `rowid`, no `WF-038/040/
+  045/035` present, 0 off-address commits, 0 trailers. The last identity check
+  would have passed with `main` pointing anywhere.
+
+Recovery was exact rather than hopeful: two candidates existed â€” the platform
+branch's tip and the orphaned squash commit `4e4c1d3`, both still in the
+reflog. Both were checked for the fix, for the absence of the four features,
+and for identity, and the chosen one's **tree hash was compared against the
+squash's**: `a488f143â€¦` on both. The squash had put exactly this content on
+`main`, so restoring it lost nothing.
+
+```
+main: 4ccb1b7 -> 1856dd8
+  feature files on main: 37
+  the four unvetted features on main: none
+  tie-break on main: rowid
+  main commits: 62   off-address: 0   trailers: 0
+  WORKFLOWS LIVE: 33 of 100
+```
+
+### A test that could not fail
+
+`tests/test_ordering_determinism.py` was already on `main`, pinning the tie-break:
+
+```python
+assert group == sorted(group, reverse=True)
+```
+
+It asserted ties come back **id-sorted**, which is exactly what an id tie-break
+produces. So it passed continuously â€” through the seven CI failures, and through
+the `id` tie-break that caused them. It confirmed the order was *stable* without
+ever asking whether it was *meaningful*, and `crm_upsert._page` pages a queue
+with `offset` and needs insertion order.
+
+It now asserts insertion order within each tie group, using each id's rank at
+creation time rather than the id's own value. **Total is not the same as
+correct**, and a test that cannot fail while the product is broken is
+decoration. Its docstring also claimed `updated_at` was second-granularity; it
+is millisecond, which is the whole reason this survived.
+
+### The `edit` tool drops its `path` argument
+
+Every attempt to edit a docstring whose payload contained backticks came back
+`Invalid arguments to tool edit: - path: Missing key`. The strings name
+`utcnow()`, `id` and `ORDER BY` â€” removing the backticks to suit a tool would
+have made the comment worse, so the edit was made from Python instead. Worth
+recording because the failure is a *malformed request*, not a refusal, and the
+obvious response â€” strip the backticks â€” is the wrong one.
+
+## The tie-break was fixed in the host, and then in the feature that bypassed it
+
+PR #52 came back with **two** failures, in a file that had been green, and they
+were the same defect one layer up:
+
+```
+- 'run_created',            <- expected first
+  'connection_checked',
+  'strategy_selected',
++ 'run_created',            <- came back third
+  'job_created',
+```
+
+`crm_backfill.engine.events()` did not use the store's order. It re-sorted the
+hydrated records itself:
+
+```python
+return sorted(records, key=lambda r: (r["created_at"], r["id"]))
+```
+
+**`r["id"]`** â€” a uuid4. So the host fix in #51 was real, and this feature was
+never subject to it. The per-run log is a transcript, and its order was being
+decided by a random number whenever two lines shared a millisecond.
+
+### A log line wants a number, not a timestamp
+
+`log()` now stamps each line with `seq`, derived from the run's own line count:
+
+```python
+seq = self.store.count_where(EVENTS, {"run_id": run_id}) + 1
+```
+
+`count_where` is the host capability promoted in #41, so this needed no new
+extension point â€” which is a fair argument that promoting it was right. The
+number is the run's line count, so it needs no extra state on the run record and
+stays correct for a run resumed days later.
+
+### And then it still did not work, because `seq` is payload
+
+The first version of the fix assigned `seq` correctly â€” `1, 2, 3, 4` in write
+order, verified by printing the raw rows â€” and the transcript was **still** out of
+order:
+
+```
+rowid=2  created=...012  seq=1  run_created
+rowid=3  created=...013  seq=2  connection_checked
+rowid=4  created=...014  seq=3  strategy_selected
+rowid=5  created=...014  seq=4  job_created     <- ties with the line above
+```
+
+because `events()` read `record.get("seq")` off the **envelope**, where `seq`
+does not exist. `seq` is payload, like everything a feature owns. So every line
+sorted as `0`, the sort key was constant, the sort was a no-op, and the order
+silently fell back to whatever `find()` returned.
+
+This is a quieter failure than a wrong order. Nothing raised; the log still
+looked like a log, in the right shape, with the lines in a plausible sequence.
+It was caught only because a test asserted the line numbers were monotonic and
+got `[2, 1, 3, 4, 5, 7, 6, ...]` â€” two adjacent pairs inverted, which is the
+signature of a tie falling through a constant key.
+
+### Two tests, one of which was written to fail
+
+* `test_the_transcript_survives_every_line_sharing_one_timestamp` stamps every
+  line with one identical timestamp, because a test that opens a run and reads
+  the log back is a **coin flip** whenever the lines tie â€” and coin flips pass.
+  It is confirmed to fail when the `id` tie-break is put back.
+* `test_every_log_line_carries_its_own_number` asserts the numbers exist, are
+  monotonic, and are consecutive. Without it, dropping `seq` from `log()` would
+  leave `events()` sorting on a constant key â€” which is precisely the failure
+  that survived one round of fixing.
+
+**204 passed** in `test_wf045.py`, and both of the tests CI reported now pass.
+
+## PR #50 was auto-closed by the accident, and a new PR is the honest response
+
+While `main` was briefly force-pushed onto `features/land-batch-1`'s own SHA,
+GitHub saw PR #50's head contained in the base and **closed it**. That closure
+carried no judgement â€” its CI had never been green on that head, and it was
+closed by a scripting error, not by a reviewer. Re-opening it was refused
+(*"is already closed"*), so the work went to **PR #52** instead: same four
+features, same commits, rebased onto the fix, CI starting from nothing. Judging a
+PR whose checks have never run on its head is not a pass, whatever the state
+field says.

@@ -422,11 +422,27 @@ class BackfillEngine:
         to this backfill" is a story, and a story told backwards is not one. The
         newest ``limit`` lines are returned, so a run with a very long log shows
         its end rather than refusing to be read.
+
+        Ordered by the line number :meth:`log` stamps, never by ``id``. ``id`` is
+        a uuid4, so using it as the tie-break made equally-timestamped lines come
+        back in an arbitrary order; the host's own tie-break is on ``rowid`` and
+        cannot be reached from here, because this sorts the hydrated records
+        itself. See the note in :meth:`log`.
+
+        The number is read from ``data``, not from the envelope. ``seq`` is
+        payload, like everything else a feature owns, and reading it off the
+        envelope yields ``None`` for every line - so the tie-break is a constant
+        zero, the sort is a no-op, and the order silently falls back to whatever
+        the store returned. That is a quieter failure than a wrong order: the
+        log still looks like a log.
         """
         records = self.store.find(EVENTS, {"run_id": run_id}, limit=limit)
         return sorted(
             records,
-            key=lambda record: (str(record.get("created_at") or ""), str(record.get("id") or "")),
+            key=lambda record: (
+                str(record.get("created_at") or ""),
+                int((record.get("data") or {}).get("seq") or 0),
+            ),
         )
 
     # -- the page cycle ----------------------------------------------------- #
@@ -1610,10 +1626,26 @@ class BackfillEngine:
         data: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Append one line to the per-run log the research's step 6 asks for."""
+        run_id = str(record["id"])
+        # Every line carries its own number, because a transcript is read in
+        # order and a timestamp cannot supply that.
+        #
+        # `created_at` is millisecond-precision, so the four lines the opening
+        # wizard writes can all land in the same millisecond and tie. The tie
+        # used to be broken by `id` - a uuid4, so the order of tied lines came
+        # out arbitrary. That is what put `run_created` third in the opening
+        # transcript on CI while the identical test passed locally, where the
+        # four lines happened to land in four different milliseconds and the
+        # primary key was never consulted.
+        #
+        # The number is the run's own line count, so it needs no extra state on
+        # the run record and stays correct for a run resumed days later.
+        seq = self.store.count_where(EVENTS, {"run_id": run_id}) + 1
         return self.store.create(
             EVENTS,
             {
-                "run_id": str(record["id"]),
+                "run_id": run_id,
+                "seq": seq,
                 "event": event,
                 "detail": detail,
                 "at": self._at(),
