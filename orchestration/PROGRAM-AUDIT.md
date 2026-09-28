@@ -1353,3 +1353,199 @@ Both assert the rendered file against what they just measured, because a
 dashboard nobody checks goes stale â€” and a dashboard that reports success while
 the thing it watches has failed is worse than none. That is the same defect this
 project has now found in three separate tools.
+
+## The author address was wrong in the repository, not in history
+
+The address was corrected to `dilipnithyanandam@gmail.com`. The interesting part is
+where the wrong one was living:
+
+```
+repo    user.email: ddilipnithyanandam@gmail.com
+global  user.email: dilipnithyanandam@gmail.com
+```
+
+The global config was already right and the *repository* config was overriding it.
+Any commit made from inside the repo got the wrong address and any commit made
+outside it got the right one, which is the shape that produces a history where the
+author changes halfway through for no visible reason. Fixing the global value alone
+would have changed nothing.
+
+**What the published history actually contained.** Asking GitHub rather than the
+local clone, because a clone can be rewritten and still describe the old one:
+
+| address | commits |
+|---|---|
+| `45650186+n-dilipkumar@users.noreply.github.com` | 170 |
+| `dilipnithyanandam@gmail.com` | 144 |
+| `dilip.nithyanandam@standards.org.au` | 39 |
+| `ddilipnithyanandam@gmail.com` | 28 |
+| `opencode@local` | 1 |
+| `wf-010@local` | 1 |
+
+**`origin/main` had 60 commits and not one of them on the requested address.** 45
+were GitHub squash-merge attributions and 15 carried a third address entirely. The
+audit had previously reported this as "squash-merge credits main's commits to the
+same account the credentials belong to, not a second contributor" â€” which was
+reasoning about what the rule *meant* rather than measuring what the repository
+*contained*. It was measured this time, and the measurement disagreed.
+
+### 177 commits carried a bot as a co-author
+
+```
+Co-authored-by: CommandCodeBot noreply@commandcode.ai
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Co-Authored-By: OpenCode (Space Bunny Free) <noreply@opencode.ai>
+```
+
+A first scan reported **214** by matching the string anywhere in a commit body. That
+count was wrong in a way worth recording, because the wrong number was much larger
+than the right one and in the opposite direction of dangerous: a scan that treats
+prose as a trailer flags commits whose message *describes* removing a bot trailer.
+
+A trailer is a line that **starts** with the key. Under that rule: 177 commits with a
+real bot trailer, and 35 with a self-referencing `Co-authored-by` naming the same
+person. Both were removed â€” a self-co-author trailer is still a second author line,
+and leaving it would have left `ddilipnithyanandam@gmail.com` in the history.
+
+### Three no-op rewrites, and what each one looked like
+
+`git filter-repo` failed three times, and **twice it failed while reporting success**:
+
+1. **The mailmap had a UTF-8 BOM.** Windows PowerShell's `Set-Content -Encoding utf8`
+   writes one; filter-repo rejects a mailmap whose first byte is `0xEF` and stops.
+2. **The message callback had no `return`.** filter-repo continued and rewrote
+   nothing.
+3. **The mailmap parsed but did not match.** Every SHA moved, the message callback
+   demonstrably ran, and all five identities were left exactly as they were. A
+   mailmap only rewrites identities it matches, so a file it declines to apply is a
+   no-op and not an error. It is indistinguishable from success unless you read the
+   identities back out afterwards.
+
+The fix was to stop matching and start assigning: a `--commit-callback` that sets
+author and committer unconditionally, so there is nothing left to match and nothing
+left to decline. The message also arrives as **bytes**, not `str` â€” filtering it as
+text raises `TypeError` from inside a fast-import, which leaves the refs untouched
+and writes a crash report, so it looks like something happened.
+
+A bundle of `main` was taken first, and every branch's tree hash was compared before
+and after. **A rewrite changes metadata and not one byte of content**, and that is
+checkable rather than assumable:
+
+```
+old tree a2138d846b76e8eeacbccb6998cd9d26edde39a3
+new tree a2138d846b76e8eeacbccb6998cd9d26edde39a3
+```
+
+### 86 agent worktrees were deliberately left alone
+
+There are 87 worktrees, each on a branch, with agents working in them. Moving a
+branch that a worktree has checked out leaves that worktree reporting every file as
+modified. Their features are landed **by content, never by branch**, so their history
+is scratch: 106 refs were rewritten, and the 86 worktree branches were left where
+they are. Five of those five `feature/WF-*` branches *were* on the remote and *were*
+rewritten, after checking each worktree for uncommitted work first (all five clean)
+and re-syncing it to the rewritten tip afterwards.
+
+### A scoped variable, read as a refspec
+
+```powershell
+git push --force origin "refs/heads/$b:refs/heads/$b"
+```
+
+PowerShell reads `$b:refs` as a **scoped variable** â€” a variable named `b` in the
+`refs` scope. The refspec came out as `refs/heads//heads/feature/WF-001-...`. The
+braces are not optional. Five branches "failed to push" for a reason that had nothing
+to do with git.
+
+### What is published now
+
+Read back from GitHub, walking the whole of `main` rather than its first page:
+
+```
+commits walked: 60
+distinct author/committer emails: 1
+      120  dilipnithyanandam@gmail.com
+distinct names: 1
+      120  Dilip Nithyanandam
+identities off the good one: 0
+real trailer lines: 0
+```
+
+**120 = 60 commits Ã— author + committer.** Every one of them, on every branch, is the
+same identity, with no machine and no second author anywhere. Three stale remote
+branches (`features/set-4-clean-four`, `orchestration/status-and-audit`, and a
+leftover `origin` self-reference) were deleted; none had an open PR.
+
+## The seven CI failures were one bug: the tie-break was a random number
+
+PR #50 came back with seven red tests across three features. They looked unrelated â€”
+`assert 'a02' == 'a01'`, `'failed' != 'rolled_back'`, `'updated' != 'created'`,
+`['fabrikam-1'...] == ['fabrikam-1'...]` â€” and the previous note recorded them as
+three separate ordering dependencies. **They are one defect, and it is in the host.**
+
+`AuditedDatabase.list()` ordered by the requested key and then broke ties on `id`.
+`id` is `uuid4().hex`. Unique, so the order was *total*; random with respect to
+insertion, so it was *meaningless*:
+
+```python
+def new_id(prefix: str = "") -> str:
+    raw = uuid.uuid4().hex
+```
+
+`created_at` and `updated_at` come from `utcnow()`, which is
+`isoformat(timespec="milliseconds")`. **I assumed for most of this investigation
+that they were second-granularity, and that was wrong** â€” a probe printing the
+stored values showed six rows a millisecond apart. That correction matters more
+than the fix it interrupted, so the rest of this is stated correctly:
+
+* **Ties are rare, and that is exactly why this bug survived.** A loop that
+  writes rows usually gives each one a distinct millisecond and never ties, so a
+  tie-break looks like dead code â€” and then two rows land in the same millisecond
+  on a loaded machine and the order becomes a random number.
+* **Ties are not exotic in this system.** Every batch write updates a whole
+  chunk's rows inside one transaction, and a transaction that runs longer than a
+  millisecond puts several rows in the same millisecond. That is the shape CI hit.
+* **A test that merely writes rows in a loop tests nothing here.** My first
+  version of these tests did exactly that, and it went green â€” because nothing
+  tied. It then failed on a later run, at a different index, for the same reason.
+
+So the four new tests **force the tie**: they write rows through `create` and then
+stamp `created_at` and `updated_at` back to one identical value, which is the only
+way to test a tie-break rather than hope for one. They assert against *the order the
+rows were written in*, not against any order the ids imply, so they cannot pass by
+luck. A fifth test asserts the rows really do tie, so a future change to the clock
+that made them tautologies would be caught rather than quietly passing.
+
+One of them pages 25 tied rows 10 at a time and asserts no row is returned twice
+and none is lost â€” the property that a within-run-stable but arbitrary tie-break
+still breaks, because the pages are separate queries.
+
+**And all four were confirmed to fail with the old tie-break in place** before
+being accepted. A regression test nobody has watched go red is a test that might
+not be testing anything.
+
+`crm_upsert`'s `_page` asks for `order_by="created_at", descending=False` and pages
+with `offset`, which is the exact shape that reads the same row twice and skips
+another.
+
+This is why the tests *passed locally four times in a row* and failed on CI with
+identical data: a two-row test is a coin flip, and four green runs in a row is 1-in-16,
+not evidence. A previous fix had already replaced a bare `ORDER BY updated_at` with
+`ORDER BY updated_at, id` â€” which converted "whatever the query plan produced" into
+"a random but stable number". That is the **worst of both**: the failure stopped
+reproducing locally and became a rare, machine-dependent flake.
+
+The fix is `rowid`. `records` is declared `id TEXT PRIMARY KEY` with no
+`WITHOUT ROWID`, so SQLite keeps an implicit `rowid` that is the true insertion
+sequence â€” monotonic, independent of the query plan, identical on every machine:
+
+```sql
+ORDER BY created_at ASC, rowid ASC
+```
+
+`find()` had the same defect and got the same fix. There are **40 `list()` call sites
+in the tree**, so this was never a three-feature problem; it was a latent flake in
+every feature to be written, which is a hundred workflows' worth of it.
+
+This is a `platform-change`: `db/audited.py` is a protected shared file, and the
+guarantee the audit core makes about order is not honest without it.
