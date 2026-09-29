@@ -1,0 +1,275 @@
+"""Find a time that works for a multi-person panel (WF-057).
+
+The researched flow, in five steps, and the domain that carries them:
+
+``dsr.panel_time.vocabulary``
+    The researched wire contract: the two provider endpoints, the two scopes, the
+    ``Prefer: outlook.timezone`` header, the 100/49/0 availability weights, the
+    ``calendarExpansionMax`` (50) and ``groupExpansionMax`` (100) caps, the
+    ``returnSuggestionReasons`` toggle, ``emptySuggestionsReason``, and the
+    researched user flow.
+``dsr.panel_time.timeutils``
+    ISO 8601 durations, RFC 3339 instants, half-open interval overlap, and the
+    time-zone clock - which records whether it resolved a named zone or fell back
+    to UTC, because this interpreter ships no IANA database.
+``dsr.panel_time.calendar``
+    The free/busy read: the researched request per dialect, group expansion inside
+    the researched caps, the local directory, and the real Google read.
+``dsr.panel_time.slots``
+    Candidate enumeration, the researched confidence arithmetic, house rules, and
+    the researched sort **high→low, then chronologically**.
+``dsr.panel_time.reasons``
+    ``suggestionReason``, and ``emptySuggestionsReason`` with the documented
+    re-call adjustments.
+``dsr.panel_time.inferences``
+    Every judgement call this package makes, named and served over HTTP.
+``dsr.panel_time.errors``
+    One error hierarchy, so the HTTP layer maps each answer to one status.
+
+Nothing in this package imports ``dsr.api``; the HTTP surface lives in
+:mod:`dsr.features.wf057_find_a_time_that_works_for_a_multi_per`, and nothing here
+imports another feature's package either. The two shared seams it *does* use -
+:class:`~dsr.store.RecordStore` and :data:`~dsr.deps.StoreDep` - are the seams
+the contract names.
+"""
+
+from dsr.panel_time.calendar import (
+    KIND_GROUP,
+    KIND_PERSON,
+    KIND_ROOM,
+    KINDS,
+    BusyMap,
+    Expansion,
+    LocalDirectory,
+    UrllibProvider,
+    expand_invited,
+    parse_google_free_busy,
+    render_commit_request,
+    render_free_busy_request,
+)
+from dsr.panel_time.engine import (
+    BOOKING_COLLECTION,
+    CALENDAR_COLLECTION,
+    COLLECTIONS,
+    PANEL_COLLECTION,
+    PROVIDER_NAMES,
+    SEARCH_COLLECTION,
+    SlotFinder,
+)
+from dsr.panel_time.errors import (
+    CalendarShapeError,
+    ConstraintError,
+    LimitExceeded,
+    NotFound,
+    PanelShapeError,
+    PanelTimeError,
+    PanelTimeNotConfigured,
+    SlotUnavailable,
+)
+from dsr.panel_time.inferences import (
+    INFERENCES,
+    by_id,
+    describe as describe_inferences,
+)
+from dsr.panel_time.reasons import (
+    ADJUSTMENT_MEANING,
+    RETUNABLE_KEYS,
+    RETUNE_ADJUSTMENTS,
+    apply_adjustment,
+    derive_empty_reason,
+    describe_reasons,
+    describe_search,
+    nearest_all_free,
+    retune_adjustments,
+    suggestion_reason,
+)
+from dsr.panel_time.slots import (
+    Candidate,
+    Evaluation,
+    apply_house_rules,
+    enumerate_candidates,
+    evaluate,
+    normalise_house_rules,
+    normalise_time_constraint,
+    pad_window,
+    rank,
+    round_percentage,
+    window,
+)
+from dsr.panel_time.timeutils import (
+    Clock,
+    format_duration,
+    format_instant,
+    overlaps,
+    parse_clock_time,
+    parse_duration,
+    parse_instant,
+    tzdb_available,
+)
+from dsr.panel_time.vocabulary import (
+    ACTIVITY_DOMAINS,
+    ACTIVITY_UNRESTRICTED,
+    ACTIVITY_WORK,
+    ADJACENT_SURFACES,
+    ATTENDANCE_QUOTE,
+    ATTENDANCE_STATUSES,
+    ATTENDANCE_WEIGHTS,
+    CALENDAR_EXPANSION_MAX_LIMIT,
+    CALENDAR_EXPANSION_MAX_QUOTE,
+    DEFAULT_MEETING_DURATION,
+    DEFAULT_SLOT_INTERVAL,
+    DRIFT_QUOTE,
+    EMPTY_BUSY_SUGGESTIONS,
+    EMPTY_NONE,
+    EMPTY_NOT_ORGANIZER,
+    EMPTY_NOT_ENOUGH_CALENDAR_FREE_TIME,
+    EMPTY_NOT_ENOUGH_PEOPLE_FREE,
+    EMPTY_REASONS,
+    EMPTY_SUGGESTIONS_REASON_QUOTE,
+    GOOGLE_CONFERENCE_SOLUTION_KEY,
+    GOOGLE_EVENTS_PATH,
+    GOOGLE_FREEBUSY_SCOPE,
+    GOOGLE_FREEBUSY_URL,
+    GRAPH_DELEGATED_SCOPE,
+    GRAPH_FIND_MEETING_TIMES_BY_USER_PATH,
+    GRAPH_FIND_MEETING_TIMES_PATH,
+    GRAPH_PREFER_HEADER,
+    GROUP_EXPANSION_MAX_LIMIT,
+    HOUSE_RULE_KEYS,
+    LOCATION_ROOM,
+    LOCATION_SUGGEST,
+    LOCATION_TYPES,
+    MAX_CANDIDATES_LIMIT,
+    MAX_SUGGESTIONS_LIMIT,
+    PROVIDER_GRAPH,
+    PROVIDER_GOOGLE,
+    PROVIDERS,
+    RANK_CONFIDENCE,
+    RANK_WEIGHTED,
+    RANKERS,
+    RETUNE_QUOTE,
+    RETURN_SUGGESTION_REASONS_DEFAULT,
+    SORT_QUOTE,
+    SOURCED_GAPS,
+    SOURCED_QUOTES,
+    STATUS_BUSY,
+    STATUS_FREE,
+    STATUS_UNKNOWN,
+    SUGGESTION_REASON_ALL_FREE,
+    SUGGESTION_REASON_QUOTE,
+    USER_FLOW,
+    describe as describe_vocabulary,
+)
+
+__all__ = [
+    "ACTIVITY_DOMAINS",
+    "ACTIVITY_UNRESTRICTED",
+    "ACTIVITY_WORK",
+    "ADJUSTMENT_MEANING",
+    "ADJACENT_SURFACES",
+    "ATTENDANCE_QUOTE",
+    "ATTENDANCE_STATUSES",
+    "ATTENDANCE_WEIGHTS",
+    "BOOKING_COLLECTION",
+    "BusyMap",
+    "CALENDAR_COLLECTION",
+    "CALENDAR_EXPANSION_MAX_LIMIT",
+    "CALENDAR_EXPANSION_MAX_QUOTE",
+    "COLLECTIONS",
+    "CalendarShapeError",
+    "Candidate",
+    "Clock",
+    "ConstraintError",
+    "DEFAULT_MEETING_DURATION",
+    "DEFAULT_SLOT_INTERVAL",
+    "DRIFT_QUOTE",
+    "EMPTY_BUSY_SUGGESTIONS",
+    "EMPTY_NONE",
+    "EMPTY_NOT_ORGANIZER",
+    "EMPTY_NOT_ENOUGH_CALENDAR_FREE_TIME",
+    "EMPTY_NOT_ENOUGH_PEOPLE_FREE",
+    "EMPTY_REASONS",
+    "EMPTY_SUGGESTIONS_REASON_QUOTE",
+    "Evaluation",
+    "Expansion",
+    "GOOGLE_CONFERENCE_SOLUTION_KEY",
+    "GOOGLE_EVENTS_PATH",
+    "GOOGLE_FREEBUSY_SCOPE",
+    "GOOGLE_FREEBUSY_URL",
+    "GRAPH_DELEGATED_SCOPE",
+    "GRAPH_FIND_MEETING_TIMES_BY_USER_PATH",
+    "GRAPH_FIND_MEETING_TIMES_PATH",
+    "GRAPH_PREFER_HEADER",
+    "GROUP_EXPANSION_MAX_LIMIT",
+    "HOUSE_RULE_KEYS",
+    "INFERENCES",
+    "KINDS",
+    "KIND_GROUP",
+    "KIND_PERSON",
+    "KIND_ROOM",
+    "LOCATION_ROOM",
+    "LOCATION_SUGGEST",
+    "LOCATION_TYPES",
+    "LocalDirectory",
+    "MAX_CANDIDATES_LIMIT",
+    "MAX_SUGGESTIONS_LIMIT",
+    "NotFound",
+    "PANEL_COLLECTION",
+    "PROVIDERS",
+    "PROVIDER_GRAPH",
+    "PROVIDER_GOOGLE",
+    "PROVIDER_NAMES",
+    "PanelShapeError",
+    "PanelTimeError",
+    "PanelTimeNotConfigured",
+    "RANKERS",
+    "RANK_CONFIDENCE",
+    "RANK_WEIGHTED",
+    "RETUNABLE_KEYS",
+    "RETUNE_ADJUSTMENTS",
+    "RETUNE_QUOTE",
+    "RETURN_SUGGESTION_REASONS_DEFAULT",
+    "SEARCH_COLLECTION",
+    "SORT_QUOTE",
+    "SOURCED_GAPS",
+    "SOURCED_QUOTES",
+    "STATUS_BUSY",
+    "STATUS_FREE",
+    "STATUS_UNKNOWN",
+    "SUGGESTION_REASON_ALL_FREE",
+    "SUGGESTION_REASON_QUOTE",
+    "SlotFinder",
+    "SlotUnavailable",
+    "USER_FLOW",
+    "UrllibProvider",
+    "apply_adjustment",
+    "apply_house_rules",
+    "by_id",
+    "derive_empty_reason",
+    "describe_inferences",
+    "describe_reasons",
+    "describe_search",
+    "describe_vocabulary",
+    "enumerate_candidates",
+    "evaluate",
+    "expand_invited",
+    "format_duration",
+    "format_instant",
+    "nearest_all_free",
+    "normalise_house_rules",
+    "normalise_time_constraint",
+    "overlaps",
+    "pad_window",
+    "parse_clock_time",
+    "parse_duration",
+    "parse_google_free_busy",
+    "parse_instant",
+    "rank",
+    "render_commit_request",
+    "render_free_busy_request",
+    "retune_adjustments",
+    "round_percentage",
+    "suggestion_reason",
+    "tzdb_available",
+    "window",
+]
