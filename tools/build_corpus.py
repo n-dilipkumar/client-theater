@@ -54,6 +54,21 @@ def main() -> int:
         return 1
     decisions = json.loads(decisions_path.read_text(encoding="utf-8"))
 
+    # Criticality is a product judgment, so it has its own recorded file rather than
+    # a row in the research corpus: docs/research/raw/ is primary-source vendor
+    # evidence, and criticality is sourced from no vendor. Whether a workflow is
+    # BUILT is deliberately not stored there either - that is measured from git and
+    # from the feature registry, and caching it is the stale-dashboard bug.
+    crit_path = OUT / "criticality-decisions.json"
+    if not crit_path.is_file():
+        print(f"run the criticality pass first: no {crit_path.name}")
+        return 1
+    criticality = json.loads(crit_path.read_text(encoding="utf-8"))
+    crit_by_ticket = {d["ticket"]: d for d in criticality["decisions"]}
+    if len(crit_by_ticket) != len(criticality["decisions"]):
+        print(f"{crit_path.name} lists a ticket more than once")
+        return 1
+
     # Apply merges: a cluster judged "same_workflow" keeps only its canonical entry.
     merged_away: dict[str, str] = {}  # dropped uid -> canonical uid
     merge_notes: list[str] = []
@@ -82,6 +97,14 @@ def main() -> int:
     entries = []
     for index, workflow in enumerate(kept, start=1):
         ticket = f"WF-{index:03d}"
+        crit = crit_by_ticket.get(ticket)
+        if crit is None:
+            print(
+                f"{ticket} ({workflow.name}) has no criticality record. Make the call and "
+                f"add it to {crit_path.name}; a workflow with no criticality silently "
+                f"disappears from the critical-path count."
+            )
+            return 1
         aliases = [u for u, c in merged_away.items() if c == workflow.uid]
         entry = {
             "ticket": ticket,
@@ -93,12 +116,43 @@ def main() -> int:
             "merged_duplicates": aliases,
             "source_count": len(workflow.sources),
             "sources": workflow.sources,
+            "criticality": crit["criticality"],
+            "criticality_basis": crit["basis"],
+            "criticality_rationale": crit["rationale"],
             "path": f"wf/{ticket}.md",
         }
         entries.append(entry)
 
         # One page per workflow, carrying the research evidence forward.
         body = workflow.body.strip() or "_No prose captured; see the raw domain file._"
+
+        # The page is regenerated in full, but agents tick the build-status boxes
+        # and append their implementation notes to it afterwards. Writing a fresh
+        # page over the top silently destroyed both - a checklist reset to
+        # unticked, and WF-001's recorded notes gone. So the part after the header
+        # is preserved and only the build-status block is refreshed.
+        page_path = wf_dir / f"{ticket}.md"
+        build_status = "\n".join(
+            [
+                "## Build status",
+                "",
+                "- [ ] Technical design doc written and Jev-validated",
+                "- [ ] Implemented",
+                "- [ ] Tests written and passing",
+                "- [ ] Reviewer bot passed",
+                "- [ ] Jev merge gate passed",
+                "- [ ] Verified in localhost browser",
+            ]
+        )
+        existing = page_path.read_text(encoding="utf-8") if page_path.is_file() else ""
+        # Carry the whole build-status section forward verbatim, heading included.
+        # Agents tick the boxes and append their own notes to it, in whatever order
+        # they please - WF-024 has prose before the boxes - so rebuilding it from
+        # parts is what dropped the heading and split a checklist.
+        preserved_tail = ""
+        if "## Build status" in existing:
+            preserved_tail = existing[existing.index("## Build status") :].rstrip() + "\n"
+
         page = "\n".join(
             [
                 f"# {ticket} - {workflow.name}",
@@ -106,6 +160,9 @@ def main() -> int:
                 f"- **Domain:** {entry['domain_title']} (`{workflow.domain}`)",
                 f"- **Research source:** `docs/research/raw/{workflow.domain}.md` section {workflow.number}",
                 f"- **Distinct sources cited:** {len(workflow.sources)}",
+                f"- **Criticality:** {crit['criticality']}"
+                + (f" ({crit['basis']})" if crit["basis"] else ""),
+                f"- **Why:** {crit['rationale']}",
                 f"- **Branch:** `feature/{ticket}-{workflow.slug}`",
             ]
             + ([f"- **Merged duplicates:** {', '.join(aliases)}"] if aliases else [])
@@ -123,18 +180,23 @@ def main() -> int:
                 "",
                 "---",
                 "",
-                "## Build status",
-                "",
-                "- [ ] Technical design doc written and Jev-validated",
-                "- [ ] Implemented",
-                "- [ ] Tests written and passing",
-                "- [ ] Reviewer bot passed",
-                "- [ ] Jev merge gate passed",
-                "- [ ] Verified in localhost browser",
-                "",
+                (preserved_tail or build_status + "\n"),
             ]
         )
-        (wf_dir / f"{ticket}.md").write_text(page, encoding="utf-8")
+        page_path.write_text(page, encoding="utf-8")
+
+    # A record for a ticket that no longer exists is as wrong as a missing one: it
+    # means the corpus moved and nobody re-read the judgment alongside it.
+    stale = sorted(set(crit_by_ticket) - {e["ticket"] for e in entries})
+    if stale:
+        print(
+            f"{crit_path.name} names {len(stale)} ticket(s) not in the corpus: "
+            + ", ".join(stale[:10])
+            + (" ..." if len(stale) > 10 else "")
+        )
+        return 1
+
+    n_critical = sum(1 for e in entries if e["criticality"] == "critical")
 
     # ---- INDEX.md ------------------------------------------------------- #
     by_domain: dict[str, list[dict]] = defaultdict(list)
@@ -154,10 +216,22 @@ def main() -> int:
         f"- **Domains:** {len(by_domain)}",
         f"- **Distinct source URLs:** {total_sources}",
         f"- **Duplicates merged after Jev review:** {len(merged_away)}",
+        f"- **Critical:** {n_critical}  \\|  **Supplementary:** {len(entries) - n_critical}",
         "",
         "Duplicate handling is recorded rather than silent: Jev was asked, per candidate",
         "cluster, whether the entries were one capability or several. Merges and the",
         "clusters judged distinct are both listed in `dedupe-decisions.json`.",
+        "",
+        "Criticality is a product judgment, not research evidence, and it is recorded per",
+        "workflow in `criticality-decisions.json` with its reasoning. A workflow is",
+        "**critical** when removing it leaves something that is not a usable digital sales",
+        "room - because it sits on the primary loop (C1: create a room, put content in,",
+        "give a buyer access, buyer consumes it, seller learns what happened), because it",
+        "is a trust precondition for showing real confidential material to real buyers",
+        "(C2), or because other workflows cannot function without it (C3). Everything else",
+        "is **supplementary**: the loop closes without it. Whether a workflow is *built* is",
+        "deliberately not recorded here, because that is measured from git and the feature",
+        "registry rather than carried forward.",
         "",
     ]
     if merge_notes:
@@ -165,18 +239,25 @@ def main() -> int:
 
     for domain, domain_entries in by_domain.items():
         title = DOMAIN_TITLES.get(domain, domain)
+        domain_critical = sum(1 for e in domain_entries if e["criticality"] == "critical")
         lines += [
             f"## {title}",
             "",
-            f"_({len(domain_entries)} workflows, domain `{domain}`)_",
+            f"_({len(domain_entries)} workflows, domain `{domain}`; "
+            f"{domain_critical} critical)_",
             "",
-            "| Ticket | Workflow | Sources | Merged |",
-            "| --- | --- | --- | --- |",
+            "| Ticket | Workflow | Critical | Sources | Merged |",
+            "| --- | --- | --- | --- | --- |",
         ]
         for entry in domain_entries:
             merged = ", ".join(entry["merged_duplicates"]) if entry["merged_duplicates"] else ""
+            critical = (
+                f"**yes** {entry['criticality_basis']}"
+                if entry["criticality"] == "critical"
+                else ""
+            )
             lines.append(
-                f"| [`{entry['ticket']}`]({entry['path']}) | {entry['name']} | "
+                f"| [`{entry['ticket']}`]({entry['path']}) | {entry['name']} | {critical} | "
                 f"{entry['source_count']} | {merged} |"
             )
         lines.append("")
@@ -187,8 +268,13 @@ def main() -> int:
     print(f"distinct workflows : {len(entries)}")
     print(f"duplicates merged : {len(merged_away)}")
     print(f"source URLs       : {total_sources}")
+    print(f"critical          : {n_critical}")
+    print(f"supplementary     : {len(entries) - n_critical}")
     for domain, domain_entries in by_domain.items():
-        print(f"  {domain:24s} {len(domain_entries):3d}")
+        print(
+            f"  {domain:24s} {len(domain_entries):3d}"
+            f"  ({sum(1 for e in domain_entries if e['criticality'] == 'critical')} critical)"
+        )
     print(f"\nwrote {(OUT / 'INDEX.md').relative_to(ROOT)}")
     print(f"wrote {(OUT / 'workflows.json').relative_to(ROOT)}")
     print(f"wrote {len(entries)} pages under {(wf_dir).relative_to(ROOT)}/")
