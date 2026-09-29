@@ -70,10 +70,11 @@ only fixed vocabulary is the envelope: `id`, `collection`, `room_id`,
 
 **Domain logic sits beside the feature, not inside the host.** Anything large
 enough to need its own tests gets its own package under `backend/dsr/` —
-`crm_oauth`, `fieldmap`, `crm_upsert`, `crm_provisioning`, `crm_engagement`,
-`atomic_bundle`, `partial_failures`, `dedupe`, `crm_backfill`, `plays` — and is
-imported by the one feature that owns it. A feature folder stays small; what it
-drives does not have to be.
+`scheduling`, `panel_time`, `headless_booking`, `conference_links`,
+`meeting_reminders`, `crm_oauth`, `fieldmap`, `crm_upsert`, `crm_provisioning`,
+`crm_engagement`, `atomic_bundle`, `partial_failures`, `dedupe`, `crm_backfill`,
+`plays`, among others — and is imported by the one feature that owns it. A
+feature folder stays small; what it drives does not have to be.
 
 **Route collisions are refused, not silently shadowed.** The host compares
 concrete `(method, path)` pairs across every mounted feature and the core
@@ -96,10 +97,11 @@ trail. A feature without tests is not considered finished.
 
 ## What works now
 
-Thirty-seven workflow plugins are merged, over 580 API routes. Each has its own
-page in the left-hand navigation; where a page is scoped to a particular deal,
-choose the room at the top of the page. Run the seeder first and there is
-realistic demo data for every one of them.
+Forty-two workflow plugins are merged. Each has its own page in the left-hand
+navigation and its own routes under a prefix it owns, so the installation you
+are running can be asked what it actually has at `/api/features`. Where a page
+is scoped to a particular deal, choose the room at the top of the page. Run the
+seeder first and there is realistic demo data for every one of them.
 
 ### Core application
 
@@ -158,6 +160,16 @@ realistic demo data for every one of them.
 | Play automations (WF-028) | A Play framework registered against a signal: a matching signal creates a one-off call, email or cadence step with no human in the loop, with assignment on the researched User / Content / Person / Account precedence. | Open **Play automations**, register the Play against a signal, and switch it on. Outcomes are tracked over webhooks on the researched retry schedule. |
 | CRM workflows (WF-030) | Contact-based CRM workflows triggered on the five published DSR filter families, refined by the keys that family publishes, with the four researched actions. | Open **CRM workflows**, write the workflow and publish it; DSR activity then drives it with no further setup. Actions are recorded, not executed. |
 | Intent stream (WF-032) | Segments pointed at webhook destinations, with every matching company visit accounted for: first send or update, which contacts survived the filters, and where the rules said not to send. | Open **Intent stream**, save a segment, attach a destination, and read the delivery rows, including the retries a downed destination needs. |
+
+### Meetings and scheduling
+
+| Feature | What it is | How you use it |
+|---|---|---|
+| Headless booking (WF-056) | Booking a meeting from your own code with no scheduling UI in front of the buyer: a scoped, admin-only token shown once, then call #1 which discovers or routes and returns a single-use `routeId` with UTC start times, and call #2 which passes it back verbatim and returns a `meetingId`, the calendar invites and the new-meeting webhook written in the same transaction. | Open **Headless booking** for the two-call contract. A session is single-use, so a failed schedule is answered with a fresh discover rather than a retry. Works over Concierge, scheduling links and handoff routers. |
+| Find a time (WF-057) | Reads several calendars' free/busy and scores every candidate slot — free 100%, unknown 49%, busy 0% — returning them ranked highest-confidence first, then chronologically, with a suggestion reason. Distribution lists expand inside the documented `calendarExpansionMax` (50) and `groupExpansionMax` (100). | Open **Find a time**, add the attendees, and pick from the ranked slots; the event is created on the organiser's calendar, with a fresh conference if asked. When nothing fits, `emptySuggestionsReason` says which call to make again. |
+| Meeting links (WF-059) | Per-booking video-conference links. Set the Location on a Meeting Type, connect the provider, and every booking mints a fresh conference whose link is written into both the booking location and the `meetingLocation` — Google Meet, Zoom, Gong (which redirects to Zoom), a static link, an in-person room, or Ask the Guest. | Open **Meeting links** and connect the provider on the Integrations tab. Moving a meeting to a different tool re-provisions the link and emails the attendees; the provider's own `appsStatus` is recorded, so a failure can be retried or fallen back from. |
+| Meeting reminders (WF-061) | Reusable reminders — email or SMS, before or after the meeting, optionally only if the primary guest has not responded — attached to many meeting types and fired on a schedule. | Open **Meeting reminders**, declare the reminder once, and attach it to every meeting type that needs it. Every message that did not go out carries a recorded reason. |
+| Meeting changes (WF-064) | Reschedule or cancel a booked meeting from the link in the invite or the host's panel, and propagate the change: the calendar event moves, the CRM Event is updated or deleted as the Meeting Type directs, and the webhooks go out. | Open **Meeting changes** to move or release a booking and follow what propagated. Events History records who, to whom, when, and from which source. |
 
 ### CRM connection and synchronisation
 
@@ -230,7 +242,13 @@ The target is one hundred workflows built from 141 researched specifications.
 [`orchestration/STATUS.md`](orchestration/STATUS.md) is generated, not
 maintained by hand: it records the workflows on `main`, the mounted route
 count, the test tally, features that failed to load, and what is in flight.
-Read it for live figures rather than trusting any count quoted here.
+
+It is still a snapshot of the moment it was last run, and this programme moves
+quickly — at the time of writing the checked-in dashboard reports 37 workflows
+and 581 routes because it predates the scheduling batch, while the tree carries
+42. Regenerate it with `orchestration/make_status.py`, or ask a running install
+at `/api/features`, which is never stale because the host is answering for
+itself. The same caution applies to the count quoted above.
 
 ## Licence
 
