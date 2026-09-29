@@ -215,7 +215,14 @@ def store(tmp_path):
 
 @pytest.fixture()
 def engine(store):
-    return WorkflowEngine(store)
+    # The clock is pinned to the same NOW the test payloads are built from.
+    # Left on the real clock, `lookback_days` is measured from whenever the suite
+    # happens to run while the events are pinned to 27 September 2026, so the
+    # window silently widens out from under the data: the lookback test passed on
+    # the 27th and 28th and failed from the 29th onward, permanently, because the
+    # two clocks only ever drift further apart. The engine takes `now` for
+    # exactly this.
+    return WorkflowEngine(store, now=lambda: NOW.isoformat())
 
 
 @pytest.fixture()
