@@ -92,7 +92,17 @@ class Clock:
         return instant.astimezone(timezone.utc)
 
     def offset_minutes(self, instant: datetime) -> int:
-        return int(self.local(instant).utcoffset() or timedelta(0).total_seconds() // 60)
+        # utcoffset() is a timedelta (or None), never a number of minutes, so
+        # it has to go through total_seconds(). The previous form only worked
+        # when the zone fell back to UTC, because timedelta(0) is falsy and
+        # short-circuited the int() call; on an interpreter that ships the IANA
+        # database a resolved zone returns a non-zero timedelta, which is
+        # truthy, and int(timedelta) raises TypeError. So the fallback is on
+        # None rather than on falsiness, and the arithmetic is explicit.
+        offset = self.local(instant).utcoffset()
+        if offset is None:
+            return 0
+        return int(offset.total_seconds() // 60)
 
     def describe(self) -> dict[str, object]:
         """What a response says about the zone, so a reader is never guessing."""
