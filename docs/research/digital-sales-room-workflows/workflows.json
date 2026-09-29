@@ -15,6 +15,9 @@
       "https://learn.liferay.com/w/digital-sales-room/dsr-launchpad",
       "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C1",
+    "criticality_rationale": "There is no room without it, and nothing downstream has anything to attach to.",
     "path": "wf/WF-001.md"
   },
   {
@@ -32,6 +35,9 @@
       "https://learn.liferay.com/w/digital-sales-room/managing-room-documents",
       "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C1",
+    "criticality_rationale": "How content reaches the buyer's eyes; without page assembly the room has no buyer-facing surface.",
     "path": "wf/WF-002.md"
   },
   {
@@ -51,6 +57,9 @@
       "https://learn.liferay.com/w/digital-sales-room/digital-sales-room-fragments",
       "https://learn.liferay.com/w/digital-sales-room/managing-room-documents"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C1",
+    "criticality_rationale": "The library is the substance of a room. An empty room is not a sales room.",
     "path": "wf/WF-003.md"
   },
   {
@@ -67,6 +76,9 @@
       "https://learn.liferay.com/w/digital-sales-room/managing-room-documents",
       "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C1",
+    "criticality_rationale": "Granting a specific buyer access with a role is the act that makes the room a shared space rather than a draft.",
     "path": "wf/WF-004.md"
   },
   {
@@ -87,6 +99,9 @@
       "https://learn.liferay.com/w/digital-sales-room/digital-sales-room-fragments",
       "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Lifecycle hygiene. Dealing closes without archiving; this keeps the workspace tidy afterwards.",
     "path": "wf/WF-005.md"
   },
   {
@@ -114,6 +129,9 @@
       "https://learn.liferay.com/w/digital-sales-room/engagement-metrics-dashboard",
       "https://learn.liferay.com/w/digital-sales-room/index"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C1",
+    "criticality_rationale": "The 'seller learns what happened' stage. This is the single reason a DSR beats a folder of PDFs, and the whole analytics-intent domain layers on top of it.",
     "path": "wf/WF-006.md"
   },
   {
@@ -133,6 +151,9 @@
       "https://developer.seismic.com/seismicsoftware/reference/reporting-librarycontentsget",
       "https://developer.seismic.com/seismicsoftware/reference/seismiclibrarycontentmanagementaddafile"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C1",
+    "criticality_rationale": "Content has to enter the system somehow; WF-003 governs a library that this fills.",
     "path": "wf/WF-007.md"
   },
   {
@@ -151,6 +172,9 @@
       "https://developer.seismic.com/seismicsoftware/reference/reporting-librarycontentsget",
       "https://developer.seismic.com/seismicsoftware/reference/seismiclibrarycontentmanagementaddafile"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Convenience ingest path. WF-007 already gets a document into the library; this only keeps it current automatically.",
     "path": "wf/WF-008.md"
   },
   {
@@ -171,6 +195,9 @@
       "https://developer.seismic.com/seismicsoftware/reference/seismiclibrarypublishingpublishoneormoredocuments",
       "https://developer.seismic.com/seismicsoftware/reference/seismiclibraryworkflowgetlistofapprovalworkflows"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Approval gating is a team-governance overlay. A lone seller publishes directly. Contested for regulated teams.",
     "path": "wf/WF-009.md"
   },
   {
@@ -187,6 +214,9 @@
       "https://developer.seismic.com/seismicsoftware/reference/contentsearch",
       "https://developer.seismic.com/seismicsoftware/reference/introduction-overview"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Findability at scale. With a small library you scroll; the loop never depended on search.",
     "path": "wf/WF-010.md"
   },
   {
@@ -208,6 +238,9 @@
       "https://help.qwilr.com/article/578-dashboard-page-statuses",
       "https://help.qwilr.com/article/87-sharing"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C1",
+    "criticality_rationale": "Publish and hand over the link. Without this the room exists but nobody outside can ever see it.",
     "path": "wf/WF-011.md"
   },
   {
@@ -234,6 +267,9 @@
       "https://docs.qwilr.com/docs/getting-started/quick-start",
       "https://help.qwilr.com/article/578-dashboard-page-statuses"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Automates WF-001. Volume convenience, not a capability the loop lacks.",
     "path": "wf/WF-012.md"
   },
   {
@@ -250,6 +286,9 @@
       "https://help.qwilr.com/article/849-conditional-content-with-qwilr-templates",
       "https://help.qwilr.com/category/85-templates-and-variables"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Personalisation improves conversion; a static room still functions.",
     "path": "wf/WF-013.md"
   },
   {
@@ -272,6 +311,9 @@
       "https://help.qwilr.com/article/768-setting-automatic-link-expiry-on-a-qwilr-page",
       "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C2",
+    "criticality_rationale": "Being unable to end access means every link is permanent. Confidential material cannot be shared on that basis.",
     "path": "wf/WF-014.md"
   },
   {
@@ -291,6 +333,9 @@
       "https://help.qwilr.com/article/175-getting-documents-accepted",
       "https://help.qwilr.com/article/797-welcome-to-qwilr-springboard"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C2",
+    "criticality_rationale": "Without any check on who the buyer is, 'restrict to this deal' is unenforceable and the audit trail attributes actions to nobody.",
     "path": "wf/WF-015.md"
   },
   {
@@ -311,6 +356,9 @@
       "https://help.qwilr.com/article/846-automations-salesforce",
       "https://help.qwilr.com/category/836-automations"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Pushes events outward. The room works standalone; this is adoption surface for CRM-centric teams.",
     "path": "wf/WF-016.md"
   },
   {
@@ -327,6 +375,9 @@
       "https://help.qwilr.com/category/544-setting-up-your-branding",
       "https://learn.liferay.com/w/digital-sales-room/managing-rooms"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Branding. Commercially important to resellers, absent from the primary loop.",
     "path": "wf/WF-017.md"
   },
   {
@@ -343,6 +394,9 @@
       "https://developers.dock.us/webhooks/event-types.md",
       "https://help.dock.us/en/articles/6989922-content-analytics"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Depth on top of WF-006. Per-page resolution refines visibility that already exists at document level.",
     "path": "wf/WF-018.md"
   },
   {
@@ -360,6 +414,9 @@
       "https://help.dock.us/en/articles/9114397-content-influence-report",
       "https://www.dock.us/library/api-webhooks"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Attribution analytics for content strategy; a seller can act on WF-006 without it.",
     "path": "wf/WF-019.md"
   },
   {
@@ -378,6 +435,9 @@
       "https://developer.seismic.com/seismicsoftware/reference/reporting-digitalsalesroomsget",
       "https://developer.seismic.com/seismicsoftware/reference/reporting-digitalsalesroomviewingsessionsget"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "BI export surface. Useful to a data team, not to the deal in front of the seller.",
     "path": "wf/WF-020.md"
   },
   {
@@ -393,6 +453,9 @@
       "https://help.dock.us/en/articles/11664129-trends-in-workspace-views",
       "https://learn.liferay.com/w/digital-sales-room/engagement-metrics-dashboard"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "A derived label over observed engagement. Interpretation, not capability.",
     "path": "wf/WF-021.md"
   },
   {
@@ -410,6 +473,9 @@
       "https://developers.dock.us/llms.txt",
       "https://www.dock.us/library/workspace-views"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Portfolio triage convenience once you have many rooms.",
     "path": "wf/WF-022.md"
   },
   {
@@ -427,6 +493,9 @@
       "https://help.dock.us/en/articles/9006259-sales-impact-report",
       "https://www.dock.us/library/reports"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Correlational reporting across two systems; depends on CRM integration that is itself supplementary.",
     "path": "wf/WF-023.md"
   },
   {
@@ -445,6 +514,9 @@
       "https://www.dock.us/library/api-webhooks",
       "https://www.dock.us/library/reports"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Management roll-up. Multi-threading insight, not a loop requirement.",
     "path": "wf/WF-024.md"
   },
   {
@@ -466,6 +538,9 @@
       "https://developers.dock.us/webhooks/introduction",
       "https://www.dock.us/library/api-webhooks"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Outbound webhook delivery to the customer's own systems. Note the name: it is server-to-server push, not a live client feed.",
     "path": "wf/WF-025.md"
   },
   {
@@ -489,6 +564,9 @@
       "https://developers.salesloft.com/docs/api/live-website-tracking-parameters-create/",
       "https://developers.salesloft.com/docs/api/third-party-live-feed-items-create/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Mirrors events into a CRM activity timeline. Convenience of review, not a capability.",
     "path": "wf/WF-026.md"
   },
   {
@@ -508,6 +586,9 @@
       "https://developers.salesloft.com/docs/api/signals-create/",
       "https://developers.salesloft.com/docs/platform/rhythm-resources/sending-signals/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Interpretation layer over engagement events.",
     "path": "wf/WF-027.md"
   },
   {
@@ -526,6 +607,9 @@
       "https://developers.salesloft.com/docs/platform/rhythm-resources/registering-plays/",
       "https://developers.salesloft.com/docs/platform/webhooks/event-types/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Automation on top of WF-027; a human can act on the signal directly.",
     "path": "wf/WF-028.md"
   },
   {
@@ -542,6 +626,9 @@
       "https://help.dock.us/en/articles/8507275-create-hubspot-workflows-based-on-dock-activity",
       "https://help.dock.us/en/articles/8507359-dock-activity-hubspot-lead-scoring"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Feeds DSR activity into CRM lead scoring. Wholly dependent on CRM integration.",
     "path": "wf/WF-029.md"
   },
   {
@@ -559,6 +646,9 @@
       "https://help.dock.us/en/articles/8507359-dock-activity-hubspot-lead-scoring",
       "https://www.dock.us/library/api-webhooks"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Triggering external CRM workflows is downstream integration, not the room itself.",
     "path": "wf/WF-030.md"
   },
   {
@@ -577,6 +667,9 @@
       "http://help.albacross.com/en/collections/1918043-integrations-connectors",
       "http://help.albacross.com/en/collections/54059-intent-data"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Anonymous-visitor de-anonymisation. A marketing capability adjacent to the sales room.",
     "path": "wf/WF-031.md"
   },
   {
@@ -595,6 +688,9 @@
       "http://help.albacross.com/en/articles/3387390-integrating-with-google-sheets-via-webhooks",
       "http://help.albacross.com/en/collections/1918043-integrations-connectors"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Outbound intent delivery to external systems, same shape as WF-025.",
     "path": "wf/WF-032.md"
   },
   {
@@ -610,6 +706,9 @@
       "https://developers.hubspot.com/docs/api-reference/crm-contacts-v3/guide",
       "https://knowledge.hubspot.com/reports/use-buyer-intent"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Account-list maintenance driven by intent data. Adjacent product.",
     "path": "wf/WF-033.md"
   },
   {
@@ -630,6 +729,9 @@
       "https://example.com/?code=xxxx`",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Entry point of the CRM cluster. Adoption-critical for enterprise buyers, absent from the product loop.",
     "path": "wf/WF-034.md"
   },
   {
@@ -648,6 +750,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query-metadata-web-api",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/web-api-service-documents"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Field mapping detail beneath WF-034.",
     "path": "wf/WF-035.md"
   },
   {
@@ -667,6 +772,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query-metadata-web-api",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/web-api-service-documents"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Provisioning CRM-side schema; only meaningful once the connector exists.",
     "path": "wf/WF-036.md"
   },
   {
@@ -685,6 +793,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/create-entity-web-api?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Single-event logging into an external system.",
     "path": "wf/WF-037.md"
   },
   {
@@ -704,6 +815,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/define-alternate-keys-entity?view=dataverse-latest",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/upsertmultiple?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Sync efficiency and idempotency, not a room capability.",
     "path": "wf/WF-038.md"
   },
   {
@@ -723,6 +837,9 @@
       "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Atomicity of CRM writes. Correctness of an adjacent feature.",
     "path": "wf/WF-039.md"
   },
   {
@@ -741,6 +858,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Error surfacing for the sync layer.",
     "path": "wf/WF-040.md"
   },
   {
@@ -761,6 +881,9 @@
       "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/define-alternate-keys-entity?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Data-quality protection in the CRM mirror.",
     "path": "wf/WF-041.md"
   },
   {
@@ -780,6 +903,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/filter-rows?view=dataverse-latest",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/overview?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Inbound CRM display. A room can be authored without CRM context.",
     "path": "wf/WF-042.md"
   },
   {
@@ -801,6 +927,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-change-tracking-synchronize-data-external-systems?view=dataverse-latest",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Freshness of inbound CRM data.",
     "path": "wf/WF-043.md"
   },
   {
@@ -817,6 +946,9 @@
       "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
       "https://knowledge.hubspot.com/workflows/how-do-i-use-webhooks-with-hubspot-workflows"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "CRM-side webhook emission; the DSR is not its subject.",
     "path": "wf/WF-044.md"
   },
   {
@@ -836,6 +968,9 @@
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-change-tracking-synchronize-data-external-systems?view=dataverse-latest",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/overview?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Historical catch-up for the connector.",
     "path": "wf/WF-045.md"
   },
   {
@@ -855,6 +990,9 @@
       "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Rate-limit resilience. Operational quality of an optional feature.",
     "path": "wf/WF-046.md"
   },
   {
@@ -871,6 +1009,9 @@
       "https://developers.hubspot.com/docs/api-reference/latest/crm/properties/guide",
       "https://developers.hubspot.com/docs/api-reference/latest/files/guide"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Document mirroring into CRM files; duplicative by design.",
     "path": "wf/WF-047.md"
   },
   {
@@ -887,6 +1028,9 @@
       "https://developers.hubspot.com/docs/developer-tooling/local-development/configurable-test-accounts",
       "https://learn.microsoft.com/en-us/power-platform/admin/environments-overview"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Connector testing affordance for integrators.",
     "path": "wf/WF-048.md"
   },
   {
@@ -906,6 +1050,9 @@
       "https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Operational monitoring of the connector.",
     "path": "wf/WF-049.md"
   },
   {
@@ -922,6 +1069,9 @@
       "https://developer.salesforce.com/docs/platform/change-data-capture/guide/cdc-replication-steps.html",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-change-tracking-synchronize-data-external-systems?view=dataverse-latest"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Recovery from a dropped change stream.",
     "path": "wf/WF-050.md"
   },
   {
@@ -940,6 +1090,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically",
       "https://your-tenant.chilipiper.com/concierge-router/[routerSlug"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Booking is adjacent to the room. A deal proceeds by email if booking does not exist.",
     "path": "wf/WF-051.md"
   },
   {
@@ -955,6 +1108,9 @@
       "https://fire.chilipiper.com/api/fire-edge/v1/org/concierge/routers/[routerSlug",
       "https://help.chilipiper.com/hc/en-us/articles/30935152032275-Using-Concierge-via-the-Edge-API"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Lead-qualification variant of the scheduler.",
     "path": "wf/WF-052.md"
   },
   {
@@ -971,6 +1127,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/28522554434323-Creating-a-Concierge-Flow",
       "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Routing policy inside the booking cluster.",
     "path": "wf/WF-053.md"
   },
   {
@@ -987,6 +1146,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/31428605286931",
       "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Team-scale booking fairness.",
     "path": "wf/WF-054.md"
   },
   {
@@ -1003,6 +1165,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/42613941250835-Reassigning-Meetings",
       "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "SDR-to-AE handoff mechanics.",
     "path": "wf/WF-055.md"
   },
   {
@@ -1019,6 +1184,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/50430350863635-How-do-I-connect-Chili-Piper-via-MCP",
       "https://help.chilipiper.com/hc/en-us/articles/50860790980627-How-do-I-Schedule-Chili-Piper-Meetings-Programmatically"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Headless/API booking. Notable as the API-first path, but still booking.",
     "path": "wf/WF-056.md"
   },
   {
@@ -1038,6 +1206,9 @@
       "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events`",
       "https://www.googleapis.com/calendar/v3/freeBusy`"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Multi-person scheduling convenience.",
     "path": "wf/WF-057.md"
   },
   {
@@ -1056,6 +1227,9 @@
       "https://cal.com/docs/atoms/introduction",
       "https://cal.com/docs/llms.txt"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Embedding the scheduler in the room is integration of an optional feature, not a loop stage.",
     "path": "wf/WF-058.md"
   },
   {
@@ -1077,6 +1251,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/39402611091475-Custom-Webhook-Configuration",
       "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events?conferenceDataVersion=1`"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Conference-link provisioning; meetings happen with a manually pasted link.",
     "path": "wf/WF-059.md"
   },
   {
@@ -1093,6 +1270,9 @@
       "https://help.gong.io/apidocs/create-a-new-gong-meeting-v2meetings.md",
       "https://help.gong.io/docs/create-consent-profiles"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Recording and auto-join; consent gating matters but only once recording exists.",
     "path": "wf/WF-060.md"
   },
   {
@@ -1108,6 +1288,9 @@
       "https://cal.com/docs/api-reference/v2/workflows/create-a-workflow",
       "https://help.chilipiper.com/hc/en-us/articles/28030135101971-Reminders-and-Messages"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Reminder automation.",
     "path": "wf/WF-061.md"
   },
   {
@@ -1124,6 +1307,9 @@
       "https://cal.com/docs/api-reference/v2/bookings/create-a-booking",
       "https://cal.com/docs/developing/guides/automation/webhooks"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Approval step in booking.",
     "path": "wf/WF-062.md"
   },
   {
@@ -1141,6 +1327,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/31428605286931",
       "https://help.chilipiper.com/hc/en-us/articles/42613941250835-Reassigning-Meetings"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Host reassignment.",
     "path": "wf/WF-063.md"
   },
   {
@@ -1159,6 +1348,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/27994909516563-Meeting-Types-in-MyApp",
       "https://help.chilipiper.com/hc/en-us/articles/31428605286931"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Reschedule and cancellation propagation. Correctness within the booking cluster.",
     "path": "wf/WF-064.md"
   },
   {
@@ -1177,6 +1369,9 @@
       "https://help.chilipiper.com/hc/en-us/articles/28522554434323-Creating-a-Concierge-Flow",
       "https://help.chilipiper.com/hc/en-us/articles/31428605286931"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Booking write-back into CRM.",
     "path": "wf/WF-065.md"
   },
   {
@@ -1193,6 +1388,9 @@
       "https://cal.com/docs/developing/guides/automation/webhooks",
       "https://help.chilipiper.com/hc/en-us/articles/39402611091475-Custom-Webhook-Configuration"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Downstream meeting lifecycle events.",
     "path": "wf/WF-066.md"
   },
   {
@@ -1218,6 +1416,9 @@
       "https://openapi.documenso.com/`",
       "https://stg-app.documenso.com/api/v2`"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "MAP with e-signature is a strong product feature but sits outside the share-and-measure loop.",
     "path": "wf/WF-067.md"
   },
   {
@@ -1239,6 +1440,9 @@
       "https://help.gong.io/docs/set-up-automated-engage-flows",
       "https://help.gong.io/docs/update-your-crm-from-engage"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Prep and follow-up sequencing.",
     "path": "wf/WF-068.md"
   },
   {
@@ -1259,6 +1463,9 @@
       "https://www.papermark.com/docs/openapi.json",
       "https://www.papermark.com/docs/openapi.json`"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C2",
+    "criticality_rationale": "The buyer link is public by construction. Password, expiry and email verification are what stop a forwarded link becoming a leak.",
     "path": "wf/WF-069.md"
   },
   {
@@ -1275,6 +1482,9 @@
       "https://www.papermark.com/docs/llms.txt",
       "https://www.papermark.com/docs/openapi.json"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "NDA gating is situational; many deals never require one.",
     "path": "wf/WF-070.md"
   },
   {
@@ -1291,6 +1501,9 @@
       "https://www.papermark.com/docs/guides/watermark-link-views.mdx",
       "https://www.papermark.com/docs/openapi.json"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Watermarking is a deterrent and a trace, not an access control.",
     "path": "wf/WF-071.md"
   },
   {
@@ -1307,6 +1520,9 @@
       "https://www.papermark.com/docs/cli/commands/links.mdx",
       "https://www.papermark.com/docs/openapi.json"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Download restriction hardens sharing that already works.",
     "path": "wf/WF-072.md"
   },
   {
@@ -1323,6 +1539,9 @@
       "https://www.papermark.com/docs/llms.txt",
       "https://www.papermark.com/docs/openapi.json"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Screenshot blocking is largely unenforceable from a browser; treat as deterrence, and do not sell it as protection.",
     "path": "wf/WF-073.md"
   },
   {
@@ -1340,6 +1559,9 @@
       "https://www.papermark.com/docs/guides/share-dataroom-with-group.mdx",
       "https://www.papermark.com/docs/openapi.json"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Per-item scoping for large organisations. WF-004's roles carry the basic case.",
     "path": "wf/WF-074.md"
   },
   {
@@ -1357,6 +1579,9 @@
       "https://www.papermark.com/docs/cli/commands/links.mdx",
       "https://www.papermark.com/docs/openapi.json"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Engagement review; analytics on access rather than access itself.",
     "path": "wf/WF-075.md"
   },
   {
@@ -1375,6 +1600,9 @@
       "https://www.papermark.com/docs/cli/commands/datarooms.mdx",
       "https://www.papermark.com/docs/llms.txt"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C2",
+    "criticality_rationale": "Early revocation is the difference between a mistake and an incident. Keeping the audit row is what makes it defensible afterwards.",
     "path": "wf/WF-076.md"
   },
   {
@@ -1393,6 +1621,9 @@
       "https://www.papermark.com/docs/api/errors.mdx",
       "https://www.papermark.com/docs/api/scopes.mdx"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C2",
+    "criticality_rationale": "Without internal roles every user is an admin, so there is no answer to 'who was allowed to do this'. Also a C3 enabler: permission checks have nothing to check against until roles exist.",
     "path": "wf/WF-077.md"
   },
   {
@@ -1410,6 +1641,9 @@
       "https://developers.pandadoc.com/docs/enable-verification.md",
       "https://developers.pandadoc.com/reference/list-document-audit-trail.md"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Signer identity verification belongs to the e-signature cluster.",
     "path": "wf/WF-078.md"
   },
   {
@@ -1426,6 +1660,9 @@
       "https://developers.hellosign.com/api/report/create.md",
       "https://developers.pandadoc.com/reference/list-document-audit-trail.md"
     ],
+    "criticality": "critical",
+    "criticality_basis": "C2",
+    "criticality_rationale": "The audit trail is the product's central claim. While it can only be read inside the process that wrote it, the guarantee is unfalsifiable to any outsider.",
     "path": "wf/WF-079.md"
   },
   {
@@ -1442,6 +1679,9 @@
       "https://developers.pandadoc.com/reference/download-protected-document.md",
       "https://developers.pandadoc.com/reference/pdfofcompleteddocumentavailablefordownload.md"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Executed-agreement retrieval in the e-sign cluster.",
     "path": "wf/WF-080.md"
   },
   {
@@ -1458,6 +1698,9 @@
       "https://developers.hellosign.com/docs/guides/sms-tools.md",
       "https://www.papermark.com/docs/guides/share-password-protected-link.mdx"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Agreement expiry lifecycle.",
     "path": "wf/WF-081.md"
   },
   {
@@ -1475,6 +1718,9 @@
       "https://dropbox-sign-api-config.s3.amazonaws.com/ip-ranges.json`",
       "https://www.papermark.com/docs/api/webhooks.mdx"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Conditional: becomes critical the moment WF-113 or WF-114 ships inbound webhook ingestion.",
     "path": "wf/WF-082.md"
   },
   {
@@ -1491,6 +1737,9 @@
       "https://learn.microsoft.com/en-us/clarity/faq",
       "https://learn.microsoft.com/en-us/clarity/ip-exclusion"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Consent-gated recording. Conditional: a legal gate wherever session recording exists.",
     "path": "wf/WF-083.md"
   },
   {
@@ -1506,6 +1755,9 @@
       "https://workos.com/docs/directory-sync/overview",
       "https://workos.com/docs/sso"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "SSO and SCIM gate enterprise procurement, not product use.",
     "path": "wf/WF-084.md"
   },
   {
@@ -1522,6 +1774,9 @@
       "https://learn.microsoft.com/en-us/clarity/faq",
       "https://www.highspot.com/product/security/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Conditional: blocks selling into the EU rather than using the product.",
     "path": "wf/WF-085.md"
   },
   {
@@ -1543,6 +1798,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/create-edit-quote-sales",
       "https://learn.microsoft.com/en-us/dynamics365/sales/developer/quote-order-invoice-entities"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "CPQ. A second product adjacent to the sales room, not a stage of it.",
     "path": "wf/WF-086.md"
   },
   {
@@ -1562,6 +1820,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/add-product-quote-order-invoice",
       "https://learn.microsoft.com/en-us/dynamics365/sales/price-calculation-opportunity-quote-order-invoice-records"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Price-book catalogue beneath the quoting product.",
     "path": "wf/WF-087.md"
   },
   {
@@ -1578,6 +1839,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/create-edit-quote-sales",
       "https://learn.microsoft.com/en-us/dynamics365/sales/developer/set-default-price-level-for-opportunity-quote-order-invoice"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Price-book selection rule.",
     "path": "wf/WF-088.md"
   },
   {
@@ -1598,6 +1862,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/price-calculation-opportunity-quote-order-invoice-records",
       "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/reference/entities/transactioncurrency"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Multi-currency quoting.",
     "path": "wf/WF-089.md"
   },
   {
@@ -1614,6 +1881,9 @@
       "https://knowledge.hubspot.com/cpq/understand-hubspot-cpq",
       "https://knowledge.hubspot.com/quotes/configure-quote-rules"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Configure-price-quote guardrails.",
     "path": "wf/WF-090.md"
   },
   {
@@ -1632,6 +1902,9 @@
       "https://knowledge.hubspot.com/quotes/manage-quotes",
       "https://knowledge.hubspot.com/quotes/set-up-quote-approvals"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Discount approval routing.",
     "path": "wf/WF-091.md"
   },
   {
@@ -1650,6 +1923,9 @@
       "https://knowledge.hubspot.com/quotes/manage-quote-approvals",
       "https://knowledge.hubspot.com/quotes/set-up-quote-approvals"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Multi-level approval chains.",
     "path": "wf/WF-092.md"
   },
   {
@@ -1670,6 +1946,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/create-quote-pdf",
       "https://learn.microsoft.com/en-us/power-platform/admin/using-word-templates-dynamics-365"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Proposal authoring from template.",
     "path": "wf/WF-093.md"
   },
   {
@@ -1690,6 +1969,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/create-quote-pdf",
       "https://learn.microsoft.com/en-us/power-platform/admin/using-word-templates-dynamics-365"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Quote sharing; a parallel share surface to the room, not part of it.",
     "path": "wf/WF-094.md"
   },
   {
@@ -1713,6 +1995,9 @@
       "https://knowledge.hubspot.com/quotes/set-up-quotes",
       "https://knowledge.hubspot.com/quotes/use-e-signatures-with-quotes"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "E-signature on quotes.",
     "path": "wf/WF-095.md"
   },
   {
@@ -1731,6 +2016,9 @@
       "https://knowledge.hubspot.com/quotes/manage-quotes",
       "https://knowledge.hubspot.com/quotes/set-up-quotes"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Signatureless acceptance plus payment.",
     "path": "wf/WF-096.md"
   },
   {
@@ -1747,6 +2035,9 @@
       "https://knowledge.hubspot.com/quotes/manage-quotes",
       "https://knowledge.hubspot.com/quotes/set-up-quotes"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Quote engagement tracking repeats WF-006's pattern on a different object.",
     "path": "wf/WF-097.md"
   },
   {
@@ -1765,6 +2056,9 @@
       "https://knowledge.hubspot.com/quotes/manage-quotes",
       "https://knowledge.hubspot.com/quotes/set-up-quotes"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Quote expiry and reminders.",
     "path": "wf/WF-098.md"
   },
   {
@@ -1782,6 +2076,9 @@
       "https://knowledge.hubspot.com/quotes/create-and-send-quotes",
       "https://knowledge.hubspot.com/quotes/use-e-signatures-with-quotes"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Contract generation from accepted quote.",
     "path": "wf/WF-099.md"
   },
   {
@@ -1798,6 +2095,9 @@
       "https://knowledge.hubspot.com/cpq/understand-hubspot-cpq",
       "https://knowledge.hubspot.com/quotes/create-a-renewal-quote-on-a-contract"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Renewal quoting.",
     "path": "wf/WF-100.md"
   },
   {
@@ -1817,6 +2117,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/lock-unlock-price-order-invoice",
       "https://learn.microsoft.com/en-us/dynamics365/sales/sales-transactions"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Quote-to-order conversion.",
     "path": "wf/WF-101.md"
   },
   {
@@ -1835,6 +2138,9 @@
       "https://learn.microsoft.com/en-us/dynamics365/sales/developer/quote-order-invoice-entities",
       "https://learn.microsoft.com/en-us/dynamics365/sales/sales-transactions"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Quote revisions.",
     "path": "wf/WF-102.md"
   },
   {
@@ -1858,6 +2164,9 @@
       "https://developers.pandadoc.com/reference/handledocumentstatechanged.md",
       "https://developers.pandadoc.com/reference/search-catalog-items"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Document-API proposal generation with approval gating.",
     "path": "wf/WF-103.md"
   },
   {
@@ -1877,6 +2186,9 @@
       "https://developers.intercom.com/docs/references/webhooks/webhook-models",
       "https://www.intercom.com/help/en/articles/4425207-series-explained"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Marketing nurture. A separate product category sharing a customer.",
     "path": "wf/WF-104.md"
   },
   {
@@ -1893,6 +2205,9 @@
       "https://developers.intercom.com/docs/references/webhooks/webhook-models",
       "https://www.intercom.com/help/en/articles/4425207-series-explained"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Recurring sequence re-entry.",
     "path": "wf/WF-105.md"
   },
   {
@@ -1910,6 +2225,9 @@
       "https://www.intercom.com/help/en/articles/2499085-when-a-customer-visits-your-site",
       "https://www.intercom.com/help/en/articles/7434613-how-to-trigger-a-workflow"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Browsing-triggered outreach; automation over analytics already counted.",
     "path": "wf/WF-106.md"
   },
   {
@@ -1927,6 +2245,9 @@
       "https://www.intercom.com/help/en/articles/7155449-automations-of-snoozed-conversations",
       "https://www.intercom.com/help/en/articles/7434613-how-to-trigger-a-workflow"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Chase and reroute automation.",
     "path": "wf/WF-107.md"
   },
   {
@@ -1944,6 +2265,9 @@
       "https://www.intercom.com/help/en/articles/2672572-slas-report",
       "https://www.intercom.com/help/en/articles/6546152-set-slas-for-conversations-and-tickets"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "SLA timers belong to support/response ops.",
     "path": "wf/WF-108.md"
   },
   {
@@ -1961,6 +2285,9 @@
       "https://www.intercom.com/help/en/articles/15362781-trigger-a-workflow-before-or-when-an-sla-breaches",
       "https://www.intercom.com/help/en/articles/6546152-set-slas-for-conversations-and-tickets"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "SLA breach escalation.",
     "path": "wf/WF-109.md"
   },
   {
@@ -1977,6 +2304,9 @@
       "https://developers.intercom.com/docs/references/webhooks/webhook-models",
       "https://www.intercom.com/help/en/articles/7434613-how-to-trigger-a-workflow"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Ticket escalation across owning teams.",
     "path": "wf/WF-110.md"
   },
   {
@@ -1993,6 +2323,9 @@
       "https://docs.customer.io/messaging/channels/in-app/inbox/get-started.md",
       "https://docs.customer.io/messaging/channels/push/send-push.md"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Multi-channel reminder delivery.",
     "path": "wf/WF-111.md"
   },
   {
@@ -2011,6 +2344,9 @@
       "https://docs.customer.io/messaging/send/automations/data-workflows/webhook-triggered-automations.md",
       "https://…|label"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Slack notification; a consumer of signals rather than a loop stage.",
     "path": "wf/WF-112.md"
   },
   {
@@ -2028,6 +2364,9 @@
       "https://docs.customer.io/llms.txt",
       "https://docs.customer.io/messaging/send/automations/data-workflows/webhook-triggered-automations.md"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Inbound webhook fan-out. Pairs with the conditional WF-082.",
     "path": "wf/WF-113.md"
   },
   {
@@ -2046,6 +2385,9 @@
       "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomTriggers/",
       "https://services.leadconnectorhq.com/...`"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "External webhook starting a workflow.",
     "path": "wf/WF-114.md"
   },
   {
@@ -2065,6 +2407,9 @@
       "https://services.leadconnectorhq.com/workflows-marketplace/triggers/execute/abc/def",
       "https://services.leadconnectorhq.com/workflows-marketplace/triggers/execute/abc/def`"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Marketplace extensibility. Platform surface, not product loop.",
     "path": "wf/WF-115.md"
   },
   {
@@ -2082,6 +2427,9 @@
       "https://help.gohighlevel.com/support/solutions/articles/155000002294-what-are-workflow-actions-complete-list-",
       "https://knowledge.hubspot.com/workflows/create-workflows"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Automated follow-up task creation.",
     "path": "wf/WF-116.md"
   },
   {
@@ -2099,6 +2447,9 @@
       "https://help.gohighlevel.com/support/solutions/articles/155000002471-workflow-action-if-else",
       "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomActions/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Stale-opportunity sweeping.",
     "path": "wf/WF-117.md"
   },
   {
@@ -2117,6 +2468,9 @@
       "https://support.pendo.io/hc/en-us/articles/360032203891-Create-a-guide-permalink",
       "https://web-sdk.pendo.io/public/guides#showguidebyidid-reason`"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "In-app guide ordering and throttling.",
     "path": "wf/WF-118.md"
   },
   {
@@ -2134,6 +2488,9 @@
       "https://marketplace.gohighlevel.com/docs/marketplace-modules/CustomTriggers/",
       "https://services.leadconnectorhq.com/workflows-marketplace/triggers/execute/abc/def`"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "External human-approval gate on an automation.",
     "path": "wf/WF-119.md"
   },
   {
@@ -2150,6 +2507,9 @@
       "https://knowledge.hubspot.com/workflows/create-workflows",
       "https://knowledge.hubspot.com/workflows/set-when-a-webhook-is-received-workflow-triggers"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Scheduled enrollment with backfill.",
     "path": "wf/WF-120.md"
   },
   {
@@ -2172,6 +2532,9 @@
       "https://www.papermark.com",
       "https://www.papermark.com/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Tracked document links restate the capability WF-006 and WF-018 already provide.",
     "path": "wf/WF-121.md"
   },
   {
@@ -2191,6 +2554,9 @@
       "https://github.com/pydio/cells",
       "https://help.walnut.io/help/deal-rooms/getting-started"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Staged data-room disclosure for diligence; a neighbouring use case.",
     "path": "wf/WF-122.md"
   },
   {
@@ -2209,6 +2575,9 @@
       "https://www.ebsta.com/",
       "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "In-room capture. WF-015 carries the identity requirement it would serve.",
     "path": "wf/WF-123.md"
   },
   {
@@ -2229,6 +2598,9 @@
       "https://www.dock.us/solutions/sales",
       "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Native MAP; valuable, adjacent to the loop.",
     "path": "wf/WF-124.md"
   },
   {
@@ -2248,6 +2620,9 @@
       "https://help.walnut.io/help/deal-rooms/getting-started",
       "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Bi-directional CRM sync restating the crm-integration domain.",
     "path": "wf/WF-125.md"
   },
   {
@@ -2268,6 +2643,9 @@
       "https://www.allego.com/",
       "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Video messaging. Note the research marks native video hosting as unsourced.",
     "path": "wf/WF-126.md"
   },
   {
@@ -2285,6 +2663,9 @@
       "https://goconsensus.com/",
       "https://goconsensus.com/overview/demolytics"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Interactive product demos are a distinct product that can live beside the room.",
     "path": "wf/WF-127.md"
   },
   {
@@ -2305,6 +2686,9 @@
       "https://goconsensus.com/",
       "https://www.dock.us/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Live co-presentation; adjacent to scheduling.",
     "path": "wf/WF-128.md"
   },
   {
@@ -2324,6 +2708,9 @@
       "https://www.dock.us/sitemap.xml`",
       "https://www.docusign.com/products/rooms"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "In-room pricing and order form; the quoting product surfaced inside the room.",
     "path": "wf/WF-129.md"
   },
   {
@@ -2346,6 +2733,9 @@
       "https://www.highspot.com/",
       "https://www.walnut.io/digital-sales-room-software/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "AI collateral generation. Strong differentiator, still additive.",
     "path": "wf/WF-130.md"
   },
   {
@@ -2367,6 +2757,9 @@
       "https://seismic.com/platform/digital-sales-rooms/",
       "https://www.papermark.com/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Bundles protections already classified: WF-071, WF-072, WF-070 and the critical WF-079.",
     "path": "wf/WF-131.md"
   },
   {
@@ -2387,6 +2780,9 @@
       "https://seismic.com/platform/digital-sales-rooms/",
       "https://www.dock.us/solutions/sales"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "In-room comments, threads and tagging. Flagged contested: a room you cannot talk inside may not be a room at all.",
     "path": "wf/WF-132.md"
   },
   {
@@ -2409,6 +2805,9 @@
       "https://seismic.com/platform/digital-sales-rooms/",
       "https://www.ebsta.com/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Intent-to-task routing, downstream of WF-027.",
     "path": "wf/WF-133.md"
   },
   {
@@ -2431,6 +2830,9 @@
       "https://www.highspot.com/",
       "https://www.mindtickle.com/blog/best-digital-sales-room-platforms-comparison-and-review/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Deal-health scoring over existing engagement data.",
     "path": "wf/WF-134.md"
   },
   {
@@ -2452,6 +2854,9 @@
       "https://www.ebsta.com/",
       "https://www.highspot.com/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Conversation intelligence; a separate product category.",
     "path": "wf/WF-135.md"
   },
   {
@@ -2470,6 +2875,9 @@
       "https://gtmking.com/deal-rooms`",
       "https://www.dock.us/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Buyer self-serve booking within the scheduling cluster.",
     "path": "wf/WF-136.md"
   },
   {
@@ -2491,6 +2899,9 @@
       "https://www.dock.us/sitemap.xml",
       "https://www.dock.us/solutions/sales"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "Versioning, brand control and closed-won handoff; governance around the loop.",
     "path": "wf/WF-137.md"
   },
   {
@@ -2509,6 +2920,9 @@
       "https://seismic.com/platform/digital-sales-rooms/",
       "https://www.docker.com/"
     ],
+    "criticality": "supplementary",
+    "criticality_basis": null,
+    "criticality_rationale": "White-label buyer experience, duplicating WF-017.",
     "path": "wf/WF-138.md"
   }
 ]
