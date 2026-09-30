@@ -7,15 +7,18 @@
 specifications** (139 complete). Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `dedaa64 Give each backfill log line a number, and order the transcript by it` &middot; measured 2026-09-28T09:42:23+05:30
+`main` at `81adff2 WF-033: auto-add and continuously track in-market companies (#58)` &middot; measured 2026-09-30T13:26:04+05:30
+
+Measured in `C:\Users\Dilip\Documents\dummy repo\client-theater`. This file is written by the generator and by nothing
+else; if a copy of it lives in another clone, that copy is not this run.
 
 ## Progress
 
-    workflows  [############......................] 37/100
-    routes     581
-    tests      7241 passed, 0 failed, 2 xfailed  (supplied)
+    workflows  [##############....................] 43/100
+    routes     754
+    tests      8878 passed, 0 failed, 2 xfailed  (measured now)
     features   0 failed to load
-    to go      63
+    to go      57
 
 ## Every feature the host loads
 
@@ -50,6 +53,7 @@ specifications** (139 complete). Regenerate with
 | `wf-028-turn-a-signal-into-an-automatic-seller` | `/api/wf-028` | 19 |
 | `wf-030-fire-crm-workflows-off-dsr-activity` | `/api/wf-030` | 18 |
 | `wf-032-stream-identified-company-contact-inte` | `/api/wf-032` | 36 |
+| `wf-033-auto-add-and-continuously-track-in-mar` | `/api/wf-033` | 41 |
 | `wf-034-connect-a-crm-org-to-the-sales-room-oa` | `/api/wf-034` | 20 |
 | `wf-035-map-sales-room-fields-onto-crm-fields-` | `/api/wf-035` | 32 |
 | `wf-036-provision-the-sales-room-engagement-ob` | `/api/wf-036` | 22 |
@@ -59,6 +63,11 @@ specifications** (139 complete). Regenerate with
 | `wf-040-surface-partial-failures-and-reject-in` | `/api/wf-040` | 14 |
 | `wf-041-detect-and-block-duplicate-records-dur` | `/api/wf-041` | 20 |
 | `wf-045-backfill-historical-records-on-a-sched` | `/api/wf-045` | 16 |
+| `wf-056-book-a-meeting-with-no-scheduling-ui-h` | `/api/wf-056` | 22 |
+| `wf-057-find-a-time-that-works-for-a-multi-per` | `/api/wf-057` | 21 |
+| `wf-059-provision-a-per-booking-video-conferen` | `/api/wf-059` | 29 |
+| `wf-061-send-conditional-pre-and-post-meeting-` | `/api/wf-061` | 29 |
+| `wf-064-reschedule-or-cancel-a-meeting-and-pro` | `/api/wf-064` | 31 |
 
 ### Prefixes carrying more than one feature
 
@@ -71,45 +80,47 @@ by luck.
 - `/api/library` &mdash; 3 features: `wf-007-content-library`, `wf-008-external-sync`, `wf-010-library-search`
 - `/api/publishing` &mdash; 2 features: `wf-009-publishing`, `wf-011-room-handover`
 
-## In flight
+## Built but not landed
 
-### Ready to verify and merge (25)
+Measured by asking each worktree whether it contains a feature module for a
+ticket that is not on `main` yet. Nothing here has passed the release bar;
+these are claims to verify, not verified work. See
+`orchestration/decisions/jev-audit.jsonl` and the release bar in `tools/jev.py`.
 
-| Workflow | Worktree | Commits |
+### Unlanded feature module present (4)
+
+| Workflow | Worktree | Feature module |
 |---|---|---|
-| WF-005 | `dsr-wf-005-build` | 55 |
-| WF-014 | `dsr-wf-014-build` | 55 |
-| WF-033 | `dsr-wf-033-build` | 52 |
-| WF-042 | `dsr-wf-042-build` | 53 |
-| WF-043 | `dsr-wf-043-build` | 54 |
-| WF-044 | `dsr-wf-044-build` | 53 |
-| WF-046 | `dsr-wf-046-build` | 53 |
-| WF-047 | `dsr-wf-047-build` | 53 |
-| WF-048 | `dsr-wf-048-build` | 55 |
-| WF-049 | `dsr-wf-049-build` | 55 |
-| WF-050 | `dsr-wf-050-build` | 55 |
-| WF-051 | `dsr-wf-051-build` | 55 |
-| WF-052 | `dsr-wf-052-build` | 55 |
-| WF-053 | `dsr-wf-053-build` | 55 |
-| WF-054 | `dsr-wf-054-build` | 55 |
-| WF-055 | `dsr-wf-055-build` | 55 |
-| WF-057 | `dsr-wf-057-build` | 61 |
-| WF-058 | `dsr-wf-058-build` | 61 |
-| WF-059 | `dsr-wf-059-build` | 61 |
-| WF-060 | `dsr-wf-060-build` | 60 |
-| WF-061 | `dsr-wf-061-build` | 61 |
-| WF-062 | `dsr-wf-062-build` | 60 |
-| WF-063 | `dsr-wf-063-build` | 61 |
-| WF-064 | `dsr-wf-064-build` | 63 |
-| WF-065 | `dsr-wf-065-build` | 61 |
+| WF-043 | `dsr-wf-043-build` | `wf043_stream_crm_record_changes_into_the_roo.py` |
+| WF-058 | `dsr-wf-058-build` | `wf058_embed_a_bookable_calendar_inside_the_s.py` |
+| WF-063 | `dsr-wf-063-build` | `wf063_reassign_a_booked_meeting_to_a_differe.py` |
+| WF-065 | `dsr-wf-065-build` | `wf065_write_the_booking_back_into_the_crm.py` |
 
-### Being written (3)
+### Unlanded, but work in progress (10)
 
-| Workflow | Worktree | Uncommitted files |
+| Workflow | Worktree | Uncommitted code files |
 |---|---|---|
 | WF-029 | `dsr-wf-029-build` | 2 |
 | WF-031 | `dsr-wf-031-build` | 1 |
-| WF-056 | `dsr-wf-056-build` | 1 |
+| WF-042 | `dsr-wf-042-build-4` | 3 |
+| WF-044 | `dsr-wf-044-build-4` | 4 |
+| WF-046 | `dsr-wf-046-build-4` | 3 |
+| WF-047 | `dsr-wf-047-build-4` | 1 |
+| WF-048 | `dsr-wf-048-build-2` | 4 |
+| WF-049 | `dsr-wf-049-build-2` | 1 |
+| WF-053 | `dsr-wf-053-build-4` | 3 |
+| WF-062 | `dsr-wf-062-build-3` | 5 |
+
+### Empty shells (47)
+
+Worktrees that committed none of their own code. Counted separately because
+they are not work: a repair batch that reran without writing leaves one of
+these, and counting them is how a stalled programme looks busy.
+
+`dsr-wf-005-build`, `dsr-wf-014-build`, `dsr-wf-042-build`, `dsr-wf-042-build-2`, `dsr-wf-042-build-3`, `dsr-wf-044-build`, `dsr-wf-044-build-2`, `dsr-wf-044-build-3`, `dsr-wf-046-build`, `dsr-wf-046-build-2`, `dsr-wf-046-build-3`, `dsr-wf-047-build`, `dsr-wf-047-build-2`, `dsr-wf-047-build-3`, `dsr-wf-048-build`, `dsr-wf-048-build-3`, `dsr-wf-048-build-4`, `dsr-wf-049-build`, `dsr-wf-049-build-3`, `dsr-wf-049-build-4`, `dsr-wf-050-build`, `dsr-wf-050-build-2`, `dsr-wf-050-build-3`, `dsr-wf-050-build-4`, `dsr-wf-051-build`, `dsr-wf-051-build-2`, `dsr-wf-051-build-3`, `dsr-wf-052-build`, `dsr-wf-052-build-2`, `dsr-wf-052-build-3`, `dsr-wf-052-build-4`, `dsr-wf-053-build`, `dsr-wf-053-build-2`, `dsr-wf-053-build-3`, `dsr-wf-054-build`, `dsr-wf-054-build-2`, `dsr-wf-054-build-3`, `dsr-wf-054-build-4`, `dsr-wf-055-build`, `dsr-wf-055-build-2`, `dsr-wf-055-build-3`, `dsr-wf-055-build-4`, `dsr-wf-060-build`, `dsr-wf-060-build-2`, `dsr-wf-060-build-3`, `dsr-wf-062-build`, `dsr-wf-062-build-2`
+
+Of the worktrees inspected, 0 belong to tickets already on `main`
+and carry nothing further.
 
 ## Board
 
@@ -131,9 +142,9 @@ with its reasoning in `orchestration/PROGRAM-AUDIT.md` once taken.
 
 ## Remaining work
 
-- **63** workflows to build to reach 100
-- **104** researched specifications have no code at all
-- **104** of the 141 specifications are unbuilt, which is more than the 63 still needed
+- **57** workflows to build to reach 100
+- **98** researched specifications have no code at all
+- **98** of the 141 specifications are unbuilt, which is fewer than the 57 still needed
 
 The corpus is larger than the target, so this is an implementation pipeline
 rather than a research programme. An earlier count of *17 workflows* was a
