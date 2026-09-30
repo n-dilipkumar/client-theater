@@ -38,8 +38,16 @@ for _s in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-ROOT = Path(r"C:\Users\Dilip\orca\projects\client-theater\client-theater")
-WORKSPACES = Path(r"C:\Users\Dilip\orca\workspaces\client-theater")
+# This script writes into the repository it lives in, always. It used to name
+# a hardcoded absolute path (an orca checkout), so running it from this repo
+# silently regenerated a dashboard in a different clone -- correct content, wrong
+# destination, and the copy in this repo went stale without anyone noticing.
+ROOT = Path(__file__).resolve().parent.parent
+
+# The agent worktrees are outside the repository by design: they are separate
+# checkouts, not worktrees registered with `git worktree list`, which is why a
+# generator inside the repo cannot discover them.
+WORKSPACES = Path(os.environ.get("DSR_WORKSPACES", r"C:\Users\Dilip\orca\workspaces\client-theater"))
 WFDIR = ROOT / "docs" / "research" / "digital-sales-room-workflows" / "wf"
 OUT = ROOT / "orchestration" / "STATUS.md"
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
@@ -183,11 +191,33 @@ def stamp_of(ref):
     return git("log", "-1", "--format=%cI", ref).strip()
 
 
+def _wf_of(name):
+    m = TICKET_RE.search(name)
+    return f"WF-{m.group(1)}" if m else None
+
+
+def landed_tickets():
+    """Tickets whose feature module is on main. Measured, not remembered."""
+    out = git("ls-tree", "--name-only", "origin/main", "backend/dsr/features/")
+    return {t for t in (_wf_of(f) for f in out.splitlines()) if t}
+
+
 def worktree_states(live):
-    """Split agent worktrees into finished and in flight, from the worktrees."""
-    ready, flying = [], []
+    """Split agent worktrees by what they actually contain.
+
+    The old classifier called a worktree "ready to verify and merge" whenever it
+    was ahead of *its own* origin/main and clean -- which is true of a stale
+    clone of main as well as of real work, and of a directory where a repair
+    batch committed nothing. It reported 25 ready; six of those carried a feature
+    nobody had landed and the rest were snapshots or empty shells.
+
+    So the question is not "how many commits" but "does this worktree contain a
+    feature module for a ticket that is not on main yet".
+    """
+    ready, flying, shells, landed = [], [], [], []
     if not WORKSPACES.exists():
-        return ready, flying
+        return ready, flying, shells, landed
+    already = landed_tickets()
     for d in sorted(WORKSPACES.iterdir()):
         m = TICKET_RE.search(d.name)
         if not m or not d.is_dir() or not d.name.startswith("dsr-"):
@@ -195,13 +225,27 @@ def worktree_states(live):
         ticket = f"WF-{m.group(1)}"
         if ticket in live:
             continue
-        ahead = git("rev-list", "--count", "origin/main..HEAD", cwd=d)
-        dirty = len([l for l in git("status", "--porcelain", cwd=d).splitlines() if l.strip()])
-        entry = {"ticket": ticket, "worktree": d.name,
-                 "commits": int(ahead) if ahead.isdigit() else 0,
-                 "uncommitted": dirty}
-        (ready if entry["commits"] and not dirty else flying).append(entry)
-    return ready, flying
+        entry = {"ticket": ticket, "worktree": d.name}
+        entry["commits"] = int(git("rev-list", "--count", "origin/main..HEAD", cwd=d) or 0)
+        dirty_lines = [l for l in git("status", "--porcelain", cwd=d).splitlines() if l.strip()]
+        entry["uncommitted"] = len(dirty_lines)
+        entry["code_dirty"] = [
+            l for l in dirty_lines if not l[3:].startswith(("orchestration/", "docs/"))
+        ]
+        # The feature module this worktree is supposed to have produced.
+        pattern = re.compile(rf"wf[_-]?0*{m.group(1)}(?!\d)", re.I)
+        tracked = git("ls-files", "backend/dsr/features", cwd=d).splitlines()
+        entry["feature_files"] = [f for f in tracked if pattern.search(f)]
+
+        if ticket in already:
+            landed.append(entry)
+        elif entry["feature_files"] and not entry["code_dirty"]:
+            ready.append(entry)
+        elif entry["feature_files"] or entry["code_dirty"]:
+            flying.append(entry)
+        else:
+            shells.append(entry)
+    return ready, flying, shells, landed
 
 
 def board_counts():
@@ -237,7 +281,7 @@ def main():
     live = features_live()
     reg = host_report()
     passed, failed, xfail, tests_from = suite_count(argv)
-    ready, flying = worktree_states(live)
+    ready, flying, shells, landed_wt = worktree_states(live)
     board, cards = board_counts()
     spec_total, spec_complete = spec_census()
 
@@ -268,6 +312,9 @@ def main():
     A("`.venv/Scripts/python orchestration/make_status.py`.")
     A("")
     A(f"`main` at `{now}` &middot; measured {stamp}")
+    A("")
+    A(f"Measured in `{ROOT}`. This file is written by the generator and by nothing")
+    A("else; if a copy of it lives in another clone, that copy is not this run.")
     A("")
     A("## Progress")
     A("")
@@ -303,27 +350,47 @@ def main():
             A(f"- `{p}` &mdash; {len(v)} features: " + ", ".join(f"`{f}`" for f, _ in sorted(v)))
         A("")
 
-    A("## In flight")
+    A("## Built but not landed")
     A("")
-    A(f"### Ready to verify and merge ({len(ready)})")
+    A("Measured by asking each worktree whether it contains a feature module for a")
+    A("ticket that is not on `main` yet. Nothing here has passed the release bar;")
+    A("these are claims to verify, not verified work. See")
+    A("`orchestration/decisions/jev-audit.jsonl` and the release bar in `tools/jev.py`.")
+    A("")
+    A(f"### Unlanded feature module present ({len(ready)})")
     A("")
     if ready:
-        A("| Workflow | Worktree | Commits |")
+        A("| Workflow | Worktree | Feature module |")
         A("|---|---|---|")
         for e in ready:
-            A(f"| {e['ticket']} | `{e['worktree']}` | {e['commits']} |")
+            mod = ", ".join(f"`{f.split('/')[-1]}`" for f in e["feature_files"])
+            A(f"| {e['ticket']} | `{e['worktree']}` | {mod} |")
     else:
         A("None.")
     A("")
-    A(f"### Being written ({len(flying)})")
+    A(f"### Unlanded, but work in progress ({len(flying)})")
     A("")
     if flying:
-        A("| Workflow | Worktree | Uncommitted files |")
+        A("| Workflow | Worktree | Uncommitted code files |")
         A("|---|---|---|")
         for e in flying:
-            A(f"| {e['ticket']} | `{e['worktree']}` | {e['uncommitted']} |")
+            A(f"| {e['ticket']} | `{e['worktree']}` | {len(e['code_dirty'])} |")
     else:
         A("None.")
+    A("")
+    A(f"### Empty shells ({len(shells)})")
+    A("")
+    A("Worktrees that committed none of their own code. Counted separately because")
+    A("they are not work: a repair batch that reran without writing leaves one of")
+    A("these, and counting them is how a stalled programme looks busy.")
+    A("")
+    if shells:
+        A(", ".join(f"`{e['worktree']}`" for e in shells))
+    else:
+        A("None.")
+    A("")
+    A(f"Of the worktrees inspected, {len(landed_wt)} belong to tickets already on `main`")
+    A("and carry nothing further.")
     A("")
 
     A("## Board")
@@ -376,12 +443,15 @@ def main():
         "the measured test count": f"tests      {passed} passed" in back,
         "the test count's provenance is stated": f"({tests_from})" in back,
         "the measured failure count": f"features   {failed_features} failed" in back,
-        "ready count": f"({len(ready)})" in back,
-        "in-flight count": f"({len(flying)})" in back,
+        f"unlanded-with-a-feature count": f"### Unlanded feature module present ({len(ready)})" in back,
+        "in-progress count": f"### Unlanded, but work in progress ({len(flying)})" in back,
+        "empty-shell count": f"### Empty shells ({len(shells)})" in back,
+        "the dashboard names its own destination": f"Measured in `{ROOT}`" in back,
         "board total": f"**{cards}**" in back,
         "main's commit": now.split()[0] in back,
         "every loaded feature listed": all(f"`{f}`" in back
                                           for f, _, _ in (reg["loaded"] if reg else [])),
+        "no unmeasured 'ready to merge' claim": "Ready to verify and merge" not in back,
     }
     bad = [k for k, v in checks.items() if not v]
     for k, v in checks.items():
