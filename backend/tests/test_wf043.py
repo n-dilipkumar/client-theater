@@ -3244,7 +3244,12 @@ def test_the_seed_shows_a_flushed_transaction_and_a_closed_subscription(seeded):
 def test_the_seed_shows_the_dataverse_rules(seeded):
     _store, engine, _rooms, summary = seeded
     tables = engine.tables()
-    assert [row["track_changes"] for row in tables] == [True, False]
+    # Compared as a set, not a list. store.list() returns rows in insertion
+    # order, and the row ids are generated, so which of the two tables comes
+    # first varies between runs. Asserting the order asserted the id generator
+    # rather than the seed, and failed roughly half the time.
+    assert {row["track_changes"] for row in tables} == {True, False}
+    assert len(tables) == 2
     assert "change_tracking_cannot_be_disabled" in summary
     assert "unsupported_query_option_with_change_tracking" in summary
 
