@@ -668,15 +668,20 @@ export default function ViewingSessions() {
   const runs = useAsync(() => sessionsApi.runs({ limit: 25 }), [nonce])
   const summary = useAsync(() => sessionsApi.summary(), [nonce])
   const sessions = useAsync(() => sessionsApi.sessions({ limit: 60 }), [nonce])
-  const dwell = useAsync(() => sessionsApi.dwell({ group_by: 'room' }), [nonce])
+  // Named `dwellStats`, not `dwell`: `dwell` is the imported formatter that
+  // turns seconds into a readable duration, and shadowing it with this hook made
+  // every later `dwell(...)` call in the file a call on an object -- which threw
+  // "is not a function" on render, unmounted the whole React root, and took
+  // every other page in the app down with it.
+  const dwellStats = useAsync(() => sessionsApi.dwell({ group_by: 'room' }), [nonce])
   const geography = useAsync(() => sessionsApi.geography(), [nonce])
   const viewers = useAsync(() => sessionsApi.viewers({ internal }), [nonce, internal])
   const rooms = useAsync(() => sessionsApi.rooms(), [nonce])
 
-  const loading = [summary, sessions, dwell, geography, viewers, rooms, runs, plan].some(
+  const loading = [summary, sessions, dwellStats, geography, viewers, rooms, runs, plan].some(
     (state) => state.loading,
   )
-  const failure = [summary, sessions, dwell, geography, viewers, rooms, runs, plan, contract].find(
+  const failure = [summary, sessions, dwellStats, geography, viewers, rooms, runs, plan, contract].find(
     (state) => state.error,
   )
 
@@ -807,7 +812,7 @@ export default function ViewingSessions() {
         )}
         {tab === 'engagement' && (
           <EngagementTab
-            dwellRollup={dwell.data?.dwell || []}
+            dwellRollup={dwellStats.data?.dwell || []}
             geography={geography.data?.geography || []}
             viewers={viewers.data?.viewers || []}
             internal={internal}
