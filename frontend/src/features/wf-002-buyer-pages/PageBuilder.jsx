@@ -89,7 +89,7 @@ function FragmentPalette({ catalogue, onAdd, disabled, adding }) {
                 </span>
                 <span
                   aria-hidden="true"
-                  className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
+                  className={`shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none ${
                     open ? 'rotate-90' : ''
                   }`}
                 >

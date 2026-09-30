@@ -71,7 +71,9 @@ export function SortHeader({ label, column, sort, order, onSort, className = '' 
         <Glyph
           name="caret"
           size={14}
-          className={active ? (order === 'desc' ? 'rotate-180' : '') : 'opacity-40'}
+          className={`transition-transform motion-reduce:transition-none ${
+            active ? (order === 'desc' ? 'rotate-180' : '') : 'opacity-40'
+          }`}
         />
         <span className="sr-only">
           {active ? `, sorted ${order === 'desc' ? 'descending' : 'ascending'}` : ', not sorted'}

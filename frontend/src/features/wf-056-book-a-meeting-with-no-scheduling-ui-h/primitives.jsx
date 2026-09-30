@@ -162,7 +162,7 @@ export function SlotButton({ value, selected, onSelect, disabled }) {
       disabled={disabled}
       aria-pressed={selected}
       className={`min-h-11 w-full rounded-lg border px-2 py-1.5 text-left font-mono text-xs
-        transition-colors duration-150 focus:border-accent focus:outline-none
+        transition-colors duration-150 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-ring
         disabled:cursor-not-allowed disabled:opacity-40 ${
           selected
             ? 'border-accent bg-accent/15 text-accent'
