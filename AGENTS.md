@@ -173,3 +173,17 @@ cd frontend && npm run build
 primary sources and records what could **not** be sourced. When drawing on it,
 keep that distinction: a workflow marked as unsourced is a hypothesis, not a
 specification.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues on `n-dilipkumar/client-theater`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: the five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
