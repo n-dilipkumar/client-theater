@@ -2980,14 +2980,23 @@ def live(http):
             "meeting_type_id": meeting_type["id"],
             "title": "Northwind walkthrough",
             "attendee_email": "priya.raman@northwind.example",
-            # Measured from the real clock, not from NOW. These routes build
-            # their engine from the wall clock, so a fixed NOW + 3 days was a
-            # future date only while the suite happened to run inside that
-            # three-day window. It expired on 2026-09-30 and the test began
-            # asserting that a live booking was expired, which is the opposite
-            # of what it means to check. The same rot that 7e7ebaf fixed for
-            # WF-030's payloads, in the one place the fixed clock cannot reach.
-            "start_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+            # Measured from the real clock, not from NOW: these routes build
+            # their engine from the wall clock, so a fixed NOW + 3 days stopped
+            # being a future date on 2026-09-30. The date is also snapped to the
+            # type's own 09:00-17:00 grid on a weekday, because the availability
+            # test below needs the booking's own slot to appear in the window
+            # with original_slot set, and an off-grid time has no slot to
+            # release. Thirty days out is far enough that nothing collides with
+            # the second booking at at(-2).
+            "start_at": next(
+                d.isoformat()
+                for d in (
+                    datetime.now(timezone.utc).replace(hour=9, minute=0, second=0, microsecond=0)
+                    + timedelta(days=n)
+                    for n in range(28, 40)
+                )
+                if d.weekday() < 5
+            ),
             "location": "Zoom",
         },
     ).json()
@@ -3043,11 +3052,18 @@ def test_the_availability_endpoint_answers_with_the_researched_parameter_name(ht
     # it stays a window the engine will actually offer slots in. These routes
     # run on the wall clock, so a window of NOW+3d..NOW+4d stopped being a
     # future window and the endpoint correctly returned nothing.
+    #
+    # The window is a week wide, not a day. The type books Monday to Friday, so
+    # a 24-hour window can land entirely on a weekend and hold no slots at all --
+    # which is what happened once the fixture's booking moved to now + 30 days
+    # and 2026-10-31 is a Saturday. A seven-day window contains a weekday in
+    # every case, so the assertion is about the parameter name rather than about
+    # which day of the week the suite happened to run on.
     start = datetime.fromisoformat(live["booking"]["data"]["start_at"])
     body = http.get(
         f"{PREFIX}/availability"
         f"?meeting_type_id={live['type']['id']}"
-        f"&from={url(start.isoformat())}&to={url((start + timedelta(days=1)).isoformat())}"
+        f"&from={url(start.isoformat())}&to={url((start + timedelta(days=7)).isoformat())}"
         f"&booking_uid_to_reschedule=bk_http_1"
     ).json()
     assert body["booking_uid_to_reschedule"] == "bk_http_1"
