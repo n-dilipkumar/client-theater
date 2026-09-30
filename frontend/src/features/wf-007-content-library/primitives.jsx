@@ -50,7 +50,7 @@ export function Toggle({ label, hint, checked, onChange }) {
           ${checked ? 'border-accent/50 bg-accent/25' : 'border-border-subtle/50 bg-muted'}`}
       >
         <span
-          className={`h-4 w-4 rounded-full transition-transform duration-200
+          className={`h-4 w-4 rounded-full transition-transform duration-200 motion-reduce:transition-none
             ${checked ? 'translate-x-5 bg-accent' : 'translate-x-0 bg-muted-foreground'}`}
         />
       </span>

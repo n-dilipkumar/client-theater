@@ -69,6 +69,16 @@ AUDIT_LOG = Path(
 )
 DEFAULT_MODEL = os.environ.get("JEV_MODEL", "jev-latest")
 
+# Human overrides live beside the judgment log, never inside it: the judgment
+# log is written by this module and by nothing else, and the point of an
+# override is that a person wrote it. See ADR-0001.
+OVERRIDE_LOG = Path(
+    os.environ.get(
+        "JEV_OVERRIDE_LOG",
+        Path(__file__).resolve().parent.parent / "orchestration" / "decisions" / "human-overrides.jsonl",
+    )
+)
+
 # A verdict is only enforced when confidence clears this bar. Below it the
 # decision is recorded as ``uncertain`` and escalated rather than silently acted
 # on. Tuned per use-case via ``Decision.threshold``.
@@ -157,6 +167,15 @@ class Decision:
     audit_id: str
     selected: str | None = None
     """The option Jev selected, when the gate was a selection between options."""
+    questions: dict[str, Any] | None = None
+    """The exact questions asked.
+
+    Written from ADR-0003. Until then the log stored answers without the
+    questions that produced them, so no two gates could be compared -- there was
+    no way to tell a strict gate from a thin one.
+    """
+    pass_option: str = "verdict"
+    """The question the verdict was derived from."""
 
     def summary(self) -> str:
         """Compact human-readable rendering for agent transcripts and logs."""
@@ -191,6 +210,8 @@ class Decision:
             "reason": self.reason,
             "latency_ms": self.latency_ms,
             "usage": self.usage,
+            "pass_option": self.pass_option,
+            "questions": self.questions or {},
             "answers": {
                 name: {
                     "type": a.type,
@@ -398,6 +419,8 @@ class Jev:
             latency_ms=latency_ms,
             audit_id="",
             selected=selected,
+            questions=questions,
+            pass_option=pass_option,
         )
         record.audit_id = self._audit(record)
         return record
@@ -613,6 +636,94 @@ class Jev:
             threshold=threshold,
         )
 
+    def release_bar(
+        self,
+        ticket: str,
+        change_summary: str,
+        measurements: dict[str, Any] | None = None,
+        unverified: Sequence[str] = (),
+        threshold: float = DEFAULT_THRESHOLD,
+    ) -> Decision:
+        """The pinned release bar. See ``docs/adr/0003-the-release-bar-question-set-is-pinned.md``.
+
+        Every landing from WF-033 onward is asked these same five questions, so
+        two gates can be compared even when they ran on different tickets. The
+        previous freeform payloads stored their answers but not their questions,
+        which made the log unauditable.
+
+        ``measurements`` is the machine-read half of the evidence: suite tallies,
+        the guard's changed-file count, the feature's route count, the design
+        floor's result. ``unverified`` is the honest half: anything a person
+        looked at and did not measure. ``evidence_measured`` asks about exactly
+        that split, so a low score can mean "nobody checked" rather than "the
+        code is wrong" -- a distinction the old single question could not carry.
+        """
+        state = {
+            "ticket": ticket,
+            "change_summary": change_summary,
+            "measurements": measurements or {},
+            "declared_unverified": list(unverified),
+            "requirements": (
+                "A feature adds files and edits no shared file. All reads and writes go through "
+                "dsr.deps / RecordStore / AuditedDatabase so every mutation writes its audit row in "
+                "the same transaction. Payloads stay schema-flexible JSON: no migration, no typed "
+                "column, the envelope untouched. The feature owns a unique route prefix with no "
+                "colliding concrete (method, path) pair. Tests exist and the whole suite is green. "
+                "The frontend page builds, is discovered by the glob, and meets the design floor."
+            ),
+        }
+        return self.decide(
+            decision=f"Implementation of {ticket} meets the release bar",
+            state=state,
+            questions={
+                "contract_compliance": {
+                    "type": "noul",
+                    "instructions": "Does this change add only new files and leave every shared file untouched, per the feature contract?",
+                    "criteria": {
+                        "true": "No shared file is edited, and the contract guard confirms it on a non-empty diff",
+                        "false": "A shared file is edited, or the guard did not actually measure a diff",
+                    },
+                },
+                "evidence_measured": {
+                    "type": "noul",
+                    "instructions": "Is every claim in the evidence a measurement taken after the change was committed, rather than an assertion, a progress bar, or a check that silently passed on empty input?",
+                    "criteria": {
+                        "true": "Counts, tallies and tool output are quoted and reproducible",
+                        "false": "Evidence is asserted, or a check passed vacuously, or key items are listed as unverified",
+                    },
+                },
+                "audit_integrity": {
+                    "type": "noul",
+                    "instructions": "Does this change preserve the audited-store guarantee: all writes through the wrapper, no direct database connection, no schema change outside the envelope?",
+                    "criteria": {
+                        "true": "Writes go through the audited store and the envelope is unchanged",
+                        "false": "A direct connection is opened, or a typed column or migration is added",
+                    },
+                },
+                "design_floor": {
+                    "type": "noul",
+                    "instructions": "Does the frontend meet the design floor -- 44px touch targets, visible focus, a text label beside every icon, no emoji as icons, reduced motion respected -- as checked by the scripted pass?",
+                    "criteria": {
+                        "true": "The scripted design-floor pass is green",
+                        "false": "The pass is red, was skipped, or is on the allowlist",
+                    },
+                },
+                "verdict": {
+                    "type": "choice",
+                    "instructions": "Should this change land on main? Weigh whether the measured evidence is sufficient to show it breaks nothing, and pay attention to items listed as unverified.",
+                    "criteria": {
+                        "merge": "Evidence supports landing it: suite green, contract intact, floor met",
+                        "fix": "Worth keeping but needs work against current main before landing",
+                        "reject": "Should not land",
+                    },
+                },
+            },
+            pass_option="verdict",
+            pass_values=("merge",),
+            fail_options=("fix", "reject"),
+            threshold=threshold,
+        )
+
     def choose_approach(
         self,
         problem: str,
@@ -686,8 +797,50 @@ def _main(argv: list[str]) -> int:
     doctor = sub.add_parser("doctor", help="check that Jev is reachable and answering")
     doctor.add_argument("--transport", default="bridge", choices=("bridge", "direct"))
 
+    bar = sub.add_parser(
+        "release-bar",
+        help="gate a landing with the pinned question set (ADR-0003)",
+    )
+    bar.add_argument("ticket", help="e.g. WF-033")
+    bar.add_argument("payload", type=Path, help="JSON: {change_summary, measurements?, unverified?}")
+    bar.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
+    bar.add_argument("--transport", default="bridge", choices=("bridge", "direct"))
+    bar.add_argument("--model", default=DEFAULT_MODEL)
+
+    override = sub.add_parser(
+        "override",
+        help="record a human override for a landing the judgment did not clear",
+    )
+    override.add_argument(
+        "payload",
+        type=Path,
+        help="JSON: {ticket, audit_id?, unmet_criteria, rationale, closes, decided_by}",
+    )
+    override.add_argument(
+        "--as",
+        dest="decided_by",
+        required=False,
+        help="the person taking responsibility; must not be an agent",
+    )
+
     args = parser.parse_args(argv)
+
+    if args.command == "override":
+        return _record_override(args)
+
     client = Jev(transport=args.transport, model=getattr(args, "model", DEFAULT_MODEL))
+
+    if args.command == "release-bar":
+        payload = json.loads(args.payload.read_text(encoding="utf-8"))
+        record = client.release_bar(
+            ticket=args.ticket,
+            change_summary=payload["change_summary"],
+            measurements=payload.get("measurements", {}),
+            unverified=payload.get("unverified", ()),
+            threshold=args.threshold,
+        )
+        print(record.summary())
+        return 0 if record.passed else 1
 
     if args.command == "doctor":
         transport = args.transport
@@ -735,6 +888,70 @@ def _main(argv: list[str]) -> int:
     )
     print(record.summary())
     return 0 if record.passed else 1
+
+
+# --------------------------------------------------------------------------- #
+# Human override
+# --------------------------------------------------------------------------- #
+
+OVERRIDE_FIELDS = ("ticket", "unmet_criteria", "rationale", "closes", "decided_by")
+
+# Words that name a program rather than a person. The party that wants the
+# change landed is never the party that clears it.
+_AGENT_MARKERS = {
+    "agent", "assistant", "bot", "orchestrator", "ai", "llm", "model",
+    "automation", "script", "ci", "system", "copilot", "cursor", "codex",
+    "commandcode", "command code", "claude", "chatgpt", "gpt", "opencode",
+}
+
+
+def _record_override(args) -> int:
+    """Append a human override. Four fields are mandatory; see ADR-0001."""
+    payload = json.loads(args.payload.read_text(encoding="utf-8"))
+    decided_by = args.decided_by or payload.get("decided_by") or ""
+    decided_by = decided_by.strip()
+
+    if not decided_by:
+        print("An override needs a named human in --as or decided_by.", file=sys.stderr)
+        return 2
+    if decided_by.lower() in _AGENT_MARKERS:
+        print(
+            f"Refusing: {decided_by!r} is not a person. ADR-0001 reserves overrides "
+            "for humans, so that the party wanting the landing is not the party "
+            "clearing it. See docs/adr/0001-gate-authority-human-override.md",
+            file=sys.stderr,
+        )
+        return 2
+
+    missing = [f for f in ("unmet_criteria", "rationale", "closes") if not payload.get(f)]
+    if missing:
+        print(f"An override must record: {', '.join(missing)}", file=sys.stderr)
+        return 2
+    if not payload.get("ticket"):
+        print("An override must name the ticket it applies to.", file=sys.stderr)
+        return 2
+
+    entry = {
+        "override_id": f"override-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "ticket": payload["ticket"],
+        "audit_id": payload.get("audit_id"),
+        "verdict_overridden": payload.get("verdict_overridden"),
+        "unmet_criteria": payload["unmet_criteria"],
+        "rationale": payload["rationale"],
+        "closes": payload["closes"],
+        "decided_by": decided_by,
+    }
+    OVERRIDE_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with OVERRIDE_LOG.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    print(f"override recorded for {entry['ticket']}")
+    print(f"  file     : {OVERRIDE_LOG}")
+    print(f"  decided  : {decided_by}")
+    print(f"  unmet    : {entry['unmet_criteria']}")
+    print(f"  closes   : {entry['closes']}")
+    return 0
 
 
 if __name__ == "__main__":

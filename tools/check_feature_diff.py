@@ -60,7 +60,11 @@ def changed_files(base: str) -> list[str]:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base", default="origin/main", help="ref to compare against")
-    parser.add_argument("--files", nargs="*", help="check an explicit file list instead of git diff")
+    parser.add_argument(
+        "--files",
+        nargs="*",
+        help="check an explicit file list instead of git diff (pass --files with no values to check nothing)",
+    )
     parser.add_argument(
         "--allow-shared",
         action="store_true",
@@ -77,9 +81,32 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    files = args.files if args.files else changed_files(args.base)
+    # `args.files` is [] both when --files was omitted and when it was passed
+    # with no values, so ask the parser which happened. Guessing here is how
+    # `--files` with no arguments silently checked the diff instead.
+    files = args.files if args.files is not None else changed_files(args.base)
     normalised = [f.replace("\\", "/") for f in files]
     offenders = sorted(set(normalised) & SHARED)
+
+    # A guard that passes on nothing measures nothing. On an uncommitted branch
+    # `git diff base...HEAD` is empty, so this used to print "OK: 0 changed
+    # file(s), none shared" -- and a release-bar record then quoted that string
+    # as evidence of contract compliance. Zero changed files is a finding, not
+    # a clean bill of health.
+    if not normalised:
+        scope = "the explicit --files list was empty" if args.files is not None else f"no changed files between {args.base} and HEAD"
+        print(
+            f"FAIL: {scope}.\n"
+            "\n"
+            "This guard can only report on a committed diff. Either the work is not\n"
+            "committed yet, or the branch has nothing of its own.\n"
+            "\n"
+            "  commit it, then re-run:   git add -A && git commit && "
+            f"python tools/check_feature_diff.py --base {args.base}\n"
+            "\n"
+            "If you are checking a file list explicitly, pass --files instead."
+        )
+        return 1
 
     if not offenders:
         print(f"OK: {len(normalised)} changed file(s), none shared")

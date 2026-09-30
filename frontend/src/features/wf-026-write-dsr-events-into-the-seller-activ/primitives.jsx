@@ -57,7 +57,7 @@ export function Toggle({ checked, onChange, label, disabled = false, className =
           }`}
       >
         <span
-          className={`absolute left-0.5 h-4 w-4 rounded-full transition-transform duration-200 ${
+          className={`absolute left-0.5 h-4 w-4 rounded-full transition-transform duration-200 motion-reduce:transition-none ${
             checked ? 'translate-x-5 bg-accent' : 'translate-x-0 bg-muted-foreground'
           }`}
         />

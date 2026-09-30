@@ -104,6 +104,29 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  design-floor:
+    name: Design floor
+    # A check that only reports is a check that decays, so this one fails.
+    # See docs/adr/0002-design-floor-is-a-ci-gate.md.
+    #
+    # The allowlist in tools/design_floor_allowlist.json is empty and the
+    # shipped pages are clean: 43 pages, 0 findings. It was 14 when the job
+    # landed, and those were fixed rather than allowlisted, which is the only
+    # reason this is green today. The first time this job ran it went red and
+    # stayed red until the findings were genuinely fixed; adding a page to the
+    # allowlist is the only way to keep it green, and that is a visible debt
+    # someone has to choose to carry.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Refuse a page that misses the floor
+        run: python tools/check_design_floor.py --fail-on-warn
+
   end-to-end:
     name: Local host app (headless)
     runs-on: ubuntu-latest
