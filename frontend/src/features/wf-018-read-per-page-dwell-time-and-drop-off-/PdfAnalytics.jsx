@@ -168,11 +168,19 @@ export default function PdfAnalytics() {
   // A room selection switches to the room-scoped route rather than filtering the
   // library in the browser: the figures on the right are then that room's
   // readers, and a room number can never be read as a library-wide one.
+  //
+  // Both branches unwrap `assets`. The library-wide route returns the whole
+  // `{assets, count}` object, so returning it raw made `library.data` an object
+  // on this path and an array on the room path -- and `assets.map` then threw on
+  // a page that had never been loaded with a room selected, which is the default.
+  // A crash here unmounts the whole React root, so every other page in the app
+  // went blank behind it. One `.map` on a mismatched shape, and 34 of 48 pages
+  // stopped rendering.
   const library = useAsync(
     () =>
       roomId
         ? pdfAnalyticsApi.roomAssets(roomId, { grain }).then((data) => data.assets || [])
-        : pdfAnalyticsApi.assets({ q: search, limit: 300 }),
+        : pdfAnalyticsApi.assets({ q: search, limit: 300 }).then((data) => data.assets || []),
     [roomId, search, grain],
   )
 
@@ -184,8 +192,12 @@ export default function PdfAnalytics() {
     [selected, roomId, grain],
   )
 
-  const assets = library.data || []
-  const roomList = rooms.data?.records || []
+  // `Array.isArray` rather than `|| []`: a `||` guard only catches null and
+  // undefined, so an object where a list belongs sails straight through and
+  // throws at the first `.map`. There is no error boundary above this page, so
+  // the throw unmounts the whole application.
+  const assets = Array.isArray(library.data) ? library.data : []
+  const roomList = Array.isArray(rooms.data?.records) ? rooms.data.records : []
   const panels = detail.data?.advanced_analytics || null
   const asset = detail.data?.asset || null
   const pdf = panels?.pdf
@@ -320,7 +332,10 @@ export default function PdfAnalytics() {
                   </div>
                   <ul className="flex flex-wrap gap-1.5">
                     {asset.isInternal && <li><Badge tone="restore">Internal asset</Badge></li>}
-                    {asset.trackingEnabled === false && <li><Badge tone="delete">Tracking off</Badge></li>}
+                    {/* neutral, not the `delete` tone: tracking being off is a
+                        state of the asset, not a destructive action, and the
+                        destructive tint measures 3.75:1 on its own background. */}
+                    {asset.trackingEnabled === false && <li><Badge>Tracking off</Badge></li>}
                     {asset.downloadEnabled === false && <li><Badge>Downloads disabled</Badge></li>}
                   </ul>
                 </div>
@@ -451,7 +466,7 @@ export default function PdfAnalytics() {
                 <p className="mt-1 text-xs text-muted-foreground">{entry.basis}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   <span className="text-foreground">This build chose: </span>
-                  <span className="font-mono">{JSON.stringify(entry.value)}</span>
+                  <span className="font-mono break-all">{JSON.stringify(entry.value)}</span>
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   <span className="text-foreground">Change it: </span>
