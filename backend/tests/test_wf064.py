@@ -2980,7 +2980,14 @@ def live(http):
             "meeting_type_id": meeting_type["id"],
             "title": "Northwind walkthrough",
             "attendee_email": "priya.raman@northwind.example",
-            "start_at": at(3, 9, 0),
+            # Measured from the real clock, not from NOW. These routes build
+            # their engine from the wall clock, so a fixed NOW + 3 days was a
+            # future date only while the suite happened to run inside that
+            # three-day window. It expired on 2026-09-30 and the test began
+            # asserting that a live booking was expired, which is the opposite
+            # of what it means to check. The same rot that 7e7ebaf fixed for
+            # WF-030's payloads, in the one place the fixed clock cannot reach.
+            "start_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             "location": "Zoom",
         },
     ).json()
@@ -3032,10 +3039,15 @@ def test_an_unknown_booking_is_a_404(http):
 
 
 def test_the_availability_endpoint_answers_with_the_researched_parameter_name(http, live):
+    # The window is read off the fixture's own booking rather than off NOW, so
+    # it stays a window the engine will actually offer slots in. These routes
+    # run on the wall clock, so a window of NOW+3d..NOW+4d stopped being a
+    # future window and the endpoint correctly returned nothing.
+    start = datetime.fromisoformat(live["booking"]["data"]["start_at"])
     body = http.get(
         f"{PREFIX}/availability"
         f"?meeting_type_id={live['type']['id']}"
-        f"&from={url(at(3))}&to={url(at(4))}"
+        f"&from={url(start.isoformat())}&to={url((start + timedelta(days=1)).isoformat())}"
         f"&booking_uid_to_reschedule=bk_http_1"
     ).json()
     assert body["booking_uid_to_reschedule"] == "bk_http_1"
