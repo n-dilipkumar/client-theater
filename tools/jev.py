@@ -646,17 +646,27 @@ class Jev:
     ) -> Decision:
         """The pinned release bar. See ``docs/adr/0003-the-release-bar-question-set-is-pinned.md``.
 
-        Every landing from WF-033 onward is asked these same five questions, so
-        two gates can be compared even when they ran on different tickets. The
-        previous freeform payloads stored their answers but not their questions,
-        which made the log unauditable.
+        Every landing is asked these same questions, so two gates can be compared
+        even when they ran on different tickets. The previous freeform payloads
+        stored their answers but not their questions, which made the log
+        unauditable.
 
         ``measurements`` is the machine-read half of the evidence: suite tallies,
         the guard's changed-file count, the feature's route count, the design
         floor's result. ``unverified`` is the honest half: anything a person
-        looked at and did not measure. ``evidence_measured`` asks about exactly
-        that split, so a low score can mean "nobody checked" rather than "the
-        code is wrong" -- a distinction the old single question could not carry.
+        looked at and did not measure.
+
+        The evidence was re-specified after five features scored 0.11 to 0.23 on
+        the original single question while the other four scored 0.84 to 0.95.
+        The cause was that one question asked both whether claims were measured
+        *and* how much was measured, so a change that declared its own limits
+        honestly -- one browser engine, no screen reader, code recovered from a
+        base 50 commits behind -- was scored as missing evidence. A check that
+        punishes disclosure trains people to conceal, which is worse than having
+        no check. So it is now two questions: ``claims_backed_by_measurement``
+        asks whether each claim traces to output that was actually produced, and
+        ``coverage_of_the_change`` asks the breadth question on its own terms.
+        Declared limits stop being a defect and become context.
         """
         state = {
             "ticket": ticket,
@@ -684,12 +694,29 @@ class Jev:
                         "false": "A shared file is edited, or the guard did not actually measure a diff",
                     },
                 },
-                "evidence_measured": {
+                "claims_backed_by_measurement": {
                     "type": "noul",
-                    "instructions": "Is every claim in the evidence a measurement taken after the change was committed, rather than an assertion, a progress bar, or a check that silently passed on empty input?",
+                    "instructions": (
+                        "Is every claim made in the evidence supported by a measurement that was "
+                        "actually run, rather than asserted, read off a progress bar, or produced "
+                        "by a check that passed on empty input? Declared limits are not a failure "
+                        "of this question -- they are the honest disclosure that belongs to them."
+                    ),
                     "criteria": {
-                        "true": "Counts, tallies and tool output are quoted and reproducible",
-                        "false": "Evidence is asserted, or a check passed vacuously, or key items are listed as unverified",
+                        "true": "Each claim traces to quoted, reproducible tool output",
+                        "false": "A claim is asserted, or a check passed vacuously or was not run",
+                    },
+                },
+                "coverage_of_the_change": {
+                    "type": "noul",
+                    "instructions": (
+                        "Setting aside what is declared unverified, how much of the change did the "
+                        "evidence actually exercise? Judge breadth, not honesty: a declared limit "
+                        "is fine, but a large unexamined surface is not."
+                    ),
+                    "criteria": {
+                        "true": "Every surface the change introduces is exercised by a measurement, with at most incidental limits declared",
+                        "false": "A substantial part of the change was never measured, whether or not that is declared",
                     },
                 },
                 "audit_integrity": {
@@ -710,7 +737,16 @@ class Jev:
                 },
                 "verdict": {
                     "type": "choice",
-                    "instructions": "Should this change land on main? Weigh whether the measured evidence is sufficient to show it breaks nothing, and pay attention to items listed as unverified.",
+                    "instructions": (
+                        "Should this change land on main? Weigh the balance of the questions above "
+                        "rather than deciding on your own: where contract_compliance, "
+                        "audit_integrity and design_floor are all healthy and the evidence "
+                        "questions show broad coverage, answer merge with the confidence that "
+                        "warrants. Items listed as unverified are declared context to weigh, not "
+                        "defects in themselves -- but a change whose coverage is genuinely thin, "
+                        "or which was recovered from a base far behind main and not reconciled, "
+                        "is fix."
+                    ),
                     "criteria": {
                         "merge": "Evidence supports landing it: suite green, contract intact, floor met",
                         "fix": "Worth keeping but needs work against current main before landing",
