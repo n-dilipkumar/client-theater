@@ -168,8 +168,33 @@ MEASURE_JS = r"""
 
   const emoji = /\p{Extended_Pictographic}/u.test(document.body.innerText);
 
+  // Real horizontal overflow is an element sticking out past the viewport, not
+  // a wide scrollWidth. documentElement.scrollWidth counts the scrollbar of any
+  // inner scroll container, so a correctly-scrolling wide table inside an
+  // overflow-x-auto card reads as a page that overflows when it does not. Look
+  // for an element that exceeds the viewport and is not inside something that
+  // scrolls, which is the defect a reader would actually see.
+  const vw = document.documentElement.clientWidth;
+  const insideScroller = (el) => {
+    let p = el.parentElement;
+    while (p && p !== document.body) {
+      const ox = getComputedStyle(p).overflowX;
+      if (ox === 'auto' || ox === 'scroll' || ox === 'hidden') return true;
+      p = p.parentElement;
+    }
+    return false;
+  };
   let overflow = false;
-  if (document.documentElement.scrollWidth > window.innerWidth + 1) overflow = true;
+  let overflowDetail = null;
+  document.querySelectorAll('body *').forEach((el) => {
+    if (overflow) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.right <= vw + 1) return;
+    if (insideScroller(el)) return;
+    overflow = true;
+    overflowDetail = `${el.tagName}.${String(el.className || '').replace(/\s+/g, ' ').slice(0, 60)} right=${Math.round(r.right)}`;
+  });
+
 
   return {
     viewport: { w: window.innerWidth, h: window.innerHeight },
@@ -179,7 +204,8 @@ MEASURE_JS = r"""
     contrastSampled: contrast.length,
     contrastWorst: contrast.slice().sort((a,b) => a.ratio - b.ratio).slice(0,3),
     emoji: emoji,
-    overflow: overflow
+    overflow: overflow,
+    overflowDetail: overflowDetail
   };
 })()
 """
@@ -343,7 +369,8 @@ def probe_route(session: str, base: str, route: str) -> dict:
                                  "viewport": at, "detail": "Extended_Pictographic in rendered text"})
             if m.get("overflow"):
                 findings.append({"kind": "horizontal-overflow", "route": route, "tab": label,
-                                 "viewport": at, "detail": "document scrolls horizontally"})
+                                 "viewport": at,
+                                 "detail": m.get("overflowDetail") or "document scrolls horizontally"})
     return {"route": route, "findings": findings,
             "tabs": len(tabs), "breakpoints": len(BREAKPOINTS)}
 
