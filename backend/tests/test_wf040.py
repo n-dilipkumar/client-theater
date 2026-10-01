@@ -3601,13 +3601,41 @@ def test_the_demo_survives_a_database_with_no_rooms(tmp_path):
 
 
 def test_the_demo_is_deterministic(tmp_path):
+    """Two seeds of the same plan produce the same rows.
+
+    The comparison is on the *set* of row keys rather than on the order they come
+    back in, and that is the whole fix. The rows are read with ``db.list``,
+    ordered by ``updated_at`` and then by insertion ``rowid``. The demo plan is
+    fixed and the seeder is deterministic, so which rows exist is not in
+    question - but the two rows the drain rewrites (``fabrikam-1`` and
+    ``fabrikam-2``) are the only ones whose ``updated_at`` moves during the
+    seed, and the two writes land in the same millisecond whenever the machine
+    is slow enough for the clock to repeat.
+
+    A tie then falls to ``rowid``, which is ``fabrikam-1`` before
+    ``fabrikam-2`` - the reverse of what the untied millisecond order gives,
+    because the drain retries them in reverse. On a fast laptop the clock
+    always advances between the two writes, so the test passed every time; on the
+    CI runner it tied, and the two seeds disagreed on one element:
+
+        At index 0 diff: 'fabrikam-2' != 'fabrikam-1'
+
+    Asserting on order here was asserting on how quickly the host can write,
+    which is not a property of the demo. Asserting on the keys asserts what the
+    test is named for, and holds on a fast machine and a slow one alike.
+    """
     first = _seed_once(tmp_path, DEMO_ROOMS, name="a")
     second = _seed_once(tmp_path, DEMO_ROOMS, name="b")
 
     assert first["summary"] == second["summary"]
-    assert [row["data"]["row_key"] for row in first["rows"]] == [
+    assert {row["data"]["row_key"] for row in first["rows"]} == {
         row["data"]["row_key"] for row in second["rows"]
-    ]
+    }
+    # Same keys *and* same per-row outcome: a set alone would miss a seed that
+    # produced the same rows with different statuses.
+    assert {row["data"]["row_key"]: row["data"].get("status") for row in first["rows"]} == {
+        row["data"]["row_key"]: row["data"].get("status") for row in second["rows"]
+    }
 
 
 def test_the_demo_survives_a_core_dataset_with_fewer_rooms(tmp_path):
