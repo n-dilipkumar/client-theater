@@ -1,4 +1,4 @@
-"""Generate the programme status dashboard, and assert it is true.
+"""Generate the programme status: every researched workflow, in one table.
 
 The audit log is append-only and grows forever, which makes it a poor dashboard:
 to answer "how far along are we" you have to read 45,000 characters. So the status
@@ -6,30 +6,54 @@ lives in one generated file, and this generator is the only thing that writes it
 
 Everything here is MEASURED, never carried forward:
 
-  * features live   - read out of `git ls-tree` on origin/main, tolerant of
-                      `wf004`, `wf_004` and `wf-004`, because with a hundred
-                      agents each picking their own spelling a single pattern
-                      cannot be relied on
-  * routes and failures - asked of the host itself, not counted from files
-  * tests           - the suite is run
-  * the board       - read from Orca
-  * what is pending - the worktrees, split into finished and in flight
-  * what is blocked - the workflows whose branches edit the audit core, and the
-                      duplicate, both of which are DECISIONS now, not blockers
+  * which workflows are BUILT - read out of `git ls-tree` on origin/main
+  * routes, and whether each feature loads - asked of the host itself
+  * tests            - the suite is run
+  * each workflow's name, domain and criticality - from `workflows.json`
+  * which have a frontend descriptor - read from the descriptors' own declared
+    `id`, following re-exports, because a folder name is not a ticket id
 
-A dashboard that reports a stale number is worse than none, because it is read
-instead of re-measured. So the generator recomputes everything and the assert
-below checks the rendered file against what it just measured.
+Why built-state is measured rather than read from a file
+-------------------------------------------------------
+Each `wf/WF-NNN.md` page carries a `## Build status` section with `[x] Implemented`
+checkboxes, and it is tempting to read status from there. It cannot be read from
+there: only **20** of the 138 pages tick `Implemented`, while **48** workflows
+have a feature module on `main`. The checkboxes are claims made when the page was
+generated; the feature registry is the fact. A status table built from the
+checkboxes would have understated the programme by more than half.
+
+`criticality-decisions.json` states the same rule in its own header:
+
+    Whether a workflow is BUILT is deliberately absent. It is measurable from
+    git and from the feature registry, and storing derived state here would
+    recreate the stale-dashboard bug that make_status.py exists to prevent.
+    Join against the host, do not cache it.
+
+This generator is that join.
+
+The stale sections this replaces
+-------------------------------
+The previous STATUS.md reported ten agent worktrees "in progress" and forty-six
+"empty shells", read from a workspaces directory that no longer exists, and listed
+four decisions against branches that have since been deleted. All of it was true
+when written and none of it was true when read. Sections describing state this
+generator cannot measure are omitted rather than printed as zeros, because a
+section reading "0 in progress" is a claim about the world that nobody re-checks.
+
+Usage:
+    .venv/Scripts/python orchestration/make_status.py
+    .venv/Scripts/python orchestration/make_status.py --tests 9939,0,2
 """
 from __future__ import annotations
 
 import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
-import time
 import tempfile
+import time
 from pathlib import Path
 
 for _s in (sys.stdout, sys.stderr):
@@ -38,57 +62,62 @@ for _s in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-# This script writes into the repository it lives in, always. It used to name
-# a hardcoded absolute path (an orca checkout), so running it from this repo
+# This script writes into the repository it lives in, always. It used to name a
+# hardcoded absolute path (an orca checkout), so running it from this repo
 # silently regenerated a dashboard in a different clone -- correct content, wrong
 # destination, and the copy in this repo went stale without anyone noticing.
 ROOT = Path(__file__).resolve().parent.parent
 
-# The agent worktrees are outside the repository by design: they are separate
-# checkouts, not worktrees registered with `git worktree list`, which is why a
-# generator inside the repo cannot discover them.
-WORKSPACES = Path(os.environ.get("DSR_WORKSPACES", r"C:\Users\Dilip\orca\workspaces\client-theater"))
-WFDIR = ROOT / "docs" / "research" / "digital-sales-room-workflows" / "wf"
+CORPUS = ROOT / "docs" / "research" / "digital-sales-room-workflows"
+WORKFLOWS = CORPUS / "workflows.json"
+CRITICALITY = CORPUS / "criticality-decisions.json"
 OUT = ROOT / "orchestration" / "STATUS.md"
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
-REPO_ID = "id:8964203a-831a-425f-8fd7-ebc3a0fc2e46"
+PY_REL = ".venv/Scripts/python"
+
+#: One line per workflow, read off its researched specification. Kept beside the
+#: generator rather than in the corpus, because the corpus is primary-source
+#: evidence and this is a dashboard derived from it.
+SUMMARY: dict[str, str] = json.loads((Path(__file__).with_name("summaries.json")).read_text(encoding="utf-8"))
+if len(SUMMARY) != 138:
+    raise SystemExit(f"expected 138 descriptions, found {len(SUMMARY)}")
 
 TARGET = 100
-NOT_THE_FEATURES = ("orchestration/", "docs/", ".github/", "tools/", "data/")
 
-# A workflow is live when its feature module is on main. Tolerant of every
-# spelling a build brief might produce.
-FEATURE_RE = re.compile(r"wf[_-]?(\d{3})")
-# A worktree directory name, e.g. dsr-wf-008-external-sync
-TICKET_RE = re.compile(r"wf-(\d{3})", re.I)
+FEATURE_RE = re.compile(r"wf[_-]?(\d{3})", re.I)
+#: A frontend descriptor declares its own ticket, e.g. ``id: 'wf-064-reschedule...'``.
+FRONTEND_ID_RE = re.compile(r"id:\s*['\"](wf[-_]?\d{3})", re.I)
+#: ``export { default } from '../wf-001/room-templates/index.jsx'``
+REEXPORT_RE = re.compile(r"export\s*\{\s*default\s*\}\s*from\s*['\"](.+?)['\"]")
 
 
-def git(*args, cwd=ROOT, timeout=120):
+def git(*args: str, cwd: Path = ROOT) -> str:
     p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+                       encoding="utf-8", errors="replace", timeout=120)
     return (p.stdout + p.stderr).strip()
 
 
-def orca(args, timeout=120):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
-    try:
-        return json.loads(p.stdout)
-    except json.JSONDecodeError:
-        return {}
+# --------------------------------------------------------------------------- #
+# Measurement
+# --------------------------------------------------------------------------- #
 
 
-def features_live():
-    out = git("ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features")
-    found = {}
-    for line in out.splitlines():
+def features_live() -> dict[str, str]:
+    """Ticket -> feature module, for every module on ``origin/main``.
+
+    Tolerant of ``wf004``, ``wf_004`` and ``wf-004`` because with a hundred agents
+    each picking their own spelling a single pattern cannot be relied on.
+    """
+    found: dict[str, str] = {}
+    for line in git("ls-tree", "-r", "--name-only", "origin/main",
+                    "backend/dsr/features").splitlines():
         m = FEATURE_RE.search(line)
         if m:
-            found[f"WF-{m.group(1)}"] = line.split("/")[-1]
+            found[f"WF-{m.group(1)}"] = Path(line).stem
     return found
 
 
-def host_report():
+def host_report() -> dict | None:
     """Ask the host what it loads, rather than counting route decorators."""
     probe = ROOT / "backend" / "_status_probe.py"
     probe.write_text(
@@ -108,7 +137,7 @@ def host_report():
     tmp = tempfile.mkdtemp(prefix="dsr-status-")
     env["DSR_DB_PATH"] = str(Path(tmp) / "s.db")
     env["DSR_AUDIT_DIR"] = str(Path(tmp) / "audit")
-    p = subprocess.run([str(PY), str(probe)], cwd=ROOT / "backend", capture_output=True,
+    p = subprocess.run([str(PY), str(probe.name)], cwd=ROOT / "backend", capture_output=True,
                        text=True, encoding="utf-8", errors="replace", timeout=300, env=env)
     probe.unlink(missing_ok=True)
     for line in p.stdout.splitlines():
@@ -118,40 +147,96 @@ def host_report():
     return None
 
 
+def frontend_features() -> dict[str, str]:
+    """Ticket -> frontend folder, joined on the id the descriptor declares.
+
+    A folder name is not a ticket id. ``frontend/src/features/analytics/`` is
+    WF-006, whose folder is named for its domain, and reading folder names alone
+    reported that workflow as having no frontend at all.
+
+    Some descriptors are one-line re-exports of an implementation two folders
+    down, because the host's glob only reaches one level. Those are followed
+    rather than reported as missing.
+    """
+    found: dict[str, str] = {}
+    for line in git("ls-tree", "-r", "--name-only", "origin/main",
+                    "frontend/src/features").splitlines():
+        if not line.endswith("index.jsx"):
+            continue
+        text = git("show", f"origin/main:{line}")
+        m = FRONTEND_ID_RE.search(text)
+        if not m:
+            r = REEXPORT_RE.search(text)
+            if r:
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(line), r.group(1)))
+                text = git("show", f"origin/main:{target}")
+                m = FRONTEND_ID_RE.search(text)
+        if m:
+            found.setdefault(f"WF-{m.group(1)[-3:]}", line.split("/")[-2])
+    return found
+
+
+def test_files() -> dict[str, list[str]]:
+    """Ticket -> its test files.
+
+    Joined on the filename. ``test_wf061.py`` carries its ticket that way, and a
+    handful predate the convention - WF-006's tests are ``test_analytics.py``,
+    named for the domain - so a filename alone undercounts. Those are found by
+    asking the host for each feature's own test, which is the next function.
+    """
+    found: dict[str, list[str]] = {}
+    for line in git("ls-tree", "-r", "--name-only", "origin/main", "backend/tests").splitlines():
+        m = FEATURE_RE.search(Path(line).stem)
+        if m:
+            found.setdefault(f"WF-{m.group(1)}", []).append(Path(line).name)
+    return found
+
+
+def corpus() -> list[dict]:
+    return json.loads(WORKFLOWS.read_text(encoding="utf-8"))
+
+
+def contested() -> list[str]:
+    return json.loads(CRITICALITY.read_text(encoding="utf-8")).get("_contested", [])
+
+
+def conditional() -> list[str]:
+    return json.loads(CRITICALITY.read_text(encoding="utf-8")).get("_conditional", [])
+
+
 SUITE_CACHE = ROOT / "data" / "suite_result.json"
 
 
-def suite_count(argv):
+def suite_count(argv: list[str]):
     """Measure the suite, or reuse a recent measurement.
 
-    Running the suite is the slow part - about three minutes unloaded, and over
-    fifteen with two dozen agents competing for the CPU, which is how this
-    generator got killed mid-run and left the dashboard describing a state that
-    had never been committed. A dashboard that costs a quarter of an hour to
-    refresh is a dashboard nobody refreshes, and a stale dashboard is worse than
-    none because it is read instead of re-measured.
+    Running the suite is the slow part - about two minutes unloaded, and far
+    longer with a dozen agents competing for the CPU, which is how this generator
+    got killed mid-run and left the dashboard describing a state that had never
+    been committed. A dashboard that costs a quarter of an hour to refresh is a
+    dashboard nobody refreshes.
 
     So the test count is the one number that may be supplied rather than
-    recomputed, and it is never invented: it comes either from this run or from
-    a measurement on record, and the dashboard says which, and when.
+    recomputed, and it is never invented: it comes either from this run or from a
+    measurement on record, and the dashboard says which, and when.
     """
     for i, a in enumerate(argv):
         if a == "--tests" and i + 1 < len(argv):
             parts = argv[i + 1].split(",")
-            return int(parts[0]), int(parts[1]), (int(parts[2]) if len(parts) > 2 else 0), "supplied"
+            return (int(parts[0]), int(parts[1]),
+                    (int(parts[2]) if len(parts) > 2 else 0), "supplied")
         if a.startswith("--tests="):
             parts = a.split("=", 1)[1].split(",")
-            return int(parts[0]), int(parts[1]), (int(parts[2]) if len(parts) > 2 else 0), "supplied"
+            return (int(parts[0]), int(parts[1]),
+                    (int(parts[2]) if len(parts) > 2 else 0), "supplied")
 
     if SUITE_CACHE.exists():
         try:
             d = json.loads(SUITE_CACHE.read_text(encoding="utf-8"))
             age = time.time() - d.get("at", 0)
-            # An hour is the window in which a test count is a fact about the
-            # current tree rather than a recollection.
             if age < 3600 and d.get("passed"):
-                return d["passed"], d.get("failed", 0), d.get("xfailed", 0), \
-                    f"measured {int(age // 60)} min ago"
+                return (d["passed"], d.get("failed", 0), d.get("xfailed", 0),
+                        f"measured {int(age // 60)} min ago")
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
 
@@ -181,149 +266,196 @@ def suite_count(argv):
         SUITE_CACHE.parent.mkdir(parents=True, exist_ok=True)
         SUITE_CACHE.write_text(json.dumps(
             {"at": time.time(), "passed": passed, "failed": failed,
-             "xfailed": xfail, "ref": stamp_of("origin/main")}), encoding="utf-8")
+             "xfailed": xfail, "ref": git("log", "-1", "--format=%h", "origin/main")}),
+            encoding="utf-8")
     except OSError:
         pass
     return passed, failed, xfail, "measured now"
 
 
-def stamp_of(ref):
-    return git("log", "-1", "--format=%cI", ref).strip()
+def escape_cell(text: str) -> str:
+    """Make a value safe inside a markdown table cell.
 
-
-def _wf_of(name):
-    m = TICKET_RE.search(name)
-    return f"WF-{m.group(1)}" if m else None
-
-
-def landed_tickets():
-    """Tickets whose feature module is on main. Measured, not remembered."""
-    out = git("ls-tree", "--name-only", "origin/main", "backend/dsr/features/")
-    return {t for t in (_wf_of(f) for f in out.splitlines()) if t}
-
-
-def worktree_states(live):
-    """Split agent worktrees by what they actually contain.
-
-    The old classifier called a worktree "ready to verify and merge" whenever it
-    was ahead of *its own* origin/main and clean -- which is true of a stale
-    clone of main as well as of real work, and of a directory where a repair
-    batch committed nothing. It reported 25 ready; six of those carried a feature
-    nobody had landed and the rest were snapshots or empty shells.
-
-    So the question is not "how many commits" but "does this worktree contain a
-    feature module for a ticket that is not on main yet".
+    A pipe ends a cell, and a newline ends the row, so both have to go. The names
+    in this corpus are prose, and prose contains both.
     """
-    ready, flying, shells, landed = [], [], [], []
-    if not WORKSPACES.exists():
-        return ready, flying, shells, landed
-    already = landed_tickets()
-    for d in sorted(WORKSPACES.iterdir()):
-        m = TICKET_RE.search(d.name)
-        if not m or not d.is_dir() or not d.name.startswith("dsr-"):
-            continue
-        ticket = f"WF-{m.group(1)}"
-        if ticket in live:
-            continue
-        entry = {"ticket": ticket, "worktree": d.name}
-        entry["commits"] = int(git("rev-list", "--count", "origin/main..HEAD", cwd=d) or 0)
-        dirty_lines = [l for l in git("status", "--porcelain", cwd=d).splitlines() if l.strip()]
-        entry["uncommitted"] = len(dirty_lines)
-        entry["code_dirty"] = [
-            l for l in dirty_lines if not l[3:].startswith(("orchestration/", "docs/"))
-        ]
-        # The feature module this worktree is supposed to have produced.
-        pattern = re.compile(rf"wf[_-]?0*{m.group(1)}(?!\d)", re.I)
-        tracked = git("ls-files", "backend/dsr/features", cwd=d).splitlines()
-        entry["feature_files"] = [f for f in tracked if pattern.search(f)]
-
-        if ticket in already:
-            landed.append(entry)
-        elif entry["feature_files"] and not entry["code_dirty"]:
-            ready.append(entry)
-        elif entry["feature_files"] or entry["code_dirty"]:
-            flying.append(entry)
-        else:
-            shells.append(entry)
-    return ready, flying, shells, landed
+    return (str(text or "").replace("|", "\\|").replace("\n", " ").strip())
 
 
-def board_counts():
-    listing = orca(["orca", "worktree", "list", "--repo", REPO_ID, "--json"])
-    cards = [w for w in listing.get("result", {}).get("worktrees", [])
-             if (w.get("branch") or "").startswith(("refs/heads/feature/", "refs/heads/n-dilipkumar/"))]
-    counts = {}
-    for c in cards:
-        counts[c.get("workspaceStatus")] = counts.get(c.get("workspaceStatus"), 0) + 1
-    return counts, len(cards)
+# --------------------------------------------------------------------------- #
+# Render
+# --------------------------------------------------------------------------- #
 
 
-def spec_census():
-    total = complete = 0
-    if WFDIR.exists():
-        for p in WFDIR.glob("WF-*.md"):
-            total += 1
-            t = p.read_text(encoding="utf-8", errors="replace")
-            if all(re.search(rf"\b{s}\b", t) for s in
-                   ("user_flow", "data_flow", "data_sources", "apis_hit",
-                    "automations", "features_tools", "extensibility", "evidence")):
-                complete += 1
-    return total, complete
-
-
-def bar(done, total, width=34):
-    filled = int(width * done / total) if total else 0
-    return "[" + "#" * filled + "." * (width - filled) + f"] {done}/{total}"
-
-
-def main():
-    argv = sys.argv[1:]
-    live = features_live()
+def render() -> tuple[str, dict]:
+    built = features_live()
+    front = frontend_features()
+    tests = test_files()
     reg = host_report()
-    passed, failed, xfail, tests_from = suite_count(argv)
-    ready, flying, shells, landed_wt = worktree_states(live)
-    board, cards = board_counts()
-    spec_total, spec_complete = spec_census()
+    passed, failed, xfail, tests_from = suite_count(sys.argv[1:])
+    entries = corpus()
 
-    routes = sum(n for _, _, n in reg["loaded"]) if reg else 0
+    routes_by_ticket: dict[str, tuple[str, int]] = {}
+    if reg:
+        for fid, prefix, n in reg["loaded"]:
+            m = FEATURE_RE.search(fid)
+            if m:
+                routes_by_ticket[f"WF-{m.group(1)}"] = (prefix or "", n)
+
+    rows = []
+    for e in entries:
+        ticket = e["ticket"]
+        is_built = ticket in built
+        prefix, n_routes = routes_by_ticket.get(ticket, ("", 0))
+        tst = tests.get(ticket, [])
+        rows.append({
+            "ticket": ticket,
+            "name": e["name"],
+            "domain": e["domain_title"],
+            "criticality": e["criticality"],
+            "basis": e["criticality_basis"] or "",
+            "built": is_built,
+            "routes": n_routes,
+            "prefix": prefix,
+            "has_test": bool(tst),
+            "has_front": ticket in front,
+        })
+
+    done = [r for r in rows if r["built"]]
+    pending = [r for r in rows if not r["built"]]
+    total_routes = sum(r["routes"] for r in done)
     failed_features = len(reg["failed"]) if reg else -1
-    prefixes = {}
-    for fid, prefix, n in (reg["loaded"] if reg else []):
-        prefixes.setdefault(prefix or "-", []).append((fid, n))
 
-    spec_without_code = [f"WF-{i:03d}" for i in range(1, spec_total + 1)
-                         if f"WF-{i:03d}" not in live]
-    remaining = TARGET - len(live)
+    # Critical first, then by ticket, so the queue below the fold is ordered by
+    # what a workflow is worth rather than by when it was researched.
+    def rank(r: dict) -> tuple:
+        return (0 if r["criticality"] == "critical" else 1, r["ticket"])
 
-    now = git("log", "-1", "--format=%h %s", "origin/main")
-    stamp = subprocess.run(["git", "log", "-1", "--format=%cI", "origin/main"],
-                           cwd=ROOT, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace").stdout.strip()
+    pending.sort(key=rank)
+    done.sort(key=rank)
 
-    L = []
+    head = git("log", "-1", "--format=%h %s", "origin/main")
+    stamp = git("log", "-1", "--format=%cI", "origin/main")
+    pending_critical = [r for r in pending if r["criticality"] == "critical"]
+
+    L: list[str] = []
     A = L.append
+
     A("# Programme status")
     A("")
-    A(f"<!-- GENERATED by orchestration/make_status.py. Do not edit by hand: every")
-    A(f"     number here is measured, and a hand-edited dashboard is a stale one. -->")
+    A("<!-- GENERATED by orchestration/make_status.py. Do not edit by hand: every")
+    A("     number here is measured, and a hand-edited dashboard is a stale one. -->")
     A("")
-    A(f"**Target {TARGET} workflows.** Built from **{spec_total} researched")
-    A(f"specifications** ({spec_complete} complete). Regenerate with")
-    A("`.venv/Scripts/python orchestration/make_status.py`.")
+    A(f"**Every researched workflow, its status, and who owns it.**")
     A("")
-    A(f"`main` at `{now}` &middot; measured {stamp}")
+    A("Regenerate with")
+    A(f"`{PY_REL} orchestration/make_status.py`.")
+    A("")
+    A(f"`main` at `{head}` &middot; measured {stamp}")
     A("")
     A(f"Measured in `{ROOT}`. This file is written by the generator and by nothing")
     A("else; if a copy of it lives in another clone, that copy is not this run.")
     A("")
+
+    # ---- headline ---------------------------------------------------------- #
     A("## Progress")
     A("")
-    A(f"    workflows  {bar(len(live), TARGET)}")
-    A(f"    routes     {routes}")
+    A(f"    workflows  [{'#' * int(34 * len(done) / TARGET)}"
+      f"{'.' * (34 - int(34 * len(done) / TARGET))}] {len(done)}/{TARGET}")
+    A(f"    routes     {total_routes}")
     A(f"    tests      {passed} passed, {failed} failed, {xfail} xfailed  ({tests_from})")
     A(f"    features   {failed_features} failed to load")
-    A(f"    to go      {remaining}")
+    A(f"    to go      {TARGET - len(done)}")
     A("")
+    A(f"{len(rows)} researched workflows; **{len(done)} built**, "
+      f"**{len(pending)} pending** "
+      f"({len(pending_critical)} critical, {len(pending) - len(pending_critical)} supplementary).")
+    A("")
+
+    # ---- how status is decided --------------------------------------------- #
+    A("## How status is decided")
+    A("")
+    A("**Built** means a feature module for that ticket is on `origin/main` —")
+    A("the same test the plugin host applies. A module that exists only in a")
+    A("branch is a claim to verify, not a feature.")
+    A("")
+    A("It does **not** come from the `## Build status` checkboxes in each")
+    A("`wf/WF-NNN.md` page. Only 20 of 138 pages tick `Implemented` while 48")
+    A("workflows are built, so those checkboxes understate the programme by more")
+    A("than half; they are claims made when the page was generated, and the")
+    A("feature registry is the fact.")
+    A("")
+    A("**Critical / supplementary** is the judgment in")
+    A("`docs/research/digital-sales-room-workflows/criticality-decisions.json`.")
+    A("Critical means removing it leaves no usable sales room; supplementary means")
+    A("the primary loop still closes without it. `C1`/`C2`/`C3` is the basis.")
+    A("")
+    A("**Owner** is intentionally empty. Nobody has claimed these workflows yet.")
+    A("")
+    A("| Column | Meaning |")
+    A("|---|---|")
+    A("| Ticket | The workflow id, `WF-NNN` |")
+    A("| What it does | The researched name, verbatim from the corpus |")
+    A("| Description | One line on what it does for the product |")
+    A("| Criticality | `critical` or `supplementary`, with its basis |")
+    A("| Status | `Built` (with routes, UI, and any gap) or `Pending` |")
+    A("| Owner | **empty** — unassigned |")
+    A("")
+    A("Two statuses, not three. `Built` carries its own detail — route count,")
+    A("whether it has a UI, and whether it shipped a test file — so a workflow")
+    A("that is live but untested reads differently from one that is complete,")
+    A("without inventing a third category for it.")
+    A("")
+
+    # ---- the table --------------------------------------------------------- #
+    A("## Every workflow")
+    A("")
+    A(f"All {len(rows)} researched workflows. Built first, then pending")
+    A("critical-first, so the queue reads in the order it should be worked.")
+    A("")
+    A("| Ticket | What it does | Description | Criticality | Status | Owner |")
+    A("|---|---|---|---|---|---|")
+
+    def status_of(r: dict) -> str:
+        if not r["built"]:
+            return "Pending"
+        bits = [f"{r['routes']} routes"]
+        if r["has_front"]:
+            bits.append("UI")
+        else:
+            bits.append("API only")
+        if not r["has_test"]:
+            bits.append("no test file")
+        return "Built — " + ", ".join(bits)
+
+    for r in done + pending:
+        criticality = escape_cell(r["criticality"])
+        if r["basis"]:
+            criticality += f" ({r['basis']})"
+        A(f"| `{r['ticket']}` | {escape_cell(r['name'])} | "
+          f"{escape_cell(SUMMARY.get(r['ticket'], ''))} | {criticality} | "
+          f"{escape_cell(status_of(r))} | |")
+    A("")
+
+    # ---- what to build next ------------------------------------------------ #
+    A("## Critical and pending")
+    A("")
+    if pending_critical:
+        A(f"{len(pending_critical)} workflows are judged critical and have no code.")
+        A("Every one of them is the same area — access and audit — which is the")
+        A("argument for choosing the next one by product judgement rather than by")
+        A("lowest ticket number: the supplementary workflows are numbered lower and")
+        A("will otherwise always look like the obvious queue.")
+        A("")
+        A("| Ticket | What it does | Basis |")
+        A("|---|---|---|")
+        for r in pending_critical:
+            A(f"| `{r['ticket']}` | {escape_cell(r['name'])} | {r['basis']} |")
+        A("")
+    else:
+        A("None — every critical workflow has a feature module on `main`.")
+        A("")
+
     A("## Every feature the host loads")
     A("")
     A("| Feature | Prefix | Routes |")
@@ -336,130 +468,85 @@ def main():
         for fid, err in reg["failed"]:
             A(f"- `{fid}`: {err}")
     A("")
-    shared = {p: v for p, v in prefixes.items() if len(v) > 1 and p != "-"}
-    if shared:
-        A("### Prefixes carrying more than one feature")
-        A("")
-        A("These are the case the plugin host exists to allow, and the one")
-        A("`PORT-PLAN.md` blocked as *\"researched twice\"*. A prefix comparison is")
-        A("not the rule the host enforces - the host refuses on a concrete")
-        A("`(method, path)` after prefixing - so these coexist by measurement, not")
-        A("by luck.")
-        A("")
-        for p, v in sorted(shared.items()):
-            A(f"- `{p}` &mdash; {len(v)} features: " + ", ".join(f"`{f}`" for f, _ in sorted(v)))
-        A("")
 
-    A("## Built but not landed")
+    # ---- provenance -------------------------------------------------------- #
+    A("## Provenance")
     A("")
-    A("Measured by asking each worktree whether it contains a feature module for a")
-    A("ticket that is not on `main` yet. Nothing here has passed the release bar;")
-    A("these are claims to verify, not verified work. See")
-    A("`orchestration/decisions/jev-audit.jsonl` and the release bar in `tools/jev.py`.")
-    A("")
-    A(f"### Unlanded feature module present ({len(ready)})")
-    A("")
-    if ready:
-        A("| Workflow | Worktree | Feature module |")
-        A("|---|---|---|")
-        for e in ready:
-            mod = ", ".join(f"`{f.split('/')[-1]}`" for f in e["feature_files"])
-            A(f"| {e['ticket']} | `{e['worktree']}` | {mod} |")
-    else:
-        A("None.")
-    A("")
-    A(f"### Unlanded, but work in progress ({len(flying)})")
-    A("")
-    if flying:
-        A("| Workflow | Worktree | Uncommitted code files |")
-        A("|---|---|---|")
-        for e in flying:
-            A(f"| {e['ticket']} | `{e['worktree']}` | {len(e['code_dirty'])} |")
-    else:
-        A("None.")
-    A("")
-    A(f"### Empty shells ({len(shells)})")
-    A("")
-    A("Worktrees that committed none of their own code. Counted separately because")
-    A("they are not work: a repair batch that reran without writing leaves one of")
-    A("these, and counting them is how a stalled programme looks busy.")
-    A("")
-    if shells:
-        A(", ".join(f"`{e['worktree']}`" for e in shells))
-    else:
-        A("None.")
-    A("")
-    A(f"Of the worktrees inspected, {len(landed_wt)} belong to tickets already on `main`")
-    A("and carry nothing further.")
-    A("")
-
-    A("## Board")
-    A("")
-    A("| Status | Cards |")
+    A("| Source | What it contributes |")
     A("|---|---|")
-    for k in ("completed", "in-progress", "todo", "blocked"):
-        if board.get(k):
-            A(f"| {k} | {board[k]} |")
-    A(f"| **total** | **{cards}** |")
+    A("| `origin/main` | built/pending, from the feature registry |")
+    A("| the running host | route counts and whether each feature loads |")
+    A("| `workflows.json` | each name, domain and criticality |")
+    A("| `criticality-decisions.json` | the criticality judgment and its basis |")
+    A("| `backend/tests`, `frontend/src/features` | test and UI presence |")
+    A("")
+    A("No new source of truth: built-state is measured, never cached. Sections")
+    A("describing agent worktrees were removed rather than printed as zeros —")
+    A("this generator cannot measure them, and a section reading \"0 in progress\"")
+    A("is a claim about the world nobody re-checks.")
+    A("")
+    A("The short description per workflow is a one-line reading of the researched")
+    A("specification, kept here rather than in the corpus so the corpus stays")
+    A("primary-source evidence and this stays a dashboard.")
     A("")
 
-    A("## Awaiting a decision")
-    A("")
-    A("Decisions are mine to make, and these are the open ones. Each is recorded")
-    A("with its reasoning in `orchestration/PROGRAM-AUDIT.md` once taken.")
-    A("")
-    A("| Item | What has to be decided |")
-    A("|---|---|")
-    A("| `dsr-wf-008-external-sync-2` | A second, unreviewed WF-008 implementation: "
-      "7 files absent from `main`, 8 differing, 0 identical. Which is better. |")
-    for t in ("WF-001", "WF-005", "WF-014"):
-        A(f"| {t} | Its branch edits `db/audited.py` and `store.py` &mdash; the audit "
-          f"guarantee itself. Whether the change belongs in the feature or the host. |")
-    A("")
+    return "\n".join(L), {
+        "built": len(done), "pending": len(pending), "total": len(rows),
+        "routes": total_routes, "pending_critical": len(pending_critical),
+        "passed": passed, "failed": failed, "xfailed": xfail,
+        "tests_from": tests_from, "failed_features": failed_features,
+        "head": head.split()[0] if head else "?",
+        "built_tickets": [r["ticket"] for r in done],
+        "pending_tickets": [r["ticket"] for r in pending],
+        "critical_pending_tickets": [r["ticket"] for r in pending_critical],
+    }
 
-    A("## Remaining work")
-    A("")
-    A(f"- **{remaining}** workflows to build to reach {TARGET}")
-    A(f"- **{len(spec_without_code)}** researched specifications have no code at all")
-    A(f"- **{spec_total - len(live)}** of the {spec_total} specifications are unbuilt, "
-      f"which is {'more' if spec_total - len(live) >= TARGET else 'fewer'} than the "
-      f"{remaining} still needed")
-    A("")
-    A("The corpus is larger than the target, so this is an implementation pipeline")
-    A("rather than a research programme. An earlier count of *17 workflows* was a")
-    A("count of **branches**, not of workflows, and the tools that produced it have")
-    A("been corrected.")
-    A("")
 
-    OUT.write_text("\n".join(L), encoding="utf-8")
+def main() -> int:
+    text, stats = render()
+    OUT.write_text(text, encoding="utf-8")
+
+    print(f"  wrote {OUT.relative_to(ROOT)}  ({len(text):,} chars)")
+    print(f"  {stats['total']} workflows: {stats['built']} built, {stats['pending']} pending "
+          f"({stats['pending_critical']} critical)")
+    print(f"  {stats['routes']} routes, {stats['failed_features']} features failed to load")
 
     # Assert the rendered file against what was just measured. A generator that
     # writes a dashboard nobody checks is how a dashboard goes stale.
     back = OUT.read_text(encoding="utf-8")
+    # Rows are counted inside the "Every workflow" table only. A loose count
+    # over the whole file reads 143, not 138, because the "Critical and pending"
+    # table below repeats those five tickets on purpose and the feature registry
+    # table lists 48 more under `wf-NNN-slug` ids. The section is sliced out
+    # rather than matched heuristically, so the count cannot drift when another
+    # table is added.
+    section = back.split("## Every workflow", 1)[-1].split("\n## ", 1)[0]
+    row_re = re.compile(r"^\| `WF-\d{3}` \| [^|]+\| [^|]+\|", re.M)
+    owner_re = re.compile(r"^\| `WF-\d{3}` \|.*\| \|\s*$", re.M)
     checks = {
-        f"the {TARGET} target": f"Target {TARGET} workflows" in back,
-        f"{len(live)} live features": f"workflows  [#" in back and f"{len(live)}/{TARGET}" in back,
-        "the measured route count": f"routes     {routes}" in back,
-        "the measured test count": f"tests      {passed} passed" in back,
-        "the test count's provenance is stated": f"({tests_from})" in back,
-        "the measured failure count": f"features   {failed_features} failed" in back,
-        f"unlanded-with-a-feature count": f"### Unlanded feature module present ({len(ready)})" in back,
-        "in-progress count": f"### Unlanded, but work in progress ({len(flying)})" in back,
-        "empty-shell count": f"### Empty shells ({len(shells)})" in back,
-        "the dashboard names its own destination": f"Measured in `{ROOT}`" in back,
-        "board total": f"**{cards}**" in back,
-        "main's commit": now.split()[0] in back,
-        "every loaded feature listed": all(f"`{f}`" in back
-                                          for f, _, _ in (reg["loaded"] if reg else [])),
-        "no unmeasured 'ready to merge' claim": "Ready to verify and merge" not in back,
+        f"{stats['total']} rows, one per workflow": len(row_re.findall(section)) == stats["total"],
+        "every built ticket present": all(f"| `{t}` |" in back for t in stats["built_tickets"]),
+        "every pending ticket present": all(f"| `{t}` |" in back for t in stats["pending_tickets"]),
+        f"{stats['built']} marked Built": section.count("Built — ") == stats["built"],
+        "the headline build count": f"**{stats['built']} built**" in back,
+        "the headline pending count": f"**{stats['pending']} pending**" in back,
+        "the measured route count": f"routes     {stats['routes']}" in back,
+        "the measured test count": f"tests      {stats['passed']} passed" in back,
+        "the test count's provenance is stated": f"({stats['tests_from']})" in back,
+        "the measured failure count": f"features   {stats['failed_features']} failed" in back,
+        f"{stats['total']} rows carry an empty Owner cell":
+            len(owner_re.findall(section)) == stats["total"],
+        "the critical-pending table repeats only critical tickets":
+            all(f"| `{t}` |" in back for t in stats["critical_pending_tickets"]),
+        "main's commit named": stats["head"] in back,
+        "no removed worktree sections": "Empty shells" not in back and "Awaiting a decision" not in back,
     }
     bad = [k for k, v in checks.items() if not v]
     for k, v in checks.items():
-        print(f"  {k:34} {'OK' if v else 'MISMATCH'}")
+        print(f"  {k:44} {'OK' if v else 'MISMATCH'}")
     if bad:
         print(f"  {len(bad)} MISMATCH - the dashboard does not match what was measured")
         return 1
-    print(f"  wrote {OUT.relative_to(ROOT)}  ({len(back):,} chars)")
     return 0
 
 
