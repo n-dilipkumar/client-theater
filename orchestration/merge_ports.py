@@ -33,18 +33,23 @@ import sys
 import tempfile
 from pathlib import Path
 
-MAIN = Path(r"C:\Users\Dilip\orca\projects\client-theater\client-theater")
-WORKSPACES = Path(r"C:\Users\Dilip\orca\workspaces\client-theater")
+# Derived from this file, not named. This script used to hardcode one machine's
+# orca checkout, so from any other clone it merged ports into a repository that
+# was not the branch under review - and printed "merged cleanly" while doing it.
+MAIN = Path(__file__).resolve().parent.parent
+WORKSPACES = Path(os.environ.get("DSR_WORKSPACES") or MAIN.parent)
 PY = MAIN / ".venv" / "Scripts" / "python.exe"
-PENDING = MAIN / "data" / "pending_ports.json"
+if not PY.exists():                       # a venv elsewhere on PATH, or POSIX layout
+    PY = Path(sys.executable)
+PENDING = Path(os.environ.get("DSR_PENDING_PORTS") or MAIN / "data" / "pending_ports.json")
 
-SHARED = {
-    "backend/dsr/api.py", "backend/dsr/deps.py", "backend/dsr/store.py",
-    "backend/dsr/db/audited.py", "backend/seed.py", "frontend/src/App.jsx",
-    "frontend/src/main.jsx", "frontend/src/lib/api.js",
-    "frontend/src/lib/features.js", "frontend/src/components/ui.jsx",
-    "frontend/vite.config.js",
-}
+# One definition of the shared-file list, in tools/contract.py. This script used
+# to repeat the literal; see the note there for why that was a live hazard rather
+# than untidy bookkeeping.
+if str(MAIN) not in sys.path:
+    sys.path.insert(0, str(MAIN))
+
+from tools.contract import SHARED  # noqa: E402
 
 
 def run(args, cwd=MAIN, timeout=900, env=None):

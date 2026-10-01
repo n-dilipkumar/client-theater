@@ -7,7 +7,7 @@
 **What is built, what is not, and what each one is worth.**
 
 Regenerate with `.venv/Scripts/python orchestration/make_workflow_board.py`.
-Verified against `origin/main` at `54bebde` (2026-10-01T17:58:27+05:30); generated 2026-10-01T18:12:13+05:30.
+Verified against `origin/main` at `baaa07f` (2026-10-01T19:20:35+05:30); generated 2026-10-01T22:24:43+05:30.
 
 This is the board to open a branch from. For live route counts, test counts
 and in-flight agent worktrees, see `orchestration/STATUS.md` — that file
@@ -22,14 +22,14 @@ measures the running product, this one measures the workflow corpus.
 | Pending — supplementary | 85 |
 | **Pending total** | **90** |
 | Corpus researched | 138 tickets, 133 after dedupe |
-| Target | 100 |
+| Target | 138 |
 
-**48 of 100 built (48%), 52 to go.**
+**48 of 138 built (34%), 90 to go.**
 
-The corpus holds more tickets than the 100 target, so this is an
-implementation pipeline rather than a research programme: there are
-90 pending tickets competing for the 52 slots
-still needed. Criticality is what decides between them.
+The target is the whole corpus: 138 researched workflows, all of
+them to be built. There is no cap and no shortlist to be chosen from -
+90 remain, and criticality is what decides the order they are
+worked in, not which of them are worth doing.
 
 ## How status is decided
 

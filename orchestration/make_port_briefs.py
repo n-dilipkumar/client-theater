@@ -13,22 +13,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "orchestration"))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from port_prompt import build  # noqa: E402
 
-SHARED = [
-    "backend/dsr/api.py",
-    "backend/dsr/deps.py",
-    "backend/dsr/store.py",
-    "backend/dsr/db/audited.py",
-    "backend/seed.py",
-    "frontend/src/App.jsx",
-    "frontend/src/main.jsx",
-    "frontend/src/lib/api.js",
-    "frontend/src/lib/features.js",
-    "frontend/src/components/ui.jsx",
-    "frontend/vite.config.js",
-]
+# The shared-file list has one definition, in tools/contract.py. A brief that
+# quotes a stale copy tells an agent it may edit a file the guard will refuse.
+from tools.contract import SHARED as _SHARED  # noqa: E402
+
+SHARED = sorted(_SHARED)
 
 # Dispatch set 3. WF-008, WF-013, WF-016.
 #
