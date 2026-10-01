@@ -196,6 +196,43 @@ def at(days: int = 0, hour: int = 9, minute: int = 0) -> str:
     )
 
 
+def wall(days: int = 0, hour: int = 9, minute: int = 0) -> str:
+    """An ISO stamp exactly ``days`` from the **real** clock.
+
+    :func:`at` is anchored to :data:`NOW` and is correct for every test that drives
+    the engine directly, because the engine fixture runs on that fixed clock. The
+    HTTP half cannot use it: the routes build their engine from the wall clock, so
+    a stamp measured from a constant silently becomes a past date once real time
+    moves past it. That is not hypothetical - it is how this file's reschedule
+    tests began failing on 2026-10-01, four days after the constant was written.
+
+    Use this only where the request crosses the HTTP boundary, and only for the
+    half of the assertion that is genuinely about "now": a time in the past is
+    refused, a time in the future is accepted. Everything else in these tests
+    should be read off the fixture rather than off any clock.
+    """
+    return (
+        (datetime.now(timezone.utc) + timedelta(days=days))
+        .replace(hour=hour, minute=minute, second=0, microsecond=0)
+        .isoformat(timespec="seconds")
+    )
+
+
+def wall_wd(days: int, hour: int = 9, minute: int = 0) -> str:
+    """A :func:`wall` stamp slid forward onto a working day.
+
+    The meeting type under test works Monday to Friday, so a target on a weekend
+    holds no slot and is refused as "not a slot on offer" rather than being
+    accepted - the test would then be about the calendar rather than about the
+    rule it claims to check. Only the hour is varied freely: 09:00 is inside the
+    09:00-17:00 window on every working day.
+    """
+    moment = datetime.now(timezone.utc) + timedelta(days=days)
+    while moment.weekday() > 4:
+        moment += timedelta(days=1)
+    return moment.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat(timespec="seconds")
+
+
 def url(value: str) -> str:
     """A timestamp as a query parameter.
 
@@ -2959,6 +2996,39 @@ def test_a_code_can_be_overridden_where_the_detail_matters():
 # --------------------------------------------------------------------------- #
 
 
+def move_to(http, live, *, uid="bk_http_1", hour=9, after=None, actor_email="a@x.example", **extra):
+    """Reschedule the fixture's booking over HTTP to a slot the engine offers.
+
+    Every HTTP test that needs a booking to have moved asks for it here, so there
+    is one definition of "a valid new time" instead of seven copies. The target is
+    read off the availability endpoint rather than invented, which is what makes
+    it safe: the route is asking the engine which slots are genuinely on offer, so
+    the call cannot fail because the date it picked was a weekend, outside the
+    working hours, or already held by another booking. ``hour`` picks a different
+    time of day when a test needs the meeting to actually move rather than stay
+    put, and ``after`` skips slots too soon to be a meaningful move.
+
+    ``actor_email`` and ``extra`` are passed through so a test that is asserting
+    *who* moved the meeting still can. Returns the target and the 201 response.
+    """
+    slots = http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}").json()["slots"]
+    floor = after or datetime.min.replace(tzinfo=timezone.utc)
+    target = next(
+        slot["start_at"]
+        for slot in slots
+        if not slot["in_past"]
+        and parse(slot["start_at"]) >= floor
+        and parse(slot["start_at"]).hour == hour
+        and parse(slot["start_at"]).minute == 0
+    )
+    response = http.post(
+        f"{PREFIX}/rooms/{live['room']['id']}/bookings/{uid}/reschedule",
+        json={"start_at": target, "actor_email": actor_email, **extra},
+    )
+    assert response.status_code == 201, response.json()
+    return target, response
+
+
 @pytest.fixture()
 def live(http):
     """A room, a Meeting Type and a booking, created over the real routes."""
@@ -2980,23 +3050,15 @@ def live(http):
             "meeting_type_id": meeting_type["id"],
             "title": "Northwind walkthrough",
             "attendee_email": "priya.raman@northwind.example",
-            # Measured from the real clock, not from NOW: these routes build
-            # their engine from the wall clock, so a fixed NOW + 3 days stopped
-            # being a future date on 2026-09-30. The date is also snapped to the
-            # type's own 09:00-17:00 grid on a weekday, because the availability
-            # test below needs the booking's own slot to appear in the window
-            # with original_slot set, and an off-grid time has no slot to
+            # Measured from the real clock, not from NOW: these routes build their
+            # engine from the wall clock, so a fixed NOW + 3 days stopped being a
+            # future date on 2026-09-30. The date is also snapped to a weekday on
+            # the type's own 09:00-17:00 grid, because the availability test below
+            # needs the booking's own slot to appear in the window with
+            # original_slot set, and an off-grid weekend time has no slot to
             # release. Thirty days out is far enough that nothing collides with
-            # the second booking at at(-2).
-            "start_at": next(
-                d.isoformat()
-                for d in (
-                    datetime.now(timezone.utc).replace(hour=9, minute=0, second=0, microsecond=0)
-                    + timedelta(days=n)
-                    for n in range(28, 40)
-                )
-                if d.weekday() < 5
-            ),
+            # the second booking at wall(-2).
+            "start_at": wall_wd(30),
             "location": "Zoom",
         },
     ).json()
@@ -3047,23 +3109,30 @@ def test_an_unknown_booking_is_a_404(http):
     assert http.get(f"{PREFIX}/bookings/bk_nope").status_code == 404
 
 
-def test_the_availability_endpoint_answers_with_the_researched_parameter_name(http, live):
-    # The window is read off the fixture's own booking rather than off NOW, so
-    # it stays a window the engine will actually offer slots in. These routes
-    # run on the wall clock, so a window of NOW+3d..NOW+4d stopped being a
-    # future window and the endpoint correctly returned nothing.
-    #
-    # The window is a week wide, not a day. The type books Monday to Friday, so
-    # a 24-hour window can land entirely on a weekend and hold no slots at all --
-    # which is what happened once the fixture's booking moved to now + 30 days
-    # and 2026-10-31 is a Saturday. A seven-day window contains a weekday in
-    # every case, so the assertion is about the parameter name rather than about
-    # which day of the week the suite happened to run on.
+def booking_window(live, days=7):
+    """``(from, to)`` query params around the fixture booking's own start.
+
+    Read off the fixture rather than off a clock, because the availability
+    endpoint runs on the real clock: a window built from the module's NOW
+    eventually describes a range entirely in the past. A window that is all in the
+    past still *returns* - the endpoint flags those slots rather than hiding them -
+    which means such a test keeps passing while asserting about a window nobody
+    would ever request. Anchoring to the fixture keeps it a window the engine will
+    genuinely offer slots in.
+
+    A week wide, not a day, because the type books Monday to Friday and a
+    24-hour window can land entirely on a weekend and hold nothing at all.
+    """
     start = datetime.fromisoformat(live["booking"]["data"]["start_at"])
+    return url(start.isoformat()), url((start + timedelta(days=days)).isoformat())
+
+
+def test_the_availability_endpoint_answers_with_the_researched_parameter_name(http, live):
+    start, end = booking_window(live)
     body = http.get(
         f"{PREFIX}/availability"
         f"?meeting_type_id={live['type']['id']}"
-        f"&from={url(start.isoformat())}&to={url((start + timedelta(days=7)).isoformat())}"
+        f"&from={start}&to={end}"
         f"&booking_uid_to_reschedule=bk_http_1"
     ).json()
     assert body["booking_uid_to_reschedule"] == "bk_http_1"
@@ -3071,14 +3140,34 @@ def test_the_availability_endpoint_answers_with_the_researched_parameter_name(ht
 
 
 def test_the_availability_endpoint_withholds_the_release_when_it_is_not_named(http, live):
-    body = http.get(
-        f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={url(at(3))}&to={url(at(4))}"
-    ).json()
+    start, end = booking_window(live)
+    body = http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={start}&to={end}").json()
+    assert body["slots"], "the control failed: there were no slots to withhold a release from"
     assert not any(slot["original_slot"] for slot in body["slots"])
 
 
-def test_the_availability_endpoint_needs_a_host_or_a_meeting_type(http, live):
-    assert http.get(f"{PREFIX}/availability?from={at(3)}&to={at(4)}").status_code == 400
+def test_the_availability_endpoint_falls_back_to_the_default_meeting_type(http, live):
+    """Neither parameter is required: a bare host and a length is a real booking.
+
+    This test used to assert a 400 here, and the 400 was not the endpoint
+    refusing the request - it was the *timestamp* being rejected. The query was
+    built with the raw ``+00:00`` rather than percent-encoded, so the offset's
+    ``+`` decoded to a space and the endpoint correctly refused an unreadable
+    date. The test therefore spent its life on :func:`url`'s job while claiming to
+    be about the missing parameters, and would have kept passing even if the
+    endpoint's answer to a parameterless request had changed entirely.
+
+    The answer is a 200, and it is the documented one: ``resolve_meeting_type``
+    hands back the default type rather than refusing, which the engine-level test
+    ``test_a_booking_can_resolve_the_default_meeting_type`` also pins.
+    """
+    start, end = booking_window(live)
+    body = http.get(f"{PREFIX}/availability?from={start}&to={end}")
+    assert body.status_code == 200
+    payload = body.json()
+    assert payload["meeting_type_id"] is None
+    assert payload["host_email"] == "host@example.invalid"
+    assert payload["slots"], "the default host is a real one, so the window should offer slots"
 
 
 def test_an_unreadable_availability_range_is_a_400_with_the_field_named(http, live):
@@ -3089,9 +3178,8 @@ def test_an_unreadable_availability_range_is_a_400_with_the_field_named(http, li
 
 def test_an_offset_aware_timestamp_survives_the_query_string(http, live):
     """The `+` in `+00:00` must not decode to a space and read as a malformed date."""
-    body = http.get(
-        f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={url(at(3))}&to={url(at(4))}"
-    )
+    start, end = booking_window(live)
+    body = http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={start}&to={end}")
     assert body.status_code == 200
     assert body.json()["slots"]
 
@@ -3112,15 +3200,19 @@ def test_a_room_that_does_not_exist_is_a_404_on_every_room_scoped_route(http):
 
 
 def test_a_reschedule_over_http_returns_the_history_row(http, live):
-    response = http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "dana@northwind.example", "reason": "later"},
+    target, response = move_to(
+        http,
+        live,
+        hour=9,
+        after=datetime.now(timezone.utc) + timedelta(days=1),
+        actor_email="dana@northwind.example",
+        reason="later",
     )
-    assert response.status_code == 201
     change = response.json()["data"]
     assert change["type"] == "rescheduled"
     assert change["reschedule_source"] == CHILICAL_HOME
     assert change["actor_email"] == "dana@northwind.example"
+    assert change["to"]["start_at"] == target
 
 
 def test_a_cancel_over_http_returns_the_history_row(http, live):
@@ -3165,10 +3257,7 @@ def test_an_unknown_reschedule_request_is_a_404(http):
 
 
 def test_the_crm_event_list_includes_the_deleted_ones_by_default(http, live):
-    http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
-    )
+    move_to(http, live)
     new_uid = http.get(f"{PREFIX}/bookings?status=booked").json()["bookings"][0]["data"]["uid"]
     http.post(
         f"{PREFIX}/rooms/{live['room']['id']}/bookings/{new_uid}/cancel", json={"actor_email": "a@x.example"}
@@ -3179,10 +3268,7 @@ def test_the_crm_event_list_includes_the_deleted_ones_by_default(http, live):
 
 
 def test_the_pushed_webhooks_are_readable_with_their_payloads(http, live):
-    http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
-    )
+    move_to(http, live)
     rows = http.get(f"{PREFIX}/webhooks?webhook={BOOKING_RESCHEDULED}").json()["webhooks"]
     assert rows
     assert rows[0]["data"]["payload"]["rescheduleUid"] == "bk_http_1"
@@ -3190,10 +3276,7 @@ def test_the_pushed_webhooks_are_readable_with_their_payloads(http, live):
 
 
 def test_the_notifications_list_readable_over_http(http, live):
-    http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
-    )
+    move_to(http, live)
     rows = http.get(f"{PREFIX}/notifications").json()["notifications"]
     assert {row["data"]["channel"] for row in rows} == {"email", "slack"}
 
@@ -3211,22 +3294,18 @@ def test_the_links_list_reports_every_bookings_two_links(http, live):
 
 
 def test_a_change_can_be_read_back_in_full_over_http(http, live):
-    change = http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
-    ).json()
+    _, response = move_to(http, live)
+    change = response.json()
     assert http.get(f"{PREFIX}/changes/{change['id']}").json()["id"] == change["id"]
     assert http.get(f"{PREFIX}/changes/nope").status_code == 404
 
 
 def test_a_bookings_history_route_reads_its_chain(http, live):
     """A booking that has not been changed itself reads its chain's history."""
-    change = http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
-    ).json()
-    assert change["data"]["type"] == "rescheduled"
-    rows = http.get(f"{PREFIX}/bookings/{change['data']['new_booking_uid']}/changes").json()
+    _, response = move_to(http, live, hour=9, after=datetime.now(timezone.utc) + timedelta(days=1))
+    change = response.json()["data"]
+    assert change["type"] == "rescheduled"
+    rows = http.get(f"{PREFIX}/bookings/{change['new_booking_uid']}/changes").json()
     # The one change that produced it, reached through the chain rather than
     # through the new booking's own uid - which is what makes a freshly moved
     # meeting readable rather than blank.
@@ -3235,10 +3314,7 @@ def test_a_bookings_history_route_reads_its_chain(http, live):
 
 
 def test_the_summary_endpoint_answers_over_http(http, live):
-    http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
-    )
+    move_to(http, live)
     body = http.get(f"{PREFIX}/summary?room_id={live['room']['id']}").json()
     assert body["changes"] == 1
     assert body["room_id"] == live["room"]["id"]
@@ -3249,14 +3325,18 @@ def test_an_expired_link_over_http_is_a_410_with_the_settings_reason(http, live)
     token = live["booking"]["data"]["reschedule_token"]
     state = http.get(f"{PREFIX}/links/{token}").json()
     assert state["expired"] is False
-    # A booking in the future is not expired, so a past one is needed.
+    # A booking in the future is not expired, so a past one is needed. Measured
+    # from the wall clock, because these routes read the real clock: a stamp
+    # anchored to the module's NOW stopped being in the past on 2026-09-30, four
+    # days after the constant was written, and this test silently stopped
+    # testing the setting it is named after.
     past = http.post(
         f"{PREFIX}/bookings?room_id={live['room']['id']}",
         json={
             "uid": "bk_http_past",
             "meeting_type_id": live["type"]["id"],
             "attendee_email": "old@northwind.example",
-            "start_at": at(-2, 9, 0),
+            "start_at": wall(-2, 9, 0),
         },
     ).json()
     assert http.get(f"{PREFIX}/links/{past['data']['reschedule_token']}").json()["expired"] is True
@@ -3281,13 +3361,21 @@ def test_an_unknown_booking_change_is_a_404_over_http(http, live):
 
 
 def test_a_bad_request_over_http_is_a_400_with_the_code(http, live):
+    # 20:00 on a working day, measured from the wall clock: outside the type's
+    # 09:00-17:00 hours, which is a 400 whatever the date. The point of the wall
+    # clock is that the hour is still 20:00 *tomorrow* - anchored to the module's
+    # NOW, this stopped being 20:00 anywhere and started being a past date, so the
+    # test would have been asserting the "in the past" refusal instead.
     response = http.post(
         f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 20, 0), "actor_email": "a@x.example"},
+        json={"start_at": wall_wd(3, 20, 0), "actor_email": "a@x.example"},
     )
     assert response.status_code == 400
     assert response.json()["error"] == "meeting_change_error"
     assert response.json()["status"] == 400
+    # Named as the hours rule rather than the past rule, so the assertion below
+    # keeps meaning what it says when the two ever stop overlapping.
+    assert "not a slot on offer" in response.json()["detail"]
 
 
 # --------------------------------------------------------------------------- #
@@ -3297,10 +3385,7 @@ def test_a_bad_request_over_http_is_a_400_with_the_code(http, live):
 
 def test_every_source_this_feature_records_names_a_route_the_host_mounted(http, live):
     """The defect this prevents: an audit log naming a path the app stopped serving."""
-    http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/reschedule",
-        json={"start_at": at(4, 9, 0), "actor_email": "dana@northwind.example"},
-    )
+    move_to(http, live)
     new_uid = http.get(f"{PREFIX}/bookings?status=booked").json()["bookings"][0]["data"]["uid"]
     http.post(
         f"{PREFIX}/rooms/{live['room']['id']}/bookings/{new_uid}/cancel",
