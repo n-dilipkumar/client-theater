@@ -12,6 +12,12 @@ Everything here is MEASURED, never carried forward:
   * each workflow's name, domain and criticality - from `workflows.json`
   * which have a frontend descriptor - read from the descriptors' own declared
     `id`, following re-exports, because a folder name is not a ticket id
+  * each workflow's Description - read from its own `wf/WF-NNN.md`, because a
+    hand-typed description table drifts silently and did (see `description_of`)
+
+The target is the size of the researched corpus, read from `workflows.json`. It
+was 100, a round number that quietly excluded 38 researched and judged workflows
+from "to go".
 
 Why built-state is measured rather than read from a file
 -------------------------------------------------------
@@ -72,17 +78,54 @@ CORPUS = ROOT / "docs" / "research" / "digital-sales-room-workflows"
 WORKFLOWS = CORPUS / "workflows.json"
 CRITICALITY = CORPUS / "criticality-decisions.json"
 OUT = ROOT / "orchestration" / "STATUS.md"
+#: The repo's own venv. `sys.executable` is the right fallback because this
+#: generator has to be runnable from a worktree that has no venv of its own,
+#: which is the normal case here.
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
+if not PY.exists():
+    PY = Path(sys.executable)
 PY_REL = ".venv/Scripts/python"
 
-#: One line per workflow, read off its researched specification. Kept beside the
-#: generator rather than in the corpus, because the corpus is primary-source
-#: evidence and this is a dashboard derived from it.
-SUMMARY: dict[str, str] = json.loads((Path(__file__).with_name("summaries.json")).read_text(encoding="utf-8"))
-if len(SUMMARY) != 138:
-    raise SystemExit(f"expected 138 descriptions, found {len(SUMMARY)}")
+#: The one-line description per workflow is READ OUT OF ITS OWN SPEC FILE, not
+#: carried in a side table.
+#:
+#: It used to come from `orchestration/summaries.json`, a hand-maintained
+#: ticket -> sentence map sitting beside this generator. That file drifted: from
+#: WF-078 onward the sentences describe a different workflow than the ticket they
+#: are filed under, so the table read e.g. "WF-080 | Download the executed
+#: agreement from the e-vault | Detect and stop an unusual access pattern". 57 of
+#: its 138 entries shared no content word with their own ticket's
+#: specification.
+#:
+#: The join was never the bug - `SUMMARY.get(ticket)` cannot return another
+#: ticket's sentence. The bug was that the description was ever hand-typed. A
+#: description that is read from `wf/WF-NNN.md` is correct by construction,
+#: because the file it came from is named after the ticket it describes. That is
+#: the same argument the rest of this generator makes about built-state: measure
+#: it, never carry it.
+DESCRIPTION_RE = re.compile(r"^-\s+\*\*name:?\*\*:?\s*(.+)$", re.M)
 
-TARGET = 100
+
+def description_of(ticket: str) -> str:
+    """The one line on what this workflow does, read from its own spec page.
+
+    The corpus states each workflow's researched name as a `name:` field in the
+    evidence block. Every one of the 138 pages carries one.
+    """
+    path = CORPUS / "wf" / f"{ticket}.md"
+    if not path.exists():
+        raise SystemExit(f"{ticket}: no specification at {path}")
+    m = DESCRIPTION_RE.search(path.read_text(encoding="utf-8", errors="replace"))
+    if not m:
+        raise SystemExit(f"{ticket}: no `name:` field in {path}")
+    return m.group(1).strip()
+
+
+#: The target is the researched corpus, not a round number. It was 100, which
+#: quietly excluded 38 researched, judged, spec'd workflows from "to go": the
+#: queue could be worked to empty and the dashboard would still read
+#: incomplete. The owner has decided to build all of them.
+TARGET = len(json.loads(WORKFLOWS.read_text(encoding="utf-8")))
 
 FEATURE_RE = re.compile(r"wf[_-]?(\d{3})", re.I)
 #: A frontend descriptor declares its own ticket, e.g. ``id: 'wf-064-reschedule...'``.
@@ -433,7 +476,7 @@ def render() -> tuple[str, dict]:
         if r["basis"]:
             criticality += f" ({r['basis']})"
         A(f"| `{r['ticket']}` | {escape_cell(r['name'])} | "
-          f"{escape_cell(SUMMARY.get(r['ticket'], ''))} | {criticality} | "
+          f"{escape_cell(description_of(r['ticket']))} | {criticality} | "
           f"{escape_cell(status_of(r))} | |")
     A("")
 
@@ -485,9 +528,11 @@ def render() -> tuple[str, dict]:
     A("this generator cannot measure them, and a section reading \"0 in progress\"")
     A("is a claim about the world nobody re-checks.")
     A("")
-    A("The short description per workflow is a one-line reading of the researched")
-    A("specification, kept here rather than in the corpus so the corpus stays")
-    A("primary-source evidence and this stays a dashboard.")
+    A("The Description column is read out of each workflow's own specification")
+    A("page, the same page the ticket number comes from. It used to come from a")
+    A("hand-maintained side table beside this generator, which drifted: from")
+    A("WF-078 the descriptions belonged to other workflows entirely, and nothing")
+    A("failed. A description read from `wf/WF-NNN.md` is correct by construction.")
     A("")
 
     return "\n".join(L), {

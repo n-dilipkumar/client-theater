@@ -25,6 +25,7 @@ which is the defect this project has now found in three separate tools.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -37,11 +38,21 @@ for _s in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-ROOT = Path(r"C:\Users\Dilip\orca\projects\client-theater\client-theater")
-WS = Path(r"C:\Users\Dilip\orca\workspaces\client-theater")
+# Derived from this file, not named. This script used to write its dashboard
+# into one machine's orca checkout, so running it from a worktree produced a
+# correct file in the wrong repository and left this one stale - which is how it
+# ended up quoting a commit from three merged PRs ago.
+ROOT = Path(__file__).resolve().parent.parent
+WS = Path(os.environ.get("DSR_WORKSPACES") or ROOT.parent)
 REPO = "id:8964203a-831a-425f-8fd7-ebc3a0fc2e46"
 OUT = ROOT / "orchestration" / "AGENTS.md"
-TARGET = 100
+
+#: The target is the researched corpus, not a round number. It used to be 100,
+#: which meant 38 workflows were researched, judged and spec'd and then silently
+#: excluded from "to go" - the queue could be worked to empty and the dashboard
+#: would still read incomplete.
+_CORPUS = ROOT / "docs" / "research" / "digital-sales-room-workflows" / "workflows.json"
+TARGET = len(json.loads(_CORPUS.read_text(encoding="utf-8"))) if _CORPUS.exists() else 138
 
 
 def run(args, cwd=ROOT, timeout=120):
@@ -78,16 +89,18 @@ def main():
     live = features_on_main()
 
     # The handle log is the record of every agent ever dispatched, so nothing
-    # silently disappears from the dashboard just because its tab closed.
+    # silently disappears from the dashboard just because its tab closed. It lives
+    # under data/, which is gitignored, so a fresh clone legitimately has none.
     handles_path = ROOT / "data" / "dispatched_batch.json"
     known = {}
-    if handles_path.exists():
+    handles_present = handles_path.exists()
+    if handles_present:
         try:
             for rec in json.loads(handles_path.read_text(encoding="utf-8")):
                 if isinstance(rec, dict) and rec.get("ticket"):
                     known[rec["ticket"]] = rec
         except (json.JSONDecodeError, OSError):
-            pass
+            handles_present = False
 
     terms = orca(["terminal", "list", "--json"]).get("result", {}).get("terminals", []) or []
     by_worktree = {}
@@ -167,14 +180,27 @@ def main():
     A("")
     A("## Right now")
     A("")
-    A(f"    agents dispatched   {len(rows)}")
-    A(f"    agent tabs open     {tabs_open}")
-    A(f"    merged into main    {merged}")
-    A(f"    ready to merge      {ready}")
-    A(f"    writing             {writing}")
-    A(f"    no work yet         {quiet}")
-    A(f"    stopped or gone     {stopped}")
-    A("")
+    if not handles_present:
+        # Printing a column of zeros here would be a claim about the world that
+        # nobody re-checks: the previous version of this file read "agents
+        # dispatched 31, ready to merge 24" for three weeks after every one of
+        # those worktrees was gone. The absence of the log is stated instead of
+        # being reported as a measurement.
+        A("**No dispatch log in this clone.** `data/dispatched_batch.json` is")
+        A("gitignored, and without it this generator cannot know which agents")
+        A("were ever dispatched. It reports no counts rather than reporting zero:")
+        A("zero is a measurement, and no measurement was taken. The programme")
+        A("state it can measure is below.")
+        A("")
+    if handles_present:
+        A(f"    agents dispatched   {len(rows)}")
+        A(f"    agent tabs open     {tabs_open}")
+        A(f"    merged into main    {merged}")
+        A(f"    ready to merge      {ready}")
+        A(f"    writing             {writing}")
+        A(f"    no work yet         {quiet}")
+        A(f"    stopped or gone     {stopped}")
+        A("")
     A(f"`main` at `{tip}`")
     A(f"measured {stamp} in {time.time() - started:.0f}s")
     A("")
@@ -184,8 +210,13 @@ def main():
     A("")
     A("## Every agent dispatched")
     A("")
-    A("| Workflow | What it is doing | State | Commits | Uncommitted | Tab |")
-    A("|---|---|---|---|---|---|")
+    if handles_present:
+        A("| Workflow | What it is doing | State | Commits | Uncommitted | Tab |")
+        A("|---|---|---|---|---|---|")
+    else:
+        A("Unknown. This generator cannot list agents it has no record of being")
+        A("dispatched, and it will not reconstruct the list from worktree names.")
+        A("")
     for r in rows:
         A(f"| {r['ticket']} | {r['title'][:44] or '-'} | **{r['state']}** | "
           f"{r['commits']} | {r['uncommitted']} | {r['tab']} |")
@@ -215,18 +246,35 @@ def main():
     OUT.write_text("\n".join(L), encoding="utf-8")
 
     back = OUT.read_text(encoding="utf-8")
+    # Without a dispatch log the count checks are vacuous - asserting "0" is
+    # present passes for a file that made no measurement. They are replaced by
+    # the check that matters in that case: the absence is declared.
+    count_checks = (
+        {
+            "the absence of a dispatch log is declared": "No dispatch log in this clone" in back,
+            "no zero counts presented as measurements": "agents dispatched   0" not in back,
+        }
+        if not handles_present
+        else {
+            "the dispatched count": f"agents dispatched   {len(rows)}" in back,
+        }
+    )
     checks = {
-        "the dispatched count": f"agents dispatched   {len(rows)}" in back,
-        "the merged count": f"merged into main    {merged}" in back,
-        "the ready count": f"ready to merge      {ready}" in back,
-        "the writing count": f"writing             {writing}" in back,
-        "the stopped count": f"stopped or gone     {stopped}" in back,
-        "the open tab count": f"agent tabs open     {tabs_open}" in back,
+        **count_checks,
         "main's commit": tip.split()[0] in back if tip else False,
         "the feature count": f"**{len(live)}** features on `main`" in back,
-        "every agent is listed": all(r["ticket"] in back for r in rows),
+        "the target is the corpus": f"of {TARGET}" in back,
         "the board is reported": f"({len(board)} cards)" in back,
     }
+    if handles_present:
+        checks |= {
+            "the merged count": f"merged into main    {merged}" in back,
+            "the ready count": f"ready to merge      {ready}" in back,
+            "the writing count": f"writing             {writing}" in back,
+            "the stopped count": f"stopped or gone     {stopped}" in back,
+            "the open tab count": f"agent tabs open     {tabs_open}" in back,
+            "every agent is listed": all(r["ticket"] in back for r in rows),
+        }
     bad = [k for k, v in checks.items() if not v]
     for k, v in checks.items():
         print(f"  {k:26} {'OK' if v else 'MISMATCH'}")
