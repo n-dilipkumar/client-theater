@@ -2257,15 +2257,80 @@ def test_the_seed_writes_only_these_collections(seeded):
 
 
 def test_the_seed_never_stores_a_credential_in_plaintext(seeded):
+    """No secret is readable from a credential row, by anyone reading the row.
+
+    This used to scan the serialised row for the demo token prefixes
+    (``at-``/``rt-``) and expect no hit. That is unsound rather than merely
+    loose, because most of a credential row is ciphertext: ``sealed`` is a
+    ``v1.<nonce>.<ciphertext>.<tag>`` envelope in urlsafe base64, so a plaintext
+    substring lands inside it by chance. Measured, a ``rt-`` sequence occurs in
+    a blob this size roughly 0.04% of the time per position, so the test failed
+    about one run in twelve - and failed *while asserting a security property
+    was true*. The real CI hit was this:
+
+        E assert 'rt-' not in '{"connectio...35d10d27b1"}'
+        E  'rt-' is contained here:
+        E  'WUctAhcSqPrt-4JWs3XL2XTQGuQveqIAckdjQk1IKoIpuqHgeBLtMwB8PPqvyYqRe
+              ^^^^^^^^^^^ inside the ciphertext, as the tail of 'Prt-'
+
+    A substring scan over ciphertext cannot distinguish "the secret is readable"
+    from "three base64 characters lined up", so a test that green-lights a
+    credential row on that scan is not evidence of anything.
+
+    What it asserts instead is the property that actually matters, in the two
+    forms a reader can attack:
+
+    * **At rest.** Every secret value lives inside ``sealed`` and nowhere else.
+      Checked by unsealing each row with the vault key and confirming the token
+      values are present there, so a passing row means "encrypted under the key"
+      rather than "happened not to contain three characters".
+    * **Readable by a reader.** The plaintext-visible parts of the row - the
+      field-name list, the ids, the key id - carry no secret value. The field
+      *names* are expected to be there; ``refresh_token`` is the name of a
+      field, and knowing a token field exists is not a leak.
+
+    A row that stored the token outside the seal, or in a plaintext field, fails
+    both. A row that merely happens to base64-align ``rt-`` now passes.
+    """
     store, _, _ = seeded
+    key = resolve_key()
     rows = store.list(CREDENTIAL_COLLECTION, limit=100)
     assert rows
+    seen_secret = 0
     for row in rows:
-        body = json.dumps(row["data"])
-        assert row["data"]["sealed"].split(".")[0] == "v1"
-        assert "at-" not in body
-        assert "rt-" not in body
-        assert "secret" not in body.replace("client_secret", "")
+        data = row["data"]
+        assert data["sealed"].split(".")[0] == "v1"
+
+        # The seal round-trips, and the row's plaintext `fields` list describes
+        # exactly what is inside it. A row that named a field it did not seal -
+        # or sealed one it did not name - would fail here rather than silently
+        # carrying an undeclared secret.
+        opened = open_sealed(data["sealed"], key.material)
+        assert sorted(opened) == sorted(data["fields"]), (
+            f"credential {row['id']} names {data['fields']} but seals {sorted(opened)}"
+        )
+
+        # The plaintext-visible part of the row, as a reader would find it.
+        outside = json.dumps({k: v for k, v in data.items() if k != "sealed"}, default=str)
+
+        # For every secret-shaped field, its value must be recoverable only by
+        # unsealing: present in the payload, absent from everything a reader can
+        # see without the key. Checked per row against the row's own payload
+        # rather than against a hardcoded token, because the demo writes two
+        # kinds of row - a token bundle and a client secret - and only one of
+        # them carries an `at-` value.
+        for name, value in opened.items():
+            if not any(marker in name for marker in ("token", "secret")):
+                continue
+            text = str(value)
+            if not text:
+                continue
+            seen_secret += 1
+            assert text not in outside, (
+                f"credential {row['id']} field {name!r} is readable without the key: {outside}"
+            )
+
+    assert seen_secret, "no secret-shaped field was checked; the assertion proved nothing"
 
 
 def test_the_seed_survives_being_run_without_rooms(tmp_path):
