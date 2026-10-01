@@ -205,3 +205,12 @@ jobs:
               raise SystemExit(f"{len(failed)} feature(s) failed to load")
           print(f"OK: {reg['count']} feature(s) loaded, 0 failed")
           PY
+
+      # Calls every (method, path) the registry advertises and fails on a 5xx.
+      # The checks above prove a module imported and that the core routes
+      # answer; neither proves that each of the 800-odd feature routes behind
+      # them has a working handler, so a mounted route that 500s was invisible.
+      # A 404 for a room that does not exist is the API correctly refusing and
+      # is not counted.
+      - name: Every advertised route answers
+        run: python tools/verify_all_routes.py --base http://127.0.0.1:8000
