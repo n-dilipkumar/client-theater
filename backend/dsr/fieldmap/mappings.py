@@ -499,9 +499,35 @@ class MappingBook:
         the validator first - and the duplicate-target check works by recording
         which row claimed a property first. Reversed, it flags the row an admin
         added first and exonerates the one they added to fix it.
+
+        The second key must be the *insertion* sequence, not the record id. Record
+        ids are ``uuid4().hex``, so a tie on ``created_at`` - which two rows
+        written in the same millisecond always tie on, and a loop adding a row per
+        mapped field does exactly that - fell to a random comparison. The order was
+        then stable within one machine and arbitrary across two, on identical data,
+        and the duplicate-target check flagged whichever row the random order put
+        first. That surfaced on CI rather than locally, as a mapping report listing
+        its rows as ``b, a, c`` instead of ``a, b, c``: over a fast local run the
+        clock always advances between two writes and the tie never forms.
+
+        So the grid is read through :meth:`RecordStore.list`, whose own tie-break
+        is the insertion ``rowid`` - monotonic, independent of the query plan, and
+        identical on every machine. See the note on :meth:`AuditedDatabase.list`,
+        which changed its tie-break to ``rowid`` for exactly this reason. The
+        mapping's own rows are selected out of that collection-wide read by id, so
+        the mapping scope is unchanged.
         """
-        records = self.store.find(ROW_COLLECTION, {"mapping_id": str(mapping_id)}, limit=1000)
-        return sorted(records, key=lambda record: (str(record.get("created_at") or ""), str(record["id"])))
+        by_id = {
+            str(record["id"])
+            for record in self.store.find(ROW_COLLECTION, {"mapping_id": str(mapping_id)}, limit=1000)
+        }
+        ordered = self.store.list(
+            ROW_COLLECTION,
+            limit=1000,
+            order_by="created_at",
+            descending=False,
+        )
+        return [record for record in ordered if str(record["id"]) in by_id]
 
     def row(self, row_id: str) -> dict[str, Any] | None:
         record = self.store.get(str(row_id or ""))
