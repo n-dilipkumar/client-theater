@@ -4,6 +4,11 @@ How to add a workflow to the Digital Sales Room. Read this before you write any
 code. It exists because this product is built by many agents in parallel: the
 rules below are what stop a hundred features from colliding with each other.
 
+> **Before you style anything, read [`docs/DESIGN-SYSTEM.md`](./DESIGN-SYSTEM.md).**
+> Colour tokens, the shape scale, the type stack, and the component list all
+> live there. Following it is what makes your page match the other forty-nine
+> without anyone reviewing your CSS.
+
 ## The one rule that matters
 
 **You add files. You do not edit shared files.**

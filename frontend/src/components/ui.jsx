@@ -51,16 +51,16 @@ export function Icon({ name, size = 18, className = '', path }) {
 
 export function Button({ children, icon, variant = 'secondary', className = '', ...props }) {
   const variants = {
-    primary: 'bg-accent text-on-accent hover:brightness-110 font-semibold',
-    secondary: 'bg-muted text-foreground hover:bg-border-subtle',
+    primary: 'bg-accent text-on-accent hover:bg-primary font-medium',
+    secondary: 'bg-surface text-foreground border border-border-subtle hover:border-accent hover:text-accent',
     ghost: 'text-muted-foreground hover:text-foreground hover:bg-muted',
-    danger: 'bg-destructive/15 text-destructive hover:bg-destructive/25',
+    danger: 'bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/15',
   }
   return (
     <button
       type="button"
-      className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm
-        transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50
+      className={`inline-flex min-h-11 items-center gap-2 rounded-sm px-4 text-sm
+        transition-colors duration-150 active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50
         ${variants[variant]} ${className}`}
       {...props}
     >
@@ -70,21 +70,23 @@ export function Button({ children, icon, variant = 'secondary', className = '', 
   )
 }
 
+/* Tones are semantic tokens, not palette literals. The old values were
+   sky-300 and amber-300, which are unreadable on a light surface. */
 const ACTION_TONES = {
-  insert: 'bg-accent/15 text-accent border-accent/30',
-  update: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  delete: 'bg-destructive/15 text-destructive border-destructive/30',
-  restore: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  insert: 'bg-accent/10 text-accent border-accent/30',
+  update: 'bg-info/10 text-info border-info/30',
+  delete: 'bg-destructive/10 text-destructive border-destructive/30',
+  restore: 'bg-warning/10 text-warning border-warning/30',
 }
 
 export function Badge({ children, tone = 'neutral' }) {
   const tones = {
-    neutral: 'bg-muted text-muted-foreground border-border-subtle/40',
+    neutral: 'bg-muted text-muted-foreground border-border-subtle',
     ...ACTION_TONES,
   }
   return (
     <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5
+      className={`inline-flex items-center rounded-xs border px-2 py-0.5
         font-mono text-xs font-medium ${tones[tone] || tones.neutral}`}
     >
       {children}
@@ -93,7 +95,7 @@ export function Badge({ children, tone = 'neutral' }) {
 }
 
 export function Card({ children, className = '' }) {
-  return <div className={`glass rounded-xl p-5 ${className}`}>{children}</div>
+  return <div className={`glass rounded-sm p-5 ${className}`}>{children}</div>
 }
 
 export function StatCard({ label, value, hint, icon }) {
@@ -101,12 +103,16 @@ export function StatCard({ label, value, hint, icon }) {
     <Card className="card-hover">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
-          <p className="mt-2 font-mono text-3xl font-semibold text-foreground">{value}</p>
-          {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-2 font-mono text-[1.75rem] leading-none font-semibold text-foreground">
+            {value}
+          </p>
+          {hint && <p className="mt-1.5 truncate text-xs text-muted-foreground">{hint}</p>}
         </div>
         {icon && (
-          <span className="rounded-lg bg-muted p-2 text-accent">
+          <span className="rounded-sm bg-accent-soft p-2 text-accent">
             <Icon name={icon} size={20} />
           </span>
         )}
@@ -128,7 +134,7 @@ export function ErrorNote({ error, onRetry }) {
   return (
     <div
       role="alert"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-destructive/40 bg-destructive/10 p-4"
     >
       <div className="min-w-0">
         <p className="text-sm font-semibold text-destructive">Could not load data</p>
@@ -145,8 +151,8 @@ export function ErrorNote({ error, onRetry }) {
 
 export function EmptyState({ title, description, action }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-subtle/50 p-10 text-center">
-      <p className="font-mono text-sm font-semibold text-foreground">{title}</p>
+    <div className="flex flex-col items-center gap-3 rounded-sm border border-dashed border-border-subtle bg-surface p-10 text-center">
+      <p className="font-display text-[15px] font-semibold text-foreground">{title}</p>
       {description && <p className="max-w-md text-sm text-muted-foreground">{description}</p>}
       {action}
     </div>
@@ -158,18 +164,18 @@ export function EmptyState({ title, description, action }) {
 export function Field({ label, hint, children, id }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
+      <label htmlFor={id} className="text-[13px] font-medium text-foreground">
         {label}
       </label>
       {children}
-      {hint && <p className="text-xs text-muted-foreground/80">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   )
 }
 
 export const inputClass =
-  'min-h-11 w-full rounded-lg border border-border-subtle/50 bg-background/60 px-3 text-sm ' +
-  'text-foreground placeholder:text-muted-foreground/60 focus:border-accent'
+  'min-h-11 w-full rounded-sm border border-border-subtle bg-surface px-3 text-sm ' +
+  'text-foreground placeholder:text-muted-foreground/70 focus:border-accent'
 
 /** Async data hook with explicit loading/error state and a manual refetch. */
 export function useAsync(loader, deps = []) {
@@ -202,7 +208,12 @@ export function JsonView({ value, depth = 0 }) {
     return <span className="text-muted-foreground/70">null</span>
   }
   if (typeof value !== 'object') {
-    const tone = typeof value === 'number' ? 'text-accent' : typeof value === 'boolean' ? 'text-sky-300' : 'text-foreground'
+    const tone =
+      typeof value === 'number'
+        ? 'text-accent'
+        : typeof value === 'boolean'
+          ? 'text-info'
+          : 'text-foreground'
     return <span className={`font-mono text-[13px] ${tone}`}>{String(value)}</span>
   }
 
@@ -211,7 +222,7 @@ export function JsonView({ value, depth = 0 }) {
     : Object.entries(value)
 
   return (
-    <ul className={depth > 0 ? 'ml-4 border-l border-border-subtle/30 pl-3' : ''}>
+    <ul className={depth > 0 ? 'ml-4 border-l border-border-subtle pl-3' : ''}>
       {entries.map(([key, child]) => (
         <li key={key} className="py-0.5">
           <span className="font-mono text-[13px] text-muted-foreground">{key}</span>

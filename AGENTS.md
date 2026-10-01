@@ -131,10 +131,33 @@ The only fixed vocabulary is the envelope: `id`, `collection`, `room_id`,
 | Database | SQLite, only via the audited wrapper |
 | Docs | Docusaurus |
 
-Design decisions live in `design-system/digital-sales-room/MASTER.md`, generated
-by the `ui-ux-pro-max` skill. Follow it. In particular: no emoji as icons, 44px
-minimum touch targets, visible focus rings, 4.5:1 text contrast, and respect
-`prefers-reduced-motion`.
+## Design system
+
+**Read `docs/DESIGN-SYSTEM.md` before you write any UI.** It is the maintained
+description of the shipped system and the thing to copy from. The enforceable
+source is `frontend/src/index.css`; if the two ever disagree, `index.css` wins.
+
+The short version:
+
+* **Style with semantic tokens, never a raw hex.** `bg-surface`,
+  `text-muted-foreground`, `border-border-subtle`. A hardcoded colour opts you
+  out of every future theme change.
+* **One accent** (`#10506f` steel blue). No purple, no violet, no neon.
+* **Near-square shapes.** `rounded-sm` (2px) for cards, inputs, buttons. No
+  pills, no drop shadows; elevation is a 1px hairline.
+* **Type:** Schibsted Grotesk for display, Geist for body, Geist Mono for IDs,
+  timestamps, counts, and JSON. Mono is for machine values, not prose.
+* **Light theme only.** `color-scheme: light`, locked for the whole product.
+* **Never edit** `frontend/src/index.css`, `App.jsx`, `components/ui.jsx`, or
+  `lib/api.js`. Use the primitives in `@/components/ui` and build anything extra
+  inside your own feature folder.
+
+`design-system/digital-sales-room/MASTER.md` is retained for history and is
+marked superseded. It described the old dark dashboard theme.
+
+The floor that has not changed: no emoji as icons, 44px minimum touch targets,
+visible focus rings, 4.5:1 text contrast, respect `prefers-reduced-motion`, no
+horizontal scroll on mobile.
 
 ## Workflow for a change
 
