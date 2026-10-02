@@ -9,6 +9,13 @@ build/
 coverage/
 *.log
 
+# The Next.js app in landing/ keeps only generated state on disk: .next/ build
+# output, node_modules/, and the auto-generated next-env.d.ts. The authored
+# source lives on the feature/landing-client-theater branch. Anchored with a
+# leading slash so a feature folder named "landing" deeper in the tree is
+# still tracked.
+/landing/
+
 # Runtime data: the SQLite database and its audit mirror are generated state,
 # not source. The schema in backend/dsr/db/schema.sql is the source of truth.
 data/
