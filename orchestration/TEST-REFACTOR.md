@@ -587,3 +587,184 @@ Append here. Newest last. Write for an agent who has never seen this work.
   Adding `-q` on the command line makes it `-qq`, which **suppresses the final
   count line entirely**. A full-suite run then exits 0, prints progress to 100%,
   and reports no counts. Do not add a second `-q`; `addopts` already has one.
+
+---
+
+## 8. Results so far
+
+### Merged to main
+
+| PR | Commit | What | Effect |
+|---|---|---|---|
+| #95 | `d7f385f` | 8 core test files | seeds once, module client, in-memory stores |
+| #96 | `698d460` | shared `conftest.py` + `pytest-xdist` | one `TestClient` per module; `-n auto` |
+| #98 | `0ae89a7` | 16 WF-001..WF-030 test files | in-memory store fixtures, one line each |
+
+### The number that counts: the Backend tests job, on a GitHub runner
+
+Local timings on this host are not comparable to CI timings and never were. Four
+suites share eight cores here. The only like-for-like measurement is the same
+runner image, so that is what this reports. Every row below is the
+**Backend tests** job duration read from GitHub Actions.
+
+| Run | Branch | Job time | Conclusion |
+|---|---|---|---|
+| `37009181528` | `chore/refresh-dashboards` | 187 s | success |
+| `37048347981` | main, **serial**, before PR 95/96 | **217 s** | success |
+| `37045145975` | `perf-tests-core` | 197 s | success |
+| `37052796804` | `perf-test-harness` | 107 s | success |
+| `37053160255` | main, after PR 96 (`-n auto`) | **118 s** | success |
+| `37054804435` | `perf-tests-features-a` | 181 s | success |
+
+The two runs on **main** bracket the work: **217 s serial, 118 s with the
+fixtures and `-n auto`.** That is **46 percent**, same runner image, and every
+run passed.
+
+The feature-branch runs are slower than the main run because they ran while three
+agent suites were competing with the runner's own work, and because the shared
+`-n auto` had not yet landed on their base. They are not a like-for-like series
+and should not be read as one. The 181 s for `perf-tests-features-a` against
+118 s on main is that gap, not a regression.
+
+**All of it: 11,129 tests, unchanged, on every run.** No test was deleted to buy
+any of this.
+
+### What each piece contributed
+
+| Change | Agent | Mechanism |
+|---|---|---|
+| seed once, not three times | core | `test_seed.py` ran the seeder per assertion; 28.4 s for 2 tests |
+| one `TestClient` per module | core, features-b | a test needs a fresh *database*, not a fresh *application* |
+| in-memory stores | core, features-a, features-b | 3.4 ms to 4.0 ms on disk, 0.5 ms in memory |
+| shared `conftest.py` | harness | one place for the fixtures, adopted without editing 75 files |
+| `pytest-xdist` with `-n auto` | harness | the suite is setup-bound, so it parallelises cleanly |
+
+### The four things this programme got wrong, and what each cost
+
+1. **A coverage floor nobody could reproduce.** I measured 2,546 missed once, on
+   a loaded host, and told four agents to defend it. Two measured the same commit
+   and both got 2,553. The gap is 7 statements in `dsr/api.py` behind an
+   `if FRONTEND_DIST.is_dir()` guard, and `frontend/dist` is a gitignored build
+   artefact. See section 2.
+2. **A single timing sample treated as evidence.** Identical code varied 47 s
+   between runs. One `AuditedDatabase` round hit 987 ms against a 5 ms median. My
+   own first measurement of the mirror cost, 657 ms, was a cold-disk artifact.
+3. **A command that printed success and was not.** `git stash push` reported
+   "Saved working directory and index state", exited 0, and left nothing. Seven
+   files were gone until they were recovered from an unreachable commit.
+4. **Treating the working tree as storage.** A file moved out of a worktree with
+   no commit behind it is unrecoverable, because git never hashed it.
+
+The common thread is not carelessness. It is treating one observation, or one
+success message, as a fact.
+
+Append here. Newest last. Write for an agent who has never seen this work.
+
+- 2026-10-02 — Orchestrator. Baseline measured and recorded. Four agents
+  dispatched.
+
+- 2026-10-02 — Orchestrator. Environment defects found and fixed. The venv path
+  carried a space. The heartbeat command used flags that do not exist. The
+  heartbeat monitor matched subjects exactly, so it reported a live agent as
+  silent. Two crashed agents from the first launch were still alive in abandoned
+  tabs and sending heartbeats under the same identity as a live one. All four
+  fixed. See section 6.
+
+- 2026-10-02 — Orchestrator. **A pre-existing flaky test, measured not guessed.**
+
+  `tests/test_wf069.py::TestOneTimeCodeHashing::test_codes_do_not_repeat_in_a_small_sample`
+  failed once on the `perf-tests-features-b` branch. It mints 200 six-digit codes
+  and asserts all 200 differ. The code space is 1,000,000, so the birthday
+  probability of at least one repeat is **1.97 percent**.
+
+  Measured over 2,000 trials of 200 real `mint_code()` calls:
+
+      collisions   35 (1.75%)
+      theory       1.97%
+      worst trial  1 repeat
+
+  The test is inherently flaky at about 2 percent. It is a defect in the TEST, not
+  in the product and not in any fixture change. Re-running the file gives
+  298 passed.
+
+  **Two measurement mistakes of my own, both worth recording.**
+
+  1. My first check ran 30 trials on the agent's branch (1 failure) and 30 on a
+     pristine copy of the base commit (0 failures), and printed DIFFERENT. With a
+     2 percent event, 0 or 1 in 30 is the *expected* result: a clean 30 is more
+     likely than not. Reporting a 1-in-30 observation as a difference is how you
+     chase a ghost.
+  2. The follow-up script printed `birthday probability expected: -97.03%`.
+     Operator precedence: `1 - pow(x, n) * 100` multiplies the wrong term. The
+     real value is `(1 - pow(x, n)) * 100` = 1.97 percent. A negative
+     probability is obviously wrong on sight, and I read the verdict line anyway.
+
+  **No agent should "fix" this test by deleting it or by widening the sample.** It
+  proves codes do not repeat, which is a real property. It proves it in a way that
+  fails 2 percent of the time. The honest fix is to seed the random source, not to
+  remove the assertion.
+
+- 2026-10-02 — Orchestrator. **Recovery after a lost stash.** The `core` agent ran
+  `git stash push`, git reported success, and the stash did not persist. Seven
+  changed files were gone. They were recovered from the unreachable stash commit
+  `1708bd5556294665df054d8bd52a8885abeab4fa` with `git checkout`, and verified
+  green before the agent was told. Recorded in `WORKTREE-SAFETY.md`.
+
+- 2026-10-02 — **PR #95 MERGED. Commit `d7f385f`. First landing.**
+
+  Eight files, all under `backend/tests`, no shared file:
+
+      test_access_api.py  test_analytics.py  test_api.py
+      test_audited.py     test_features.py   test_roles.py
+      test_roles_api.py   test_seed.py
+
+  All six CI checks green on an isolated runner. Mergeable CLEAN.
+
+  What landed, and what it is worth:
+
+  * `test_seed.py` ran the seeder three times for two assertions, because one
+    test wanted a fresh nested path and one wanted to seed the same path twice.
+    A module fixture now seeds once. The file was 28.4 s, the most expensive in
+    the suite for two tests.
+  * Five files entered a `TestClient` per test, which runs the FastAPI lifespan
+    and opens a database each time. One module-scoped client per module, with a
+    fresh database swapped into `app.state` per test.
+  * `test_audited.py` split into two fixtures: `db` in memory, and `mirror_db`
+    file-backed for exactly the three tests that glob for `audit-*.jsonl`. Its
+    slowest setup fell from 1.22 s to 0.20 s.
+
+  **The agent corrected its own headline numbers twice, unprompted.** It first
+  claimed a halving, then reported that it had measured its own *converted* tree
+  and called it the baseline. Its final claim is 27 to 35 percent on the six
+  converted files, measured against a clean clone at `bc999cc` in a temp folder.
+  That is the number to trust, and it is smaller than the one it started with.
+
+  **A real defect found and fixed:** `app` is a module-level singleton shared by
+  every test file in the process. The first version of the fixture closed its
+  database on the way out without restoring `app.state`, so a file that read
+  `app.state.store` without entering its own client would have hit a closed
+  database. That is the exact "passes alone, fails together" mode. Both fixtures
+  now save and restore `app.state.db` and `app.state.store`.
+
+- 2026-10-02 — **The measurement lesson of this programme, stated once.**
+
+  On this machine, with four agent suites competing for eight cores, **a single
+  timing sample is not evidence.** The spread between a fast and a slow run of
+  identical code was 47 s (151.93 s against 198.85 s), and one `AuditedDatabase`
+  round hit 987 ms where the median was 5 ms.
+
+  I published a number from one contaminated sample. I measured a file database
+  with a mirror at 657 ms and one without at 13 ms, and wrote that the mirror was
+  the cost. Re-measured as the minimum of six interleaved rounds:
+
+      file + mirror    min 3.41ms
+      file, no mirror  min 4.03ms
+      in-memory        min 0.48ms
+
+  The mirror costs nothing. My first number was an artifact of running first on a
+  cold, contended disk. The rule every agent now follows: **interleave the
+  variants, take the minimum of several rounds, and say the machine was busy.**
+
+  One more consequence, which is the useful part: **CI is a better measurement
+  than any local run here.** It runs on an isolated runner with no competing load.
+  When CI disagrees with a local number, CI is right.
