@@ -62,8 +62,14 @@ DELETE_SOURCE = "DELETE /test/access/room_access_under_test"
 
 
 @pytest.fixture()
-def db(tmp_path):
-    database = AuditedDatabase(tmp_path / "wf004.db")
+def db():
+    """One in-memory database per test.
+
+    Nothing in this file reads the database off disk: there is no audit mirror
+    and no test inspects a file, so an in-memory database gives the same
+    behaviour for a fraction of the setup cost.
+    """
+    database = AuditedDatabase(":memory:")
     yield database
     database.close()
 

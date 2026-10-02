@@ -16,13 +16,14 @@ structural decisions.
 
 from __future__ import annotations
 
-import tempfile
+import os
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from dsr.api import app
+from dsr.db.audited import AuditedDatabase
+from dsr.store import RecordStore
 from fastapi.testclient import TestClient
 
 BUYER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0 Safari/537.36"
@@ -36,22 +37,57 @@ SCANNER_AGENT = "Microsoft Outlook preview scanner"
 PREFIX = "/api/wf-015-identity-gate"
 
 
-@pytest.fixture()
-def client(monkeypatch):
+@pytest.fixture(scope="module")
+def _entered_client(tmp_path_factory):
+    """Enter one TestClient for the whole module.
+
+    Entering a TestClient runs the FastAPI lifespan, which opens the database.
+    That is the expensive part, and a test needs a fresh *database*, not a fresh
+    *application*: ``dsr.deps.get_store`` reads ``request.app.state.store`` on
+    every request, so replacing that attribute is enough to isolate a test. The
+    client is entered once here and the store is swapped per test below, which
+    keeps the same isolation for a fraction of the cost.
+
+    Module scope rules out ``monkeypatch``, so the environment is set by hand and
+    put back on the way out.
+    """
     import dsr.api as api_module
 
-    tmp = tempfile.TemporaryDirectory()
-    monkeypatch.setenv("DSR_DB_PATH", str(Path(tmp.name) / "api.db"))
-    monkeypatch.setenv("DSR_AUDIT_DIR", str(Path(tmp.name) / "audit"))
+    tmp = tmp_path_factory.mktemp("client")
+    saved = {
+        name: os.environ.get(name) for name in ("DSR_DB_PATH", "DSR_AUDIT_DIR", "DSR_PUBLIC_URL")
+    }
+    saved_dist = api_module.FRONTEND_DIST
+    os.environ["DSR_DB_PATH"] = str(tmp / "api.db")
+    os.environ["DSR_AUDIT_DIR"] = str(tmp / "audit")
     # The link a buyer follows must be stable for the round-trip test, so pin
     # the public base rather than inheriting the test client's host.
-    monkeypatch.setenv("DSR_PUBLIC_URL", "http://salesroom.test")
+    os.environ["DSR_PUBLIC_URL"] = "http://salesroom.test"
     # Static mounts are import-time, so point the module at a missing directory
     # to keep these tests focused on the API rather than the built frontend.
-    monkeypatch.setattr(api_module, "FRONTEND_DIST", Path(tmp.name) / "absent-frontend")
-    with TestClient(app) as test_client:
-        yield test_client
-    tmp.cleanup()
+    api_module.FRONTEND_DIST = tmp / "absent-frontend"
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        api_module.FRONTEND_DIST = saved_dist
+
+
+@pytest.fixture()
+def client(_entered_client):
+    """Give each test its own empty database, in memory."""
+    db = AuditedDatabase(":memory:", actor="api")
+    _entered_client.app.state.db = db
+    _entered_client.app.state.store = RecordStore(db)
+    try:
+        yield _entered_client
+    finally:
+        db.close()
 
 
 # -- helpers ----------------------------------------------------------------- #
