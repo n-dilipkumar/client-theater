@@ -8,16 +8,16 @@
 Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `4c3a09a Merge pull request #83 from n-dilipkumar/chore/landing-and-labels` &middot; measured 2026-10-02T10:07:48+05:30
+`main` at `5d84552 Merge pull request #87 from n-dilipkumar/fix/status-truth` &middot; measured 2026-10-02T12:01:48+05:30
 
-Measured in `C:\Users\Dilip\orca\workspaces\client-theater\status-truth`. This file is written by the generator and by nothing
+Measured in `C:\Users\Dilip\Documents\dummy repo\client-theater`. This file is written by the generator and by nothing
 else; if a copy of it lives in another clone, that copy is not this run.
 
 ## Progress
 
     workflows  [###########.......................] 48/138
     routes     881
-    tests      9995 passed, 0 failed, 2 xfailed  (measured 0 min ago on 4c3a09a)
+    tests      9995 passed, 0 failed, 2 xfailed  (measured now)
     features   0 failed to load
     to go      90
 
