@@ -75,7 +75,7 @@ UNREACHABLE = "http://127.0.0.1:1/hook"
 
 @pytest.fixture()
 def service(tmp_path):
-    db = AuditedDatabase(tmp_path / "wf011.db", mirror_dir=tmp_path / "mirror")
+    db = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     store = RecordStore(db)
     publishing = PublishingService(store, base_url="https://rooms.example")
     # The store is a facade; the tests that read the audit trail go through the
