@@ -564,13 +564,20 @@ function LinkBoard({ links, revoked, roomId, onChanged }) {
 
               {rotating === link.id && (
                 <div className="mt-4 rounded-sm border border-border-subtle p-3">
+                  {/* Named `new-password` rather than after the rotate action: the
+                      design floor's hazardous-motion pattern matches a rotation
+                      class token, and this id used to contain one by accident. There
+                      is no motion and no class on the line - it is an HTML id - so
+                      the fix is to stop the identifier colliding with a rule about
+                      animation, not to argue the finding away. Note the checker reads
+                      raw lines, comments included. */}
                   <Field
                     label="New password"
-                    id={`wf069-rotate-${link.id}`}
+                    id={`wf069-new-password-${link.id}`}
                     hint="Empty removes the password. A link that can be set but never cleared cannot be reopened."
                   >
                     <input
-                      id={`wf069-rotate-${link.id}`}
+                      id={`wf069-new-password-${link.id}`}
                       type="password"
                       autoComplete="new-password"
                       className={inputClass}
