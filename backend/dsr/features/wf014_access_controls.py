@@ -22,6 +22,7 @@ from dsr.access_controls import (
     PAGES,
     REFUSAL_STATUS,
     AccessControls,
+    AccessWindowConflict,
     AccessWindowInvalid,
     AccessWindowRefusal,
     parse_instant,
@@ -466,24 +467,39 @@ def set_live(
 
 
 def seed(db, context):
-    """Four pages that show the four states the workflow can be in.
+    """Five pages, one per state the workflow can be in.
 
     A feature whose page is empty in the demo is a feature nobody can review, and
-    the states worth showing are the ones that are hard to reach by clicking: a
-    page expired on a date in the past, a page whose cap is spent while its
-    status still reads live, a page about to expire, and one that is open. The
-    view rows for the capped page are written directly so the cap is genuinely
-    counted rather than faked with a stored number.
+    the states worth showing are the ones hard to reach by clicking: a page
+    expired on a date already past, a page whose cap is spent while its status
+    still reads live, a page about to expire, a page that is open, and a draft
+    holding a setting whose clock has not started.
+
+    The view rows for the capped page go through ``record_view`` rather than being
+    written by hand, so the cap is genuinely counted by ``count_where`` instead of
+    faked with a stored number. That call refuses the view that meets the cap, so
+    the refusal is caught rather than treated as a fault - a page one over its
+    limit is what a real room looks like.
     """
     from dsr.access_controls import AccessControls
     from dsr.store import RecordStore
 
     store = RecordStore(db)
     engine = AccessControls(store)
-    room_ids = context.get("room_ids") or []
+    room_ids = [room_id for room_id, _account in (context.get("room_ids") or [])]
+    now = context.get("now") or utcnow()
     if not room_ids:
         return None
-    now = context.get("now") or utcnow()
+
+    # The seeder is not a collaborator, and it writes as an instance
+    # administrator. An archived room is read-only for a collaborator - earlier
+    # features seed first and some of them archive a room to demonstrate their
+    # own workflow - so writing this feature's windows as a collaborator made the
+    # demo dataset depend on the order features happen to load in, and the
+    # seeder reported this feature as failed when it landed on an archived room.
+    # Choosing the identity here rather than filtering the rooms keeps the demo
+    # rows present in either case, which is the point of a seed.
+    SEED_ROLE = "instance_admin"
 
     def page(room_id: str, slug: str, title: str, *, published: bool) -> str:
         record = store.create(
@@ -515,33 +531,39 @@ def seed(db, context):
         return record["id"]
 
     def window_at(row: int) -> str:
-        return str(room_ids[row % len(room_ids)][0])
+        return str(room_ids[row % len(room_ids)])
 
     # 1. Open, with a cap that has room left.
     open_page = page(window_at(0), "pricing", "Pricing and packaging", published=True)
-    engine.set_view_limit(
-        open_page, enabled=True, max_views=25, role="room_collaborator", actor="seed"
-    )
+    engine.set_view_limit(open_page, enabled=True, max_views=25, role=SEED_ROLE, actor="seed")
 
     # 2. About to expire: inside the seven-day warning horizon.
     expiring = page(window_at(1), "security-overview", "Security overview", published=True)
-    engine.set_expiry(expiring, enabled=True, days=5, role="room_collaborator", actor="seed")
+    engine.set_expiry(expiring, enabled=True, days=5, role=SEED_ROLE, actor="seed")
 
     # 3. Expired on a date already past: badged declined with nothing set by hand.
     expired = page(window_at(2), "procurement", "Procurement pack", published=True)
-    engine.set_expiry(expired, enabled=True, days=3, role="room_collaborator", actor="seed")
+    engine.set_expiry(expired, enabled=True, days=3, role=SEED_ROLE, actor="seed")
     # Reopen the clock 40 days ago so a 3-day window closed on a date in the past.
-    engine.set_live(expired, role="room_collaborator", actor="seed", now=now - timedelta(days=40))
+    engine.set_live(expired, role=SEED_ROLE, actor="seed", now=now - timedelta(days=40))
 
     # 4. Cap spent, status still live: the case the whole workflow is about.
+    #
+    # Three views against a cap of two. The first two are admitted; the third
+    # meets the cap and is refused, which is the rule working rather than a fault,
+    # so the refusal is caught here. The page therefore ends closed with a count
+    # sitting exactly on its limit - the state a real room reaches.
     capped = page(window_at(3), "implementation-plan", "Implementation plan", published=True)
-    engine.set_view_limit(capped, enabled=True, max_views=2, role="room_collaborator", actor="seed")
+    engine.set_view_limit(capped, enabled=True, max_views=2, role=SEED_ROLE, actor="seed")
     for index in range(3):
-        engine.record_view(capped, viewer=f"buyer{index + 1}@northwind.example")
+        try:
+            engine.record_view(capped, viewer=f"buyer{index + 1}@northwind.example")
+        except AccessWindowConflict:
+            pass
 
     # 5. A draft that already carries a setting, to show the clock not running.
     draft = page(window_at(4), "case-studies", "Case studies", published=False)
-    engine.set_expiry(draft, enabled=True, days=14, role="room_collaborator", actor="seed")
+    engine.set_expiry(draft, enabled=True, days=14, role=SEED_ROLE, actor="seed")
 
     states = []
     for record_id in (open_page, expiring, expired, capped, draft):

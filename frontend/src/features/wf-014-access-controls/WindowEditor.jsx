@@ -128,9 +128,12 @@ export default function WindowEditor({ window, actions, onChange }) {
 
         {window.view_limit.enabled && (
           <div className="mt-3" role="img" aria-label={`${window.view_limit.views} of ${window.view_limit.max_views} views used`}>
-            <div className="h-1.5 w-full rounded-full bg-muted">
+            {/* `rounded-xs` rather than `rounded-full`: the design system reserves
+                full rounding for circles, and near-square shapes are the signal
+                that this is enterprise software. */}
+            <div className="h-1.5 w-full rounded-xs bg-muted">
               <div
-                className={`h-1.5 rounded-full ${window.view_limit.capped ? 'bg-destructive' : 'bg-accent'}`}
+                className={`h-1.5 rounded-xs ${window.view_limit.capped ? 'bg-destructive' : 'bg-accent'}`}
                 style={{
                   width: `${Math.min(
                     100,
