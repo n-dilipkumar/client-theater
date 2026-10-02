@@ -16,7 +16,7 @@ import {
 import { absoluteTime, relativeTime } from '@/lib/api'
 
 import { libraryApi } from './api'
-import { DOCUMENT_ICON, ICONS } from './icons'
+import { ICONS } from './icons'
 import { useRoomSelection } from './useRoomSelection'
 
 /**

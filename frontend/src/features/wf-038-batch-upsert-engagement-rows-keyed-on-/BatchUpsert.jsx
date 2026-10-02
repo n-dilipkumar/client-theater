@@ -29,7 +29,7 @@
  * disabled under `prefers-reduced-motion`.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { relativeTime } from '@/lib/api'
 import {
   Badge,

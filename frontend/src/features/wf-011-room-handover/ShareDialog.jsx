@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { absoluteTime, relativeTime } from '@/lib/api'
 import { Badge, Button, ErrorNote, Field, Icon, Spinner, inputClass, useAsync } from '@/components/ui'
 import { publishingApi } from './api'
@@ -25,39 +25,57 @@ export default function ShareDialog({ roomId, onClose, onChanged }) {
   const share = useAsync(() => publishingApi.share(roomId), [roomId])
   const room = share.data
 
-  const [status, setStatus] = useState('')
+  const [statusChoice, setStatusChoice] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
-  const [link, setLink] = useState(null)
+  const [linkState, setLinkState] = useState({ seed: undefined, link: null })
   const [copied, setCopied] = useState(null)
-  const [access, setAccess] = useState({
-    expires_at: '',
-    max_views: '',
-    password: '',
-    require_identity_verification: false,
-  })
+  const [accessState, setAccessState] = useState({ seed: undefined, access: null })
   const [accessBusy, setAccessBusy] = useState(false)
   const [accessError, setAccessError] = useState(null)
 
-  // Seed the form once the room arrives, and whenever it is refetched.
-  useEffect(() => {
-    if (!room) return
-    setStatus(room.status)
-    setAccess({
-      // A date input cannot hold a timestamp, so an ISO timestamp is shown as
-      // its date. Saving then stores the end of that day, which is what a
-      // seller who typed a full timestamp meant anyway.
-      expires_at: (room.access.expires_at || '').slice(0, 10),
-      max_views: room.access.max_views ?? '',
-      password: '',
-      require_identity_verification: room.access.require_identity_verification,
-    })
-  }, [room])
+  // The form is seeded from the room, and re-seeded when it is refetched. Each
+  // seeded value remembers which room payload it came from, so a different
+  // payload derives a fresh value during render instead of being copied into
+  // state by an effect.
+  //
+  // The consequence that matters: while the room is in flight the form shows
+  // the incoming room's values immediately, rather than for one render showing
+  // the empty defaults and then the real ones.
+  const status = statusChoice ?? room?.status ?? ''
 
-  useEffect(() => {
-    if (room?.public_url) setLink({ url: room.public_url, shareable: !room.access.expired })
-  }, [room])
+  const access =
+    accessState.seed === room
+      ? accessState.access
+      : room
+        ? {
+            // A date input cannot hold a timestamp, so an ISO timestamp is
+            // shown as its date. Saving then stores the end of that day, which
+            // is what a seller who typed a full timestamp meant anyway.
+            expires_at: (room.access.expires_at || '').slice(0, 10),
+            max_views: room.access.max_views ?? '',
+            password: '',
+            require_identity_verification: room.access.require_identity_verification,
+          }
+        : null
+
+  // `applyStatus` adopts the link the server returns; until that write happens
+  // the link is whatever the loaded room says.
+  const link =
+    linkState.seed === room
+      ? linkState.link
+      : room?.public_url
+        ? { url: room.public_url, shareable: !room.access.expired }
+        : null
+
+  const setStatus = (next) => setStatusChoice(next)
+  const setAccess = (next) =>
+    setAccessState({
+      seed: room,
+      access: typeof next === 'function' ? next(access) : next,
+    })
+  const setLink = (next) => setLinkState({ seed: room, link: next })
 
   async function applyStatus() {
     setBusy(true)

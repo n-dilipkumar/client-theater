@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   Badge,
   Button,
@@ -77,8 +77,8 @@ const RETURN_PRESENTATION = {
   properties: (value) => JSON.stringify(value),
   applicationUrls: (value) => JSON.stringify(value),
   pageThumbnailUrls: (value) => `${(value || []).length} pages`,
-  thumbnailUrl: (value) => 'thumbnail',
-  downloadUrl: (value) => 'download',
+  thumbnailUrl: () => 'thumbnail',
+  downloadUrl: () => 'download',
 }
 
 let filterSequence = 0
@@ -336,34 +336,35 @@ export default function LibrarySearch() {
   const [error, setError] = useState(null)
   const [tokenExpired, setTokenExpired] = useState(false)
   const [selected, setSelected] = useState([])
-  const [targetRoom, setTargetRoom] = useState('')
+  const [chosenTargetRoom, setChosenTargetRoom] = useState('')
   const [assembling, setAssembling] = useState(false)
   const [assembly, setAssembly] = useState(null)
   const [saveName, setSaveName] = useState('')
   const [activeSearchId, setActiveSearchId] = useState(null)
 
   const limits = contract.data?.limits
-  const effectivePageSize = pageSize ?? limits?.defaultPageSize ?? 20
   const availableFields = useMemo(() => {
     const discovered = (fields.data?.fields || []).map((entry) => entry.path)
     const known = Object.keys(FIELD_LABELS)
     return [...new Set([...discovered, ...known])].sort().map((path) => ({ path }))
   }, [fields.data])
 
-  // Seed the controls from the server contract once it arrives, so the defaults
-  // here are the server's defaults rather than a second copy of them.
-  useEffect(() => {
-    if (!contract.data) return
-    setSearchFields((current) => current || contract.data.searchFields)
-    setReturnFields((current) => current || contract.data.returnFields.default)
-    setPageSize((current) => current || contract.data.limits.defaultPageSize)
-  }, [contract.data])
+  // The three controls below are seeded from the server contract, so the
+  // defaults here are the server's defaults rather than a second copy of them.
+  // They read as `null` until the operator or a saved search sets them, so the
+  // contract's value is the fallback. Deriving the fallback during render
+  // replaces an effect that wrote three states on arrival -- and, more to the
+  // point, it stops the first render after the contract loads from offering the
+  // operator the page's hardcoded fallbacks.
+  const seededSearchFields = searchFields ?? contract.data?.searchFields
+  const seededReturnFields = returnFields ?? contract.data?.returnFields?.default
+  const seededPageSize = pageSize ?? contract.data?.limits?.defaultPageSize
 
-  useEffect(() => {
-    if (!targetRoom && rooms.data?.records?.length) {
-      setTargetRoom(rooms.data.records[0].id)
-    }
-  }, [rooms.data, targetRoom])
+  const effectivePageSize = seededPageSize ?? 20
+
+  // Which room results are assembled into. An explicit choice wins, otherwise
+  // the first room, derived rather than copied into state by an effect.
+  const targetRoom = chosenTargetRoom || rooms.data?.records?.[0]?.id || ''
 
   const buildBody = useCallback(
     (overrides = {}) => {
@@ -373,8 +374,8 @@ export default function LibrarySearch() {
       // An explicitly empty list is sent as one, not dropped: the server treats
       // a missing list as "use the defaults", so silently omitting it would make
       // unchecking every field look like it had done nothing.
-      if (searchFields) options.searchFields = searchFields
-      if (returnFields) options.returnFields = returnFields
+      if (seededSearchFields) options.searchFields = seededSearchFields
+      if (seededReturnFields) options.returnFields = seededReturnFields
       options.pageSize = effectivePageSize
       if (broaden) options.enableSuggestedQueryResults = true
       if (Object.keys(options).length) body.options = options
@@ -383,7 +384,7 @@ export default function LibrarySearch() {
       if (sortField) body.sort = [{ field: sortField, direction: sortDirection }]
       return { ...body, ...overrides }
     },
-    [term, searchFields, returnFields, effectivePageSize, broaden, group, sortField, sortDirection],
+    [term, seededSearchFields, seededReturnFields, effectivePageSize, broaden, group, sortField, sortDirection],
   )
 
   async function run(continuationToken) {
@@ -547,12 +548,12 @@ export default function LibrarySearch() {
                   <Checkbox
                     key={field}
                     label={FIELD_LABELS[field] || field}
-                    checked={(searchFields || []).includes(field)}
-                    onChange={() => toggleField(searchFields || [], setSearchFields, field)}
+                    checked={(seededSearchFields || []).includes(field)}
+                    onChange={() => toggleField(seededSearchFields || [], setSearchFields, field)}
                   />
                 ))}
               </div>
-              {searchFields && searchFields.length === 0 && (
+              {seededSearchFields && seededSearchFields.length === 0 && (
                 <p className="mt-1 text-xs text-amber-300">
                   No search fields selected, so a term cannot match anything.
                 </p>
@@ -571,8 +572,8 @@ export default function LibrarySearch() {
                   <Checkbox
                     key={field}
                     label={FIELD_LABELS[field] || field}
-                    checked={(returnFields || []).includes(field)}
-                    onChange={() => toggleField(returnFields || [], setReturnFields, field)}
+                    checked={(seededReturnFields || []).includes(field)}
+                    onChange={() => toggleField(seededReturnFields || [], setReturnFields, field)}
                   />
                 ))}
               </div>
@@ -786,7 +787,7 @@ export default function LibrarySearch() {
                   id="library-target-room"
                   className={inputClass}
                   value={targetRoom}
-                  onChange={(event) => setTargetRoom(event.target.value)}
+                  onChange={(event) => setChosenTargetRoom(event.target.value)}
                 >
                   {(rooms.data?.records || []).map((room) => (
                     <option key={room.id} value={room.id}>

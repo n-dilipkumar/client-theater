@@ -98,17 +98,20 @@ export function Notice({ tone = 'info', title, icon, children }) {
  *    it exists and contributed nothing.
  */
 export function BarRow({ label, value, display, hint, max, tone = 'accent' }) {
-  const [grown, setGrown] = useState(false)
   const reduced = usePrefersReducedMotion()
+  // Only the animation is state. Whether the bar is shown at its width is
+  // derived: with reduced motion there is no animation to wait for, so the bar
+  // is simply at full width on the first render. Writing `setGrown(true)` in the
+  // reduced branch instead meant the bar spent one render at zero width for a
+  // reader who asked for no animation at all.
+  const [animated, setAnimated] = useState(false)
   const peak = max ?? value ?? 0
   const ratio = peak > 0 && value > 0 ? Math.max(0.02, Math.min(1, value / peak)) : 0
+  const grown = reduced || animated
 
   useEffect(() => {
-    if (reduced) {
-      setGrown(true)
-      return undefined
-    }
-    const frame = requestAnimationFrame(() => setGrown(true))
+    if (reduced) return undefined
+    const frame = requestAnimationFrame(() => setAnimated(true))
     return () => cancelAnimationFrame(frame)
   }, [reduced])
 

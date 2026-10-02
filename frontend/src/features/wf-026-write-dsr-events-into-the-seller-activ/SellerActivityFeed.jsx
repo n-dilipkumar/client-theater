@@ -62,7 +62,7 @@ const SECTIONS = [
 const STATUS_TONE = { delivered: 'insert', failed: 'delete', skipped: 'update' }
 
 /** One configured custom event, with its card preview and its on/off toggle. */
-function EventTypeRow({ entry, apps, onToggle, onDelete, busy }) {
+function EventTypeRow({ entry, onToggle, onDelete, busy }) {
   const [open, setOpen] = useState(false)
   const locales = Object.entries(entry.localizations || {})
 
@@ -779,7 +779,6 @@ export default function SellerActivityFeed() {
                       <EventTypeRow
                         key={entry.id}
                         entry={entry}
-                        apps={appList}
                         busy={busy}
                         onToggle={(row, next) =>
                           run(

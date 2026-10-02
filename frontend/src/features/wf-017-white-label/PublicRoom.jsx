@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Badge, Card, ErrorNote, Spinner } from '@/components/ui'
+import { useMemo } from 'react'
+import { Badge, Card, ErrorNote, Spinner, useAsync } from '@/components/ui'
 import { whiteLabelApi } from './api'
 import { Glyph } from './primitives'
 
@@ -59,22 +59,16 @@ function brandStyle(branding) {
 }
 
 export default function PublicRoom({ path }) {
-  const [state, setState] = useState({ data: null, error: null, loading: true })
 
-  useEffect(() => {
-    let cancelled = false
-    setState({ data: null, error: null, loading: true })
-    // `window.location.host` is sent so the server can say whether this link was
-    // opened on the room's own domain or on the default one. Both are correct
-    // answers; the badge differs, the room does not.
-    whiteLabelApi
-      .resolveLink(path, window.location.host)
-      .then((data) => !cancelled && setState({ data, error: null, loading: false }))
-      .catch((error) => !cancelled && setState({ data: null, error, loading: false }))
-    return () => {
-      cancelled = true
-    }
-  }, [path])
+  // `window.location.host` is sent so the server can say whether this link was
+  // opened on the room's own domain or on the default one. Both are correct
+  // answers; the badge differs, the room does not.
+  const room = useAsync(() => whiteLabelApi.resolveLink(path, window.location.host), [path])
+  const state = {
+    data: room.data,
+    error: room.error,
+    loading: room.loading,
+  }
 
   const branding = state.data?.white_label?.branding
   const style = useMemo(() => brandStyle(branding), [branding])

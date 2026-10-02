@@ -30,7 +30,7 @@
  * `./primitives.jsx`.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { absoluteTime, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -132,7 +132,7 @@ function RunProgress({ run }) {
 const DEFAULT_MAP = '{\n  "Name": "title",\n  "Stage__c": "stage"\n}'
 
 function StartWizard({ vocabulary, connections, roomId, onStarted, onError }) {
-  const [connectionId, setConnectionId] = useState('')
+  const [chosenConnectionId, setChosenConnectionId] = useState('')
   const [kind, setKind] = useState('full_history')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -146,9 +146,9 @@ function StartWizard({ vocabulary, connections, roomId, onStarted, onError }) {
   // would be a button that says "Opening…" only after it has already opened.
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    if (!connectionId && connections.length) setConnectionId(connections[0].id)
-  }, [connections, connectionId])
+  // The first connection is the sensible default, derived rather than copied into
+  // state by an effect that cost an extra render with nothing chosen.
+  const connectionId = chosenConnectionId || connections[0]?.id || ''
 
   const chosen = connections.find((row) => row.id === connectionId)
   const threshold = defaultOf(vocabulary, 'bulk_threshold_records') ?? 2000
@@ -299,7 +299,7 @@ function StartWizard({ vocabulary, connections, roomId, onStarted, onError }) {
               <select
                 id="wf045-connection"
                 value={connectionId}
-                onChange={(event) => setConnectionId(event.target.value)}
+                onChange={(event) => setChosenConnectionId(event.target.value)}
                 className={inputClass}
               >
                 {connections.map((connection) => (
@@ -740,7 +740,7 @@ function InferenceCard({ entry }) {
 
 export default function BackfillHistory() {
   const [tab, setTab] = useState('runs')
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [selectedRun, setSelectedRun] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [nonce, setNonce] = useState(0)
@@ -751,9 +751,9 @@ export default function BackfillHistory() {
   const inferences = useAsync(() => backfillApi.inferences(), [])
   const rooms = useAsync(() => backfillApi.rooms(), [])
 
-  useEffect(() => {
-    if (!roomId && rooms.data?.records?.length) setRoomId(rooms.data.records[0].id)
-  }, [rooms.data, roomId])
+  // The first room is the sensible default, derived rather than copied into state
+  // by an effect that cost an extra render with nothing chosen.
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
 
   const connections = useAsync(() => backfillApi.connections(), [nonce])
   const runs = useAsync(
@@ -869,7 +869,7 @@ export default function BackfillHistory() {
             id="wf045-room"
             value={roomId}
             onChange={(event) => {
-              setRoomId(event.target.value)
+              setChosenRoomId(event.target.value)
               setSelectedRun('')
             }}
             className={`${inputClass} max-w-xs`}

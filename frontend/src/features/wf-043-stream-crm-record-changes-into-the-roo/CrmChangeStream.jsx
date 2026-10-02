@@ -74,7 +74,7 @@ function tone(changeType) {
  * Sections
  * ---------------------------------------------------------------------- */
 
-function Summary({ summary, usage, vocabulary }) {
+function Summary({ summary, usage }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
@@ -108,7 +108,12 @@ function Summary({ summary, usage, vocabulary }) {
 function Orgs({ orgs, vocabulary, onChanged, onNotice }) {
   const [system, setSystem] = useState('salesforce')
   const [edition, setEdition] = useState('Unlimited')
-  const [entities, setEntities] = useState('Opportunity')
+  // KNOWN GAP (not a lint fix): `enableCdc` below sends this list, but nothing
+  // here lets the operator edit it, so enabling from this card always captures
+  // the single entity "Opportunity". The Channels card two sections down does
+  // bind its own `entities` field. Wiring a picker here changes what the page
+  // renders and is a feature decision for the owning branch, not a lint pass.
+  const [entities] = useState('Opportunity')
 
   const register = useCallback(async () => {
     try {
@@ -1291,7 +1296,6 @@ export default function CrmChangeStream() {
       <Summary
         summary={summary.data || {}}
         usage={usage.data || { totals: {} }}
-        vocabulary={vocabulary.data}
       />
       <Banner notice={notice} />
 

@@ -51,10 +51,6 @@ function roomName(rooms, roomId) {
   return rooms.find((room) => room.id === roomId)?.data?.name || roomId
 }
 
-function qualifiedCount(row) {
-  return (row.indicators || []).filter((entry) => entry.qualifies).length
-}
-
 /* -------------------------------------------------------------------------- */
 /* The composer                                                                */
 /* -------------------------------------------------------------------------- */
@@ -429,7 +425,7 @@ function FeedRow({ row }) {
   )
 }
 
-function LiveFeed({ room, feed, loading, error, onRetry, onToggleHidden }) {
+function LiveFeed({ feed, loading, error, onRetry, onToggleHidden }) {
   const [showHidden, setShowHidden] = useState(false)
 
   if (loading) return <Spinner label="Loading the Live Feed" />
@@ -814,11 +810,6 @@ export default function IntentSignalsPage() {
   const inferences = useAsync(() => signalApi.inferences(), [])
   const registry = useAsync(() => signalApi.registrations(), [])
 
-  const room = useMemo(
-    () => (rooms.data?.records || []).find((record) => record.id === roomId) || null,
-    [rooms.data, roomId],
-  )
-
   const summary = useAsync(
     () => (roomId ? signalApi.summary(roomId) : Promise.resolve(null)),
     [roomId],
@@ -951,7 +942,6 @@ export default function IntentSignalsPage() {
       />
 
       <LiveFeed
-        room={room}
         feed={feedWithWithheld}
         loading={feed.loading}
         error={feed.error}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import {
   Badge,
@@ -72,8 +72,6 @@ function id(value, from) {
     </span>
   )
 }
-
-const STATE_ORDER = ['synced', 'pending', 'failed', 'blocked']
 
 /**
  * Why a reason is drawn the way it is, read from the server's vocabulary.
@@ -377,7 +375,7 @@ function Configuration({ connectors, eventTypes, fieldMaps, vocabulary }) {
 /* ------------------------------------------------------------------ the page */
 
 export default function CrmEngagementLog() {
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [selectedEventId, setSelectedEventId] = useState('')
   const [selectedLogId, setSelectedLogId] = useState('')
   const [busy, setBusy] = useState(false)
@@ -405,9 +403,10 @@ export default function CrmEngagementLog() {
       ),
     [rooms.data]
   )
-  useEffect(() => {
-    if (!roomId && sortedRooms.length) setRoomId(sortedRooms[0].id)
-  }, [sortedRooms, roomId])
+  // The first room, once, so the page is never a picker with nothing picked.
+  // Derived rather than copied into state by an effect, which cost an extra
+  // render with no room selected.
+  const roomId = chosenRoomId || sortedRooms[0]?.id || ''
 
   const fieldMaps = useAsync(() => engagementApi.fieldMaps(), [])
   const readiness = useAsync(
@@ -496,7 +495,7 @@ export default function CrmEngagementLog() {
               className={inputClass}
               value={roomId}
               onChange={(event) => {
-                setRoomId(event.target.value)
+                setChosenRoomId(event.target.value)
                 setSelectedEventId('')
               }}
             >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, EmptyState, ErrorNote, Field, Spinner, inputClass, useAsync } from '@/components/ui'
 import PageBuilder from './PageBuilder'
 import RoomView from './RoomView'
@@ -59,23 +59,28 @@ function TabList({ active, onChange }) {
 
 export default function BuyerPages() {
   const rooms = useAsync(() => pagesApi.rooms(), [])
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [tab, setTab] = useState('edit')
-  const [pageId, setPageId] = useState(null)
-  const [slug, setSlug] = useState(null)
 
-  // Default to the first room once they arrive, so the page is never an empty
-  // shell when there is something to show.
-  useEffect(() => {
-    const first = rooms.data?.records?.[0]?.id
-    if (first && !roomId) setRoomId(first)
-  }, [rooms.data, roomId])
+  // The page and buyer-view slug each remember which room they were chosen for.
+  // A selection belonging to another room reads as no selection, which is what
+  // the old `useEffect(() => { setPageId(null); setSlug(null) }, [roomId])`
+  // arranged. Deriving it means the first render of a newly chosen room already
+  // shows the right thing, rather than one render showing the previous room's
+  // page before the effect corrected it.
+  const [pageChoice, setPageChoice] = useState({ roomId: '', pageId: null })
+  const [slugChoice, setSlugChoice] = useState({ roomId: '', slug: null })
 
-  // A new room is a new page selection and a new buyer-view slug.
-  useEffect(() => {
-    setPageId(null)
-    setSlug(null)
-  }, [roomId])
+  // Only the operator's explicit choice is state; the room on screen falls back
+  // to the first one, so the page is never an empty shell when there is
+  // something to show.
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
+
+  const pageId = pageChoice.roomId === roomId ? pageChoice.pageId : null
+  const slug = slugChoice.roomId === roomId ? slugChoice.slug : null
+
+  const selectPage = (next) => setPageChoice({ roomId, pageId: next })
+  const selectSlug = (next) => setSlugChoice({ roomId, slug: next })
 
   if (rooms.loading) return <Spinner label="Loading sales rooms" />
   if (rooms.error) return <ErrorNote error={rooms.error} onRetry={rooms.refetch} />
@@ -99,7 +104,7 @@ export default function BuyerPages() {
               id="wf002-room"
               className={`${inputClass} min-w-56`}
               value={roomId}
-              onChange={(event) => setRoomId(event.target.value)}
+              onChange={(event) => setChosenRoomId(event.target.value)}
             >
               {records.length === 0 && <option value="">No rooms yet</option>}
               {records.map((item) => (
@@ -126,9 +131,9 @@ export default function BuyerPages() {
               <PageBuilder
                 roomId={roomId}
                 pageId={pageId}
-                onSelectPage={setPageId}
+                onSelectPage={selectPage}
                 onOpenBuyerView={(nextSlug) => {
-                  setSlug(nextSlug)
+                  selectSlug(nextSlug)
                   setTab('view')
                 }}
               />
@@ -139,12 +144,12 @@ export default function BuyerPages() {
                 roomId={roomId}
                 slug={slug}
                 onEdit={(nextPageId) => {
-                  setPageId(nextPageId)
+                  selectPage(nextPageId)
                   setTab('edit')
                 }}
-                onOpenPage={setSlug}
+                onOpenPage={selectSlug}
                 onShowAll={() => {
-                  setSlug(null)
+                  selectSlug(null)
                   setTab('edit')
                 }}
               />
