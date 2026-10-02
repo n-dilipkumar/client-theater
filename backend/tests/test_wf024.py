@@ -75,15 +75,17 @@ def at(days: float = 0, hours: float = 0) -> str:
 
 
 @pytest.fixture()
-def store():
-    """A store over a throwaway audited database, for the domain tests."""
-    tmp = tempfile.TemporaryDirectory()
-    db = AuditedDatabase(
-        Path(tmp.name) / "wf024.db", mirror_dir=Path(tmp.name) / "audit", actor="test"
-    )
+def store(tmp_path):
+    """A store over an in-memory audited database, for the domain tests.
+
+    The database is the only expensive part of this fixture, and an in-memory one
+    applies the same schema far faster than a file on disk. The audit mirror still
+    goes to disk, so the mirror write path stays exercised rather than silently
+    disappearing from the suite.
+    """
+    db = AuditedDatabase(":memory:", mirror_dir=tmp_path / "audit", actor="test")
     yield RecordStore(db)
     db.close()
-    tmp.cleanup()
 
 
 @pytest.fixture()
