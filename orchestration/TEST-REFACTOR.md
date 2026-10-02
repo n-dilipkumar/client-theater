@@ -462,3 +462,128 @@ Append here. Newest last. Write for an agent who has never seen this work.
     distribution mode and coverage did not move, so nothing broke. That is
     evidence, not proof: a test that passes both ways while covering different
     lines would show up in neither number.
+- 2026-10-03 — **Agent D (features-b), branch `perf-tests-features-b`.** Cut the
+  setup cost of `test_wf032`..`test_wf079` and the 9 frontend test files. Test
+  code only. No application source, no assertion weakened, no test deleted.
+
+  **Scope correction: 26 files, not 28, and 6,220 tests, not 5,922.** The task
+  brief lists 26 filenames and says 28. The count that matters is what pytest
+  collects: 6,220 tests across the 26 files I own.
+
+  **Where the time actually was.** `pytest --durations=0` over my 26 files,
+  before any edit:
+
+  | Phase | Seconds | Share |
+  |---|---|---|
+  | setup | 167.1 | 56.5% |
+  | call | 71.1 | 24.0% |
+  | teardown | 57.4 | 19.4% |
+
+  Setup plus teardown was **75.9%** of measured time. The test bodies were a
+  quarter of it. The fixtures were the whole problem, which confirms the section
+  3 diagnosis and sharpens it: for the wf032..wf079 files the fixture share is
+  worse than the 49% recorded for the suite as a whole.
+
+  **Three changes.**
+
+  1. *In-memory databases, 22 files.* `AuditedDatabase(path)` is 7.0 ms,
+     `AuditedDatabase(":memory:")` is 0.4 ms. I verified by reading the tests
+     that **no test in these 26 files reads the audit mirror off the
+     filesystem.** The one test that does is in `test_wf001.py`, which belongs to
+     agent C. So the `mirror_dir` argument bought nothing here.
+
+  2. *One `TestClient` per module, 21 files.* Strategy C from section 3, exactly
+     as documented. `dsr/api.py` assigns only `app.state.db` and
+     `app.state.store`, and `dsr/deps.py` reads `app.state.store` per request.
+
+     **One exception, found by reading rather than by guessing.**
+     `test_wf033.py` keeps a file-backed database. Three of its audit tests open
+     a *second* `AuditedDatabase` on the same path and read the audit log back
+     from it. That proves the audit row was committed to the file, which is a
+     different claim from reading it over HTTP. Converting it to `:memory:` broke
+     two of those tests, which is how I found the coupling.
+
+  3. *One seeded database for the read-only seed tests in `test_wf063.py`,
+     16 tests.* Fifteen of them assert different things about the same demo
+     dataset, and each used to run the whole seeder over its own database. The
+     no-rooms case and the test that drives the engine keep their own.
+
+  **Left file-backed on purpose**, per the brief's safety rules:
+  `test_wf034.py`, `test_wf038.py`, `test_wf038_http.py` (real transport layer),
+  and `test_wf045_perf.py` (performance measurement; its timings must not move).
+
+  **Result, same machine, same interpreter.**
+
+  | | Before | After |
+  |---|---|---|
+  | 26 files, tests | 6,220 | 6,220 |
+  | wall clock | 343.46 s | 151.93 s |
+  | setup (reported) | 167.1 s | 45.6 s (-73%) |
+  | teardown (reported) | 57.4 s | 8.0 s (-86%) |
+
+  **Read the headline with care.** Two runs of the same code gave 151.93 s and
+  198.85 s, because up to four suites from four agents were running on eight
+  cores at once. So the honest saving on my files is **between 42% and 56%**, not
+  a single figure. The phase split is the robust evidence; the wall clock is
+  load noise. The orchestrator's own measurement of my 22 changed files, on a
+  quieter machine, was 5,766 passed in 81.19 s. CI on an isolated runner is
+  better still and should override both.
+
+  **Gates, on the rebased tree.**
+
+  | Gate | Baseline | Mine |
+  |---|---|---|
+  | collected | 11,129 | 11,129 |
+  | passed | 11,127 + 2 xfailed | 11,127 + 2 xfailed |
+  | coverage missed statements | 2,546 measured on this machine | 2,546 measured on this machine |
+  | `ruff check` | pass | pass |
+  | `ruff format --check` | pass | pass (520 files) |
+  | `eslint` | pass | 0 errors, 1 pre-existing warning in `ui.jsx` |
+  | `prettier` | pass | pass |
+  | `vitest run` | 260 passed | 260 passed, 9 files |
+  | `vite build` | pass | pass, 293 modules |
+
+  **On the coverage floor, defer to the corrected number above.** I measured 2,546
+  missed statements out of 50,045 both before and after my change, so my change
+  moved coverage by nothing at all — that is the claim I can support. I am not
+  restating 2,546 as the floor the next agent must defend, because two agents
+  have since shown that figure is not reproducible on this machine. The floor
+  recorded earlier in this document is the one to hold.
+
+  **The frontend was measured, not changed — and I could not improve it safely.**
+  All 9 files render through `@testing-library/react`, so the jsdom environment
+  every file pays for is not avoidable; the section 5 suggestion to move a pure
+  logic file to a lighter environment has no candidate here. Only 2 test titles
+  repeat across the 9 files, and both are per-feature descriptor assertions that
+  check their own feature, so there is no duplication to remove. The `waitFor`
+  and `findBy` calls are not slow by accident: every page fetches on mount, so
+  the assertion genuinely has to wait. I could only have made this faster by
+  swapping `userEvent` for `fireEvent`, which would stop testing real key
+  events. I did not do that. I added no coverage gate, as instructed.
+
+  **I did not reduce the test count, on purpose.** Once the fixtures were fixed
+  the remaining cost is in the test bodies (`call` 46.7 s of 100.2 s reported).
+  Cutting tests to save that would trade covered behaviour for a small gain,
+  which section 4 rule 2 forbids. So this branch makes the suite much faster and
+  keeps every test. If the programme also wants a smaller *count*, that is a
+  separate decision and it needs a human, because it means choosing which
+  behaviours to stop asserting.
+
+  **Two things I got wrong, recorded so nobody copies them.**
+
+  * I ran `git stash` in a worktree. All four worktrees share one `.git`, so
+    `git stash pop` took a **peer agent's** stash and wrote 7 core test files
+    into my worktree. I reverted them and popped my own stash by name, and no
+    work was lost, but this is exactly the failure `WORKTREE-SAFETY.md` rule 1
+    describes. The correct way to get a baseline is rule 3: copy the repo and
+    check out the base commit in the copy.
+  * The harness temp folder is shared between agents. A peer agent overwrote one
+    of my analysis scripts with a different file of the same name, and it failed
+    in a way that looked like my bug. My scripts now live in a private
+    subfolder. Anyone measuring on this machine should assume the temp folder is
+    not private.
+
+  **One measurement trap.** `backend/pyproject.toml` sets `addopts = "-q"`.
+  Adding `-q` on the command line makes it `-qq`, which **suppresses the final
+  count line entirely**. A full-suite run then exits 0, prints progress to 100%,
+  and reports no counts. Do not add a second `-q`; `addopts` already has one.

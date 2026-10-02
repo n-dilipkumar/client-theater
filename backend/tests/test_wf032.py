@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import ast
 import json
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -203,8 +202,10 @@ def unreachable() -> DeliveryResult:
 
 
 @pytest.fixture()
-def store(tmp_path):
-    db = AuditedDatabase(tmp_path / "wf032.db", mirror_dir=tmp_path / "mirror")
+def store():
+    # In-memory rather than a file on disk: 0.4 ms against 7.0 ms, measured. No test
+    # in this file reads the audit mirror off the filesystem, so the file bought nothing.
+    db = AuditedDatabase()
     yield RecordStore(db)
     db.close()
 
@@ -276,31 +277,45 @@ def outcome(result: dict, workflow_id: str) -> dict:
     return next(row for row in result["deliveries"] if row["workflowId"] == workflow_id)
 
 
-@pytest.fixture()
-def http(monkeypatch, transport):
-    """A client over a temporary database, with the transport faked.
+@pytest.fixture(scope="module")
+def _shared_client(tmp_path_factory):
+    """One application for the module. A fresh database for each test.
 
-    ``DSR_DB_PATH`` points at a temporary file the way ``test_features.py`` does,
-    and the whole service is replaced through ``app.dependency_overrides`` - the
-    seam the feature contract provides for exactly this, so no socket is opened
-    anywhere in this suite and no wall-clock time is spent in a POST.
+    See the note on ``_shared_client`` in this package: the lifespan only assigns
+    ``app.state.db`` and ``app.state.store``, and the whole service is replaced
+    through ``app.dependency_overrides`` - the seam the feature contract provides
+    for exactly this, so no socket is opened anywhere in this suite and no
+    wall-clock time is spent in a POST.
     """
-    tmp = tempfile.TemporaryDirectory()
-    monkeypatch.setenv("DSR_DB_PATH", str(Path(tmp.name) / "wf032.db"))
-    monkeypatch.setenv("DSR_AUDIT_DIR", str(Path(tmp.name) / "audit"))
-    monkeypatch.setattr("dsr.api.FRONTEND_DIST", Path(tmp.name) / "absent-frontend")
-    with TestClient(app) as client:
-        app.dependency_overrides[load_feature(MODULE).get_stream] = lambda: IntentStream(
-            client.app.state.store, transport=transport, now=NOW
-        )
-        # The scripted transport is reachable from a test body, so a test can
-        # make the next call fail without rebuilding the service.
-        client.transport = transport  # type: ignore[attr-defined]
-        try:
-            yield client
-        finally:
-            app.dependency_overrides.clear()
-    tmp.cleanup()
+    scratch = tmp_path_factory.mktemp("wf032-http")
+    patch = pytest.MonkeyPatch()
+    patch.setenv("DSR_DB_PATH", ":memory:")
+    patch.setenv("DSR_AUDIT_DIR", str(scratch / "audit"))
+    patch.setattr("dsr.api.FRONTEND_DIST", scratch / "absent-frontend")
+    with TestClient(app) as test_client:
+        yield test_client
+    patch.undo()
+
+
+@pytest.fixture()
+def http(_shared_client, transport):
+    """The shared application, over a database this test owns alone."""
+    db = AuditedDatabase()
+    _shared_client.app.state.db = db
+    _shared_client.app.state.store = RecordStore(db)
+    app.dependency_overrides.clear()
+    app.dependency_overrides[load_feature(MODULE).get_stream] = lambda: IntentStream(
+        _shared_client.app.state.store, transport=transport, now=NOW
+    )
+    # The scripted transport is reachable from a test body, so a test can
+    # make the next call fail without rebuilding the service.
+    _shared_client.transport = transport
+    try:
+        yield _shared_client
+    finally:
+        app.dependency_overrides.clear()
+        del _shared_client.transport
+        db.close()
 
 
 @pytest.fixture()

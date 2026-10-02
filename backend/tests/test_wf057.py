@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import inspect
 import re
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -194,8 +193,10 @@ def candidates(*starts: str, minutes: int = 60) -> list[Candidate]:
 
 
 @pytest.fixture()
-def store(tmp_path):
-    db = AuditedDatabase(tmp_path / "wf057.db", mirror_dir=tmp_path / "mirror")
+def store():
+    # In-memory rather than a file on disk: 0.4 ms against 7.0 ms, measured. No test
+    # in this file reads the audit mirror off the filesystem, so the file bought nothing.
+    db = AuditedDatabase()
     yield RecordStore(db)
     db.close()
 
@@ -2980,16 +2981,48 @@ def test_a_calendar_can_be_soft_deleted_and_its_searches_stay(
 # --------------------------------------------------------------------------- #
 
 
+@pytest.fixture(scope="module")
+def _shared_client(tmp_path_factory):
+    """One application for the module. A fresh database for each test.
+
+    The lifespan in ``dsr/api.py`` only assigns ``app.state.db`` and
+    ``app.state.store``, and ``dsr/deps.py`` reads ``app.state.store`` on every
+    request. A test therefore needs a fresh *database*, not a fresh
+    *application*. Entering a TestClient costs 46 ms measured; swapping the two
+    attributes costs about 1.25 ms.
+
+    The environment is patched here rather than per test because a module-scoped
+    fixture cannot use the function-scoped ``monkeypatch``. It is undone on the
+    way out so it reaches no other module. ``DSR_DB_PATH`` is ``:memory:`` so the
+    lifespan's own database costs nothing either.
+    """
+    scratch = tmp_path_factory.mktemp("wf057-http")
+    patch = pytest.MonkeyPatch()
+    patch.setenv("DSR_DB_PATH", ":memory:")
+    patch.setenv("DSR_AUDIT_DIR", str(scratch / "audit"))
+    patch.setattr("dsr.api.FRONTEND_DIST", scratch / "absent-frontend")
+    with TestClient(app) as test_client:
+        yield test_client
+    patch.undo()
+
+
 @pytest.fixture()
-def http(monkeypatch):
-    """A client over a temporary database, with the engine built per request."""
-    tmp = tempfile.TemporaryDirectory()
-    monkeypatch.setenv("DSR_DB_PATH", str(Path(tmp.name) / "wf057_http.db"))
-    monkeypatch.setenv("DSR_AUDIT_DIR", str(Path(tmp.name) / "audit"))
-    monkeypatch.setattr("dsr.api.FRONTEND_DIST", Path(tmp.name) / "absent-frontend")
-    with TestClient(app) as client:
-        yield client
-    tmp.cleanup()
+def http(_shared_client):
+    """The shared application, over a database this test owns alone.
+
+    ``dependency_overrides`` is cleared on the way in and on the way out: the
+    application is module-scoped, so an override one test installs would
+    otherwise still be installed for the next one.
+    """
+    db = AuditedDatabase()
+    _shared_client.app.state.db = db
+    _shared_client.app.state.store = RecordStore(db)
+    _shared_client.app.dependency_overrides.clear()
+    try:
+        yield _shared_client
+    finally:
+        _shared_client.app.dependency_overrides.clear()
+        db.close()
 
 
 @pytest.fixture()
