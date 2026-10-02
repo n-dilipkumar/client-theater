@@ -4191,13 +4191,13 @@ def test_the_seed_survives_being_run_with_no_rooms(db, seed_module):
 #: window on ``now + 1 day`` broke specifically on a Friday, when tomorrow is a
 #: Saturday and every demo asset books Monday to Friday.
 SEED_CLOCKS = [
-    datetime(2026, 9, 28, 9, 0, tzinfo=timezone.utc),   # Monday, as NOW
+    datetime(2026, 9, 28, 9, 0, tzinfo=timezone.utc),  # Monday, as NOW
     datetime(2026, 9, 29, 23, 59, tzinfo=timezone.utc),  # Tuesday, late
-    datetime(2026, 10, 2, 0, 0, tzinfo=timezone.utc),   # Friday, midnight
+    datetime(2026, 10, 2, 0, 0, tzinfo=timezone.utc),  # Friday, midnight
     datetime(2026, 10, 2, 9, 30, tzinfo=timezone.utc),  # Friday, the day CI broke
     datetime(2026, 10, 2, 23, 59, tzinfo=timezone.utc),  # Friday, late
-    datetime(2026, 10, 3, 9, 0, tzinfo=timezone.utc),   # Saturday
-    datetime(2026, 10, 4, 9, 0, tzinfo=timezone.utc),   # Sunday
+    datetime(2026, 10, 3, 9, 0, tzinfo=timezone.utc),  # Saturday
+    datetime(2026, 10, 4, 9, 0, tzinfo=timezone.utc),  # Sunday
 ]
 
 #: The mixed demo the seeder is supposed to produce. Asserted as a list rather
@@ -4235,8 +4235,7 @@ def test_the_seed_books_on_every_day_of_the_week(db, seed_module, clock):
     # The point of the window being relative: the meeting it books is in the
     # future relative to the clock that asked for it.
     assert all(
-        _instant(row["data"]["startTime"]) > clock
-        for row in store.list(MEETING_COLLECTION)
+        _instant(row["data"]["startTime"]) > clock for row in store.list(MEETING_COLLECTION)
     ), summary
 
 
