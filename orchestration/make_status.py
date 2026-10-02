@@ -312,7 +312,9 @@ def cache_is_current(entry: dict, ref: str, age: float) -> bool:
     ref at all is refused rather than guessed at, because an entry that cannot name
     its tree cannot be shown to describe this one.
     """
-    return bool(ref) and entry.get("ref") == ref and age < CACHE_MAX_AGE and bool(entry.get("passed"))
+    return (
+        bool(ref) and entry.get("ref") == ref and age < CACHE_MAX_AGE and bool(entry.get("passed"))
+    )
 
 
 def suite_count(argv: list[str]):
