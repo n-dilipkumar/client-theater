@@ -33,24 +33,26 @@ function writeRoomToUrl(roomId) {
 }
 
 export function useRoomSelection(fallbackRoomId) {
-  const [roomId, setRoomId] = useState(readRoomFromUrl)
+  // Only what the operator picked is state. The room on screen falls back to
+  // the first room during render, so there is no effect whose job was to copy
+  // the fallback into state -- and no render pass in between in which the page
+  // briefly had no room at all.
+  const [chosenRoomId, setChosenRoomId] = useState(readRoomFromUrl)
 
-  useEffect(() => {
-    // Nothing chosen and nothing linked: open the first room, so the page shows
-    // a library rather than an empty picker.
-    if (!roomId && fallbackRoomId) setRoomId(fallbackRoomId)
-  }, [roomId, fallbackRoomId])
+  const roomId = chosenRoomId || fallbackRoomId || ''
 
   // A link pasted into the address bar, or a back/forward step, lands here.
+  // This one legitimately subscribes to an external system, so it stays an
+  // effect; the state it writes is the operator's choice, not a derived value.
   useEffect(() => {
-    const sync = () => setRoomId(readRoomFromUrl())
+    const sync = () => setChosenRoomId(readRoomFromUrl())
     window.addEventListener('popstate', sync)
     return () => window.removeEventListener('popstate', sync)
   }, [])
 
   const selectRoom = useCallback((next) => {
     writeRoomToUrl(next || '')
-    setRoomId(next || '')
+    setChosenRoomId(next || '')
   }, [])
 
   return [roomId, selectRoom]

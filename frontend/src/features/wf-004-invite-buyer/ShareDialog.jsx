@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
   Badge,
@@ -52,21 +52,32 @@ function ExpiryLabel({ member }) {
 }
 
 function MemberRow({ member, snapshot, onRoleChange, onExpirySave, onExpiryClear, onRemove, busyId }) {
-  const [editingExpiry, setEditingExpiry] = useState(false)
-  const [draftExpiry, setDraftExpiry] = useState(member.access_valid_until || '')
-  const [confirmingRemove, setConfirmingRemove] = useState(false)
+  // The row's own state is scoped to the grant it belongs to. A different grant's
+  // expiry, role or id derives fresh values during render, which is what the old
+  // effect's three setStates arranged -- except that it happened a render later,
+// so for one render a newly-listed grant was shown with the previous grant's
+  // half-typed expiry and an open confirmation.
+  const [rowEdits, setRowEdits] = useState({ forGrant: undefined, edits: {} })
+
+  const grantKey = `${member.id}|${member.role}|${member.access_valid_until || ''}`
+  const edits = rowEdits.forGrant === grantKey ? rowEdits.edits : {}
+
+  const editingExpiry = Boolean(edits.editingExpiry)
+  const setEditingExpiry = (value) =>
+    setRowEdits({ forGrant: grantKey, edits: { ...edits, editingExpiry: value } })
+
+  const draftExpiry = edits.draftExpiry ?? member.access_valid_until ?? ''
+  const setDraftExpiry = (value) =>
+    setRowEdits({ forGrant: grantKey, edits: { ...edits, draftExpiry: value } })
+
+  const confirmingRemove = Boolean(edits.confirmingRemove)
+  const setConfirmingRemove = (value) =>
+    setRowEdits({ forGrant: grantKey, edits: { ...edits, confirmingRemove: value } })
 
   const busy = busyId === member.id
-  const assignable = snapshot.actor.assignable_roles
   // The owner is the room, not a grant: it is neither reassignable nor
   // removable, and the row says so instead of offering controls that 400.
   const locked = member.owner
-
-  useEffect(() => {
-    setDraftExpiry(member.access_valid_until || '')
-    setEditingExpiry(false)
-    setConfirmingRemove(false)
-  }, [member.access_valid_until, member.role, member.id])
 
   return (
     <li className="rounded-lg border border-border-subtle/25 bg-background/30 p-3">
@@ -203,34 +214,46 @@ function MemberRow({ member, snapshot, onRoleChange, onExpirySave, onExpiryClear
 export function ShareDialog({ room, actor, onClose }) {
   const snapshot = useAsync(() => rolesApi.snapshot(room.id, actor), [room.id, actor])
   const [emails, setEmails] = useState([])
-  const [role, setRole] = useState(null)
   const [expiry, setExpiry] = useState('')
   const [sending, setSending] = useState(false)
   const [busyId, setBusyId] = useState(null)
-  const [problem, setProblem] = useState(null)
-  const [confirmation, setConfirmation] = useState(null)
-  const [result, setResult] = useState(null)
 
   const data = snapshot.data
   const canShare = data?.actor?.can_share ?? false
-  const roles = data?.roles ?? []
+  // Memoised so the `assignable` below keeps a stable dependency. A fresh `[]`
+  // each render made every dep change on every render, so the memo never held.
+  const roles = useMemo(() => data?.roles ?? [], [data])
   const assignable = useMemo(
     () => roles.filter((item) => item.assignable).map((item) => item.id),
     [roles],
   )
 
-  // Default to Viewer, and re-default when the actor changes to someone whose
-  // allowed roles differ, so the form can never be left on a role this person
-  // is not allowed to hand out.
-  useEffect(() => {
-    if (!data) return
-    setRole((current) =>
-      current && assignable.includes(current) ? current : assignable[assignable.length - 1] || 'viewer',
-    )
-    setProblem(null)
-    setConfirmation(null)
-    setResult(null)
-  }, [data, assignable])
+  // The role defaults to Viewer, and re-defaults when the actor changes to someone
+  // whose allowed roles differ, so the form can never be left on a role this
+  // person is not allowed to hand out. Derived rather than copied into state by
+  // an effect: a role the new actor cannot assign is corrected on the first
+  // render instead of a render later.
+  const fallbackRole = assignable[assignable.length - 1] || 'viewer'
+  const [roleChoice, setRoleChoice] = useState({ forSnapshot: undefined, role: null })
+  const chosenRole = roleChoice.forSnapshot === data ? roleChoice.role : null
+  const role = chosenRole && assignable.includes(chosenRole) ? chosenRole : fallbackRole
+  const setRole = (next) =>
+    setRoleChoice({ forSnapshot: data, role: typeof next === 'function' ? next(role) : next })
+
+  // The problem, the confirmation and the result all describe an attempt made by
+  // the current actor, so they read as absent when the snapshot changes.
+  const [outcome, setOutcome] = useState({ forSnapshot: undefined, problem: null, confirmation: null, result: null })
+  const current = outcome.forSnapshot === data ? outcome : { problem: null, confirmation: null, result: null }
+  const problem = current.problem
+  const confirmation = current.confirmation
+  const result = current.result
+
+  const setProblem = (next) =>
+    setOutcome({ forSnapshot: data, ...current, problem: typeof next === 'function' ? next(problem) : next })
+  const setConfirmation = (next) =>
+    setOutcome({ forSnapshot: data, ...current, confirmation: typeof next === 'function' ? next(confirmation) : next })
+  const setResult = (next) =>
+    setOutcome({ forSnapshot: data, ...current, result: typeof next === 'function' ? next(result) : next })
 
   async function send(event) {
     event.preventDefault()

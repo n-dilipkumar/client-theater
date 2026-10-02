@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { Icon } from '@/components/ui'
 
 /**
@@ -26,7 +26,13 @@ import { Icon } from '@/components/ui'
 export default function Modal({ title, description, onClose, children, footer }) {
   const ref = useRef(null)
   // A stable id so the heading labels the dialog, generated once per mount.
-  const titleId = useRef(`wf011-modal-title-${Math.random().toString(36).slice(2, 9)}`)
+  // `useId` rather than `Math.random()` in a ref: the id is read during render,
+  // and a ref's current value is not meant to be. It is also pure -- the
+  // compiler flagged `Math.random()` in render, and it was a real problem:
+  // StrictMode renders twice, so the id the DOM was built from and the id a
+  // re-render produced could differ and break the aria-labelledby pairing.
+  const generatedTitleId = useId()
+  const titleId = `wf011-modal-title-${generatedTitleId}`
 
   useEffect(() => {
     const node = ref.current

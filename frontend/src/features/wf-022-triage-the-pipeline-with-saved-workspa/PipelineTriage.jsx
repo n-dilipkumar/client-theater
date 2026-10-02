@@ -32,7 +32,7 @@
  *     which. The provider glyph marks the difference.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { absoluteTime, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -47,7 +47,7 @@ import {
   useAsync,
 } from '@/components/ui'
 import { triageApi } from './api'
-import Glyph, { CLONE_ICON, INFERENCE_ICON, REORDER_ICON, SHARED_ICON, TABLE_ICON } from './icons'
+import Glyph, { CLONE_ICON, INFERENCE_ICON, SHARED_ICON, TABLE_ICON } from './icons'
 import { Note, StatTile, Toggle } from './primitives'
 
 const FOCUS =
@@ -122,9 +122,17 @@ function InferenceRow({ entry }) {
 }
 
 /** The column editor. Position is the point: the list *is* the table's shape. */
-function ColumnEditor({ vocabulary, columns, onChange, onSave, onClose, saving }) {
-  const [draft, setDraft] = useState(columns)
-  useEffect(() => setDraft(columns), [columns])
+function ColumnEditor({ vocabulary, columns, onSave, onClose, saving }) {
+  // The reordered draft is scoped to the column list it was made from, so a
+  // different list derives its own draft during render rather than an effect
+  // copying it in a render later.
+  const [draftEdits, setDraftEdits] = useState({ forColumns: null, draft: null })
+  const draft = draftEdits.forColumns === columns && draftEdits.draft ? draftEdits.draft : columns
+  const setDraft = (next) =>
+    setDraftEdits({
+      forColumns: columns,
+      draft: typeof next === 'function' ? next(draft) : next,
+    })
 
   const meta = useMemo(
     () => Object.fromEntries(vocabulary.columns.map((column) => [column.key, column])),

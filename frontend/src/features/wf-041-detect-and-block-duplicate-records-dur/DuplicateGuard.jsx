@@ -28,7 +28,7 @@
  * so a team that adds a matching key ships a record rather than a change here.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { absoluteTime, api, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -319,7 +319,7 @@ export default function DuplicateGuard() {
   const inferences = useAsync(() => dedupeApi.inferences(), [])
 
   // -- the "try a lead" form
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [domain, setDomain] = useState('')
@@ -329,13 +329,14 @@ export default function DuplicateGuard() {
   const [tryError, setTryError] = useState(null)
   const [trying, setTrying] = useState(false)
 
-  const roomOptions = rooms.data || []
+  const roomOptions = useMemo(() => rooms.data || [], [rooms.data])
 
-  // Default to the first room once the list arrives. An effect rather than a
-  // setState during render, so React is not asked to re-render mid-render.
-  useEffect(() => {
-    if (!roomId && roomOptions.length > 0) setRoomId(roomOptions[0].id)
-  }, [roomId, roomOptions])
+  // Default to the first room once the list arrives.
+  //
+  // Derived during render, which is both correct and cheaper than the effect it
+  // replaces: no setState during render, and no extra render in which no room
+  // was selected while the list was already on screen.
+  const roomId = chosenRoomId || roomOptions[0]?.id || ''
 
   async function guard(busyKey, successMessage, work) {
     setBusyId(busyKey)
@@ -644,7 +645,7 @@ export default function DuplicateGuard() {
                     className={inputClass}
                     required
                     value={roomId}
-                    onChange={(event) => setRoomId(event.target.value)}
+                    onChange={(event) => setChosenRoomId(event.target.value)}
                   >
                     <option value="">Choose a room</option>
                     {roomOptions.map((room) => (

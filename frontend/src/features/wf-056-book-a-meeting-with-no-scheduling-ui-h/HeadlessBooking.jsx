@@ -48,7 +48,7 @@
  * reads `reason` from the response body. See `./api.js` for the note.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api, relativeTime, absoluteTime } from '@/lib/api'
 import {
   Badge,
@@ -138,8 +138,10 @@ export default function HeadlessBooking() {
 /* Book: the two researched calls                                            */
 /* ------------------------------------------------------------------------- */
 
+/** A shared empty, so `assets` keeps a stable identity across renders. */
+const EMPTY_ASSETS = []
+
 function BookPanel({ vocabulary, roomId, room }) {
-  const [assets, setAssets] = useState([])
   const [assetId, setAssetId] = useState('')
   const [guestEmail, setGuestEmail] = useState('')
   const [windowHours, setWindowHours] = useState(24)
@@ -151,9 +153,9 @@ function BookPanel({ vocabulary, roomId, room }) {
 
   const loadAssets = useAsync(() => headlessApi.listAssets({}), [])
 
-  useEffect(() => {
-    setAssets(loadAssets.data?.assets ?? [])
-  }, [loadAssets.data])
+  // The asset list is the fetch's own payload, read during render rather than
+  // copied into state by an effect.
+  const assets = loadAssets.data?.assets ?? EMPTY_ASSETS
 
   /** A booking changes the asset list only insofar as availability moved, so
    *  re-read the assets this panel owns rather than a summary above it. */

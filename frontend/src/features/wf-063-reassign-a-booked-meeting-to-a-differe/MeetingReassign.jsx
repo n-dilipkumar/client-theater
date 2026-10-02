@@ -28,7 +28,7 @@
  * here, so a term the backend adds reaches the page with no change to it.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { absoluteTime, api, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -51,7 +51,6 @@ import {
   LockedField,
   OutcomeChip,
   Quote,
-  ineligibleSentence,
 } from './primitives'
 
 const SECTIONS = [
@@ -84,7 +83,7 @@ function Note({ children, tone = 'neutral' }) {
 
 export default function MeetingReassign() {
   const [section, setSection] = useState('activity')
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('all')
   const [filters, setFilters] = useState({ meeting_type: '', host_id: '', booker: '', status: '', product_source: '' })
@@ -93,11 +92,9 @@ export default function MeetingReassign() {
 
   // The first room is selected automatically so the page is useful on arrival,
   // which is the difference between a demo that works and one that needs setup.
-  useEffect(() => {
-    if (!roomId && rooms.data?.records?.length) {
-      setRoomId(rooms.data.records[0].id)
-    }
-  }, [rooms.data, roomId])
+  // Derived during render rather than copied into state by an effect, which
+  // cost an extra render with no room selected.
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
 
   const summary = useAsync(() => (roomId ? reassignApi.summary(roomId) : Promise.resolve(null)), [roomId])
 
@@ -118,7 +115,7 @@ export default function MeetingReassign() {
               id="wf063-room"
               value={roomId}
               onChange={(event) => {
-                setRoomId(event.target.value)
+                setChosenRoomId(event.target.value)
                 setSelected(null)
               }}
               className={inputClass}

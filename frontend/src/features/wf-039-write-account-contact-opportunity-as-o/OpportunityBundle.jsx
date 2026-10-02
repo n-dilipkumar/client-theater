@@ -54,7 +54,7 @@ import {
   useAsync,
 } from '@/components/ui'
 import { bundleApi, listRooms } from './api'
-import Glyph, { ATOMIC_ICON, BUNDLE_ICON, INFERENCE_ICON, ORDER_ICON, ROLLBACK_ICON, WIRE_ICON } from './icons'
+import Glyph, { ATOMIC_ICON, BUNDLE_ICON, ORDER_ICON, ROLLBACK_ICON } from './icons'
 import { Notice, StatTile, StepRow, Toggle } from './primitives'
 
 /** A short label for a dialect id, so the picker reads as a choice not a code. */

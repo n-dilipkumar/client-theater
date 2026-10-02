@@ -47,7 +47,9 @@ export default function InviteBuyer() {
   const [actor, setActor] = useState(null)
   const [sharing, setSharing] = useState(null)
 
-  const records = rooms.data?.records || []
+  // Memoised so the `identities` below keeps a stable dependency. A fresh `[]`
+  // each render made every dep change on every render, so the memo never held.
+  const records = useMemo(() => rooms.data?.records || [], [rooms.data])
 
   // The room owners, plus the two demo identities the core seed uses, so the
   // delegation rule can be tried from both sides: the owner may hand out Room

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { apiRequest, absoluteTime, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -84,15 +84,6 @@ const ASSIGNMENT_TONES = {
   account_no_candidates: 'delete',
   no_object: 'delete',
   object_unresolved: 'delete',
-}
-
-/** The reason a Play did not fire, phrased for a seller rather than a developer. */
-const MATCH_REASONS = {
-  matched: 'fired',
-  not_enabled: 'registered, not enabled',
-  no_overlap: 'no matching indicator on the signal',
-  no_indicators: 'the signal carried no indicators',
-  registration_mismatch: 'belongs to a different signal registration',
 }
 
 async function get(path, params) {
@@ -368,7 +359,7 @@ function InferenceList({ inferences }) {
 }
 
 export default function PlayAutomations() {
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [outcome, setOutcome] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -380,10 +371,11 @@ export default function PlayAutomations() {
   // The first room is a sensible default, but a room is never assumed for a
   // decision: the summary below says which room it is showing, and an operator who
   // means a different one picks it.
-  useEffect(() => {
-    const available = rooms.data?.records || []
-    if (!roomId && available.length > 0) setRoomId(available[0].id)
-  }, [rooms.data, roomId])
+  // No room is picked for the operator: the summary names which one it is
+  // showing, and an operator who means a different one picks it. Derived rather
+  // than copied into state by an effect, which cost an extra render with no room
+  // selected.
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
 
   const summary = useAsync(
     () => (roomId ? get(`/rooms/${roomId}/summary`) : Promise.resolve(null)),
@@ -490,7 +482,7 @@ export default function PlayAutomations() {
             id="wf028-room"
             className={inputClass}
             value={roomId}
-            onChange={(event) => setRoomId(event.target.value)}
+            onChange={(event) => setChosenRoomId(event.target.value)}
           >
             <option value="">Choose a room…</option>
             {rooms_list.map((room) => (

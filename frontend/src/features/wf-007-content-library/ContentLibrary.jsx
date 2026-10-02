@@ -20,7 +20,7 @@
  *   honestly instead of a broken image.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { relativeTime } from '@/lib/api'
 import {
@@ -77,14 +77,13 @@ function today() {
 
 export default function ContentLibrary() {
   const rooms = useAsync(() => libraryApi.rooms(), [])
-  const [roomId, setRoomId] = useState('')
-
-  // Default to the first room once the list arrives, so the screen is useful
-  // immediately rather than showing an empty picker.
-  useEffect(() => {
-    const first = rooms.data?.records?.[0]
-    if (first && !roomId) setRoomId(first.id)
-  }, [rooms.data, roomId])
+  // Only the operator's explicit choice is state. Which room is on screen is
+  // derived during render, defaulting to the first room so the screen is useful
+  // immediately rather than showing an empty picker. Storing the default in
+  // state instead meant an extra render pass with nothing selected, and the
+  // setState-in-effect to arrange it.
+  const [chosenRoomId, setChosenRoomId] = useState('')
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
 
   const documents = useAsync(
     () => (roomId ? libraryApi.documents(roomId, { limit: 100 }) : Promise.resolve(null)),
@@ -207,7 +206,7 @@ export default function ContentLibrary() {
               id="library-room"
               className={inputClass}
               value={roomId}
-              onChange={(event) => setRoomId(event.target.value)}
+              onChange={(event) => setChosenRoomId(event.target.value)}
             >
               {(rooms.data.records || []).map((room) => (
                 <option key={room.id} value={room.id}>

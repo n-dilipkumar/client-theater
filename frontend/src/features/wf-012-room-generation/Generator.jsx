@@ -22,7 +22,7 @@
  * respects prefers-reduced-motion (handled globally in index.css).
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { absoluteTime, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -294,6 +294,10 @@ function GeneratedRoom({ room, onPublish, busy }) {
   )
 }
 
+/** A shared default, so `values` keeps a stable identity across renders while
+ *  the operator has typed nothing into the current template. */
+const EMPTY_VALUES = {}
+
 export default function Generator() {
   const templates = useAsync(() => generationApi.listTemplates(), [])
   const rooms = useAsync(() => generationApi.listGenerations(), [])
@@ -308,16 +312,13 @@ export default function Generator() {
     expiryDays: '',
     publishNow: false,
   })
-  const [values, setValues] = useState({})
-  const [preview, setPreview] = useState(null)
-  const [previewError, setPreviewError] = useState(null)
   const [previewing, setPreviewing] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [publishing, setPublishing] = useState('')
   const [actionError, setActionError] = useState(null)
   const [result, setResult] = useState(null)
 
-  const records = templates.data?.records || []
+  const records = useMemo(() => templates.data?.records || [], [templates.data])
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) || records[0] || null,
     [records, selectedId],
@@ -325,11 +326,35 @@ export default function Generator() {
 
   // A template change invalidates the values and the preview: keys from the
   // previous template mean nothing to the new one.
-  useEffect(() => {
-    setValues({})
-    setPreview(null)
-    setPreviewError(null)
-  }, [selected?.id])
+  //
+  // These are scoped to the template they were entered for rather than cleared
+  // by an effect. The effect version left one render in which the new
+  // template's keys were shown next to the previous template's values -- and
+  // `request` below was built from that mismatch, so a preview fired in that
+  // window would have substituted keys the new template does not declare.
+  const [valuesState, setValuesState] = useState({ forTemplate: undefined, values: {} })
+  const [previewState, setPreviewState] = useState({ forTemplate: undefined, preview: null })
+  const [previewErrorState, setPreviewErrorState] = useState({
+    forTemplate: undefined,
+    error: null,
+  })
+
+  const values = useMemo(
+    () => (valuesState.forTemplate === selected?.id ? valuesState.values : EMPTY_VALUES),
+    [valuesState, selected?.id],
+  )
+  const preview = previewState.forTemplate === selected?.id ? previewState.preview : null
+  const previewError =
+    previewErrorState.forTemplate === selected?.id ? previewErrorState.error : null
+
+  const setValues = (next) =>
+    setValuesState({
+      forTemplate: selected?.id,
+      values: typeof next === 'function' ? next(values) : next,
+    })
+  const setPreview = (next) => setPreviewState({ forTemplate: selected?.id, preview: next })
+  const setPreviewError = (next) =>
+    setPreviewErrorState({ forTemplate: selected?.id, error: next })
 
   const variables = useMemo(
     () => (selected?.data?.variables || []).filter((v) => v && typeof v === 'object'),
