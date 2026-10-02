@@ -814,36 +814,94 @@ DEMO_ASSETS: tuple[dict[str, Any], ...] = (
     },
 )
 
+
+def _demo_day(now: Any, *, margin_hours: int = 48) -> Any:
+    """The UTC midnight this demo's windows and calendar blocks are built on.
+
+    Two properties, and an earlier version of this seeder had neither:
+
+    * **Far enough ahead** that the day's slots are still in the future whatever
+      hour the seed happens to run at. An earlier version anchored on
+      ``now + 1 day`` at the same time of day, which after 16:00 UTC produced a
+      window that fell entirely outside a 09:00-16:00 desk.
+    * **On a working day.** Every asset in :data:`DEMO_ASSETS` books Monday to
+      Friday - the default ``work_days`` is ``{0, 1, 2, 3, 4}`` - so a window
+      anchored on a Saturday contains no slots at all and the workflow refuses
+      with *no availability*. The margin alone does not prevent that, because
+      the margin does not know what day of the week it lands on: ``now + 1 day``
+      lands on a Saturday every Friday the seed runs, and that is why this
+      feature's seed has been failing. Anchoring on the next weekday is the fix.
+
+    Returned as a midnight so a caller can build several windows on the same day
+    without each one walking the calendar again.
+    """
+    from datetime import timedelta, timezone
+
+    base = (now.astimezone(timezone.utc) + timedelta(hours=margin_hours)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    for offset in range(0, 15):
+        candidate = base + timedelta(days=offset)
+        if candidate.isoweekday() <= 5:
+            return candidate
+    return base  # pragma: no cover - 15 days covers every weekday
+
+
+def _stamp(spec: str, day: Any) -> str:
+    """Resolve a demo stamp written as ``+1d 09:00`` against the demo day.
+
+    Relative, because a calendar block dated in the past blocks nothing. The demo
+    would keep its four rows and its reassuring count, and quietly stop being a
+    demo of anything: a wall of free time is exactly what these blocks exist to
+    break up.
+    """
+    from datetime import timedelta
+
+    days_text, _, clock = spec.strip().partition(" ")
+    offset = int(days_text.rstrip("dD"))
+    hour, _, minute = clock.partition(":")
+    moment = (day + timedelta(days=offset)).replace(
+        hour=int(hour), minute=int(minute or 0), second=0, microsecond=0
+    )
+    return moment.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 #: The calendar blocks the demo files, chosen so the slot lists are not a solid
 #: wall of free time. Two different hosts, plus a block on *one* handoff path
 #: only - which is what makes the per-path availability visible.
+#:
+#: The stamps are offsets from :func:`_demo_day` rather than absolute instants.
+#: An absolute one is a demo that is silently wrong the day after, and - because
+#: the booking window moves with the clock while the blocks do not - it also
+#: drifts out of its own window entirely, leaving four calendar rows that no
+#: longer block anything.
 DEMO_CALENDAR: tuple[dict[str, Any], ...] = (
     {
         "host_email": "dana.okafor@example.com",
-        "startsAt": "2026-10-06T13:00:00Z",
-        "endsAt": "2026-10-06T15:00:00Z",
+        "startsAt": "+0d 13:00",
+        "endsAt": "+0d 15:00",
         "label": "Internal weekly",
         "source_system": "google_calendar",
     },
     {
         "host_email": "dana.okafor@example.com",
-        "startsAt": "2026-10-07T09:00:00Z",
-        "endsAt": "2026-10-07T12:00:00Z",
+        "startsAt": "+1d 09:00",
+        "endsAt": "+1d 12:00",
         "label": "Customer onsite",
         "source_system": "google_calendar",
     },
     {
         "host_email": "sam.ibrahim@example.com",
-        "startsAt": "2026-10-06T10:00:00Z",
-        "endsAt": "2026-10-06T11:30:00Z",
+        "startsAt": "+0d 10:00",
+        "endsAt": "+0d 11:30",
         "label": "Security review prep",
         "source_system": "outlook",
     },
     {
         "host_email": "aisha.farouk@example.com",
         "path_id": "path-emea",
-        "startsAt": "2026-10-06T10:00:00Z",
-        "endsAt": "2026-10-06T14:00:00Z",
+        "startsAt": "+0d 10:00",
+        "endsAt": "+0d 14:00",
         "label": "EMEA customer day",
         "source_system": "google_calendar",
     },
@@ -875,8 +933,6 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     Returns a short description, which the seeder prints.
     """
-    from datetime import timedelta
-
     store = RecordStore(db)
     now = context["now"]
     headless = HeadlessBooking(store, clock=lambda: now)
@@ -920,8 +976,27 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         None,
     )
 
+    # One anchor for both the sessions' interval and the calendar blocks, so the
+    # blocks land inside the window they are supposed to shape. See _demo_day.
+    demo_day = _demo_day(now)
+    interval = {
+        "startsAt": demo_day.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        # 36 hours from that midnight spans a whole working day and part of the
+        # next, so a desk in any timezone the demo configures has slots in it.
+        "duration": 36 * 60,
+    }
+
     for block in DEMO_CALENDAR:
-        headless.add_calendar_block(room_at(0), dict(block), actor=actor, source=source)
+        headless.add_calendar_block(
+            room_at(0),
+            {
+                **block,
+                "startsAt": _stamp(str(block["startsAt"]), demo_day),
+                "endsAt": _stamp(str(block["endsAt"]), demo_day),
+            },
+            actor=actor,
+            source=source,
+        )
 
     # Two tokens: one that can do everything, and one that can only *read* - so
     # the per-section, per-permission scope rule is demonstrated rather than
@@ -943,18 +1018,6 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         source=source,
     )
 
-    # Sessions run over a window that is guaranteed to be in the future *and* to
-    # cover every demo asset's working hours, whatever time of day the seeder
-    # happens to run at. An earlier version used "now + 1 day" at the same
-    # time of day, which after 16:00 UTC produced a window that fell entirely
-    # outside a 09:00-16:00 desk and the whole feature's seed failed.
-    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    interval = {
-        "startsAt": tomorrow.isoformat(timespec="seconds").replace("+00:00", "Z"),
-        # 36 hours from midnight UTC spans a whole working day twice over, so a
-        # desk in any timezone the demo configures has slots in it.
-        "duration": 36 * 60,
-    }
     outcomes: list[str] = []
 
     # 1. The happy path, on the Concierge surface, with the admin token.
