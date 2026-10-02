@@ -63,6 +63,26 @@ export function Notice({ tone = 'neutral', title, children, action }) {
  * A checkbox styled as a switch would be dishonest: this changes a setting, it does
  * not select something, and `role="switch"` with `aria-checked` is what a screen
  * reader needs to say so. The label is a real `<label for>`, never a placeholder.
+ *
+ * Reduced motion
+ * --------------
+ *
+ * The knob is positioned by flexbox (`justify-start` / `justify-end`), not by a
+ * `translate-*`, and the only transition is behind `motion-safe:`. Under
+ * `prefers-reduced-motion: reduce` that means no transform and no transition at all:
+ * the two states differ by layout and colour, not by anything travelling across the
+ * screen. A knob that slid for someone who asked their operating system not to
+ * animate anything is the hazard the design floor reserves (ADR-0002), and this is
+ * what it reserves it for.
+ *
+ * Nine sibling features reach the same place with
+ * `transition-transform ... motion-reduce:transition-none` over an absolute knob plus
+ * `translate-x-5` / `translate-x-0`. That is the same opt-out with the transition
+ * removed rather than the transform, and it is a reasonable shape - but it still
+ * repositions the knob, and here the state is carried by four things that are not
+ * movement (track colour, knob colour, flexbox position, `aria-checked`), so
+ * dropping the transform costs nothing. Flagged to the coordinator as a deliberate
+ * difference from the sibling pattern rather than an oversight.
  */
 export function Toggle({ id, label, hint, checked, onChange, disabled = false }) {
   return (
@@ -79,15 +99,15 @@ export function Toggle({ id, label, hint, checked, onChange, disabled = false })
         aria-label={label}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-sm border transition-colors duration-150
+        className={`mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-sm border transition-colors duration-150
           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent
           disabled:cursor-not-allowed disabled:opacity-50
-          ${checked ? 'border-accent bg-accent' : 'border-border-subtle bg-muted'}`}
+          ${checked ? 'justify-end border-accent bg-accent' : 'justify-start border-border-subtle bg-muted'}`}
       >
         <span
-          className={`inline-block h-4 w-4 rounded-xs bg-surface transition-transform duration-150 ${
-            checked ? 'translate-x-6' : 'translate-x-1'
-          }`}
+          aria-hidden="true"
+          className={`mx-0.5 h-4 w-4 rounded-xs motion-safe:transition-transform motion-safe:duration-150
+            ${checked ? 'bg-surface' : 'bg-foreground'}`}
         />
       </button>
     </div>
