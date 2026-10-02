@@ -183,8 +183,10 @@ CLEAN_END = f"{(NOW + timedelta(days=CLEAN_DAYS_AHEAD)).date().isoformat()}T10:3
 
 
 @pytest.fixture()
-def db(tmp_path):
-    database = AuditedDatabase(tmp_path / "reassign.db", mirror_dir=tmp_path / "mirror")
+def db():
+    # In-memory rather than a file on disk: 0.4 ms against 7.0 ms, measured. No test
+    # in this file reads the audit mirror off the filesystem, so the file bought nothing.
+    database = AuditedDatabase()
     yield database
     database.close()
 
@@ -279,20 +281,48 @@ def meeting(engine, room, host):
     return make_meeting(engine, room["id"], host["id"])
 
 
-@pytest.fixture()
-def http(monkeypatch, tmp_path):
-    """A client over a temporary database.
+@pytest.fixture(scope="module")
+def _shared_client(tmp_path_factory):
+    """One application for the module. A fresh database for each test.
 
-    ``get_engine`` is a FastAPI dependency, so the real routes already build the
-    engine from ``StoreDep`` and the suite needs no override: the engine holds
-    nothing beyond the store and a clock, so the production path and the test
-    path are the same path.
+    The lifespan in ``dsr/api.py`` only assigns ``app.state.db`` and
+    ``app.state.store``, and ``dsr/deps.py`` reads ``app.state.store`` on every
+    request. A test therefore needs a fresh *database*, not a fresh
+    *application*. Entering a TestClient costs 46 ms measured; swapping the two
+    attributes costs about 1.25 ms.
+
+    The environment is patched here rather than per test because a module-scoped
+    fixture cannot use the function-scoped ``monkeypatch``. It is undone on the
+    way out so it reaches no other module. ``DSR_DB_PATH`` is ``:memory:`` so the
+    lifespan's own database costs nothing either.
     """
-    monkeypatch.setenv("DSR_DB_PATH", str(tmp_path / "http.db"))
-    monkeypatch.setenv("DSR_AUDIT_DIR", str(tmp_path / "audit"))
-    monkeypatch.setattr("dsr.api.FRONTEND_DIST", tmp_path / "absent-frontend")
-    with TestClient(app) as client:
-        yield client
+    scratch = tmp_path_factory.mktemp("wf063-http")
+    patch = pytest.MonkeyPatch()
+    patch.setenv("DSR_DB_PATH", ":memory:")
+    patch.setenv("DSR_AUDIT_DIR", str(scratch / "audit"))
+    patch.setattr("dsr.api.FRONTEND_DIST", scratch / "absent-frontend")
+    with TestClient(app) as test_client:
+        yield test_client
+    patch.undo()
+
+
+@pytest.fixture()
+def http(_shared_client):
+    """The shared application, over a database this test owns alone.
+
+    ``dependency_overrides`` is cleared on the way in and on the way out: the
+    application is module-scoped, so an override one test installs would
+    otherwise still be installed for the next one.
+    """
+    db = AuditedDatabase()
+    _shared_client.app.state.db = db
+    _shared_client.app.state.store = RecordStore(db)
+    _shared_client.app.dependency_overrides.clear()
+    try:
+        yield _shared_client
+    finally:
+        _shared_client.app.dependency_overrides.clear()
+        db.close()
 
 
 def seed_http(client):
@@ -2984,6 +3014,28 @@ def test_a_meeting_booked_over_http_records_its_own_route(http):
 # --------------------------------------------------------------------------- #
 
 
+@pytest.fixture(scope="module")
+def seeded():
+    """One seeded database shared by every read-only seed test in this section.
+
+    Fifteen tests assert different things about the same demo dataset, and the
+    seeder writes hundreds of rows. Seeding once per module rather than once per
+    test is the difference between one seed and fifteen. The two tests that need
+    different data keep their own database: the no-rooms case seeds an empty room
+    list, and the refusal test drives the engine rather than reading it.
+
+    Every test that uses this fixture only reads. A reader cannot change what the
+    next reader sees, which is what makes sharing it safe.
+    """
+    database = AuditedDatabase()
+    try:
+        store = RecordStore(database)
+        summary = load_feature(MODULE).seed(database, {"room_ids": seed_rooms(store), "now": NOW})
+        yield store, summary
+    finally:
+        database.close()
+
+
 @pytest.fixture()
 def seed_module():
     return load_feature(MODULE)
@@ -2996,19 +3048,17 @@ def seed_rooms(store, names=("Northwind", "Contoso", "Fabrikam", "Adventure")):
     ]
 
 
-def test_the_seed_reports_what_it_added(db, seed_module):
-    store = RecordStore(db)
-    summary = seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seed_reports_what_it_added(seeded, seed_module):
+    store, summary = seeded
     assert isinstance(summary, str)
     assert "7 hosts" in summary
     assert "3 distributions" in summary
     assert f"{len(seed_module.DEMO_MEETINGS)} meetings" in summary
 
 
-def test_the_seed_shows_both_bounds_being_bypassed_in_different_cases(db, seed_module):
+def test_the_seed_shows_both_bounds_being_bypassed_in_different_cases(seeded, seed_module):
     """Both researched bounds, so one case is not standing in for both."""
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+    store, _summary = seeded
     bypassed = [
         set(record["data"]["bounds_bypassed"]) for record in store.list(REASSIGNMENT_COLLECTION)
     ]
@@ -3016,9 +3066,8 @@ def test_the_seed_shows_both_bounds_being_bypassed_in_different_cases(db, seed_m
     assert any("max_range" in entry for entry in bypassed)
 
 
-def test_the_seed_shows_both_bypassed_bounds_and_both_webhooks(db, seed_module):
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seed_shows_both_bypassed_bounds_and_both_webhooks(seeded, seed_module):
+    store, _summary = seeded
     reassignments = store.list(REASSIGNMENT_COLLECTION)
     assert any(record["data"]["bounds_bypassed"] for record in reassignments)
     assert any(
@@ -3027,9 +3076,8 @@ def test_the_seed_shows_both_bypassed_bounds_and_both_webhooks(db, seed_module):
     )
 
 
-def test_the_seed_shows_a_credit_that_did_not_move_after_a_no_show(db, seed_module):
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seed_shows_a_credit_that_did_not_move_after_a_no_show(seeded, seed_module):
+    store, _summary = seeded
     outcomes = {
         record["data"]["credit_movement"]["outcome"]
         for record in store.list(REASSIGNMENT_COLLECTION)
@@ -3038,10 +3086,9 @@ def test_the_seed_shows_a_credit_that_did_not_move_after_a_no_show(db, seed_modu
     assert CREDIT_MOVED in outcomes
 
 
-def test_the_seed_shows_an_invite_field_going_to_null(db, seed_module):
+def test_the_seed_shows_an_invite_field_going_to_null(seeded, seed_module):
     """A field the new host has not set must not keep the old host's value."""
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+    store, _summary = seeded
     nulled = [
         record
         for record in store.list(REASSIGNMENT_COLLECTION)
@@ -3051,7 +3098,7 @@ def test_the_seed_shows_an_invite_field_going_to_null(db, seed_module):
     assert nulled, "no reassignment nulled an invite field, so the demo misses that case"
 
 
-def test_every_seeded_reassignment_carries_a_real_before_and_after(db, seed_module):
+def test_every_seeded_reassignment_carries_a_real_before_and_after(seeded, seed_module):
     """Neither side may be empty.
 
     An empty "before" is the shape a reassignment takes when the meeting was
@@ -3059,8 +3106,7 @@ def test_every_seeded_reassignment_carries_a_real_before_and_after(db, seed_modu
     which is the whole researched behaviour. A demo that showed it would be a
     demo of a bug.
     """
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+    store, _summary = seeded
     for record in store.list(REASSIGNMENT_COLLECTION):
         data = record["data"]
         assert data["invite_before"], f"{data['meeting_id']} has no invite before the reassignment"
@@ -3070,9 +3116,8 @@ def test_every_seeded_reassignment_carries_a_real_before_and_after(db, seed_modu
         assert data["invite_after"]["organizer"] == data["to_host"]["name"]
 
 
-def test_the_seeded_reassignments_report_at_least_one_field_changing(db, seed_module):
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seeded_reassignments_report_at_least_one_field_changing(seeded, seed_module):
+    store, _summary = seeded
     changes = [
         record["data"]["invite_fields_changed"] for record in store.list(REASSIGNMENT_COLLECTION)
     ]
@@ -3080,10 +3125,9 @@ def test_the_seeded_reassignments_report_at_least_one_field_changing(db, seed_mo
     assert any("dial_in" in changed for changed in changes)
 
 
-def test_the_seed_shows_every_documented_refusal(db, seed_module):
+def test_the_seed_shows_every_documented_refusal(seeded, seed_module):
     """One refusal per rule the demo is meant to make reachable, and all of them land."""
-    store = RecordStore(db)
-    summary = seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+    store, summary = seeded
     assert len(seed_module.DEMO_REFUSED) == 5
     assert "5 refusals" in summary
 
@@ -3134,42 +3178,37 @@ def test_the_seed_actually_refuses_what_it_says_it_refuses(db, seed_module):
         )
 
 
-def test_the_seed_shows_a_cancelled_meeting_so_the_409_is_reachable(db, seed_module):
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seed_shows_a_cancelled_meeting_so_the_409_is_reachable(seeded, seed_module):
+    store, _summary = seeded
     statuses = {record["data"]["status"] for record in store.list(MEETING_COLLECTION)}
     assert "cancelled" in statuses
     assert "no_show" in statuses
 
 
-def test_the_seed_uses_every_documented_source(db, seed_module):
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seed_uses_every_documented_source(seeded, seed_module):
+    store, _summary = seeded
     sources = {record["data"]["reassignment_source"] for record in store.list(HISTORY_COLLECTION)}
     assert sources <= set(SURFACES)
     # More than one, so the Events History "source" column is worth reading.
     assert len(sources) >= 3
 
 
-def test_the_seed_writes_history_for_every_reassignment(db, seed_module):
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seed_writes_history_for_every_reassignment(seeded, seed_module):
+    store, _summary = seeded
     assert len(store.list(HISTORY_COLLECTION)) == len(store.list(REASSIGNMENT_COLLECTION))
 
 
-def test_the_seed_hosts_include_one_inactive_and_one_busy(db, seed_module):
+def test_the_seed_hosts_include_one_inactive_and_one_busy(seeded, seed_module):
     """Otherwise the two refusals are unreachable from the demo."""
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+    store, _summary = seeded
     hosts = store.list(HOST_COLLECTION)
     assert any(not record["data"]["active"] for record in hosts)
     assert any(record["data"]["busy"] for record in hosts)
 
 
-def test_the_seed_distributions_disagree_about_any_team_member(db, seed_module):
+def test_the_seed_distributions_disagree_about_any_team_member(seeded, seed_module):
     """Otherwise the researched control has nothing to decide."""
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+    store, _summary = seeded
     flags = {
         record["data"]["allow_any_team_member"] for record in store.list(DISTRIBUTION_COLLECTION)
     }
@@ -3181,19 +3220,17 @@ def test_the_seed_survives_being_run_with_no_rooms(db, seed_module):
     assert "no rooms" in summary
 
 
-def test_the_seed_audits_its_own_writes(db, seed_module):
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+def test_the_seed_audits_its_own_writes(seeded, seed_module):
+    store, _summary = seeded
     for collection in (REASSIGNMENT_COLLECTION, HISTORY_COLLECTION):
         rows = store.audit(collection=collection)
         assert rows, f"{collection} was seeded without an audit row"
         assert {row["source"] for row in rows} == {"seed"}
 
 
-def test_the_seeded_reassignment_labels_match_what_the_engine_produced(db, seed_module):
+def test_the_seeded_reassignment_labels_match_what_the_engine_produced(seeded, seed_module):
     """Every demo case is labelled with the outcome it actually reaches."""
-    store = RecordStore(db)
-    seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
+    store, _summary = seeded
     outcomes = [record["data"]["outcome"] for record in store.list(REASSIGNMENT_COLLECTION)]
     assert set(outcomes) == {ASSIGNED}
 
