@@ -81,6 +81,101 @@ jobs:
         working-directory: backend
         run: python -m pytest
 
+  # The linter is a gate, not a report. See the "no escape hatches" note below:
+  # a lint job that reports and passes is worse than no lint job, because it looks
+  # like enforcement.
+  #
+  # There is no `if:` here, so this runs on pull_request AND on pushes to main.
+  # That asymmetry matters for a linter specifically: the whole reason
+  # backend/tests/test_wf056.py reached main unformatted is that nothing ran
+  # ruff on the way in. Skipping main would let a direct push reintroduce the
+  # exact drift this job exists to catch. The `guard` job's push-to-main skip is
+  # about *contract* edits, which platform work legitimately makes; lint debt is
+  # never legitimate on any branch.
+  lint:
+    name: Lint (ruff, eslint, prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Installed from the backend `dev` extras rather than by naming a ruff
+      # version here, so that backend/pyproject.toml stays the single source of
+      # truth for the pin. A version written into this workflow would be a second
+      # place to forget to bump, and a linter that silently changes version is a
+      # linter whose findings are not reproducible.
+      - name: Install Python linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e 'backend[dev]'
+
+      # ---------------------------------------------------------------------
+      # READ THIS BEFORE "SIMPLIFYING" THE TWO COMMANDS BELOW.
+      #
+      # The ruff configuration lives in backend/pyproject.toml, and `tools/`
+      # and `orchestration/` live outside `backend/`. So `--config` and the
+      # explicit path list are BOTH load-bearing. A bare `ruff check .` from the
+      # repo root finds no config, silently falls back to ruff's own defaults
+      # (which enable PLW/RUF/FURB), and reports several hundred findings that
+      # are almost entirely inside the vendored .agents/ and .claude/ skill
+      # directories. Nothing announces that the flag is missing; the output just
+      # reads like the repository is full of errors, which trains everyone to
+      # ignore it. Do not drop the flag and do not replace the paths with `.`.
+      # ---------------------------------------------------------------------
+
+      # ruff check before ruff format, and both before `npm ci`: the Python
+      # linters cost seconds and `npm ci` costs about a minute, so this ordering
+      # means the common failure (a stray unused import) is reported without
+      # paying for the Node install first.
+      - name: ruff check
+        run: ruff check backend tools orchestration --config backend/pyproject.toml
+
+      - name: ruff format --check
+        run: ruff format --check backend tools orchestration --config backend/pyproject.toml
+
+      - name: Install frontend linters
+        working-directory: frontend
+        run: npm ci
+
+      - name: eslint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: prettier
+        working-directory: frontend
+        run: npm run format:check
+
+      # No `|| true`, no `continue-on-error`, no `--exit-zero`, and no
+      # `--max-warnings`. A warning is still a finding, and `eslint .` already
+      # exits non-zero on errors without any of those; adding them back would
+      # turn this job into a comment in the checks list. If a rule is wrong,
+      # fix the rule in frontend/eslint.config.js on its own branch, which is a
+      # reviewable decision, rather than muting it here where nobody sees it.
+      #
+      # This job also runs its own `npm ci` instead of folding the two frontend
+      # checks into the `frontend` job, which is a deliberate trade:
+      #
+      #   * it is a separately named check, so a lint failure does not arrive
+      #     under a job called "Frontend build" and get misread as a bundler
+      #     problem;
+      #   * it fails in parallel with `backend` instead of queueing behind the
+      #     frontend test and build steps, so a lint error is reported in
+      #     seconds rather than after a full test-and-build cycle;
+      #   * the cost is a second `npm ci`. That is not new to this workflow --
+      #     `end-to-end` already installs node_modules a second time -- and
+      #     setup-node's npm cache means the repeat is mostly a cache restore.
+
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest
@@ -130,11 +225,12 @@ jobs:
       # check that decays into one people learn to ignore. Report-only coverage
       # is a separate decision, for a human, once there is a provider.
       #
-      # The `lint` job is NOT here on purpose: it is owned by agent B, who is
-      # adding the eslint/prettier config and .pre-commit-config.yaml in
-      # parallel. A lint step written before that tooling lands would reference
-      # a command that is not installed and turn a missing dependency into a red
-      # build for the wrong reason. Agent B adds that job; do not duplicate it.
+      # The eslint and prettier checks live in the `lint` job above, not here.
+      # They arrived with frontend/eslint.config.js and .prettierrc, so the
+      # earlier note on this step -- that the lint job belonged to whichever
+      # branch added the tooling, and should not be duplicated -- is now
+      # resolved. It was written, and it is called `lint`. Do not re-add a second
+      # copy of `npm run lint` here; two copies means two places to forget.
       - name: Test
         working-directory: frontend
         env:
