@@ -4110,6 +4110,92 @@ def test_the_seed_survives_being_run_with_no_rooms(db, seed_module):
     assert "no rooms" in summary
 
 
+#: The seed has to work on every day of the week, and the fixed ``NOW`` above is
+#: a Monday. It was the reason this bug survived a green suite: every seeder test
+#: anchored on a Monday, the window was always fine, and the failure only ever
+#: appeared through ``backend/seed.py``, which uses the real clock. Anchoring the
+#: window on ``now + 1 day`` broke specifically on a Friday, when tomorrow is a
+#: Saturday and every demo asset books Monday to Friday.
+SEED_CLOCKS = [
+    datetime(2026, 9, 28, 9, 0, tzinfo=timezone.utc),   # Monday, as NOW
+    datetime(2026, 9, 29, 23, 59, tzinfo=timezone.utc),  # Tuesday, late
+    datetime(2026, 10, 2, 0, 0, tzinfo=timezone.utc),   # Friday, midnight
+    datetime(2026, 10, 2, 9, 30, tzinfo=timezone.utc),  # Friday, the day CI broke
+    datetime(2026, 10, 2, 23, 59, tzinfo=timezone.utc),  # Friday, late
+    datetime(2026, 10, 3, 9, 0, tzinfo=timezone.utc),   # Saturday
+    datetime(2026, 10, 4, 9, 0, tzinfo=timezone.utc),   # Sunday
+]
+
+#: The mixed demo the seeder is supposed to produce. Asserted as a list rather
+#: than as substrings: ``booked`` is a substring of ``booked_handoff``, so a
+#: substring check would pass on a seed that lost its first booking.
+SEED_OUTCOMES = ["booked", "failed_offered", "retry_refused", "booked_handoff"]
+
+
+def _rooms_for(store):
+    return [
+        (store.create("room", {"name": name}, actor="dana", source="core")["id"], name)
+        for name in ("Northwind", "Contoso", "Fabrikam", "Adventure")
+    ]
+
+
+def _instant(value):
+    from dsr.headless_booking.availability import parse_instant
+
+    return parse_instant(value, field="startTime")
+
+
+@pytest.mark.parametrize("clock", SEED_CLOCKS, ids=lambda c: f"{c:%a-%H%M}")
+def test_the_seed_books_on_every_day_of_the_week(db, seed_module, clock):
+    """The demo books every day the seed might run on, and the booking is ahead.
+
+    On the old code this raised ``Refusal: no availability`` on the three Fridays
+    and passed on the rest, which is the whole shape of the bug: not an expiry,
+    a weekday.
+    """
+    store = RecordStore(db)
+    summary = seed_module.seed(db, {"room_ids": _rooms_for(store), "now": clock})
+
+    outcomes = summary.split("sessions: ", 1)[1].split(", 1 ownership")[0]
+    assert [part.strip() for part in outcomes.split(",")] == SEED_OUTCOMES, summary
+    # The point of the window being relative: the meeting it books is in the
+    # future relative to the clock that asked for it.
+    assert all(
+        _instant(row["data"]["startTime"]) > clock
+        for row in store.list(MEETING_COLLECTION)
+    ), summary
+
+
+def test_the_demo_window_always_lands_on_a_working_day(seed_module):
+    """The refusal this fix exists for, stated as the rule it enforces.
+
+    Every demo asset declares Monday-to-Fri ``work_days``, so a window anchored
+    on a weekend has no slots in it and the workflow refuses with *no
+    availability*. Asserted directly on the anchor so the guarantee does not
+    depend on the rest of the seed happening to notice.
+    """
+    for clock in SEED_CLOCKS:
+        day = seed_module._demo_day(clock)
+        assert day.isoweekday() <= 5, f"{clock:%a} anchored the demo on {day:%a}"
+        assert day > clock
+
+
+def test_the_demo_calendar_blocks_land_inside_the_demo_window(seed_module):
+    """The blocks are resolved against the window, so they still block anything.
+
+    Dated absolutely they drift out of the moving window and quietly stop
+    blocking: four calendar rows and a wall of free time.
+    """
+    for clock in SEED_CLOCKS:
+        day = seed_module._demo_day(clock)
+        window_end = day + timedelta(hours=36)
+        for block in seed_module.DEMO_CALENDAR:
+            start = _instant(seed_module._stamp(block["startsAt"], day))
+            end = _instant(seed_module._stamp(block["endsAt"], day))
+            assert day <= start < window_end, (clock, block["label"], start)
+            assert start < end <= window_end, (clock, block["label"], end)
+
+
 def test_the_seeded_assets_are_all_valid_against_the_assets_validator(seeded, seed_module):
     """Every demo row passes the same validation a create request does."""
     from dsr.headless_booking.assets import normalise
