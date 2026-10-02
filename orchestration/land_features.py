@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -45,19 +46,30 @@ for _s in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-ROOT = Path(r"C:\Users\Dilip\orca\projects\client-theater\client-theater")
-WORKSPACES = Path(r"C:\Users\Dilip\orca\workspaces\client-theater")
-PENDING = ROOT / "data" / "pending_ports.json"
+# Derived from this file, not named. This script used to hardcode an orca
+# checkout, so from any other clone it merged into a repository that had nothing
+# to do with the branch under review - and reported success doing it. A path that
+# cannot be wrong on another machine is a path with no literal in it.
+ROOT = Path(__file__).resolve().parent.parent
+
+# The workspaces directory is this repo's parent when the repo is a worktree
+# inside one (which is how this project is always used), and overridable for the
+# cases where it is not.
+WORKSPACES = Path(os.environ.get("DSR_WORKSPACES") or ROOT.parent)
+PENDING = Path(os.environ.get("DSR_PENDING_PORTS") or ROOT / "data" / "pending_ports.json")
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
+if not PY.exists():                       # a venv elsewhere on PATH, or POSIX layout
+    PY = Path(sys.executable)
 ME = "Dilip Nithyanandam <ddilipnithyanandam@gmail.com>"
 
-SHARED = {
-    "backend/dsr/api.py", "backend/dsr/deps.py", "backend/dsr/store.py",
-    "backend/dsr/db/audited.py", "backend/seed.py", "frontend/src/App.jsx",
-    "frontend/src/main.jsx", "frontend/src/lib/api.js",
-    "frontend/src/lib/features.js", "frontend/src/components/ui.jsx",
-    "frontend/vite.config.js",
-}
+# The shared-file list has one definition, in tools/contract.py. See the note
+# there: this script used to carry its own copy, so the guard and the merge
+# pipeline could disagree about what a feature may not touch, and nothing failed.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.contract import SHARED  # noqa: E402
+
 TRAILER = re.compile(
     r"^(Co-authored-by|Signed-off-by|Reviewed-by|Generated-with|Thanks-to"
     r"|Report-Message|Mailmap-To)\s*:", re.I)

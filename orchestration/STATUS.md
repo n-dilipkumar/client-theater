@@ -8,18 +8,18 @@
 Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `454c005 Add a workflow board: what is built, what is pending, and what each is worth (#76)` &middot; measured 2026-10-01T18:18:02+05:30
+`main` at `baaa07f Rebuild STATUS.md as a per-workflow table, measured from git (#77)` &middot; measured 2026-10-01T19:20:35+05:30
 
-Measured in `C:\Users\Dilip\Documents\dummy repo\client-theater`. This file is written by the generator and by nothing
+Measured in `C:\Users\Dilip\orca\workspaces\client-theater\t1-docs-dedup`. This file is written by the generator and by nothing
 else; if a copy of it lives in another clone, that copy is not this run.
 
 ## Progress
 
-    workflows  [################..................] 48/100
+    workflows  [###########.......................] 48/138
     routes     881
-    tests      9939 passed, 0 failed, 2 xfailed  (measured now)
+    tests      9939 passed, 0 failed, 2 xfailed  (supplied)
     features   0 failed to load
-    to go      52
+    to go      90
 
 138 researched workflows; **48 built**, **90 pending** (5 critical, 85 supplementary).
 
@@ -63,144 +63,144 @@ critical-first, so the queue reads in the order it should be worked.
 
 | Ticket | What it does | Description | Criticality | Status | Owner |
 |---|---|---|---|---|---|
-| `WF-001` | Create a Digital Sales Room from an account and template | Stand up a buyer-facing room from an account and a chosen template | critical (C1) | Built — 4 routes, UI | |
-| `WF-002` | Build the room's buyer-facing pages from DSR fragments | Assemble and publish the pages a buyer actually sees | critical (C1) | Built — 17 routes, UI | |
-| `WF-003` | Populate and govern the room's document library | Hold the room's documents and govern who may see them | critical (C1) | Built — 10 routes, UI | |
-| `WF-004` | Invite buyers to a room with a role and an access expiry | Invite a named buyer with a role and an expiry | critical (C1) | Built — 6 routes, UI | |
-| `WF-006` | Review buyer engagement and prioritise follow-up | Read per-buyer engagement and rank who to follow up | critical (C1) | Built — 8 routes, UI, no test file | |
-| `WF-007` | Ingest a document or deck into the content library | Ingest an external document or deck into the library | critical (C1) | Built — 12 routes, UI | |
-| `WF-011` | Take a room from draft to live and hand over the link | Take a room from draft to live and hand over the link | critical (C1) | Built — 10 routes, UI | |
-| `WF-015` | Verify buyer identity and restrict by email domain | Verify a buyer's identity by email domain | critical (C2) | Built — 12 routes, UI | |
-| `WF-005` | Archive and restore a room | Archive a closed room and restore it unchanged | supplementary | Built — 8 routes, API only | |
-| `WF-008` | Auto-sync an external cloud file into the content library | Mirror a cloud file into the library on a schedule | supplementary | Built — 8 routes, UI | |
-| `WF-009` | Approve and publish library content, immediately or on schedule | Approve content for publishing, now or on a schedule | supplementary | Built — 13 routes, UI | |
-| `WF-010` | Search the content library to assemble a room | Find library content by keyword, tag or type | supplementary | Built — 8 routes, UI | |
-| `WF-012` | Generate a personalised room programmatically from a template | Draft a room from a brief and a template | supplementary | Built — 9 routes, UI | |
-| `WF-013` | Personalise room content with conditional rules | Show or hide content by a rule the seller sets | supplementary | Built — 11 routes, UI | |
-| `WF-016` | Sync room events to the CRM via webhooks and automations | Two-way sync of room engagement with a CRM record | supplementary | Built — 16 routes, UI | |
-| `WF-017` | White-label rooms on a custom domain | Rebrand the room per tenant or per client | supplementary | Built — 10 routes, UI | |
-| `WF-018` | Read per-page dwell time and drop-off inside a PDF | Measure per-page dwell time and where buyers drop off | supplementary | Built — 12 routes, UI | |
-| `WF-019` | Rank content influence and associate revenue with assets | Rank content by the revenue it influences | supplementary | Built — 15 routes, UI | |
-| `WF-020` | Extract DSR viewing sessions (dwell time + geography) for BI | Reconstruct a buyer's viewing sessions | supplementary | Built — 16 routes, UI | |
-| `WF-021` | Classify workspace engagement health (Hot / Warm / Cooling / Cold) | Score workspace health from engagement signals | supplementary | Built — 9 routes, UI | |
-| `WF-022` | Triage the pipeline with saved workspace views | Triage the pipeline from saved views and filters | supplementary | Built — 20 routes, UI | |
-| `WF-023` | Relate buyer engagement to CRM pipeline and close rate | Link buyer engagement to CRM pipeline and revenue | supplementary | Built — 14 routes, UI | |
-| `WF-024` | Roll up client engagement and multi-threading portfolio-wide | Roll activity up across a client's many rooms | supplementary | Built — 10 routes, UI | |
-| `WF-025` | Stream workspace activity events to your own systems in real time | Stream workspace activity events to downstream systems | supplementary | Built — 32 routes, UI | |
-| `WF-026` | Write DSR events into the seller activity feed | Write room events into the seller's own activity feed | supplementary | Built — 24 routes, UI | |
-| `WF-027` | Emit buyer intent signals with indicators, urgency, and attribution | Emit buyer intent signals with a confidence score | supplementary | Built — 13 routes, UI | |
-| `WF-028` | Turn a signal into an automatic seller action (Play registration) | Turn an intent signal into an automatic seller action | supplementary | Built — 19 routes, UI | |
+| `WF-001` | Create a Digital Sales Room from an account and template | Create a room from an account and template | critical (C1) | Built — 4 routes, UI | |
+| `WF-002` | Build the room's buyer-facing pages from DSR fragments | Build room pages from DSR fragments | critical (C1) | Built — 17 routes, UI | |
+| `WF-003` | Populate and govern the room's document library | Populate the room document library | critical (C1) | Built — 10 routes, UI | |
+| `WF-004` | Invite buyers to a room with a role and an access expiry | Invite buyers with role and expiry | critical (C1) | Built — 6 routes, UI | |
+| `WF-006` | Review buyer engagement and prioritise follow-up | Review buyer engagement and prioritise follow-up | critical (C1) | Built — 8 routes, UI, no test file | |
+| `WF-007` | Ingest a document or deck into the content library | Ingest a document into the content library | critical (C1) | Built — 12 routes, UI | |
+| `WF-011` | Take a room from draft to live and hand over the link | Take a room from draft to live | critical (C1) | Built — 10 routes, UI | |
+| `WF-015` | Verify buyer identity and restrict by email domain | Verify buyer identity and restrict by domain | critical (C2) | Built — 12 routes, UI | |
+| `WF-005` | Archive and restore a room | Archive and restore a room | supplementary | Built — 8 routes, API only | |
+| `WF-008` | Auto-sync an external cloud file into the content library | Auto-sync an external cloud file | supplementary | Built — 8 routes, UI | |
+| `WF-009` | Approve and publish library content, immediately or on schedule | Approve and publish library content | supplementary | Built — 13 routes, UI | |
+| `WF-010` | Search the content library to assemble a room | Search the content library to assemble a room | supplementary | Built — 8 routes, UI | |
+| `WF-012` | Generate a personalised room programmatically from a template | Generate a personalised room from a template | supplementary | Built — 9 routes, UI | |
+| `WF-013` | Personalise room content with conditional rules | Personalise room content with conditional rules | supplementary | Built — 11 routes, UI | |
+| `WF-016` | Sync room events to the CRM via webhooks and automations | Sync room events to the CRM | supplementary | Built — 16 routes, UI | |
+| `WF-017` | White-label rooms on a custom domain | White-label rooms on a custom domain | supplementary | Built — 10 routes, UI | |
+| `WF-018` | Read per-page dwell time and drop-off inside a PDF | Read per-page dwell time and drop-off inside a PDF | supplementary | Built — 12 routes, UI | |
+| `WF-019` | Rank content influence and associate revenue with assets | Rank content influence and associate revenue with assets | supplementary | Built — 15 routes, UI | |
+| `WF-020` | Extract DSR viewing sessions (dwell time + geography) for BI | Extract DSR viewing sessions (dwell time + geography) for BI | supplementary | Built — 16 routes, UI | |
+| `WF-021` | Classify workspace engagement health (Hot / Warm / Cooling / Cold) | Classify workspace engagement health | supplementary | Built — 9 routes, UI | |
+| `WF-022` | Triage the pipeline with saved workspace views | Triage the pipeline with saved workspace views | supplementary | Built — 20 routes, UI | |
+| `WF-023` | Relate buyer engagement to CRM pipeline and close rate | Relate buyer engagement to CRM pipeline and close rate | supplementary | Built — 14 routes, UI | |
+| `WF-024` | Roll up client engagement and multi-threading portfolio-wide | Roll up client engagement and multi-threading portfolio-wide | supplementary | Built — 10 routes, UI | |
+| `WF-025` | Stream workspace activity events to your own systems in real time | Stream workspace activity events to your own systems in real time | supplementary | Built — 32 routes, UI | |
+| `WF-026` | Write DSR events into the seller activity feed | Write DSR events into the seller activity feed | supplementary | Built — 24 routes, UI | |
+| `WF-027` | Emit buyer intent signals with indicators, urgency, and attribution | Emit buyer intent signals with indicators, urgency, and attribution | supplementary | Built — 13 routes, UI | |
+| `WF-028` | Turn a signal into an automatic seller action (Play registration) | Turn a signal into an automatic seller action | supplementary | Built — 19 routes, UI | |
 | `WF-030` | Fire CRM workflows off DSR activity | Fire CRM workflows off DSR activity | supplementary | Built — 18 routes, UI | |
-| `WF-032` | Stream identified company/contact intent to your own systems | Stream identified companies and contacts into the room | supplementary | Built — 36 routes, UI | |
-| `WF-033` | Auto-add and continuously track in-market companies from intent signals | Auto-add a company and track it against marketing | supplementary | Built — 41 routes, UI | |
-| `WF-034` | Connect a CRM org to the sales room (OAuth 2.0 authorization code) | Connect a CRM org and store its token sealed | supplementary | Built — 20 routes, UI | |
-| `WF-035` | Map sales-room fields onto CRM fields and define the sync key | Map sales-room fields onto CRM fields per connection | supplementary | Built — 32 routes, UI | |
-| `WF-036` | Provision the sales-room engagement object and its fields into the CRM | Create the CRM objects a room engagement implies | supplementary | Built — 22 routes, UI | |
-| `WF-037` | Log a single buyer engagement event into the CRM | Log one buyer engagement event against a CRM record | supplementary | Built — 28 routes, UI | |
-| `WF-038` | Batch-upsert engagement rows keyed on the external ID | Upsert many engagement rows keyed on a stable id | supplementary | Built — 18 routes, UI | |
-| `WF-039` | Write account + contact + opportunity as one atomic transaction | Write account, contact and opportunity as one bundle | supplementary | Built — 17 routes, UI | |
-| `WF-040` | Surface partial failures and reject invalid writes before commit | Show partial CRM failures and offer a safe retry | supplementary | Built — 14 routes, UI | |
-| `WF-041` | Detect and block duplicate records during sync | Block duplicate CRM records before they are created | supplementary | Built — 20 routes, UI | |
-| `WF-043` | Stream CRM record changes into the room in near real time | Stream CRM record changes back into the room | supplementary | Built — 37 routes, UI | |
-| `WF-045` | Backfill historical records on a schedule with a resumable cursor | Backfill historical CRM records on a schedule | supplementary | Built — 16 routes, UI | |
-| `WF-056` | Book a meeting with no scheduling UI (headless / AI agent) | Book a meeting with no scheduling UI in the room | supplementary | Built — 22 routes, UI | |
-| `WF-057` | Find a time that works for a multi-person panel | Find one time that works for a panel of people | supplementary | Built — 21 routes, UI | |
-| `WF-058` | Embed a bookable calendar inside the sales room / app | Embed a bookable calendar inside the room | supplementary | Built — 36 routes, UI | |
-| `WF-059` | Provision a per-booking video-conference link (Meet / Zoom / Teams / Gong) | Provision a video link per booking, Meet or Zoom or Teams | supplementary | Built — 29 routes, UI | |
-| `WF-061` | Send conditional pre- and post-meeting reminders and SMS nudges | Send conditional pre- and post-meeting reminders | supplementary | Built — 29 routes, UI | |
-| `WF-063` | Reassign a booked meeting to a different host | Reassign a booked meeting to a different host | supplementary | Built — 23 routes, UI | |
-| `WF-064` | Reschedule or cancel a meeting and propagate the change | Move or cancel a meeting and propagate the change | supplementary | Built — 31 routes, UI | |
-| `WF-065` | Write the booking back into the CRM | Write a completed booking back to the CRM | supplementary | Built — 25 routes, UI | |
-| `WF-014` | Expire or cap access to a room | Expire or cap a buyer's access to a room | critical (C2) | Pending | |
-| `WF-069` | Gate each buyer link with a password, an expiry and email verification | Gate a buyer link by password, expiry and email check | critical (C2) | Pending | |
-| `WF-076` | Revoke access early and keep the audit row | Revoke a buyer's access early and keep the audit row | critical (C2) | Pending | |
+| `WF-032` | Stream identified company/contact intent to your own systems | Stream identified company/contact intent to your own systems | supplementary | Built — 36 routes, UI | |
+| `WF-033` | Auto-add and continuously track in-market companies from intent signals | Auto-add and continuously track in-market companies from intent signals | supplementary | Built — 41 routes, UI | |
+| `WF-034` | Connect a CRM org to the sales room (OAuth 2.0 authorization code) | Connect a CRM org to the sales room | supplementary | Built — 20 routes, UI | |
+| `WF-035` | Map sales-room fields onto CRM fields and define the sync key | Map sales-room fields onto CRM fields | supplementary | Built — 32 routes, UI | |
+| `WF-036` | Provision the sales-room engagement object and its fields into the CRM | Provision the engagement object into the CRM | supplementary | Built — 22 routes, UI | |
+| `WF-037` | Log a single buyer engagement event into the CRM | Log a buyer engagement event into the CRM | supplementary | Built — 28 routes, UI | |
+| `WF-038` | Batch-upsert engagement rows keyed on the external ID | Batch-upsert engagement rows on the external ID | supplementary | Built — 18 routes, UI | |
+| `WF-039` | Write account + contact + opportunity as one atomic transaction | Commit a related record set atomically | supplementary | Built — 17 routes, UI | |
+| `WF-040` | Surface partial failures and reject invalid writes before commit | Surface partial failures and reject invalid writes | supplementary | Built — 14 routes, UI | |
+| `WF-041` | Detect and block duplicate records during sync | Detect and block duplicate records during sync | supplementary | Built — 20 routes, UI | |
+| `WF-043` | Stream CRM record changes into the room in near real time | Stream CRM record changes into the room | supplementary | Built — 37 routes, UI | |
+| `WF-045` | Backfill historical records on a schedule with a resumable cursor | Backfill history on a resumable cursor | supplementary | Built — 16 routes, UI | |
+| `WF-056` | Book a meeting with no scheduling UI (headless / AI agent) | Book headlessly via API or MCP | supplementary | Built — 22 routes, UI | |
+| `WF-057` | Find a time that works for a multi-person panel | Find a shared slot across several calendars | supplementary | Built — 21 routes, UI | |
+| `WF-058` | Embed a bookable calendar inside the sales room / app | Embed an in-room booking calendar | supplementary | Built — 36 routes, UI | |
+| `WF-059` | Provision a per-booking video-conference link (Meet / Zoom / Teams / Gong) | Generate and swap the video meeting link | supplementary | Built — 29 routes, UI | |
+| `WF-061` | Send conditional pre- and post-meeting reminders and SMS nudges | Send conditional meeting reminders and nudges | supplementary | Built — 29 routes, UI | |
+| `WF-063` | Reassign a booked meeting to a different host | Reassign a booked meeting to another host | supplementary | Built — 23 routes, UI | |
+| `WF-064` | Reschedule or cancel a meeting and propagate the change | Reschedule or cancel a booked meeting | supplementary | Built — 31 routes, UI | |
+| `WF-065` | Write the booking back into the CRM | Write the meeting back to the CRM | supplementary | Built — 25 routes, UI | |
+| `WF-014` | Expire or cap access to a room | Expire or cap access to a room | critical (C2) | Pending | |
+| `WF-069` | Gate each buyer link with a password, an expiry and email verification | Gate a buyer link with password + expiry + email verification | critical (C2) | Pending | |
+| `WF-076` | Revoke access early and keep the audit row | Revoke access early and keep the audit row | critical (C2) | Pending | |
 | `WF-077` | Manage internal workspace roles and least-privilege integration scopes | Manage internal roles and least-privilege integration scopes | critical (C2) | Pending | |
-| `WF-079` | Export a tamper-evident audit trail with IP and verification outcomes | Export a tamper-evident audit trail for compliance | critical (C2) | Pending | |
+| `WF-079` | Export a tamper-evident audit trail with IP and verification outcomes | Export a tamper-evident audit trail | critical (C2) | Pending | |
 | `WF-029` | Score DSR activity as CRM lead-score criteria | Score DSR activity as CRM lead-score criteria | supplementary | Pending | |
-| `WF-031` | Identify anonymous web visitors as companies and filter by pages visited | Identify anonymous visitors as companies by pages visited | supplementary | Pending | |
-| `WF-042` | Pull CRM deal, account and contact data into the room for display | Pull CRM deal, account and contact data into the room | supplementary | Pending | |
-| `WF-044` | Emit a webhook out of the CRM when a deal stage changes | Emit a webhook when a deal stage changes | supplementary | Pending | |
-| `WF-046` | Throttle and retry under vendor API rate limits | Throttle and retry under vendor rate limits | supplementary | Pending | |
+| `WF-031` | Identify anonymous web visitors as companies and filter by pages visited | Identify anonymous web visitors as companies and filter by pages visited | supplementary | Pending | |
+| `WF-042` | Pull CRM deal, account and contact data into the room for display | Pull CRM records into the room for display | supplementary | Pending | |
+| `WF-044` | Emit a webhook out of the CRM when a deal stage changes | Emit a webhook out of the CRM on a deal stage change | supplementary | Pending | |
+| `WF-046` | Throttle and retry under vendor API rate limits | Throttle and retry under API rate limits | supplementary | Pending | |
 | `WF-047` | Mirror room documents into CRM files | Mirror room documents into CRM files | supplementary | Pending | |
-| `WF-048` | Validate the connector against a sandbox or test account | Validate a connector against a sandbox account | supplementary | Pending | |
-| `WF-049` | Monitor integration health and remaining API quota | Report integration health and remaining API quota | supplementary | Pending | |
-| `WF-050` | Reconcile gaps and overflows after a dropped change stream | Reconcile gaps and overflows after a dropped change stream | supplementary | Pending | |
-| `WF-051` | Route and book a demo request inline from a web form | Route and book a demo request inline from a web form | supplementary | Pending | |
-| `WF-052` | Qualify a lead without offering any calendar | Qualify a lead without offering any calendar | supplementary | Pending | |
-| `WF-053` | Route a booking to the owner of the CRM record | Route a booking to the owner of the CRM record | supplementary | Pending | |
-| `WF-054` | Spread bookings across a team by availability-weighted round robin | Spread bookings across a team by availability | supplementary | Pending | |
-| `WF-055` | Hand a lead off from an SDR scheduler to an AE | Hand a lead off from an SDR scheduler to an AE | supplementary | Pending | |
-| `WF-060` | Auto-join and record the meeting, gated by recording consent | Auto-join and record a meeting, gated on consent | supplementary | Pending | |
-| `WF-062` | Route a requested slot for host approval before confirming | Route a requested slot for host approval before booking | supplementary | Pending | |
-| `WF-066` | Push meeting lifecycle events to downstream systems | Push meeting lifecycle events to downstream systems | supplementary | Pending | |
-| `WF-067` | Collect mutual-action-plan approval by e-signature and track it | Collect mutual-action-plan approval by e-signature | supplementary | Pending | |
-| `WF-068` | Prepare for the meeting, then run the post-meeting follow-up sequence | Prepare for the meeting, then run the follow-up sequence | supplementary | Pending | |
-| `WF-070` | Require NDA acceptance before the buyer sees anything | Require NDA acceptance before a buyer sees anything | supplementary | Pending | |
-| `WF-071` | Stamp a dynamic, per-viewer watermark on every page | Stamp a per-viewer watermark on every page | supplementary | Pending | |
+| `WF-048` | Validate the connector against a sandbox or test account | Validate the connector against a sandbox | supplementary | Pending | |
+| `WF-049` | Monitor integration health and remaining API quota | Monitor integration health and quota | supplementary | Pending | |
+| `WF-050` | Reconcile gaps and overflows after a dropped change stream | Reconcile gaps after a dropped change stream | supplementary | Pending | |
+| `WF-051` | Route and book a demo request inline from a web form | Route-and-book a web form request inline | supplementary | Pending | |
+| `WF-052` | Qualify a lead without offering any calendar | Qualify-and-assign without scheduling | supplementary | Pending | |
+| `WF-053` | Route a booking to the owner of the CRM record | Book with the CRM record owner | supplementary | Pending | |
+| `WF-054` | Spread bookings across a team by availability-weighted round robin | Distribute bookings across a team by round robin | supplementary | Pending | |
+| `WF-055` | Hand a lead off from an SDR scheduler to an AE | Handoff-schedule a lead from SDR to AE | supplementary | Pending | |
+| `WF-060` | Auto-join and record the meeting, gated by recording consent | Auto-join and record with consent | supplementary | Pending | |
+| `WF-062` | Route a requested slot for host approval before confirming | Hold a meeting request pending host approval | supplementary | Pending | |
+| `WF-066` | Push meeting lifecycle events to downstream systems | Fan out meeting events via signed webhooks | supplementary | Pending | |
+| `WF-067` | Collect mutual-action-plan approval by e-signature and track it | Send a mutual action plan for e-signature approval | supplementary | Pending | |
+| `WF-068` | Prepare for the meeting, then run the post-meeting follow-up sequence | Prepare for and follow up on a meeting | supplementary | Pending | |
+| `WF-070` | Require NDA acceptance before the buyer sees anything | Require NDA acceptance before viewing | supplementary | Pending | |
+| `WF-071` | Stamp a dynamic, per-viewer watermark on every page | Stamp a dynamic per-viewer watermark | supplementary | Pending | |
 | `WF-072` | Enforce view-only access and block bulk download | Enforce view-only access and block bulk download | supplementary | Pending | |
-| `WF-073` | Apply confidential view and block screenshot / screen-record shortcuts | Mark pages confidential and block screen recording | supplementary | Pending | |
-| `WF-074` | Scope visibility to an audience with per-item view and download permissions | Scope visibility per audience, item by item | supplementary | Pending | |
-| `WF-075` | Review engagement: verification state, per-page dwell, geo, device and downloads | Review engagement: verification, dwell, geo, downloads | supplementary | Pending | |
-| `WF-078` | Require recipient identity verification before opening or signing | Record every access decision with who and when | supplementary | Pending | |
-| `WF-080` | Download the executed agreement from the e-vault, webhook-driven | Detect and stop an unusual access pattern | supplementary | Pending | |
-| `WF-081` | Expire an agreement and drive pre-expiry reminders | Verify the integrity of exported audit evidence | supplementary | Pending | |
-| `WF-082` | Verify and IP-allowlist inbound provider webhooks | Verify inbound webhooks by signature and IP allowlist | supplementary | Pending | |
-| `WF-083` | Record buyer sessions behind a consent gate, masked, IP-excluded and auto-purged | Detect data exfiltration through the room | supplementary | Pending | |
-| `WF-084` | Federate staff SSO and auto-provision / deprovision via SCIM | Hold content pending a compliance review | supplementary | Pending | |
-| `WF-085` | Meet GDPR / CCPA: region residency, retention limits, DSAR and consent tooling | Meet a GDPR or regional data-residency requirement | supplementary | Pending | |
-| `WF-086` | Author a quote from a deal or opportunity | Honour a data subject's deletion request end to end | supplementary | Pending | |
-| `WF-087` | Curate a product and price-book catalogue with tiered pricing | Encrypt sensitive fields at rest and in transit | supplementary | Pending | |
-| `WF-088` | Auto-assign the correct price book or price list to a deal by rule | Rotate and expire credentials on a schedule | supplementary | Pending | |
-| `WF-089` | Quote in a transaction currency with FX conversion and same-currency constraints | Scope a service account to the least privilege | supplementary | Pending | |
-| `WF-090` | Enforce configuration and discount guardrails with quote rules before publish | Prove who changed what, for an auditor | supplementary | Pending | |
-| `WF-091` | Route a discounted quote for standard approval | Report on compliance posture across the estate | supplementary | Pending | |
-| `WF-092` | Chain sequential multi-level approvals through a workflow | Classify a record's sensitivity automatically | supplementary | Pending | |
-| `WF-093` | Build a branded proposal from a template | Redact sensitive values from exports and logs | supplementary | Pending | |
-| `WF-094` | Publish and share the quote as a hosted link or email | Record consent and honour its withdrawal | supplementary | Pending | |
-| `WF-095` | Collect acceptance by e-signature, countersignature, signer reassignment and identity verification | Support a legal hold over room content | supplementary | Pending | |
-| `WF-096` | Accept a quote without a signature and take payment in the quote | Produce a signed receipt for an audit event | supplementary | Pending | |
-| `WF-097` | Track buyer engagement on a shared quote and drive follow-up | Detect a session that is not the account owner | supplementary | Pending | |
-| `WF-098` | Expire a quote and auto-send buyer reminders | Enforce MFA on internal workspace roles | supplementary | Pending | |
-| `WF-099` | Auto-create a contract from an accepted quote | Alert on a security-relevant configuration change | supplementary | Pending | |
-| `WF-100` | Create a renewal quote from a contract and auto-create the renewal deal | Review who can see a room before it goes live | supplementary | Pending | |
-| `WF-101` | Convert an accepted quote into an order and lock the price | Compare open-source and commercial DSR options | supplementary | Pending | |
-| `WF-102` | Revise a quote to create a new revision instead of losing the deal | Score a DSR against this one's capability set | supplementary | Pending | |
-| `WF-103` | Generate a proposal from CRM data via a document API, gate it on internal approval, and sync status back | Track which competitor claims this product meets | supplementary | Pending | |
-| `WF-104` | Drip a multi-channel nurture sequence with in-app → email fallback | Diff this product's roadmap against a rival's | supplementary | Pending | |
-| `WF-105` | Re-enter a recurring series and tag the contact on completion | Summarise a rival's pricing and packaging changes | supplementary | Pending | |
-| `WF-106` | Trigger outreach when a prospect repeatedly browses a high-intent page | Record a competitive win and its lost features | supplementary | Pending | |
-| `WF-107` | Chase unresponsive buyers and reroute conversations from unresponsive reps | Map this product's gaps against the market | supplementary | Pending | |
-| `WF-108` | Run SLA response timers that respect office hours and pause rules | Publish a comparison a buyer can read unaided | supplementary | Pending | |
-| `WF-109` | Escalate just before / when an SLA target is breached | Generate a quote from a room's agreed scope | supplementary | Pending | |
-| `WF-110` | Escalate a conversation converted into a ticket to the owning team | Turn an approved quote into a paid order | supplementary | Pending | |
-| `WF-111` | Send a multi-channel reminder: push notification plus in-app inbox fallback | Accept payment inside the buyer's room | supplementary | Pending | |
-| `WF-112` | Notify the internal team in Slack from a buyer signal | Issue an invoice and track what is unpaid | supplementary | Pending | |
-| `WF-113` | Ingest third-party data by webhook and fan it out as events | Accept a webhook from a vendor into the room | supplementary | Pending | |
-| `WF-114` | Start a workflow from an external system's webhook | Verify and route inbound webhook traffic | supplementary | Pending | |
-| `WF-115` | Publish custom workflow triggers and actions to an app marketplace | Retry a failed webhook delivery with backoff | supplementary | Pending | |
-| `WF-116` | Create an automated seller follow-up task with a reminder | Reconcile a webhook against what the vendor sent | supplementary | Pending | |
-| `WF-117` | Sweep stale opportunities by an inactivity rule and escalate | Expose a webhook log per connection | supplementary | Pending | |
-| `WF-118` | Order and throttle in-app guide prompts, and re-prompt after dismissal | Sign and verify outbound webhook payloads | supplementary | Pending | |
-| `WF-119` | Gate an automation on an external human approval, then resume | Route a webhook to a queue under backpressure | supplementary | Pending | |
-| `WF-120` | Enroll records on a schedule with re-enrollment control and backfill | Replay a webhook range after an outage | supplementary | Pending | |
-| `WF-121` | Tracked, per-recipient document link with page-level read analytics | Benchmark against an open-source DSR baseline | supplementary | Pending | |
-| `WF-122` | Structured data room with staged, tiered disclosure | Track build performance against the baseline | supplementary | Pending | |
-| `WF-123` | In-room qualifying form / buyer data capture | Report the feature gap to the open-source baseline | supplementary | Pending | |
-| `WF-124` | Native Mutual Action Plan with owners, timelines and reminders | Contribute a connector back to an open-source project | supplementary | Pending | |
-| `WF-125` | Bi-directional CRM sync with room creation on CRM conditions | License-check a dependency before shipping | supplementary | Pending | |
-| `WF-126` | Seller-recorded video intro and in-room video walkthrough | Audit the supply chain for a release | supplementary | Pending | |
-| `WF-127` | Interactive product demo with activity heatmaps and organic stakeholder discovery | Pin and verify a build dependency | supplementary | Pending | |
-| `WF-128` | Live co-presented walkthrough inside the deal | Track an upstream project's release cadence | supplementary | Pending | |
-| `WF-129` | In-room pricing, quote and signable order form | Mirror an upstream fix into this product | supplementary | Pending | |
-| `WF-130` | Generated, personalised collateral from deal data (AI document generation) | Prove provenance for a released artifact | supplementary | Pending | |
-| `WF-131` | Content protection: watermarking, download control, NDA gating, audit log | Reproduce a build from source | supplementary | Pending | |
-| `WF-132` | In-room collaboration: comments, threads, tagging, and champion enablement | Hold an in-room comment thread and tag a person | supplementary | Pending | |
-| `WF-133` | Intent signal → seller alert → CRM task (routing workflow) | Let a buyer ask a question the seller must answer | supplementary | Pending | |
-| `WF-134` | Engagement-driven deal-health scoring, risk detection and coaching trigger | Track a mutual action plan to completion | supplementary | Pending | |
-| `WF-135` | Conversation intelligence capture and CRM write-back | Surface the buyer's champion inside the room | supplementary | Pending | |
-| `WF-136` | Buyer self-serve booking of the next step | Let a champion enable their own team | supplementary | Pending | |
-| `WF-137` | Governance: versioning, brand control, and the closed-won → onboarding handoff | Prove a buyer's identity before letting them comment | supplementary | Pending | |
-| `WF-138` | Branded, custom-domain, white-label buyer experience | Notify a room's followers of a change | supplementary | Pending | |
+| `WF-073` | Apply confidential view and block screenshot / screen-record shortcuts | Apply confidential view and block screenshot shortcuts | supplementary | Pending | |
+| `WF-074` | Scope visibility to an audience with per-item view and download permissions | Scope visibility to an audience with per-item permissions | supplementary | Pending | |
+| `WF-075` | Review engagement: verification state, per-page dwell, geo, device and downloads | Review who engaged, where and for how long | supplementary | Pending | |
+| `WF-078` | Require recipient identity verification before opening or signing | Require recipient identity verification before open or sign | supplementary | Pending | |
+| `WF-080` | Download the executed agreement from the e-vault, webhook-driven | Download the executed agreement from the e-vault | supplementary | Pending | |
+| `WF-081` | Expire an agreement and drive pre-expiry reminders | Expire an agreement and drive pre-expiry reminders | supplementary | Pending | |
+| `WF-082` | Verify and IP-allowlist inbound provider webhooks | Verify and IP-allowlist inbound provider webhooks | supplementary | Pending | |
+| `WF-083` | Record buyer sessions behind a consent gate, masked, IP-excluded and auto-purged | Record buyer sessions behind a consent gate | supplementary | Pending | |
+| `WF-084` | Federate staff SSO and auto-provision / deprovision via SCIM | Federate staff SSO and auto-provision via SCIM | supplementary | Pending | |
+| `WF-085` | Meet GDPR / CCPA: region residency, retention limits, DSAR and consent tooling | Meet GDPR / CCPA: residency, retention, DSAR | supplementary | Pending | |
+| `WF-086` | Author a quote from a deal or opportunity | Author a quote from a deal or opportunity | supplementary | Pending | |
+| `WF-087` | Curate a product and price-book catalogue with tiered pricing | Curate a product and price-book catalogue with tiered pricing | supplementary | Pending | |
+| `WF-088` | Auto-assign the correct price book or price list to a deal by rule | Auto-assign the correct price book or price list to a deal by rule | supplementary | Pending | |
+| `WF-089` | Quote in a transaction currency with FX conversion and same-currency constraints | Quote in a transaction currency with FX conversion | supplementary | Pending | |
+| `WF-090` | Enforce configuration and discount guardrails with quote rules before publish | Enforce configuration and discount guardrails with quote rules | supplementary | Pending | |
+| `WF-091` | Route a discounted quote for standard approval | Route a discounted quote for standard approval | supplementary | Pending | |
+| `WF-092` | Chain sequential multi-level approvals through a workflow | Chain sequential multi-level approvals through a workflow | supplementary | Pending | |
+| `WF-093` | Build a branded proposal from a template | Build a branded proposal from a template | supplementary | Pending | |
+| `WF-094` | Publish and share the quote as a hosted link or email | Publish and share the quote as a hosted link or email | supplementary | Pending | |
+| `WF-095` | Collect acceptance by e-signature, countersignature, signer reassignment and identity verification | Collect acceptance by e-signature, countersignature and identity verification | supplementary | Pending | |
+| `WF-096` | Accept a quote without a signature and take payment in the quote | Accept a quote without a signature and take payment in the quote | supplementary | Pending | |
+| `WF-097` | Track buyer engagement on a shared quote and drive follow-up | Track buyer engagement on a shared quote and drive follow-up | supplementary | Pending | |
+| `WF-098` | Expire a quote and auto-send buyer reminders | Expire a quote and auto-send buyer reminders | supplementary | Pending | |
+| `WF-099` | Auto-create a contract from an accepted quote | Auto-create a contract from an accepted quote | supplementary | Pending | |
+| `WF-100` | Create a renewal quote from a contract and auto-create the renewal deal | Create a renewal quote from a contract and auto-create the renewal deal | supplementary | Pending | |
+| `WF-101` | Convert an accepted quote into an order and lock the price | Convert an accepted quote into an order and lock the price | supplementary | Pending | |
+| `WF-102` | Revise a quote to create a new revision instead of losing the deal | Revise a quote to create a new revision instead of losing the deal | supplementary | Pending | |
+| `WF-103` | Generate a proposal from CRM data via a document API, gate it on internal approval, and sync status back | Generate a proposal from CRM data via a document API, gate it on internal approval, sync status back | supplementary | Pending | |
+| `WF-104` | Drip a multi-channel nurture sequence with in-app → email fallback | Drip a multi-channel nurture sequence with channel fallback | supplementary | Pending | |
+| `WF-105` | Re-enter a recurring series and tag the contact on completion | Re-enter a recurring nurture series and tag on completion | supplementary | Pending | |
+| `WF-106` | Trigger outreach when a prospect repeatedly browses a high-intent page | Trigger outreach on high-intent page visits | supplementary | Pending | |
+| `WF-107` | Chase unresponsive buyers and reroute conversations from unresponsive reps | Chase unresponsive buyers and reroute unattended conversations | supplementary | Pending | |
+| `WF-108` | Run SLA response timers that respect office hours and pause rules | Run SLA response timers with office-hour awareness | supplementary | Pending | |
+| `WF-109` | Escalate just before / when an SLA target is breached | Escalate on SLA breach with a pre-warning head start | supplementary | Pending | |
+| `WF-110` | Escalate a conversation converted into a ticket to the owning team | Escalate a converted conversation into an owned ticket | supplementary | Pending | |
+| `WF-111` | Send a multi-channel reminder: push notification plus in-app inbox fallback | Send a multi-channel reminder with an in-app inbox fallback | supplementary | Pending | |
+| `WF-112` | Notify the internal team in Slack from a buyer signal | Notify the internal team in Slack from a buyer signal | supplementary | Pending | |
+| `WF-113` | Ingest third-party data by webhook and fan it out as events | Ingest third-party data by webhook and fan it out as events | supplementary | Pending | |
+| `WF-114` | Start a workflow from an external system's webhook | Start a workflow from an external system's webhook | supplementary | Pending | |
+| `WF-115` | Publish custom workflow triggers and actions to an app marketplace | Publish custom workflow triggers and actions to an app marketplace | supplementary | Pending | |
+| `WF-116` | Create an automated seller follow-up task with a reminder | Create an automated seller follow-up task with a reminder | supplementary | Pending | |
+| `WF-117` | Sweep stale opportunities by an inactivity rule and escalate | Sweep stale opportunities and escalate the pipeline | supplementary | Pending | |
+| `WF-118` | Order and throttle in-app guide prompts, and re-prompt after dismissal | Order, throttle and repeat in-app guide prompts | supplementary | Pending | |
+| `WF-119` | Gate an automation on an external human approval, then resume | Gate an automation on external human approval and resume | supplementary | Pending | |
+| `WF-120` | Enroll records on a schedule with re-enrollment control and backfill | Enroll records on a schedule with re-enrollment control | supplementary | Pending | |
+| `WF-121` | Tracked, per-recipient document link with page-level read analytics | Tracked deal-link distribution with per-page dwell | supplementary | Pending | |
+| `WF-122` | Structured data room with staged, tiered disclosure | Tiered data room — reveal sections as trust grows | supplementary | Pending | |
+| `WF-123` | In-room qualifying form / buyer data capture | In-room qualification capture | supplementary | Pending | |
+| `WF-124` | Native Mutual Action Plan with owners, timelines and reminders | Native Mutual Action Plan execution | supplementary | Pending | |
+| `WF-125` | Bi-directional CRM sync with room creation on CRM conditions | CRM-driven room lifecycle | supplementary | Pending | |
+| `WF-126` | Seller-recorded video intro and in-room video walkthrough | Asynchronous personalised video inside the room | supplementary | Pending | |
+| `WF-127` | Interactive product demo with activity heatmaps and organic stakeholder discovery | Interactive demo / sandbox analytics with stakeholder discovery | supplementary | Pending | |
+| `WF-128` | Live co-presented walkthrough inside the deal | In-room live presentation / co-browsing | supplementary | Pending | |
+| `WF-129` | In-room pricing, quote and signable order form | Quote-to-order-form inside the room, with e-signature | supplementary | Pending | |
+| `WF-130` | Generated, personalised collateral from deal data (AI document generation) | Data-driven document/deck generation into the room | supplementary | Pending | |
+| `WF-131` | Content protection: watermarking, download control, NDA gating, audit log | Per-recipient content protection and auditability | supplementary | Pending | |
+| `WF-132` | In-room collaboration: comments, threads, tagging, and champion enablement | In-room conversation and champion self-service | supplementary | Pending | |
+| `WF-133` | Intent signal → seller alert → CRM task (routing workflow) | Real-time buyer-intent alerting and routing | supplementary | Pending | |
+| `WF-134` | Engagement-driven deal-health scoring, risk detection and coaching trigger | Deal-risk scoring and rep coaching from in-room behaviour | supplementary | Pending | |
+| `WF-135` | Conversation intelligence capture and CRM write-back | Auto-capture of the deal conversation into the CRM | supplementary | Pending | |
+| `WF-136` | Buyer self-serve booking of the next step | In-deal scheduling and next-step booking | supplementary | Pending | |
+| `WF-137` | Governance: versioning, brand control, and the closed-won → onboarding handoff | Version control, brand governance and post-sale room continuity | supplementary | Pending | |
+| `WF-138` | Branded, custom-domain, white-label buyer experience | Branded room on your own domain | supplementary | Pending | |
 
 ## Critical and pending
 
@@ -287,6 +287,8 @@ describing agent worktrees were removed rather than printed as zeros —
 this generator cannot measure them, and a section reading "0 in progress"
 is a claim about the world nobody re-checks.
 
-The short description per workflow is a one-line reading of the researched
-specification, kept here rather than in the corpus so the corpus stays
-primary-source evidence and this stays a dashboard.
+The Description column is read out of each workflow's own specification
+page, the same page the ticket number comes from. It used to come from a
+hand-maintained side table beside this generator, which drifted: from
+WF-078 the descriptions belonged to other workflows entirely, and nothing
+failed. A description read from `wf/WF-NNN.md` is correct by construction.

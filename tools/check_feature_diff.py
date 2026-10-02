@@ -19,32 +19,22 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Editing any of these from a feature branch means N branches will collide at
-# the same line. The feature host already gives features a way to register
-# without touching them.
-SHARED = {
-    "backend/dsr/api.py",
-    "backend/dsr/deps.py",
-    "backend/dsr/store.py",
-    "backend/dsr/db/audited.py",
-    # Rewritten by ten of the first twelve features, purely to add their own
-    # demo rows. Features export seed(db, context) in their own module instead.
-    "backend/seed.py",
-    "frontend/src/App.jsx",
-    "frontend/src/main.jsx",
-    "frontend/src/lib/api.js",
-    "frontend/src/lib/features.js",
-    "frontend/src/components/ui.jsx",
-    "frontend/vite.config.js",
-}
+# The shared-file list lives in exactly one place. This module used to carry its
+# own copy of the literal, which meant a shared file added to the guard but not
+# to the merge scripts - or the reverse - failed silently, and the guard is the
+# only thing standing between a hundred parallel feature branches and a merge
+# collision. See tools/contract.py.
+#
+# The import is sys.path-relative rather than a bare `from contract import ...`
+# because this file runs from the repo root (`python tools/check_feature_diff.py`)
+# and the same pattern is used by the orchestration/ scripts, which run from the
+# repo root and from backend/. Deriving the repo root from __file__ makes it
+# independent of the caller's working directory.
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-# Platform work is allowed to touch these; it just is not a feature branch.
-PLATFORM_PREFIXES = (
-    "orchestration/",
-    "docs/",
-    "tools/",
-    "design-system/",
-)
+from tools.contract import PLATFORM_PREFIXES, SHARED  # noqa: E402
 
 
 def changed_files(base: str) -> list[str]:

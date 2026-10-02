@@ -25,10 +25,10 @@ requirements seriously in a way the off-the-shelf products do not:
 - **Schema flexibility without coordination.** A team adding a field to a room
   or a document must not require a migration, a pull request from another team,
   or a deployment. Fields are discovered from the data at runtime.
-- **Many features, merged without collision.** The roadmap is one hundred
-  workflows authored by many different people and agents in parallel. The
-  architecture is designed so that a workflow is a file you add, never a shared
-  file you edit.
+- **Many features, merged without collision.** The roadmap is every one of the
+  138 researched workflows, authored by many different people and agents in
+  parallel. The architecture is designed so that a workflow is a file you add,
+  never a shared file you edit.
 
 ## Tech stack
 
@@ -38,7 +38,7 @@ requirements seriously in a way the off-the-shelf products do not:
 | Frontend testing | Vitest, Testing Library | |
 | Backend | Python 3.11+, FastAPI, Uvicorn | `python-multipart` for document uploads |
 | Database | SQLite via `AuditedDatabase` | Single writer, WAL journalling; direct connections are not permitted |
-| Backend testing | Pytest, httpx | 56 test modules, run against a temporary database |
+| Backend testing | Pytest, httpx | 69 test modules, run against a temporary database |
 | Documentation | Markdown under `docs/`, with a researched workflow corpus | |
 | Design system | `design-system/digital-sales-room/MASTER.md` | 44px touch targets, visible focus, 4.5:1 contrast, `prefers-reduced-motion` honoured |
 
@@ -97,11 +97,16 @@ trail. A feature without tests is not considered finished.
 
 ## What works now
 
-Forty-two workflow plugins are merged. Each has its own page in the left-hand
-navigation and its own routes under a prefix it owns, so the installation you
-are running can be asked what it actually has at `/api/features`. Where a page
-is scoped to a particular deal, choose the room at the top of the page. Run the
-seeder first and there is realistic demo data for every one of them.
+Forty-eight workflow plugins are merged. Each has its own page in the
+left-hand navigation and its own routes under a prefix it owns, so the
+installation you are running can be asked what it actually has at
+`/api/features`. Where a page is scoped to a particular deal, choose the room at
+the top of the page. Run the seeder first and there is realistic demo data for
+every one of them.
+
+The target is all 138 researched workflows, not a round number. Ninety remain;
+[`orchestration/WORKFLOW-BOARD.md`](orchestration/WORKFLOW-BOARD.md) lists what is
+built, what is pending, and what each is worth.
 
 ### Core application
 
@@ -118,6 +123,7 @@ seeder first and there is realistic demo data for every one of them.
 | Feature | What it is | How you use it |
 |---|---|---|
 | Create a room (WF-001) | A three-step wizard — bind the room to an account, pick a template, name it — with the room and the site it is bound to written in one transaction. | Open **Create a room** and work through the three steps. Every other field you send is stored as-is. |
+| Archive and restore (WF-005) | Close a room to buyers while keeping its content, and bring a mistaken archive back. Both directions need the same update permission and write only the status, so a restore has nothing to clean up. | Archive from the room's page, then restore it from the same list. |
 | Buyer pages (WF-002) | A fragment catalogue, a drag-and-drop page editor with a configuration panel, and an immutable published revision. | Open **Buyer pages**, compose the page from fragments, then **Publish**. Buyers are served published revisions only. |
 | Documents (WF-003) | The room's document folder as one canonical library: upload, workflow status with a transition graph, role gates on every write, and the four-slot Document Gallery Block. | Open **Documents** for a room, upload or move a document through its status, and place up to four in the gallery block. |
 | Content library (WF-007) | Organisation-wide ingest of a binary plus schema-flexible metadata: required name, derived format, name de-collision, rollback on a failed binary, versioning rather than replacement, asynchronous thumbnail. | Open **Content library**, upload a file with its metadata, and add a new version later rather than replacing the binary. |
@@ -160,6 +166,7 @@ seeder first and there is realistic demo data for every one of them.
 | Play automations (WF-028) | A Play framework registered against a signal: a matching signal creates a one-off call, email or cadence step with no human in the loop, with assignment on the researched User / Content / Person / Account precedence. | Open **Play automations**, register the Play against a signal, and switch it on. Outcomes are tracked over webhooks on the researched retry schedule. |
 | CRM workflows (WF-030) | Contact-based CRM workflows triggered on the five published DSR filter families, refined by the keys that family publishes, with the four researched actions. | Open **CRM workflows**, write the workflow and publish it; DSR activity then drives it with no further setup. Actions are recorded, not executed. |
 | Intent stream (WF-032) | Segments pointed at webhook destinations, with every matching company visit accounted for: first send or update, which contacts survived the filters, and where the rules said not to send. | Open **Intent stream**, save a segment, attach a destination, and read the delivery rows, including the retries a downed destination needs. |
+| Intent companies (WF-033) | The buyer-intent table of in-market companies, a named view saved over it, and auto-add plus continuous tracking of the companies that enter that view. Activity rolls up into a root domain and time frames are last-visit based, capped at 90 midnight-UTC days. | Open **Intent companies**, save the view you care about, and read which companies were added and why. |
 
 ### Meetings and scheduling
 
@@ -170,6 +177,9 @@ seeder first and there is realistic demo data for every one of them.
 | Meeting links (WF-059) | Per-booking video-conference links. Set the Location on a Meeting Type, connect the provider, and every booking mints a fresh conference whose link is written into both the booking location and the `meetingLocation` — Google Meet, Zoom, Gong (which redirects to Zoom), a static link, an in-person room, or Ask the Guest. | Open **Meeting links** and connect the provider on the Integrations tab. Moving a meeting to a different tool re-provisions the link and emails the attendees; the provider's own `appsStatus` is recorded, so a failure can be retried or fallen back from. |
 | Meeting reminders (WF-061) | Reusable reminders — email or SMS, before or after the meeting, optionally only if the primary guest has not responded — attached to many meeting types and fired on a schedule. | Open **Meeting reminders**, declare the reminder once, and attach it to every meeting type that needs it. Every message that did not go out carries a recorded reason. |
 | Meeting changes (WF-064) | Reschedule or cancel a booked meeting from the link in the invite or the host's panel, and propagate the change: the calendar event moves, the CRM Event is updated or deleted as the Meeting Type directs, and the webhooks go out. | Open **Meeting changes** to move or release a booking and follow what propagated. Events History records who, to whom, when, and from which source. |
+| Bookable calendar (WF-058) | A bookable calendar installed inside a room: an OAuth client and an embed, a slot grid, an optional slot hold, and a booking the prospect submits entirely in-room. | Open **Bookable calendar**, connect the client, drop the embed into a room, and let a prospect book without leaving it. |
+| Meeting reassign (WF-063) | Hand a booked meeting to another host from Meetings Activity or the calendar add-on. The Meeting Type and Workspace stay locked, the invite takes the new assignee's details, the round-robin credit moves with the host, and Events History records who, to whom, when and from which source. | Open **Meeting reassign** and move the booking; follow the credit and the invite. |
+| Booking writeback (WF-065) | A router flow's CRM nodes run against a booked meeting: the Lead or Contact is matched by email and updated or created, the Event is related to the open Case or the Opportunity, selected fields are updated, the CampaignMember is added as Booked, and the Owner is reassigned. Every attempt appears in Events History with a retry. | Open **Booking writeback** to configure the nodes, then read each attempt in Events History. |
 
 ### CRM connection and synchronisation
 
@@ -184,6 +194,7 @@ seeder first and there is realistic demo data for every one of them.
 | Sync log (WF-040) | Per-record outcomes from all three vendors normalised into one room error model, naming the offending property on each failed row, with an admin able to compare what was sent against what was expected. | Open **Sync log** to see partial failures, then retry the failed rows only. |
 | Duplicate guard (WF-041) | An inbound lead checked against the CRM's duplicate rule, then blocked, updated, or deliberately duplicated according to the connection's policy, with the decision logged alongside the matched record id. | Open **Duplicate guard** to set the policy and read the decision log. |
 | Backfill history (WF-045) | A room's CRM history read into its replica on a schedule — asynchronous extract for volume, delta or paged read otherwise — with a resumable cursor so a crash restarts with no duplicates and no gaps. | Open **Backfill history**, schedule the run, and watch the cursor. A run that cannot be resumed says so. |
+| CRM change stream (WF-043) | A Change Data Capture channel with each change buffered under its transactionKey and committed to the room's replica only when that key changes, so one transaction lands once. A custom channel is enriched with the unchanged field the room needs to resolve a record. | Open **CRM change stream** to see which changes have been applied and which are still buffered. |
 
 ## Getting started
 
@@ -238,17 +249,19 @@ files:
 
 ## Programme status
 
-The target is one hundred workflows built from 141 researched specifications.
-[`orchestration/STATUS.md`](orchestration/STATUS.md) is generated, not
-maintained by hand: it records the workflows on `main`, the mounted route
-count, the test tally, features that failed to load, and what is in flight.
+The target is all 138 researched workflows. [`orchestration/STATUS.md`](orchestration/STATUS.md)
+is generated, not maintained by hand: it records every researched workflow, the
+mounted route count, the test tally, and features that failed to load. It reads
+48 built and 90 to go against `origin/main`.
 
-It is still a snapshot of the moment it was last run, and this programme moves
-quickly — at the time of writing the checked-in dashboard reports 37 workflows
-and 581 routes because it predates the scheduling batch, while the tree carries
-42. Regenerate it with `orchestration/make_status.py`, or ask a running install
-at `/api/features`, which is never stale because the host is answering for
-itself. The same caution applies to the count quoted above.
+[`orchestration/WORKFLOW-BOARD.md`](orchestration/WORKFLOW-BOARD.md) is the
+shorter view — what is landed, what is pending, ordered critical-first, and the
+basis for each criticality call.
+
+Both are snapshots of the moment they were last run, and this programme moves
+quickly. Regenerate them with `orchestration/make_status.py` and
+`orchestration/make_workflow_board.py`, or ask a running install at
+`/api/features`, which is never stale because the host is answering for itself.
 
 ## Licence
 
