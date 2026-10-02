@@ -234,7 +234,7 @@ def test_no_module_in_the_package_touches_the_environment_or_a_temp_folder():
 
 @pytest.fixture()
 def store(tmp_path):
-    db = AuditedDatabase(tmp_path / "wf025.db", mirror_dir=tmp_path / "mirror")
+    db = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     yield RecordStore(db)
     db.close()
 

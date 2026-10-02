@@ -267,7 +267,7 @@ class Clock:
 
 @pytest.fixture()
 def store(tmp_path):
-    db = AuditedDatabase(tmp_path / "wf028.db", mirror_dir=tmp_path / "mirror")
+    db = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     yield RecordStore(db)
     db.close()
 

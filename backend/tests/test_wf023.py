@@ -100,7 +100,7 @@ SOURCE = f"POST {PREFIX}/deals"
 
 @pytest.fixture()
 def store(tmp_path):
-    db = AuditedDatabase(tmp_path / "wf023.db", mirror_dir=tmp_path / "mirror")
+    db = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     yield RecordStore(db)
     db.close()
 

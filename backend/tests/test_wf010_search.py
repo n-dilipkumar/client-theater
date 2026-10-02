@@ -89,7 +89,7 @@ LIBRARY = [
 
 @pytest.fixture()
 def store(tmp_path):
-    db = AuditedDatabase(tmp_path / "library.db", mirror_dir=tmp_path / "mirror")
+    db = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     record_store = RecordStore(db)
     record_store.bulk_create("document", LIBRARY, actor="seed", source="test")
     yield record_store

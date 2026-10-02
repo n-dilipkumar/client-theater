@@ -63,7 +63,7 @@ def load_feature():
 
 @pytest.fixture()
 def db(tmp_path):
-    database = AuditedDatabase(tmp_path / "lifecycle.db", mirror_dir=tmp_path / "mirror")
+    database = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     yield database
     database.close()
 

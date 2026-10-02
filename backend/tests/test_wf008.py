@@ -91,7 +91,7 @@ class FakeClock:
 
 @pytest.fixture()
 def db(tmp_path):
-    database = AuditedDatabase(tmp_path / "wf008.db", mirror_dir=tmp_path / "audit", actor="test")
+    database = AuditedDatabase(":memory:", mirror_dir=tmp_path / "audit", actor="test")
     yield database
     database.close()
 
