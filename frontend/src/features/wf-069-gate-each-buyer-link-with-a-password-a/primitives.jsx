@@ -75,14 +75,20 @@ export function Notice({ tone = 'neutral', title, children, action }) {
  * animate anything is the hazard the design floor reserves (ADR-0002), and this is
  * what it reserves it for.
  *
- * Nine sibling features reach the same place with
- * `transition-transform ... motion-reduce:transition-none` over an absolute knob plus
- * `translate-x-5` / `translate-x-0`. That is the same opt-out with the transition
- * removed rather than the transform, and it is a reasonable shape - but it still
- * repositions the knob, and here the state is carried by four things that are not
- * movement (track colour, knob colour, flexbox position, `aria-checked`), so
- * dropping the transform costs nothing. Flagged to the coordinator as a deliberate
+ * Nine sibling features reach the same place differently: an absolutely positioned
+ * knob moved by a horizontal translation utility, with a `motion-reduce:` variant
+ * that removes the transition. That is a sanctioned shape and it satisfies the floor,
+ * because the transition is what animates the movement. It still repositions the
+ * knob, though, and here the state is carried by four things that are not movement
+ * (track colour, knob colour, flexbox position, `aria-checked`), so dropping the
+ * transform costs nothing and makes the reduced-motion case the absence of movement
+ * rather than a faster movement. Flagged to the coordinator as a deliberate
  * difference from the sibling pattern rather than an oversight.
+ *
+ * The sibling utilities are described rather than written out on purpose: the
+ * design-floor check reads raw lines, comments included, so spelling them here would
+ * put a hazardous-motion token back into the file and make this docstring a tripwire
+ * for whoever trims it next.
  */
 export function Toggle({ id, label, hint, checked, onChange, disabled = false }) {
   return (
