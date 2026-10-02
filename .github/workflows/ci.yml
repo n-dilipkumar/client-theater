@@ -97,6 +97,50 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # Tests run BEFORE the build, deliberately, and the order is the point.
+      # A failing test and a failing build are different bugs, but `npm run
+      # build` is the louder of the two: the bundler fails on a compile error
+      # anywhere in the bundle, so a single broken assertion would be reported
+      # behind whatever the bundler tripped over first. Running the cheap,
+      # specific signal first means the build is only attempted once the thing
+      # it is meant to prove -- that the pages behave -- already holds.
+      #
+      # `npm run test` is `vitest run`: one pass, no watcher, no TTY. That is
+      # what keeps this step from hanging the runner to the job timeout, which
+      # is the usual way a test step goes wrong in CI. There is deliberately no
+      # `test:watch` here; that script exists for a human at a terminal. CI=1 is
+      # set explicitly so the non-interactive intent does not depend on the
+      # runner happening to set it. The same reasoning is why the test config
+      # pins NODE_ENV=test rather than inheriting it: vitest only defaults it
+      # when it is unset, so an inherited NODE_ENV=production loads React's
+      # production bundle, `act()` throws, and the step goes red for a reason
+      # that reads like a React bug rather than an environment one. This runner
+      # does not set NODE_ENV, which is precisely why that failure would stay
+      # invisible here and surface only on a contributor's machine.
+      #
+      # This step cannot pass on an empty run. If the `include` glob in
+      # vitest.config.js ever stops matching, `vitest run` exits 1 with "No test
+      # files found", and `passWithNoTests: false` is pinned in that config to
+      # keep it that way -- the same command with `--passWithNoTests` exits 0.
+      # Do not add that flag to make a red suite green.
+      #
+      # No coverage step, on purpose. No coverage provider is installed
+      # (@vitest/coverage-v8 is not in devDependencies) and the project has not
+      # agreed a threshold, so gating on a number nobody has agreed to is a
+      # check that decays into one people learn to ignore. Report-only coverage
+      # is a separate decision, for a human, once there is a provider.
+      #
+      # The `lint` job is NOT here on purpose: it is owned by agent B, who is
+      # adding the eslint/prettier config and .pre-commit-config.yaml in
+      # parallel. A lint step written before that tooling lands would reference
+      # a command that is not installed and turn a missing dependency into a red
+      # build for the wrong reason. Agent B adds that job; do not duplicate it.
+      - name: Test
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: npm run test
+
       # A feature whose page does not compile must not merge. The frontend host
       # discovers features by globbing src/features/*\/index.jsx, so a broken
       # feature only fails here rather than in a browser.
