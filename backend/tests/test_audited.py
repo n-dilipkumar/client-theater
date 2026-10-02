@@ -16,7 +16,23 @@ from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound, utcnow
 
 
 @pytest.fixture()
-def db(tmp_path):
+def db():
+    """One in-memory database per test.
+
+    Almost nothing in this file reads the disk: the audit log is queried through
+    ``db.audit(...)``, not through the mirror, and no test inspects a file. The
+    three tests that do read the mirror ask for ``mirror_db`` below, which is
+    the only reason this fixture used to be file-backed for all of them.
+    """
+    database = AuditedDatabase(":memory:")
+    yield database
+    database.close()
+
+
+@pytest.fixture()
+def mirror_db(tmp_path):
+    """A file-backed database that writes the JSONL mirror, for the three tests
+    that assert on the mirror itself rather than through the audit API."""
     database = AuditedDatabase(tmp_path / "test.db", mirror_dir=tmp_path / "mirror")
     yield database
     database.close()
@@ -397,9 +413,9 @@ def test_audit_records_actor_source_and_request_id(db):
     assert entry["request_id"] == "req-1"
 
 
-def test_jsonl_mirror_written_for_each_change(db, tmp_path):
-    record = db.create("room", {"name": "A"})
-    db.update(record["id"], {"name": "B"})
+def test_jsonl_mirror_written_for_each_change(mirror_db, tmp_path):
+    record = mirror_db.create("room", {"name": "A"})
+    mirror_db.update(record["id"], {"name": "B"})
 
     mirrors = list((tmp_path / "mirror").glob("audit-*.jsonl"))
     lines = [json.loads(line) for line in mirrors[0].read_text(encoding="utf-8").splitlines()]
@@ -697,8 +713,8 @@ def test_write_inside_a_transaction_is_refused_with_a_clear_error(db):
     assert db.audit_count() == 0
 
 
-def test_transaction_mirror_is_written_only_after_commit(db, tmp_path):
-    with db.transaction(actor="api") as tx:
+def test_transaction_mirror_is_written_only_after_commit(mirror_db, tmp_path):
+    with mirror_db.transaction(actor="api") as tx:
         tx.create("room", {"name": "Acme"})
         tx.create("site", {"friendly_url": "acme"})
 
@@ -707,9 +723,9 @@ def test_transaction_mirror_is_written_only_after_commit(db, tmp_path):
     assert [line["action"] for line in lines] == ["insert", "insert"]
 
 
-def test_transaction_mirror_is_not_written_when_rolled_back(db, tmp_path):
+def test_transaction_mirror_is_not_written_when_rolled_back(mirror_db, tmp_path):
     with pytest.raises(RuntimeError):
-        with db.transaction() as tx:
+        with mirror_db.transaction() as tx:
             tx.create("room", {"name": "Acme"})
             raise RuntimeError("boom")
 
