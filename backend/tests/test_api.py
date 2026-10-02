@@ -54,13 +54,23 @@ def _entered_client(tmp_path_factory):
 
 @pytest.fixture()
 def client(_entered_client):
-    """Give each test its own empty database, in memory."""
+    """Give each test its own empty database, in memory.
+
+    The previous store is put back on the way out. `app` is a module-level
+    singleton shared by every test file in the process, so leaving a closed
+    database on `app.state` would be state this fixture leaked into whatever
+    module runs next.
+    """
+    app_ = _entered_client.app
+    previous_db, previous_store = app_.state.db, app_.state.store
     db = AuditedDatabase(":memory:", actor="api")
-    _entered_client.app.state.db = db
-    _entered_client.app.state.store = RecordStore(db)
+    app_.state.db = db
+    app_.state.store = RecordStore(db)
     try:
         yield _entered_client
     finally:
+        app_.state.db = previous_db
+        app_.state.store = previous_store
         db.close()
 
 
