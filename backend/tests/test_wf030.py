@@ -207,7 +207,7 @@ def workflow_payload(**overrides: Any) -> dict[str, Any]:
 
 @pytest.fixture()
 def store(tmp_path):
-    db = AuditedDatabase(tmp_path / "wf030.db", mirror_dir=tmp_path / "mirror")
+    db = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     yield RecordStore(db)
     db.close()
 

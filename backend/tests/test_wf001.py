@@ -58,7 +58,7 @@ def client(monkeypatch):
 
 @pytest.fixture()
 def store(tmp_path):
-    database = AuditedDatabase(tmp_path / "wf001.db", mirror_dir=tmp_path / "mirror")
+    database = AuditedDatabase(":memory:", mirror_dir=tmp_path / "mirror")
     yield RecordStore(database)
     database.close()
 
