@@ -371,9 +371,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "collections-are-prefixed",
-        "decision": (
-            "Every collection this feature owns is prefixed wf032_."
-        ),
+        "decision": ("Every collection this feature owns is prefixed wf032_."),
         "researched": "Nothing: collection names are this product's.",
         "alternative": "Plain names, as most collections in this repository use.",
         "why": (

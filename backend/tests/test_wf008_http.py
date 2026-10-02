@@ -23,11 +23,10 @@ import time
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
-from dsr.features import load_feature
 from dsr.external_library.sources import GOOGLE_DRIVE, SAMPLE_FILE_ID, STALE_FILE_ID
+from dsr.features import load_feature
+from fastapi.testclient import TestClient
 
 SOURCE = GOOGLE_DRIVE
 FILE_ID = SAMPLE_FILE_ID
@@ -60,7 +59,9 @@ def client(monkeypatch):
 @pytest.fixture()
 def room(client):
     """A room created over HTTP, so it exists in the app's own store."""
-    return client.post("/api/records/room", json={"name": "Northwind", "stage": "evaluation"}).json()
+    return client.post(
+        "/api/records/room", json={"name": "Northwind", "stage": "evaluation"}
+    ).json()
 
 
 @pytest.fixture()
@@ -127,7 +128,9 @@ def test_connections_route_exposes_lineage(client, connected):
 def test_folder_route_offers_the_root_keyword(client, room):
     # The generic records route scopes with `room_id`; the library routes use
     # `roomId` to match the researched request vocabulary.
-    client.post("/api/records/library_folder", json={"name": "Q2 Decks"}, params={"room_id": room["id"]})
+    client.post(
+        "/api/records/library_folder", json={"name": "Q2 Decks"}, params={"room_id": room["id"]}
+    )
 
     body = client.get("/api/library/folders", params={"roomId": room["id"]}).json()
 
@@ -198,7 +201,9 @@ def test_a_folder_in_the_room_is_accepted(client, room, connected):
 
 
 def test_metadata_is_stored_and_queryable(client, room, connected):
-    add_over_http(client, room, metadata={"review_owner": "sam", "campaign": {"tier": "enterprise"}})
+    add_over_http(
+        client, room, metadata={"review_owner": "sam", "campaign": {"tier": "enterprise"}}
+    )
 
     found = client.get(
         "/api/records/document", params={"where": '{"campaign.tier":"enterprise"}'}
@@ -353,7 +358,10 @@ def test_the_limit_expires(client, room, connected):
     assert add_over_http(client, room, actor="dana").status_code == 201
     time.sleep(1.05)
 
-    assert add_over_http(client, room, actor="dana", externalContentId=OTHER_FILE_ID).status_code == 201
+    assert (
+        add_over_http(client, room, actor="dana", externalContentId=OTHER_FILE_ID).status_code
+        == 201
+    )
 
 
 # -- read models ------------------------------------------------------------ #
@@ -370,7 +378,9 @@ def test_list_route_returns_items_and_statuses(client, room, connected):
 
 
 def test_list_route_excludes_documents_that_are_not_external(client, room, connected):
-    client.post("/api/records/document", json={"title": "Uploaded deck"}, params={"room_id": room["id"]})
+    client.post(
+        "/api/records/document", json={"title": "Uploaded deck"}, params={"room_id": room["id"]}
+    )
     add_over_http(client, room)
 
     body = client.get("/api/library/external").json()
@@ -447,7 +457,9 @@ def test_sync_status_of_an_unknown_content_id_is_404(client):
 def test_resync_route_reports_what_it_did(client, room, connected):
     add_over_http(client, room, autoSync=True)
     # The source has not moved, so the pass has nothing to apply.
-    body = client.post("/api/library/external/resync", json={}, params={"actor": "sync-worker"}).json()
+    body = client.post(
+        "/api/library/external/resync", json={}, params={"actor": "sync-worker"}
+    ).json()
 
     assert body["checked"] == 1
     assert body["updated"] == []
@@ -470,7 +482,9 @@ def test_resync_route_applies_drift_and_audits_it_under_its_own_route(client, ro
         json={"source": {**record["data"]["source"], "source_version": "rev-1"}},
     )
 
-    body = client.post("/api/library/external/resync", json={}, params={"actor": "sync-worker"}).json()
+    body = client.post(
+        "/api/library/external/resync", json={}, params={"actor": "sync-worker"}
+    ).json()
 
     assert body["counts"]["updated"] == 1
     entries = client.get("/api/audit", params={"record_id": content_id}).json()["entries"]

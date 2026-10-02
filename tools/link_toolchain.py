@@ -106,7 +106,9 @@ def main() -> int:
         except (AttributeError, OSError):
             pass
 
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--verify", action="store_true", help="report only, change nothing")
     args = parser.parse_args()
 

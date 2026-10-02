@@ -164,9 +164,7 @@ def available_slots(
     return slots
 
 
-def find_slot(
-    slots: Sequence[Mapping[str, Any]], start_at: str
-) -> dict[str, Any] | None:
+def find_slot(slots: Sequence[Mapping[str, Any]], start_at: str) -> dict[str, Any] | None:
     """The slot beginning exactly at ``start_at``, or ``None``.
 
     Exact match on the instant rather than a containment test, so a reschedule to

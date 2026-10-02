@@ -255,9 +255,7 @@ OAUTH_FLOW_QUOTE = (
 
 #: Step 5: "The prospect books entirely in-room; no Chili-Piper-like external page is
 #: shown." The reason every write route in this feature is room-scoped.
-IN_ROOM_QUOTE = (
-    "The prospect books entirely in-room; no Chili-Piper-like external page is shown."
-)
+IN_ROOM_QUOTE = "The prospect books entirely in-room; no Chili-Piper-like external page is shown."
 
 # --------------------------------------------------------------------------- #
 # Routing forms
@@ -319,8 +317,7 @@ def require_component(name: str) -> str:
     """The embed component called ``name``, or a refusal naming the set."""
     if name not in EMBED_COMPONENTS:
         raise SchedulingError(
-            f"unknown embed component {name!r}; the published set is "
-            + ", ".join(EMBED_COMPONENTS)
+            f"unknown embed component {name!r}; the published set is " + ", ".join(EMBED_COMPONENTS)
         )
     return name
 
@@ -369,7 +366,6 @@ def require_event_type_kind(name: str) -> str:
     """The event type kind called ``name``, or a refusal naming the set."""
     if name not in EVENT_TYPE_KINDS:
         raise SchedulingError(
-            f"unknown event type kind {name!r}; the published set is "
-            + ", ".join(EVENT_TYPE_KINDS)
+            f"unknown event type kind {name!r}; the published set is " + ", ".join(EVENT_TYPE_KINDS)
         )
     return name

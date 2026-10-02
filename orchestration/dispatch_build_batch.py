@@ -36,6 +36,7 @@ ten is the most the machine can hold. If a batch comes back hot - slow, failing,
 or half-blocked on dialogs - the next one is smaller, and the reason goes in the
 dispatch record.
 """
+
 import json
 import re
 import subprocess
@@ -59,8 +60,11 @@ REPO_ID = "id:8964203a-831a-425f-8fd7-ebc3a0fc2e46"
 # already landed.
 #
 #   python orchestration/dispatch_build_batch.py 28 38
-BATCH = list(range(int(sys.argv[1]) if len(sys.argv) > 1 else 18,
-                   int(sys.argv[2]) if len(sys.argv) > 2 else 28))
+BATCH = list(
+    range(
+        int(sys.argv[1]) if len(sys.argv) > 1 else 18, int(sys.argv[2]) if len(sys.argv) > 2 else 28
+    )
+)
 
 POINTER = (
     "Read the file orchestration/ports/WF-{n:03d}.md in this repo and carry out exactly "
@@ -79,8 +83,15 @@ UNSAFE = set("`$%&|<>^")
 
 
 def orca(args, timeout=180):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         return json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -118,8 +129,19 @@ def main():
             continue
 
         dirname = f"dsr-wf-{n:03d}-build"
-        wt = orca(["orca", "worktree", "create", "--name", dirname,
-                   "--setup", "skip", "--no-parent", "--json"])
+        wt = orca(
+            [
+                "orca",
+                "worktree",
+                "create",
+                "--name",
+                dirname,
+                "--setup",
+                "skip",
+                "--no-parent",
+                "--json",
+            ]
+        )
         if not wt.get("ok"):
             print(f"  worktree failed: {str(wt)[:200]}")
             continue
@@ -128,24 +150,70 @@ def main():
         # A meaningful tab name: the ticket and what the workflow does, so the
         # board is readable without cross-referencing anything.
         tab = f"DSR {ticket} {title[:44]}"
-        term = orca(["orca", "terminal", "create", "--worktree", wt_id,
-                     "--title", tab, "--command", "opencode", "--json"])
+        term = orca(
+            [
+                "orca",
+                "terminal",
+                "create",
+                "--worktree",
+                wt_id,
+                "--title",
+                tab,
+                "--command",
+                "opencode",
+                "--json",
+            ]
+        )
         if not term.get("ok"):
             print(f"  terminal failed: {str(term)[:200]}")
             continue
         handle = term["result"]["terminal"]["handle"]
 
         time.sleep(9)
-        orca(["orca", "terminal", "wait", "--terminal", handle,
-              "--for", "tui-idle", "--timeout-ms", "45000", "--json"], timeout=70)
-        send = orca(["orca", "terminal", "send", "--terminal", handle,
-                     "--text", text, "--enter", "--wait-submit", "25", "--json"],
-                    timeout=110)
+        orca(
+            [
+                "orca",
+                "terminal",
+                "wait",
+                "--terminal",
+                handle,
+                "--for",
+                "tui-idle",
+                "--timeout-ms",
+                "45000",
+                "--json",
+            ],
+            timeout=70,
+        )
+        send = orca(
+            [
+                "orca",
+                "terminal",
+                "send",
+                "--terminal",
+                handle,
+                "--text",
+                text,
+                "--enter",
+                "--wait-submit",
+                "25",
+                "--json",
+            ],
+            timeout=110,
+        )
         print(f"  tab {handle}  send_ok={send.get('ok')}")
-        launched.append({"ticket": ticket, "n": n, "handle": handle,
-                         "worktree": dirname, "worktree_id": wt_id,
-                         "title": tab, "workflow": title,
-                         "brief": f"orchestration/ports/{ticket}.md"})
+        launched.append(
+            {
+                "ticket": ticket,
+                "n": n,
+                "handle": handle,
+                "worktree": dirname,
+                "worktree_id": wt_id,
+                "title": tab,
+                "workflow": title,
+                "brief": f"orchestration/ports/{ticket}.md",
+            }
+        )
 
     # MERGE into the handle file, do not overwrite it. It used to write the
     # current batch only, so every dispatch erased the record of the agents
@@ -160,15 +228,13 @@ def main():
                 if isinstance(rec, dict) and rec.get("ticket"):
                     known[rec["ticket"]] = rec
         except (json.JSONDecodeError, OSError):
-            pass          # a corrupt log must not stop a dispatch
+            pass  # a corrupt log must not stop a dispatch
     for a in launched:
         known[a["ticket"]] = a
-    handles_path.write_text(
-        json.dumps(list(known.values()), indent=2), encoding="utf-8")
+    handles_path.write_text(json.dumps(list(known.values()), indent=2), encoding="utf-8")
 
     print()
-    print(f"=== {len(launched)} agent tab(s) launched this run, "
-          f"{len(known)} known in total ===")
+    print(f"=== {len(launched)} agent tab(s) launched this run, {len(known)} known in total ===")
     for a in launched:
         print(f"  {a['ticket']}  {a['handle']}  {a['title']}")
 
@@ -184,8 +250,9 @@ def main():
         mangled = re.search(r"'Read' is not recognized", text) is not None
         got_brief = "ports/" in text
         active = re.search(r"Thought|Explored|Read |pytest|git status|Thinking", text) is not None
-        print(f"  {a['ticket']}: prompt_mangled={mangled}  brief_echoed={got_brief}  "
-              f"active={active}")
+        print(
+            f"  {a['ticket']}: prompt_mangled={mangled}  brief_echoed={got_brief}  active={active}"
+        )
     return 0 if len(launched) == len(BATCH) else 1
 
 

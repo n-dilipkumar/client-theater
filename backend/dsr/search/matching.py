@@ -72,7 +72,10 @@ class FieldText:
 
 def field_text(value: Any, *, include_keys: bool = False) -> FieldText:
     if isinstance(value, str):
-        return FieldText(tokens=frozenset(_TOKEN.findall(value.lower())), normalized=" ".join(value.lower().split()))
+        return FieldText(
+            tokens=frozenset(_TOKEN.findall(value.lower())),
+            normalized=" ".join(value.lower().split()),
+        )
     return FieldText(tokens=frozenset(tokenize(value, include_keys=include_keys)), normalized="")
 
 
@@ -109,7 +112,9 @@ class Scorer:
         data = record.get("data") or {}
         path = self.schema.resolve(field_name)
         # Custom properties are searched by name as well as value, so keys count.
-        return field_text(get_path(data, path), include_keys=path.startswith(self.schema.properties_root))
+        return field_text(
+            get_path(data, path), include_keys=path.startswith(self.schema.properties_root)
+        )
 
     def score(
         self,

@@ -136,7 +136,9 @@ def parse_window(
     if end_dt <= start_dt:
         raise SchedulingError("end must be after start")
     if start_dt < now:
-        raise SchedulingError("start is in the past; a slot query cannot answer for a window that has passed")
+        raise SchedulingError(
+            "start is in the past; a slot query cannot answer for a window that has passed"
+        )
     if end_dt - start_dt > timedelta(days=max_days):
         raise SchedulingError(f"the slot window may not exceed {max_days} days")
     return (start_dt, end_dt)
@@ -170,11 +172,15 @@ def normalise_host(spec: Mapping[str, Any], *, field: str = "host") -> dict[str,
         days = list(EVERY_DAY)
     else:
         if not isinstance(raw_days, (list, tuple)):
-            raise SchedulingError(f"{field}.days must be a list of ISO weekday numbers, 1 (Monday) to 7")
+            raise SchedulingError(
+                f"{field}.days must be a list of ISO weekday numbers, 1 (Monday) to 7"
+            )
         try:
             days = sorted({int(day) for day in raw_days})
         except (TypeError, ValueError) as exc:
-            raise SchedulingError(f"{field}.days must be ISO weekday numbers, 1 (Monday) to 7") from exc
+            raise SchedulingError(
+                f"{field}.days must be ISO weekday numbers, 1 (Monday) to 7"
+            ) from exc
         bad = [day for day in days if day not in EVERY_DAY]
         if bad:
             raise SchedulingError(
@@ -192,7 +198,9 @@ def normalise_host(spec: Mapping[str, Any], *, field: str = "host") -> dict[str,
         interval_minutes = int(interval)
         notice_minutes = int(notice)
     except (TypeError, ValueError) as exc:
-        raise SchedulingError(f"{field} slot_interval_minutes and minimum_notice_minutes must be whole minutes") from exc
+        raise SchedulingError(
+            f"{field} slot_interval_minutes and minimum_notice_minutes must be whole minutes"
+        ) from exc
     if interval_minutes < 1:
         raise SchedulingError(f"{field}.slot_interval_minutes must be at least 1")
     if notice_minutes < 0:
@@ -297,9 +305,7 @@ def candidate_starts(
     return sorted(seen)
 
 
-def overlaps(
-    first: tuple[datetime, datetime], second: tuple[datetime, datetime]
-) -> bool:
+def overlaps(first: tuple[datetime, datetime], second: tuple[datetime, datetime]) -> bool:
     """Do two half-open intervals share any time? Touching ends do not overlap."""
     return first[0] < second[1] and second[0] < first[1]
 

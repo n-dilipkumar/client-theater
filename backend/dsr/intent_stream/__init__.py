@@ -82,12 +82,17 @@ from dsr.intent_stream.registry import (
     summarise_visit,
     summarise_workflow,
 )
-from dsr.intent_stream.segments import evaluate_conditions, evaluate_segment
-from dsr.intent_stream.segments import OPERATORS as SEGMENT_OPERATORS
+from dsr.intent_stream.segments import (
+    OPERATORS as SEGMENT_OPERATORS,
+    evaluate_conditions,
+    evaluate_segment,
+)
 from dsr.intent_stream.stream import IntentStream, url_warnings, validate_target_url
-from dsr.intent_stream.tokens import generate as generate_token
-from dsr.intent_stream.tokens import mask as mask_token
-from dsr.intent_stream.tokens import matches as token_matches
+from dsr.intent_stream.tokens import (
+    generate as generate_token,
+    mask as mask_token,
+    matches as token_matches,
+)
 from dsr.intent_stream.vocabulary import (
     ALL_COLLECTIONS,
     CONTACT_COLLECTION,

@@ -36,7 +36,6 @@ from dsr.crm_engagement.vocabulary import (
     TRANSFORM_NAMES,
 )
 
-
 INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "success-is-per-vendor-not-2xx",
@@ -277,7 +276,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "timeout",
         "topic": "how long to wait for a create",
         "basis": "The research says nothing about a timeout.",
-        "value": {"seconds": 10.0, "note": "not a knob in the vocabulary; a constant in delivery.py"},
+        "value": {
+            "seconds": 10.0,
+            "note": "not a knob in the vocabulary; a constant in delivery.py",
+        },
         "why": (
             "10 seconds is long enough for a third-party API on a slow day and short enough that a "
             "dead host does not hold a queue worker. It is deliberately *not* the 5 seconds the "
@@ -321,8 +323,19 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "WF-037 does not cite it."
         ),
         "value": {
-            "refused_at_save": ["no fields", "no target property", "a target mapped twice", "an unknown direction", "a picklist.map with no options", "a sync key that collides with a field"],
-            "flagged_at_send": ["a target the CRM may not have", "a type the CRM may not accept", "a picklist value not in the table"],
+            "refused_at_save": [
+                "no fields",
+                "no target property",
+                "a target mapped twice",
+                "an unknown direction",
+                "a picklist.map with no options",
+                "a sync key that collides with a field",
+            ],
+            "flagged_at_send": [
+                "a target the CRM may not have",
+                "a type the CRM may not accept",
+                "a picklist value not in the table",
+            ],
             "unverifiable_here": "anything requiring a live CRM's metadata",
         },
         "why": (
@@ -366,7 +379,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "the buyer identity coming 'from W1/W2', and the OAuth authorization-code flow is W1's "
             "subject, not this one's."
         ),
-        "value": {"header": "Authorization: Bearer <token>", "vendor_specific": False, "stored": False},
+        "value": {
+            "header": "Authorization: Bearer <token>",
+            "vendor_specific": False,
+            "stored": False,
+        },
         "why": (
             "All three vendors' documented APIs take an OAuth bearer token on the same header, so "
             "one shape is correct for all three and a per-vendor branch would be a guess. The token "
@@ -429,7 +446,11 @@ def describe() -> dict[str, Any]:
             },
             "record_id_locations": {
                 vendor: [
-                    {"where": entry["where"], "path": entry.get("path") or entry.get("name"), "sourced": entry["sourced"]}
+                    {
+                        "where": entry["where"],
+                        "path": entry.get("path") or entry.get("name"),
+                        "sourced": entry["sourced"],
+                    }
                     for entry in entries
                 ]
                 for vendor, entries in RECORD_ID_LOCATIONS.items()

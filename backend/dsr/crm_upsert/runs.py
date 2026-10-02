@@ -369,7 +369,7 @@ def interpret_items(
         )
 
     outcomes: list[RowOutcome] = []
-    for index, (row, raw) in enumerate(zip(planned, results)):
+    for index, (row, raw) in enumerate(zip(planned, results, strict=True)):
         item = raw if isinstance(raw, Mapping) else {"message": str(raw)}
         record_id = "" if item.get("id") in (None, "") else str(item.get("id"))
         if not _is_success(item):
@@ -523,14 +523,16 @@ def _interpret_chunk(
         )
 
     produced, chunk_error = interpret_items(
-        results, expected=len(planned), status=response.status, planned=planned, chunk_index=chunk_index
+        results,
+        expected=len(planned),
+        status=response.status,
+        planned=planned,
+        chunk_index=chunk_index,
     )
     if chunk_error is not None:
         return produced, chunk_error
 
-    if all_or_none and (
-        any(entry.outcome == "failed" for entry in produced) or not response.ok
-    ):
+    if all_or_none and (any(entry.outcome == "failed" for entry in produced) or not response.ok):
         # "You can choose whether to roll back the entire request when an error
         # occurs." Under allOrNone a single failure means nothing in this chunk
         # was written, so the rows that "succeeded" are rolled back too and none
@@ -708,7 +710,9 @@ def _chunk_record(
     }
 
 
-def _progress(driver: str, chunks: Sequence[Mapping[str, Any]], totals: Mapping[str, int], rows_sent: int) -> dict[str, Any]:
+def _progress(
+    driver: str, chunks: Sequence[Mapping[str, Any]], totals: Mapping[str, int], rows_sent: int
+) -> dict[str, Any]:
     """The block a progress bar renders.
 
     ``percent`` is over rows actually put on the wire, not over rows selected: a
@@ -1059,9 +1063,7 @@ def _write_back(
             # outcomes are already decided and the log is still the record of
             # them, so this is reported on the outcome rather than aborting the run.
             entry.outcome = "failed"
-            entry.errors.append(
-                "the room row was deleted before its outcome could be written back"
-            )
+            entry.errors.append("the room row was deleted before its outcome could be written back")
     return written
 
 

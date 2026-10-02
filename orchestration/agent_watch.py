@@ -15,6 +15,7 @@ then whether the worktree has moved, then the screen. And it reports the worktre
 state for every agent, because a worktree that has gained files is the only thing
 that actually proves work happened - screens lie, mangle, and time out.
 """
+
 import json
 import re
 import subprocess
@@ -38,8 +39,15 @@ ACTIVITY = re.compile(r"Thought|Explored|Read |Edit |Write |Thinking|pytest|git 
 
 
 def orca(args, timeout=120):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         return json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -47,8 +55,15 @@ def orca(args, timeout=120):
 
 
 def git(*args, cwd):
-    p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=60)
+    p = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
     return (p.stdout + p.stderr).strip()
 
 
@@ -66,7 +81,9 @@ def main():
     print("=" * 96)
     print(f"  {len(agents)} dispatched agents")
     print("=" * 96)
-    print(f"  {'ticket':8} {'ahead':>5} {'dirty':>5}  {'stopped':8} {'moved':6} {'dialog':7} {'verdict'}")
+    print(
+        f"  {'ticket':8} {'ahead':>5} {'dirty':>5}  {'stopped':8} {'moved':6} {'dialog':7} {'verdict'}"
+    )
     print("  " + "-" * 92)
 
     rows = []
@@ -77,7 +94,9 @@ def main():
             continue
 
         ahead = git("rev-list", "--count", "origin/main..HEAD", cwd=wt)
-        dirty = len([l for l in git("status", "--porcelain", cwd=wt).splitlines() if l.strip()])
+        dirty = len(
+            [line for line in git("status", "--porcelain", cwd=wt).splitlines() if line.strip()]
+        )
         ahead = int(ahead) if ahead.isdigit() else -1
 
         r = orca(["orca", "terminal", "read", "--terminal", a["handle"], "--json"])
@@ -106,8 +125,10 @@ def main():
             verdict = "NO WORK YET"
 
         rows.append((a["ticket"], ahead, dirty, stopped, moved, dialog, verdict))
-        print(f"  {a['ticket']:8} {ahead:>5} {dirty:>5}  {str(stopped):8} "
-              f"{str(moved):6} {str(dialog):7} {verdict}")
+        print(
+            f"  {a['ticket']:8} {ahead:>5} {dirty:>5}  {str(stopped):8} "
+            f"{str(moved):6} {str(dialog):7} {verdict}"
+        )
 
     print()
     print("=" * 96)

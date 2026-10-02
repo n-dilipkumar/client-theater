@@ -255,7 +255,9 @@ def load_features(app: FastAPI) -> FeatureRegistry:
                 id=feature_id,
                 name=feature_name,
                 ticket=str(meta.get("ticket", "")),
-                description=str(meta.get("description", getattr(module, "__doc__", "") or "").strip()),
+                description=str(
+                    meta.get("description", getattr(module, "__doc__", "") or "").strip()
+                ),
                 module=full_name,
                 prefix=router.prefix,
                 routes=shapes,

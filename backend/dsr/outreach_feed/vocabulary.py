@@ -331,7 +331,9 @@ def build_event_payload(
             "type": EVENT_RESOURCE_TYPE,
             "attributes": attributes,
             "relationships": {
-                "prospect": {"data": {"type": PROSPECT_RESOURCE_TYPE, "id": str(prospect_id).strip()}}
+                "prospect": {
+                    "data": {"type": PROSPECT_RESOURCE_TYPE, "id": str(prospect_id).strip()}
+                }
             },
         }
     }
@@ -385,8 +387,7 @@ def describe_adjacent_surfaces() -> dict[str, Any]:
                 "name": "Tab and tile extensions",
                 "kind": "client extension",
                 "description": (
-                    "Render a DSR widget on the Prospect, Opportunity or Account "
-                    "detail page."
+                    "Render a DSR widget on the Prospect, Opportunity or Account detail page."
                 ),
                 "why_not": (
                     "An Outreach client extension is a bundle Outreach installs; it "
@@ -462,7 +463,7 @@ def describe() -> dict[str, Any]:
                 }
             },
             "sourced_quote": (
-                'curl https://api.outreach.io/api/v2/events -X POST '
+                "curl https://api.outreach.io/api/v2/events -X POST "
                 '-H "Authorization: Bearer S2S_TOKEN" -d …'
             ),
         },

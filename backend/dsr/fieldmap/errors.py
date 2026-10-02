@@ -115,7 +115,9 @@ class SyncKeyCapacity(FieldMapError):
     is ten for both documented vendors.
     """
 
-    def __init__(self, message: str, *, used: int = 0, limit: int = 10, providers: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self, message: str, *, used: int = 0, limit: int = 10, providers: tuple[str, ...] = ()
+    ) -> None:
         super().__init__(message)
         self.used = used
         self.limit = limit

@@ -51,8 +51,7 @@ RULES = (
     (
         "focus-suppressed",
         "fail",
-        "Removes the global :focus-visible outline with no ring, shadow or "
-        "border to replace it.",
+        "Removes the global :focus-visible outline with no ring, shadow or border to replace it.",
     ),
     (
         "tap-target-under-44px",
@@ -76,7 +75,9 @@ EMOJI = re.compile(
 # :focus-visible outline for every interactive element, which is the correct
 # place for it. So the finding is not "this feature has no focus class" -- it is
 # "this feature switches the global focus state off".
-FOCUS_SUPPRESSED = re.compile(r"focus:outline-none|outline-none|focus:ring-0|focus-visible:outline-none")
+FOCUS_SUPPRESSED = re.compile(
+    r"focus:outline-none|outline-none|focus:ring-0|focus-visible:outline-none"
+)
 
 # Classes that imply "this is interactive".
 INTERACTIVE = re.compile(
@@ -84,7 +85,9 @@ INTERACTIVE = re.compile(
 )
 
 # Focus styling: Tailwind focus/focus-visible variants, or a :focus rule.
-FOCUS_STYLE = re.compile(r"focus:ring|focus-visible:|focus:border|:focus\b|outline-(none|ring|offset)")
+FOCUS_STYLE = re.compile(
+    r"focus:ring|focus-visible:|focus:border|:focus\b|outline-(none|ring|offset)"
+)
 
 # The floor's focus rule is satisfied globally: frontend/src/index.css sets a
 # :focus-visible outline on every interactive element, which is the right place
@@ -122,9 +125,7 @@ HAZARDOUS_MOTION = re.compile(
 )
 # Tailwind's named height scale. Anything at or above h-11 (2.75rem = 44px) is
 # compliant, so only the steps below it are findings.
-TAP_OK_SCALE = re.compile(
-    r"\b(?:min-)?(?:h|w)-(?:11|12|14|16|20|24|28|32|40|48|56|64|72|80|96)\b"
-)
+TAP_OK_SCALE = re.compile(r"\b(?:min-)?(?:h|w)-(?:11|12|14|16|20|24|28|32|40|48|56|64|72|80|96)\b")
 TAP_SMALL_SCALE = re.compile(r"\b(?:min-)?(?:h|w)-\[(\d+)px\]")
 # A decorative element is not a tap target. A 2px-wide chart column and a 1px
 # divider are sized to be seen, not to be hit, and reporting them as
@@ -138,7 +139,9 @@ SMALL_PX = 44
 def feature_dirs(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
-    return sorted((p for p in root.iterdir() if p.is_dir() and any(p.glob("index.*"))), key=lambda p: p.name)
+    return sorted(
+        (p for p in root.iterdir() if p.is_dir() and any(p.glob("index.*"))), key=lambda p: p.name
+    )
 
 
 def check_feature(feat: Path) -> list[dict]:
@@ -165,8 +168,7 @@ def check_feature(feat: Path) -> list[dict]:
 
             # A static centring offset never changes, so it is not motion.
             stripped_of_offsets = STATIC_CENTRE_OFFSET.sub(" ", line)
-            if (HAZARDOUS_MOTION.search(stripped_of_offsets)
-                    and not REDUCED_MOTION.search(line)):
+            if HAZARDOUS_MOTION.search(stripped_of_offsets) and not REDUCED_MOTION.search(line):
                 # Only flag a motion line inside a feature that never mentions
                 # reduced motion anywhere; a file-level opt-in is enough.
                 if not REDUCED_MOTION.search(text):
@@ -219,7 +221,9 @@ def check_feature(feat: Path) -> list[dict]:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--feature", help="check one feature directory by name")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--fail-on-warn", action="store_true", help="treat warnings as failures")
@@ -255,10 +259,14 @@ def main(argv: list[str]) -> int:
     warns = {k: v for k, v in warns.items() if v}
 
     if args.json:
-        print(json.dumps({"checked": len(targets), "failures": failures, "warnings": warns}, indent=2))
+        print(
+            json.dumps({"checked": len(targets), "failures": failures, "warnings": warns}, indent=2)
+        )
     else:
         checked = len([t for t in targets if t.name not in allow])
-        print(f"design floor: {checked} feature page(s) checked, {len(failures)} failing, {len(warns)} with warnings")
+        print(
+            f"design floor: {checked} feature page(s) checked, {len(failures)} failing, {len(warns)} with warnings"
+        )
         for name, items in failures.items():
             print(f"\nFAIL {name}")
             for f in items:

@@ -31,8 +31,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -45,6 +43,7 @@ from dsr.generation import (
     render,
     render_text,
 )
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -152,7 +151,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
     module = load_feature("wf012_generation")
 
     assert module.FEATURE["id"] in text
-    assert f'id: {module.FEATURE["id"]!r}' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
 
 
 def test_feature_module_does_not_import_the_shared_app():
@@ -450,7 +449,9 @@ def test_template_can_be_updated_in_place(client, template_id):
 
 
 def test_generating_from_an_unknown_template_is_404(client):
-    response = client.post(f"{PREFIX}/generations", json={"template_id": "template_nope", "name": "X"})
+    response = client.post(
+        f"{PREFIX}/generations", json={"template_id": "template_nope", "name": "X"}
+    )
 
     assert response.status_code == 404
     assert response.json()["error"] == "unknown_template"
@@ -594,7 +595,8 @@ def test_missing_name_is_400(client, template_id):
 
 def test_non_object_substitutions_is_400(client, template_id):
     response = client.post(
-        f"{PREFIX}/generations", json={"template_id": template_id, "name": "X", "substitutions": ["a"]}
+        f"{PREFIX}/generations",
+        json={"template_id": template_id, "name": "X", "substitutions": ["a"]},
     )
 
     assert response.status_code == 400
@@ -635,7 +637,9 @@ def test_deleting_a_room_frees_its_external_id(client, template_id):
 def test_generated_rooms_are_findable_by_external_id(client, template_id):
     generate(client, tid=template_id, external_id="sf-op-0001")
 
-    found = client.get(f"{PREFIX}/generations", params={"where": '{"external_id":"sf-op-0001"}'}).json()
+    found = client.get(
+        f"{PREFIX}/generations", params={"where": '{"external_id":"sf-op-0001"}'}
+    ).json()
 
     assert found["count"] == 1
     assert found["rooms"][0]["data"]["name"] == "Acme — Enterprise Evaluation"
@@ -793,7 +797,13 @@ def test_read_returns_stored_data_and_derived_state_separately(client, template_
     # Stored facts live in data...
     assert read["data"]["published"] is True
     # ...and only what is computed on read lives in generation.
-    assert set(read["generation"]) == {"published", "status", "published_at", "expires_at", "expiry"}
+    assert set(read["generation"]) == {
+        "published",
+        "status",
+        "published_at",
+        "expires_at",
+        "expiry",
+    }
     assert "status" not in read["data"]
 
 
@@ -878,7 +888,7 @@ def _matches_registered_route(source: str, routes: list[dict]) -> bool:
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -936,9 +946,7 @@ def test_seed_produces_a_template_and_rooms_in_every_derived_state(monkeypatch):
 
     with tempfile.TemporaryDirectory() as tmp:
         with AuditedDatabase(Path(tmp) / "seed.db", mirror_dir=Path(tmp) / "audit") as db:
-            summary = module.seed(
-                db, {"room_ids": [], "now": now, "rng": random.Random("wf012")}
-            )
+            summary = module.seed(db, {"room_ids": [], "now": now, "rng": random.Random("wf012")})
 
             templates = db.list("template")
             rooms = [r for r in db.list("room") if r["data"].get("generated")]

@@ -54,8 +54,7 @@ RULES: dict[str, str] = {
         "the signal names a User, and User is first in the researched precedence order"
     ),
     "content_precedence": (
-        "the signal names Email Content, and Content is second in the researched "
-        "precedence order"
+        "the signal names Email Content, and Content is second in the researched precedence order"
     ),
     "person_precedence": (
         "the signal names a Person, and Person is third in the researched precedence order"
@@ -218,7 +217,7 @@ def resolve_assignment(
             f"The signal names {ASSIGNMENT_OBJECT[key]} {object_id!r}, which is "
             f"{ASSIGNMENT_OBJECT[key]}'s place in the researched precedence order"
             + (
-                f", and a User is the seller directly"
+                ", and a User is the seller directly"
                 if key == "user_guid"
                 else f", and the caller supplied {'a person' if person_id else 'a seller'} for it"
             )
@@ -303,7 +302,7 @@ def _resolve_account(
                         f"{len(ties)} people on this Account share the top score of "
                         f"{score:g}; the most recent engagement at "
                         f"{engaged.isoformat()} was taken, then the person id. The research "
-                        "says \"Highest Buyer Engagement Score\" and states no tie-break."
+                        'says "Highest Buyer Engagement Score" and states no tie-break.'
                     ),
                 }
             )
@@ -340,9 +339,9 @@ def _resolve_account(
             "seller": winner.get("seller"),
             "reason": (
                 f"The signal names Account {account_id!r} and nobody on it engaged inside "
-                f"the last {ENGAGEMENT_WINDOW_DAYS} days, so - \"If there is no engagement, "
+                f'the last {ENGAGEMENT_WINDOW_DAYS} days, so - "If there is no engagement, '
                 "relate the task to the last person whose most recent contact was with the "
-                f"Account Owner\" - the task goes to {winner.get('person_id')!r}, last "
+                f'Account Owner" - the task goes to {winner.get("person_id")!r}, last '
                 f"contacted on {contacted.isoformat()}."
             ),
             "notes": notes,

@@ -4,6 +4,7 @@ First attempt returned `uncertain` because the option set was under-differentiat
 This reframes the problem with the missing evidence: sub-agents write code and
 tests, not the shared database, so the real concurrency surface is much smaller.
 """
+
 import sys
 from pathlib import Path
 

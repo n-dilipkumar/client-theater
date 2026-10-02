@@ -141,9 +141,7 @@ def describe(subscription: Mapping[str, Any]) -> dict[str, Any]:
         "recommended_buffer_bytes": vocabulary.RECOMMENDED_BUFFER_BYTES,
         "buffer_within_recommendation": current <= limit,
         "buffer_exceeds_recommendation": current > vocabulary.RECOMMENDED_BUFFER_BYTES,
-        "buffer_usage_percent": (
-            round(100.0 * current / limit, 1) if limit else 0.0
-        ),
+        "buffer_usage_percent": (round(100.0 * current / limit, 1) if limit else 0.0),
     }
 
 

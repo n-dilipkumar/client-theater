@@ -20,12 +20,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.crm_upsert.transport import SimulatedTransport
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-038"
 MODULE = "wf038_batch_upsert_engagement_rows_keyed_on_"
@@ -70,7 +69,11 @@ def make_rows(client, room_id, count, prefix="k"):
         made.append(
             client.post(
                 f"{PREFIX}/rooms/{room_id}/engagement",
-                json={"engagement_id": f"{prefix}{index}", "event_type": "viewed", "account": "Acme"},
+                json={
+                    "engagement_id": f"{prefix}{index}",
+                    "event_type": "viewed",
+                    "account": "Acme",
+                },
             ).json()["record"]
         )
     return made
@@ -125,7 +128,10 @@ def test_registering_a_capability_over_http_appears_in_the_catalogue(client):
         },
     )
     assert response.status_code == 201
-    vendors = {entry["vendor"]: entry for entry in client.get(f"{PREFIX}/capabilities").json()["capabilities"]}
+    vendors = {
+        entry["vendor"]: entry
+        for entry in client.get(f"{PREFIX}/capabilities").json()["capabilities"]
+    }
     assert vendors["acme"]["max_batch_size"] == 30
     assert vendors["acme"]["origin"] == "stored"
 
@@ -147,7 +153,9 @@ def test_a_stored_capability_overrides_a_built_in_over_http(client):
         },
     )
     room = make_room(client)
-    connection = make_connection(client, room["id"], vendor="hubspot", object_name="contacts", key_field="email")
+    connection = make_connection(
+        client, room["id"], vendor="hubspot", object_name="contacts", key_field="email"
+    )
     assert connection["capability_max_batch_size"] == 40
     assert connection["capability_source"] == "stored"
     assert connection["effective_batch_size"] == 40
@@ -169,7 +177,9 @@ def test_config_is_served_with_its_defaults(client):
 
 def test_patching_config_merges_rather_than_replaces(client):
     client.patch(f"{PREFIX}/config", json={"schedule": {"interval_hours": 6}})
-    body = client.patch(f"{PREFIX}/config", json={"queue": {"opportunistic_threshold": 3}}).json()["config"]
+    body = client.patch(f"{PREFIX}/config", json={"queue": {"opportunistic_threshold": 3}}).json()[
+        "config"
+    ]
     assert body["schedule"]["interval_hours"] == 6
     assert body["queue"]["opportunistic_threshold"] == 3
     assert body["queue"]["target"] == 200
@@ -184,7 +194,12 @@ def test_creating_a_connection_returns_its_effective_settings(client):
     room = make_room(client)
     body = client.post(
         f"{PREFIX}/connections",
-        json={"vendor": "salesforce", "object": "Engagement__c", "key_field": "Ext__c", "batch_size": 50},
+        json={
+            "vendor": "salesforce",
+            "object": "Engagement__c",
+            "key_field": "Ext__c",
+            "batch_size": 50,
+        },
         params={"room_id": room["id"]},
     ).json()
     assert body["created"] is True
@@ -261,7 +276,13 @@ def test_listing_connections_can_be_scoped_to_a_room(client):
 
 def test_reading_a_connection_serves_its_lint(client):
     room = make_room(client)
-    connection = make_connection(client, room["id"], vendor="dataverse", object_name="engagements", key_field="sample_keyattribute")
+    connection = make_connection(
+        client,
+        room["id"],
+        vendor="dataverse",
+        object_name="engagements",
+        key_field="sample_keyattribute",
+    )
     body = client.get(f"{PREFIX}/connections/{connection['id']}").json()
     assert body["connection"]["id"] == connection["id"]
     assert any(entry["id"] == "no-per-item-results" for entry in body["lint"])
@@ -280,7 +301,9 @@ def test_patching_a_connection_revalidates(client):
     assert ok.status_code == 200
     assert ok.json()["connection"]["effective_batch_size"] == 25
 
-    refused = client.patch(f"{PREFIX}/connections/{connection['id']}", json={"vendor": "hubspot", "batch_size": 500})
+    refused = client.patch(
+        f"{PREFIX}/connections/{connection['id']}", json={"vendor": "hubspot", "batch_size": 500}
+    )
     assert refused.status_code == 422
 
 
@@ -293,7 +316,9 @@ def test_deleting_a_connection_is_soft_and_audited(client):
     connection = make_connection(client, room["id"])
     assert client.delete(f"{PREFIX}/connections/{connection['id']}").json()["deleted"] is True
     assert client.get(f"{PREFIX}/connections/{connection['id']}").status_code == 404
-    entry = client.get("/api/audit", params={"collection": "crm_upsert_connection"}).json()["entries"][0]
+    entry = client.get("/api/audit", params={"collection": "crm_upsert_connection"}).json()[
+        "entries"
+    ][0]
     assert entry["action"] == "delete"
 
 
@@ -309,7 +334,8 @@ def test_deleting_an_unknown_connection_is_404(client):
 def test_queueing_a_row_reports_that_it_is_pending(client):
     room = make_room(client)
     body = client.post(
-        f"{PREFIX}/rooms/{room['id']}/engagement", json={"engagement_id": "k1", "event_type": "viewed"}
+        f"{PREFIX}/rooms/{room['id']}/engagement",
+        json={"engagement_id": "k1", "event_type": "viewed"},
     ).json()
     assert body["created"] is True
     assert body["status"] == "pending"
@@ -366,9 +392,12 @@ def test_preview_returns_the_request_and_sends_nothing(client):
     assert len(request["body"]["records"]) == 2
     assert request["body"]["records"][0]["attributes"]["type"] == "Engagement__c"
     # Nothing was sent, so nothing changed.
-    assert client.get(
-        f"{PREFIX}/rooms/{room['id']}/queue", params={"connection_id": connection["id"]}
-    ).json()["counts"]["pending"] == 2
+    assert (
+        client.get(
+            f"{PREFIX}/rooms/{room['id']}/queue", params={"connection_id": connection["id"]}
+        ).json()["counts"]["pending"]
+        == 2
+    )
 
 
 def test_preview_of_another_rooms_connection_is_404(client):
@@ -415,7 +444,8 @@ def test_sync_now_reports_the_key_found_and_key_not_found_split(client):
 
     # Re-queue one row by hand: the key is now one the simulated CRM holds.
     record = client.post(
-        f"{PREFIX}/rooms/{room['id']}/engagement", json={"engagement_id": "k0", "event_type": "viewed"}
+        f"{PREFIX}/rooms/{room['id']}/engagement",
+        json={"engagement_id": "k0", "event_type": "viewed"},
     ).json()["record"]
     assert record["id"]
 
@@ -435,7 +465,16 @@ def test_sync_now_lifts_the_run_fields_to_the_top_level(client):
     body = client.post(
         f"{PREFIX}/rooms/{room['id']}/upsert", params={"connection_id": connection["id"]}
     ).json()
-    for key in ("totals", "progress", "outcomes", "chunks", "run_id", "mode", "batch_size", "key_field"):
+    for key in (
+        "totals",
+        "progress",
+        "outcomes",
+        "chunks",
+        "run_id",
+        "mode",
+        "batch_size",
+        "key_field",
+    ):
         assert key in body, key
     assert body["collection"] == "crm_upsert_run"
 
@@ -535,7 +574,8 @@ def test_a_run_reports_per_row_errors_with_the_crm_s_own_text(client):
     # An empty external id: there is nothing to key the upsert on, so the
     # connector refuses the row before any request goes out.
     client.post(
-        f"{PREFIX}/rooms/{room['id']}/engagement", json={"engagement_id": "", "event_type": "viewed"}
+        f"{PREFIX}/rooms/{room['id']}/engagement",
+        json={"engagement_id": "", "event_type": "viewed"},
     )
 
     body = client.post(
@@ -550,7 +590,11 @@ def test_a_run_reports_per_row_errors_with_the_crm_s_own_text(client):
 def test_dataverse_rows_leave_the_queue_unconfirmed_over_http(client):
     room = make_room(client)
     connection = make_connection(
-        client, room["id"], vendor="dataverse", object_name="engagements", key_field="sample_keyattribute"
+        client,
+        room["id"],
+        vendor="dataverse",
+        object_name="engagements",
+        key_field="sample_keyattribute",
     )
     queued = make_rows(client, room["id"], 2)
     body = client.post(
@@ -588,7 +632,11 @@ def test_two_connections_on_one_room_keep_separate_queues_over_http(client):
     room = make_room(client)
     salesforce = make_connection(client, room["id"])
     dataverse = make_connection(
-        client, room["id"], vendor="dataverse", object_name="engagements", key_field="sample_keyattribute"
+        client,
+        room["id"],
+        vendor="dataverse",
+        object_name="engagements",
+        key_field="sample_keyattribute",
     )
     make_rows(client, room["id"], 1)
     client.post(f"{PREFIX}/rooms/{room['id']}/upsert", params={"connection_id": salesforce["id"]})
@@ -685,7 +733,11 @@ def test_runs_can_be_filtered_by_connection(client):
     room = make_room(client)
     one = make_connection(client, room["id"])
     two = make_connection(
-        client, room["id"], vendor="dataverse", object_name="engagements", key_field="sample_keyattribute"
+        client,
+        room["id"],
+        vendor="dataverse",
+        object_name="engagements",
+        key_field="sample_keyattribute",
     )
     make_rows(client, room["id"], 1)
     client.post(f"{PREFIX}/rooms/{room['id']}/upsert", params={"connection_id": one["id"]})
@@ -733,7 +785,9 @@ def audit_entries(client, **params) -> list[dict]:
 
 
 def my_sources(client) -> set[str]:
-    return {entry["source"] for entry in audit_entries(client) if PREFIX in (entry.get("source") or "")}
+    return {
+        entry["source"] for entry in audit_entries(client) if PREFIX in (entry.get("source") or "")
+    }
 
 
 def test_every_write_names_the_route_that_served_it(client):
@@ -848,7 +902,7 @@ def serves(mounted: dict[str, list[list[str]]], method: str, path: str) -> bool:
             continue
         if all(
             expected.startswith("{") or expected == actual or RECORD_ID.match(actual)
-            for expected, actual in zip(candidate, recorded)
+            for expected, actual in zip(candidate, recorded, strict=False)
         ):
             return True
     return False
@@ -868,7 +922,7 @@ def test_every_audit_row_in_the_whole_log_names_a_mounted_route(client):
     client.patch(f"{PREFIX}/config", json={"schedule": {"interval_hours": 12}})
     client.post("/api/records/room", json={"name": "Core room", "account": "Core"})
     client.post(f"{PREFIX}/rooms/{room['id']}/upsert", params={"connection_id": connection["id"]})
-    client.post(f"/api/records/bulk/x", json=[{"k": "v"}])
+    client.post("/api/records/bulk/x", json=[{"k": "v"}])
     client.delete(f"{PREFIX}/connections/{connection['id']}")
 
     mounted = mounted_routes(client)
@@ -914,14 +968,15 @@ def test_a_deleted_route_would_be_reported_not_silently_accepted():
 
 
 def test_the_seed_produces_connections_rows_and_runs():
-    from datetime import datetime, timezone
-
     import random
+    from datetime import datetime, timezone
 
     tmp = tempfile.TemporaryDirectory()
     db = AuditedDatabase(Path(tmp.name) / "seed.db", actor="test")
     try:
-        room = db.create("room", {"name": "Northwind", "account": "Northwind Traders"}, source="test")
+        room = db.create(
+            "room", {"name": "Northwind", "account": "Northwind Traders"}, source="test"
+        )
         summary = load_feature(MODULE).seed(
             db,
             {
@@ -944,9 +999,8 @@ def test_the_seed_produces_connections_rows_and_runs():
 
 
 def test_the_seed_covers_the_four_researched_connector_shapes():
-    from datetime import datetime, timezone
-
     import random
+    from datetime import datetime, timezone
 
     tmp = tempfile.TemporaryDirectory()
     db = AuditedDatabase(Path(tmp.name) / "seed.db", actor="test")
@@ -961,7 +1015,10 @@ def test_the_seed_covers_the_four_researched_connector_shapes():
             },
         )
         store = RecordStore(db)
-        vendors = {record["data"]["vendor"]: record["data"] for record in store.list("crm_upsert_connection", limit=20)}
+        vendors = {
+            record["data"]["vendor"]: record["data"]
+            for record in store.list("crm_upsert_connection", limit=20)
+        }
         assert set(vendors) == {"salesforce", "hubspot", "dataverse", "legacy_table"}
         assert vendors["salesforce"]["all_or_none"] is True
         assert vendors["hubspot"]["key_field"] == "email"
@@ -973,9 +1030,8 @@ def test_the_seed_covers_the_four_researched_connector_shapes():
 
 def test_the_seed_shows_every_state_the_research_distinguishes():
     """A demo of only successes teaches a reviewer nothing."""
-    from datetime import datetime, timezone
-
     import random
+    from datetime import datetime, timezone
 
     tmp = tempfile.TemporaryDirectory()
     db = AuditedDatabase(Path(tmp.name) / "seed.db", actor="test")
@@ -990,7 +1046,10 @@ def test_the_seed_shows_every_state_the_research_distinguishes():
             },
         )
         store = RecordStore(db)
-        totals = {outcome: 0 for outcome in ("created", "updated", "failed", "rolled_back", "rejected", "submitted")}
+        totals = {
+            outcome: 0
+            for outcome in ("created", "updated", "failed", "rolled_back", "rejected", "submitted")
+        }
         for run in store.list("crm_upsert_run", limit=20):
             for name, value in (run["data"]["totals"] or {}).items():
                 if name in totals:
@@ -1009,9 +1068,8 @@ def test_the_seed_shows_every_state_the_research_distinguishes():
 
 
 def test_the_seed_leaves_dataverse_rows_unconfirmed():
-    from datetime import datetime, timezone
-
     import random
+    from datetime import datetime, timezone
 
     tmp = tempfile.TemporaryDirectory()
     db = AuditedDatabase(Path(tmp.name) / "seed.db", actor="test")
@@ -1046,9 +1104,8 @@ def test_the_seed_leaves_dataverse_rows_unconfirmed():
 
 
 def test_the_seed_says_so_when_there_are_no_rooms():
-    from datetime import datetime, timezone
-
     import random
+    from datetime import datetime, timezone
 
     tmp = tempfile.TemporaryDirectory()
     db = AuditedDatabase(Path(tmp.name) / "seed.db", actor="test")
@@ -1063,9 +1120,8 @@ def test_the_seed_says_so_when_there_are_no_rooms():
 
 
 def test_the_seed_writes_only_audited_rows():
-    from datetime import datetime, timezone
-
     import random
+    from datetime import datetime, timezone
 
     tmp = tempfile.TemporaryDirectory()
     db = AuditedDatabase(Path(tmp.name) / "seed.db", actor="test")

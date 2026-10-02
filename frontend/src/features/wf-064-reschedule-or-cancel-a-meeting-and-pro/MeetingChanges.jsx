@@ -976,7 +976,7 @@ function InvitePanel({ uid, onUseToken, viaLink }) {
         {invite.data.description}
       </pre>
       <div className="flex flex-wrap gap-2">
-        {(invate.data.links?.reschedule?.expired === false ||
+        {(invite.data.links?.reschedule?.expired === false ||
           invite.data.links?.cancel?.expired === false) && (
           <Button
             onClick={() => onUseToken(invite.data.links.reschedule?.token || '')}

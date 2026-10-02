@@ -53,8 +53,8 @@ from dsr.event_stream.vocabulary import (
     is_asset_event,
     is_form_event,
     is_share_link_event,
-    required_objects_for,
     require_event,
+    required_objects_for,
 )
 
 #: The object name on the wire. Sourced: the payload "emits a ``webhook-event``".

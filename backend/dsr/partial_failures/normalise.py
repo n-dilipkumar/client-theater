@@ -51,7 +51,7 @@ from dataclasses import dataclass, field as _field
 from typing import Any, Mapping, Sequence
 
 from dsr.partial_failures.errors import InvalidPayload
-from dsr.partial_failures.vocabulary import CORRELATION, FIELD_SOURCE, require_connector
+from dsr.partial_failures.vocabulary import FIELD_SOURCE, require_connector
 
 # --------------------------------------------------------------------------- #
 # The room error model
@@ -201,7 +201,7 @@ CLASSIFICATION: tuple[ClassificationEntry, ...] = (
         retryable=True,
         basis=(
             "Quoted: \"403 ... If the error code is REQUEST_LIMIT_EXCEEDED, you've exceeded API "
-            "request limits in your org.\" An exceeded request limit is the rate-limit class the "
+            'request limits in your org." An exceeded request limit is the rate-limit class the '
             "researched automation names, and it clears on its own."
         ),
         connector="salesforce",
@@ -223,8 +223,8 @@ CLASSIFICATION: tuple[ClassificationEntry, ...] = (
         id="dataverse-concurrency-mismatch",
         retryable=False,
         basis=(
-            "Quoted: \"412 Precondition Failed Expect this status code for the following types of "
-            "errors: ConcurrencyVersionMismatch - DuplicateRecord\". A version mismatch means the "
+            'Quoted: "412 Precondition Failed Expect this status code for the following types of '
+            'errors: ConcurrencyVersionMismatch - DuplicateRecord". A version mismatch means the '
             "row was written against a version that has moved, and the fix is to re-read it, not to "
             "send it again."
         ),
@@ -247,7 +247,7 @@ CLASSIFICATION: tuple[ClassificationEntry, ...] = (
         id="lock-mismatch",
         retryable=True,
         basis=(
-            "Inferred from the researched automation, which names \"locked\" as one of the two "
+            'Inferred from the researched automation, which names "locked" as one of the two '
             "retryable classes. The source set names no code for it: Dataverse documents 412 for "
             "ConcurrencyVersionMismatch and DuplicateRecord, which are the two *other* conditions "
             "under the same status and are treated as terminal here. A lock is the one 412 whose "
@@ -260,7 +260,7 @@ CLASSIFICATION: tuple[ClassificationEntry, ...] = (
         id="throttled",
         retryable=True,
         basis=(
-            "Inferred from the researched automation, which names \"rate limit\" as a retryable "
+            'Inferred from the researched automation, which names "rate limit" as a retryable '
             "class without naming a code for it. HTTP 429 is the transport-level signal all three "
             "vendors use for it, and putting a throttled row in a human's queue would defeat the "
             "automation the research describes."
@@ -272,8 +272,8 @@ CLASSIFICATION: tuple[ClassificationEntry, ...] = (
         retryable=False,
         basis=(
             "Quoted twice. Salesforce: \"400 The request couldn't be understood, usually because "
-            "the JSON or XML body contains an error.\" Dataverse: \"400 BadRequest Expect this "
-            "status code when an argument is invalid.\" Neither improves by being sent again."
+            'the JSON or XML body contains an error." Dataverse: "400 BadRequest Expect this '
+            'status code when an argument is invalid." Neither improves by being sent again.'
         ),
         http_status=400,
     ),
@@ -432,6 +432,7 @@ def _when_matches(key: str, expected: Any, subject: Mapping[str, Any]) -> bool:
 # The entry point
 # --------------------------------------------------------------------------- #
 
+
 def normalise(
     connector: str,
     status: Any,
@@ -554,7 +555,9 @@ def _hubspot(
                 overrides,
                 notes=notes,
                 code=str(envelope.get("category") or envelope.get("code") or f"HTTP_{status}"),
-                message=str(envelope.get("message") or _first_text(envelope, ("error", "detail")) or ""),
+                message=str(
+                    envelope.get("message") or _first_text(envelope, ("error", "detail")) or ""
+                ),
                 category=_text_or_none(envelope.get("category")),
                 reported=reported,
             )
@@ -787,8 +790,14 @@ def _dataverse(
                 "top-level error is reported as an unattributed failure"
             )
             outcomes, unattributed, described = _match_results(
-                connector, status, rows, items, overrides, notes,
-                positional="request_order", describe=_dataverse_item_error,
+                connector,
+                status,
+                rows,
+                items,
+                overrides,
+                notes,
+                positional="request_order",
+                describe=_dataverse_item_error,
                 failed=_dataverse_failed,
             )
             unattributed = (
@@ -854,8 +863,14 @@ def _dataverse(
         )
 
     outcomes, unattributed, described = _match_results(
-        connector, status, rows, items, overrides, notes,
-        positional="request_order", describe=_dataverse_item_error,
+        connector,
+        status,
+        rows,
+        items,
+        overrides,
+        notes,
+        positional="request_order",
+        describe=_dataverse_item_error,
         failed=_dataverse_failed,
     )
     return BatchOutcome(
@@ -1013,8 +1028,14 @@ def _salesforce(
         return _all_rows_succeeded(connector, status, rows, notes=notes, reported=reported)
 
     outcomes, unattributed, described = _match_results(
-        connector, status, rows, results, overrides, notes,
-        positional="results_order", describe=_salesforce_record_error,
+        connector,
+        status,
+        rows,
+        results,
+        overrides,
+        notes,
+        positional="results_order",
+        describe=_salesforce_record_error,
         failed=_salesforce_failed,
         correlation_of=_salesforce_correlation,
     )
@@ -1383,7 +1404,9 @@ def _all_rows_failed(
     )
 
 
-def _ordered(outcomes: Mapping[str, RowOutcome], rows: Sequence[Mapping[str, Any]]) -> tuple[RowOutcome, ...]:
+def _ordered(
+    outcomes: Mapping[str, RowOutcome], rows: Sequence[Mapping[str, Any]]
+) -> tuple[RowOutcome, ...]:
     """Outcomes in the order the rows were sent, whatever order the vendor used."""
     position = {str(row["row_key"]): int(row["index"]) for row in rows}
     return tuple(sorted(outcomes.values(), key=lambda item: position.get(item.row_key, item.index)))
@@ -1426,9 +1449,7 @@ def _finalise(
     return tuple(notes)
 
 
-def _related_from_sequence(
-    errors: Any, field_keys: Sequence[str]
-) -> tuple[dict[str, Any], ...]:
+def _related_from_sequence(errors: Any, field_keys: Sequence[str]) -> tuple[dict[str, Any], ...]:
     if not _is_sequence(errors):
         return ()
     related: list[dict[str, Any]] = []
@@ -1436,7 +1457,8 @@ def _related_from_sequence(
         if isinstance(entry, Mapping):
             related.append(
                 {
-                    "code": _text_or_none(entry.get("code")) or _text_or_none(entry.get("errorCode")),
+                    "code": _text_or_none(entry.get("code"))
+                    or _text_or_none(entry.get("errorCode")),
                     "message": str(entry.get("message") or ""),
                     "field": _first_text(entry, field_keys),
                 }

@@ -483,9 +483,7 @@ def render(
             else:
                 lines = []
                 for element in elements:
-                    row, missing = render_text(
-                        item_template, {**values, ITEM_BINDING: element}
-                    )
+                    row, missing = render_text(item_template, {**values, ITEM_BINDING: element})
                     # `item.x` misses are not the caller's problem here: the
                     # actionable key is the repeating key, already reported
                     # above if it was missing. A page-level key that an item
@@ -600,8 +598,9 @@ class TemplateGenerator:
 
     # -- templates ---------------------------------------------------------- #
 
-    def declare(self, payload: Mapping[str, Any], *, actor: str | None = None,
-                source: str) -> dict[str, Any]:
+    def declare(
+        self, payload: Mapping[str, Any], *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Register or update a template shell.
 
         A template is an ordinary schema-flexible record, so it can equally be
@@ -642,14 +641,12 @@ class TemplateGenerator:
                 raise UnknownTemplate(existing)
             if current["collection"] != TEMPLATE_COLLECTION:
                 raise GenerationConflict(f"{existing} is not a template")
-            return self.store.update(
-                existing, record_data, actor=actor, source=source
-            )
-        return self.store.create(
-            TEMPLATE_COLLECTION, record_data, actor=actor, source=source
-        )
+            return self.store.update(existing, record_data, actor=actor, source=source)
+        return self.store.create(TEMPLATE_COLLECTION, record_data, actor=actor, source=source)
 
-    def templates(self, *, where: Mapping[str, Any] | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def templates(
+        self, *, where: Mapping[str, Any] | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
         if where:
             return self.store.find(TEMPLATE_COLLECTION, where, limit=limit)
         return self.store.list(TEMPLATE_COLLECTION, limit=limit)
@@ -705,7 +702,9 @@ class TemplateGenerator:
             record["data"], request.substitutions, label=f"template {record['id']}"
         )
 
-    def _prepare(self, request: GenerationRequest, *, seen: dict[str, str] | None = None) -> dict[str, Any]:
+    def _prepare(
+        self, request: GenerationRequest, *, seen: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Build the room payload, without writing. Raises on any problem."""
         record, rendered = self._render_request(request)
         template_data = record["data"]
@@ -713,9 +712,7 @@ class TemplateGenerator:
         if request.external_id:
             key = request.external_id
             if seen is not None and key in seen:
-                raise GenerationConflict(
-                    f"external_id {key!r} appears twice in this batch"
-                )
+                raise GenerationConflict(f"external_id {key!r} appears twice in this batch")
             clash = self.store.find(ROOM_COLLECTION, {"external_id": key}, limit=1)
             if clash:
                 raise GenerationConflict(
@@ -748,17 +745,17 @@ class TemplateGenerator:
             payload["external_id"] = request.external_id
         return payload
 
-    def generate(self, request: GenerationRequest, *, actor: str | None = None,
-                 source: str) -> dict[str, Any]:
+    def generate(
+        self, request: GenerationRequest, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Generate one room. One write, one audit row."""
         payload = self._prepare(request)
-        record = self.store.create(
-            ROOM_COLLECTION, payload, actor=actor, source=source
-        )
+        record = self.store.create(ROOM_COLLECTION, payload, actor=actor, source=source)
         return self._present(record)
 
-    def generate_many(self, requests: Sequence[GenerationRequest], *, actor: str | None = None,
-                      source: str) -> dict[str, Any]:
+    def generate_many(
+        self, requests: Sequence[GenerationRequest], *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Generate a batch of rooms. One transaction, one audit row.
 
         All or nothing: every item is rendered and every external id is checked
@@ -774,13 +771,10 @@ class TemplateGenerator:
 
         seen: dict[str, str] = {}
         payloads = [self._prepare(request, seen=seen) for request in requests]
-        created = self.store.bulk_create(
-            ROOM_COLLECTION, payloads, actor=actor, source=source
-        )
+        created = self.store.bulk_create(ROOM_COLLECTION, payloads, actor=actor, source=source)
         return {"count": len(created), "rooms": [self._present(record) for record in created]}
 
-    def publish(self, room_id: str, *, actor: str | None = None,
-                source: str) -> dict[str, Any]:
+    def publish(self, room_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
         """Publish a generated room, which is when its expiry clock starts.
 
         **[sourced]** Publication is opt-in and the expiry count "starts when
@@ -810,7 +804,9 @@ class TemplateGenerator:
 
     # -- reads -------------------------------------------------------------- #
 
-    def generated(self, *, where: Mapping[str, Any] | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def generated(
+        self, *, where: Mapping[str, Any] | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
         """List generated rooms, newest first.
 
         ``where`` filters on arbitrary JSON paths, so a team can ask for

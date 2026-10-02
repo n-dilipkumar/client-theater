@@ -35,10 +35,10 @@ from typing import Any, Mapping
 from dsr.crm_provisioning.errors import KeyConstraintError, ManifestError
 from dsr.crm_provisioning.vendors import VendorAdapter
 from dsr.crm_provisioning.vocabulary import (
+    FINDING_SEVERITIES,
     KEY_MAX_BYTES,
     KEY_MAX_COLUMNS,
     PROPERTY_TYPES,
-    FINDING_SEVERITIES,
 )
 
 #: What a manifest's own key is called. One accepted spelling, so a manifest
@@ -168,12 +168,16 @@ def normalise_manifest(payload: Mapping[str, Any] | None) -> dict[str, Any]:
         )
         columns: list[dict[str, Any]] = []
         for position, raw in enumerate(columns_in):
-            _require(isinstance(raw, Mapping), f"{SYNC_KEY_FIELD}.columns[{position}] must be a JSON object")
+            _require(
+                isinstance(raw, Mapping),
+                f"{SYNC_KEY_FIELD}.columns[{position}] must be a JSON object",
+            )
             column = _text(raw.get("name") or raw.get("field"))
             _require(column, f"{SYNC_KEY_FIELD}.columns[{position}].name is required")
             length = raw.get("length")
             _require(
-                length is None or (isinstance(length, int) and not isinstance(length, bool) and length > 0),
+                length is None
+                or (isinstance(length, int) and not isinstance(length, bool) and length > 0),
                 f"{SYNC_KEY_FIELD} column {column!r} needs a positive integer length, or none",
             )
             columns.append({"name": column, "length": length})
@@ -433,7 +437,11 @@ def validate(manifest: Mapping[str, Any], adapter: VendorAdapter) -> list[dict[s
                 )
             )
 
-    if manifest.get("object") and not adapter.object_label_required and manifest["object"].get("label"):
+    if (
+        manifest.get("object")
+        and not adapter.object_label_required
+        and manifest["object"].get("label")
+    ):
         # Nothing to do, and deliberately not a finding: Dataverse's table
         # definition carries no display label at the object level, so a manifest
         # that declares one is not wrong, it is just carrying a label this vendor

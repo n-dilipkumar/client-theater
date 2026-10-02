@@ -4,6 +4,7 @@ Same rule as before: a status is a claim about work in flight, so `in-progress`
 goes on a card only when an agent is genuinely live, and the comment carries the
 measured facts rather than a description of intent.
 """
+
 import json
 import subprocess
 import sys
@@ -27,8 +28,15 @@ SET2 = [
 
 
 def orca(args, timeout=90):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         d = json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -37,8 +45,15 @@ def orca(args, timeout=90):
 
 
 def git(*args, cwd=ROOT):
-    p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=60)
+    p = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
     return (p.stdout + p.stderr).strip()
 
 
@@ -52,24 +67,45 @@ for dirname, ticket in SET2:
         continue
 
     # Measure, then describe. A comment that states a fact can be checked.
-    dirty = len([l for l in git("status", "--porcelain", cwd=wt["path"]).splitlines() if l.strip()])
+    dirty = len(
+        [line for line in git("status", "--porcelain", cwd=wt["path"]).splitlines() if line.strip()]
+    )
     ahead = git("rev-list", "--count", "origin/main..HEAD", cwd=wt["path"]) or "0"
     shared_note = "no shared file touched"
 
-    note = (f"{ticket}: live OpenCode agent (Space Bunny Free) porting {ticket}. "
-            f"Brief: orchestration/ports/{ticket}.md. {dirty} uncommitted file(s), "
-            f"{ahead} commit(s) ahead of main, {shared_note}. "
-            f"Agent commits locally and stops; a human reviews, pushes and opens the PR.")
+    note = (
+        f"{ticket}: live OpenCode agent (Space Bunny Free) porting {ticket}. "
+        f"Brief: orchestration/ports/{ticket}.md. {dirty} uncommitted file(s), "
+        f"{ahead} commit(s) ahead of main, {shared_note}. "
+        f"Agent commits locally and stops; a human reviews, pushes and opens the PR."
+    )
 
-    res = orca(["orca", "worktree", "set", "--worktree", wt["id"],
-                "--workspace-status", "in-progress", "--comment", note, "--json"])
+    res = orca(
+        [
+            "orca",
+            "worktree",
+            "set",
+            "--worktree",
+            wt["id"],
+            "--workspace-status",
+            "in-progress",
+            "--comment",
+            note,
+            "--json",
+        ]
+    )
     ok = res.get("ok")
-    print(f"{ticket}: {'in-progress' if ok else 'FAILED ' + str(res)[:120]}  ({dirty} uncommitted, {ahead} commits)")
+    print(
+        f"{ticket}: {'in-progress' if ok else 'FAILED ' + str(res)[:120]}  ({dirty} uncommitted, {ahead} commits)"
+    )
 
 print()
 listing = orca(["orca", "worktree", "list", "--repo", REPO_ID, "--json"])
-cards = [w for w in listing["result"]["worktrees"]
-         if w.get("branch", "").startswith(("refs/heads/feature/", "refs/heads/n-dilipkumar/"))]
+cards = [
+    w
+    for w in listing["result"]["worktrees"]
+    if w.get("branch", "").startswith(("refs/heads/feature/", "refs/heads/n-dilipkumar/"))
+]
 counts = {}
 for c in cards:
     counts[c.get("workspaceStatus")] = counts.get(c.get("workspaceStatus"), 0) + 1

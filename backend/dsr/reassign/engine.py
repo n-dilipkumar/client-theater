@@ -30,8 +30,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
-from dsr.reassign import distribution as dist
-from dsr.reassign import rules, webhooks
+from dsr.reassign import distribution as dist, rules, webhooks
 from dsr.reassign.distribution import normalise_meeting
 from dsr.reassign.errors import MeetingStateError, ReassignError
 from dsr.reassign.vocabulary import (
@@ -158,7 +157,9 @@ class ReassignEngine:
     def distributions(self, room_id: str | None = None) -> list[dict[str, Any]]:
         return self.store.list(DISTRIBUTION_COLLECTION, room_id=room_id, limit=1000)
 
-    def hosts(self, room_id: str | None = None, team: str | None = None, active: bool | None = None) -> list[dict[str, Any]]:
+    def hosts(
+        self, room_id: str | None = None, team: str | None = None, active: bool | None = None
+    ) -> list[dict[str, Any]]:
         records = self.store.list(HOST_COLLECTION, room_id=room_id, limit=1000)
         if team:
             records = [r for r in records if r["data"].get("team") == team]
@@ -169,7 +170,9 @@ class ReassignEngine:
     def require_host(self, host_id: str) -> dict[str, Any]:
         return self._require(HOST_COLLECTION, host_id, "host")
 
-    def reassignments(self, room_id: str | None = None, meeting_id: str | None = None) -> list[dict[str, Any]]:
+    def reassignments(
+        self, room_id: str | None = None, meeting_id: str | None = None
+    ) -> list[dict[str, Any]]:
         records = self.store.list(REASSIGNMENT_COLLECTION, room_id=room_id, limit=1000)
         if meeting_id:
             records = [r for r in records if r["data"].get("meeting_id") == meeting_id]
@@ -181,7 +184,9 @@ class ReassignEngine:
             return None
         return record
 
-    def events_history(self, meeting_id: str | None = None, limit: int = HISTORY_LIMIT) -> list[dict[str, Any]]:
+    def events_history(
+        self, meeting_id: str | None = None, limit: int = HISTORY_LIMIT
+    ) -> list[dict[str, Any]]:
         """The Events History tab, newest first.
 
         One row per reassignment, carrying the four things the research says the
@@ -194,7 +199,9 @@ class ReassignEngine:
         in any test that reuses a clock - so a history tab that can disagree with
         itself about order is not something this has to worry about producing.
         """
-        records = self.store.list(HISTORY_COLLECTION, limit=1000, order_by="updated_at", descending=True)
+        records = self.store.list(
+            HISTORY_COLLECTION, limit=1000, order_by="updated_at", descending=True
+        )
         if meeting_id:
             records = [r for r in records if r["data"].get("meeting_id") == meeting_id]
         return records[: max(1, min(int(limit), HISTORY_LIMIT))]
@@ -317,7 +324,9 @@ class ReassignEngine:
             f"what a reassignment takes into account, so they have to exist"
         )
 
-    def require_slot_within_bounds(self, meeting: Mapping[str, Any], host_id: str) -> dict[str, Any]:
+    def require_slot_within_bounds(
+        self, meeting: Mapping[str, Any], host_id: str
+    ) -> dict[str, Any]:
         """Refuse a *booking* whose slot breaches the distribution's bounds.
 
         The counterpart to the reassign path's exemption, and what gives that
@@ -362,7 +371,9 @@ class ReassignEngine:
             )
         return verdict
 
-    def availability(self, meeting_id: str, request: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def availability(
+        self, meeting_id: str, request: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Which hosts could take this booking, and why the others could not.
 
         Backs "If the target person is known and free, pick them and hit
@@ -492,7 +503,9 @@ class ReassignEngine:
                 actor=actor,
                 source=source,
             )
-            credit = self._apply_credit(tx, decision, previous_host, new_host, actor=actor, source=source)
+            credit = self._apply_credit(
+                tx, decision, previous_host, new_host, actor=actor, source=source
+            )
 
         payloads = self._webhook_payloads(meeting_record, new_host, previous_host, reassignment, at)
         response = {
@@ -529,13 +542,19 @@ class ReassignEngine:
         previous_delta, new_delta = patch
         tx.update(
             previous_host["id"],
-            {"round_robin_credits": int(previous_host["data"].get("round_robin_credits", 0) or 0) + previous_delta},
+            {
+                "round_robin_credits": int(previous_host["data"].get("round_robin_credits", 0) or 0)
+                + previous_delta
+            },
             actor=actor,
             source=source,
         )
         tx.update(
             new_host["id"],
-            {"round_robin_credits": int(new_host["data"].get("round_robin_credits", 0) or 0) + new_delta},
+            {
+                "round_robin_credits": int(new_host["data"].get("round_robin_credits", 0) or 0)
+                + new_delta
+            },
             actor=actor,
             source=source,
         )
@@ -599,7 +618,9 @@ class ReassignEngine:
         reassigned_hosts = {r["data"].get("to_host_id") for r in reassignments}
         return {
             "meetings": len(meetings),
-            "upcoming": sum(1 for r in meetings if dist.parse_instant(r["data"]["starts_at"]) >= now),
+            "upcoming": sum(
+                1 for r in meetings if dist.parse_instant(r["data"]["starts_at"]) >= now
+            ),
             "past": sum(1 for r in meetings if dist.parse_instant(r["data"]["starts_at"]) < now),
             "reassignments": len(reassignments),
             "history_rows": len(history),

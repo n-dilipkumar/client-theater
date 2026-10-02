@@ -79,7 +79,9 @@ def _sort_key(moment: Any) -> str:
     return str(moment or "")
 
 
-def _by_newest(records: Iterable[Mapping[str, Any]], field_name: str = "occurred_at") -> list[Mapping[str, Any]]:
+def _by_newest(
+    records: Iterable[Mapping[str, Any]], field_name: str = "occurred_at"
+) -> list[Mapping[str, Any]]:
     return sorted(records, key=lambda row: _sort_key(row.get(field_name)), reverse=True)
 
 
@@ -100,18 +102,24 @@ def market_for(
     matched: list[str] = []
     for market in markets:
         wanted_countries = {
-            str(value).strip().upper() for value in (market.get("countries") or []) if str(value).strip()
+            str(value).strip().upper()
+            for value in (market.get("countries") or [])
+            if str(value).strip()
         }
         wanted_industries = {
-            str(value).strip().lower() for value in (market.get("industries") or []) if str(value).strip()
+            str(value).strip().lower()
+            for value in (market.get("industries") or [])
+            if str(value).strip()
         }
         if countries & wanted_countries or (industry and industry in wanted_industries):
             matched.append(str(market.get("id")))
     return sorted(matched)
 
 
-def top_page_views(visits: Sequence[Mapping[str, Any]], limit: int = TOP_PAGE_LIMIT) -> list[dict[str, Any]]:
-    """"the pages with the most visits from visitors from this company".
+def top_page_views(
+    visits: Sequence[Mapping[str, Any]], limit: int = TOP_PAGE_LIMIT
+) -> list[dict[str, Any]]:
+    """ "the pages with the most visits from visitors from this company".
 
     Counted by *visits*, not by page views: the card says "the pages with the
     most visits", and one session reading four pages contributes one visit to
@@ -220,9 +228,7 @@ def _row_for(
             break
 
     countries = {str(row.get("country")) for row in ordered_visits if row.get("country")}
-    countries |= {
-        str(row.get("country")) for row in ordered_research if row.get("country")
-    }
+    countries |= {str(row.get("country")) for row in ordered_research if row.get("country")}
     industries = {str(row.get("industry")) for row in ordered_research if row.get("industry")}
 
     company_record = snapshot.companies.get(key)
@@ -244,7 +250,10 @@ def _row_for(
 
     last_seen_candidates = [
         value
-        for value in [last_visit, _sort_key(ordered_research[0].get("occurred_at")) if ordered_research else None]
+        for value in [
+            last_visit,
+            _sort_key(ordered_research[0].get("occurred_at")) if ordered_research else None,
+        ]
         if value
     ]
 

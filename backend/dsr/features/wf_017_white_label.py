@@ -127,7 +127,10 @@ def _host_not_served(request: Request, exc: HostNotServed) -> JSONResponse:
     # would say so to anyone probing. Routing is not identity.
     return JSONResponse(
         status_code=404,
-        content={"error": "host_not_served", "detail": f"{exc.host} is not served by this deployment"},
+        content={
+            "error": "host_not_served",
+            "detail": f"{exc.host} is not served by this deployment",
+        },
     )
 
 
@@ -594,7 +597,7 @@ def seed(db, context: dict[str, Any]) -> str:
 
     now = context["now"].isoformat()
     service = DomainService(RecordStore(db), resolver=_resolver())
-    pairs = list(zip(SEED_STATES, room_ids))
+    pairs = list(zip(SEED_STATES, room_ids, strict=False))
     written: list[dict[str, Any]] = []
 
     for state, (room_id, account) in pairs:
@@ -611,5 +614,9 @@ def seed(db, context: dict[str, Any]) -> str:
         f"{sum(1 for s in written if s['domain_status'] == 'unverified' and s['domain'])} awaiting DNS, "
         f"{sum(1 for s in written if not s['domain'])} on the default host"
     )
-    suffix = "" if len(pairs) == len(SEED_STATES) else f", {len(SEED_STATES) - len(pairs)} state(s) skipped"
+    suffix = (
+        ""
+        if len(pairs) == len(SEED_STATES)
+        else f", {len(SEED_STATES) - len(pairs)} state(s) skipped"
+    )
     return f"{len(pairs)} rooms white-labelled ({described}){suffix}"

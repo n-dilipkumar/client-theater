@@ -41,7 +41,6 @@ if str(ROOT) not in sys.path:
 
 from tools.contract import PLATFORM_PREFIXES, SHARED, SHARED_COUNT  # noqa: E402
 
-
 #: The four consumers named in the Jev decision that authorised the module.
 #: Each must import the list, not redeclare it.
 DECIDED_CONSUMERS = [
@@ -212,8 +211,9 @@ def test_consumer_resolves_to_the_single_definition(path: pathlib.Path):
 @pytest.mark.parametrize("path", ALL_CONSUMERS, ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_consumer_binds_shared_by_import(path: pathlib.Path):
     """The binding is `from tools.contract import SHARED`, not a literal."""
-    assert shared_binding_is_an_import(path), \
+    assert shared_binding_is_an_import(path), (
         f"{path.name} does not import SHARED from tools/contract.py"
+    )
 
 
 @pytest.mark.parametrize("path", ALL_CONSUMERS, ids=lambda p: f"{p.parent.name}/{p.name}")
@@ -252,7 +252,11 @@ def test_contract_module_documents_its_consumers():
 def run_guard(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(TOOLS / "check_feature_diff.py"), *args],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=ROOT,
     )
 
 
@@ -281,9 +285,12 @@ def test_guard_normalises_windows_separators():
 
 
 def test_guard_passes_a_clean_feature_branch():
-    result = run_guard("--files", "backend/dsr/features/wf001_x.py",
-                       "frontend/src/features/wf-001-x/index.jsx",
-                       "backend/tests/test_wf001.py")
+    result = run_guard(
+        "--files",
+        "backend/dsr/features/wf001_x.py",
+        "frontend/src/features/wf-001-x/index.jsx",
+        "backend/tests/test_wf001.py",
+    )
     assert result.returncode == 0
     assert result.stdout == "OK: 3 changed file(s), none shared\n"
 

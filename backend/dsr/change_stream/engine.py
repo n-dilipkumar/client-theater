@@ -11,14 +11,16 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from dsr.change_stream import channels as channel_rules
-from dsr.change_stream import dataverse as dataverse_rules
-from dsr.change_stream import events as event_rules
-from dsr.change_stream import hubspot as hubspot_rules
-from dsr.change_stream import inferences as inference_rules
-from dsr.change_stream import replica as replica_rules
-from dsr.change_stream import usage as usage_rules
-from dsr.change_stream import vocabulary
+from dsr.change_stream import (
+    channels as channel_rules,
+    dataverse as dataverse_rules,
+    events as event_rules,
+    hubspot as hubspot_rules,
+    inferences as inference_rules,
+    replica as replica_rules,
+    usage as usage_rules,
+    vocabulary,
+)
 from dsr.change_stream.buffering import BufferSet, TransactionBuffer
 from dsr.change_stream.errors import (
     CdcNotEnabled,
@@ -106,15 +108,24 @@ class ChangeStreamEngine:
         caller asking "what does this accept" gets an answer rather than a 400.
         """
         payload = vocabulary.describe()
-        payload["hubspot"] = dict(payload["hubspot"], **{
-            "direction": hubspot_rules.describe()["direction"],
-            "fired_by": hubspot_rules.describe()["fired_by"],
-        })
+        payload["hubspot"] = dict(
+            payload["hubspot"],
+            **{
+                "direction": hubspot_rules.describe()["direction"],
+                "fired_by": hubspot_rules.describe()["fired_by"],
+            },
+        )
         payload["usage"] = usage_rules.describe_metric_source()
         payload["fields"] = {
             "change_event": [
-                "changeType", "transactionKey", "sequenceNumber", "commitTimestamp",
-                "changedFields", "payload", "enrichedFields", "entity",
+                "changeType",
+                "transactionKey",
+                "sequenceNumber",
+                "commitTimestamp",
+                "changedFields",
+                "payload",
+                "enrichedFields",
+                "entity",
             ],
             "field_map": ["sync_key", "sync_key_field", "account_field", "fields"],
         }
@@ -143,7 +154,9 @@ class ChangeStreamEngine:
             raise UnknownOrg(f"org {org_id} not found")
         return record
 
-    def register_org(self, payload: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def register_org(
+        self, payload: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Register a connected CRM org, with the edition the gate reads.
 
         One record per system, because the edition gate is a property of the org
@@ -212,7 +225,10 @@ class ChangeStreamEngine:
             if requested and not bool(data.get("cdc_enabled")):
                 if not vocabulary.edition_supports_cdc(data.get("edition")):
                     raise _edition_error(data.get("edition"))
-                entities = [str(name) for name in (payload.get("entities") or data.get("cdc_entities") or [])]
+                entities = [
+                    str(name)
+                    for name in (payload.get("entities") or data.get("cdc_entities") or [])
+                ]
                 if not entities:
                     raise OrgError(
                         "entities is required to enable Change Data Capture: the room has to say "
@@ -237,9 +253,7 @@ class ChangeStreamEngine:
             patch["edition_covers_cdc"] = vocabulary.edition_supports_cdc(patch["edition"])
 
         if not patch:
-            raise OrgError(
-                "nothing to change: send cdc_enabled, entities, edition or org_name"
-            )
+            raise OrgError("nothing to change: send cdc_enabled, entities, edition or org_name")
         return self.store.update(record["id"], patch, actor=actor, source=source)
 
     def require_cdc(self, org: Mapping[str, Any]) -> None:
@@ -256,7 +270,9 @@ class ChangeStreamEngine:
     # Channels
     # ------------------------------------------------------------------ #
 
-    def channels(self, *, name: str | None = None, org_id: str | None = None) -> list[dict[str, Any]]:
+    def channels(
+        self, *, name: str | None = None, org_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Every channel, optionally narrowed to one org or one exact name.
 
         The name filter is a byte-for-byte comparison, because "The channel name
@@ -267,8 +283,12 @@ class ChangeStreamEngine:
         """
         records = self.store.list(CHANNELS, limit=500)
         if org_id:
-            records = [r for r in records if str(r.get("room_id") or "") is not None
-                       and str((r["data"] or {}).get("org_id")) == str(org_id)]
+            records = [
+                r
+                for r in records
+                if str(r.get("room_id") or "") is not None
+                and str((r["data"] or {}).get("org_id")) == str(org_id)
+            ]
         if name:
             records = [r for r in records if str((r["data"] or {}).get("name")) == name]
         return [self.present_channel(record) for record in records]
@@ -433,7 +453,9 @@ class ChangeStreamEngine:
         """
         record = self.require_channel(channel_id)
         data = dict(record["data"])
-        result = channel_rules.add_enrichment(data, fields, transport=str(data.get("transport") or ""))
+        result = channel_rules.add_enrichment(
+            data, fields, transport=str(data.get("transport") or "")
+        )
         updated = self.store.update(
             record["id"],
             {"enriched_fields": result["enriched_fields"]},
@@ -509,9 +531,8 @@ class ChangeStreamEngine:
             "created_at": record.get("created_at"),
             "updated_at": record.get("updated_at"),
             **data,
-            "wire_format": data.get("wire_format") or vocabulary.wire_format_for(
-                str(data.get("transport") or "")
-            ),
+            "wire_format": data.get("wire_format")
+            or vocabulary.wire_format_for(str(data.get("transport") or "")),
             "buffered": buffers.describe() if buffers else [],
             "usage": usage_rules.describe({**data, "id": subscription_id}),
         }
@@ -567,7 +588,9 @@ class ChangeStreamEngine:
             "wire_format": vocabulary.wire_format_for(transport),
             "state": "open",
             "entity": entity,
-            "buffer_limit_bytes": int(channel.get("buffer_bytes") or vocabulary.RECOMMENDED_BUFFER_BYTES),
+            "buffer_limit_bytes": int(
+                channel.get("buffer_bytes") or vocabulary.RECOMMENDED_BUFFER_BYTES
+            ),
             "usage": usage_rules.blank(),
             "fetch_outstanding": 0,
         }
@@ -609,7 +632,9 @@ class ChangeStreamEngine:
         try:
             requested = int(raw)
         except (TypeError, ValueError) as exc:
-            raise MalformedEvent(f"num_requested must be a whole number of events; got {raw!r}") from exc
+            raise MalformedEvent(
+                f"num_requested must be a whole number of events; got {raw!r}"
+            ) from exc
         if requested <= 0:
             raise MalformedEvent("num_requested must be greater than zero")
 
@@ -877,17 +902,19 @@ class ChangeStreamEngine:
         plans: list[tuple[dict[str, Any], dict[str, Any]]] = []
         for event in events:
             existing = self._find_replica(
-                room_id, channel, replica_rules.resolve_external_id(
+                room_id,
+                channel,
+                replica_rules.resolve_external_id(
                     event.get("payload") or {},
                     event_rules.enriched_fields_in_effect(event, channel),
                     channel.get("field_map") or {},
-                )
+                ),
             )
             plan = replica_rules.plan_event(event, channel, existing=existing)
             plans.append((plan, existing or {}))
 
         written: list[dict[str, Any]] = []
-        for event, (plan, _planned_against) in zip(events, plans):
+        for event, (plan, _planned_against) in zip(events, plans, strict=True):
             # Re-read rather than reuse the plan-phase row: two events in one
             # transaction can touch the same record, and the second has to see
             # what the first wrote.
@@ -903,32 +930,32 @@ class ChangeStreamEngine:
                     source=source,
                 )
             else:
-                record = self.store.update(existing["id"], merged["data"], actor=actor, source=source)
-            written.append({
-                "external_id": plan["external_id"],
-                "replica_id": str(record["id"]),
-                "action": plan["action"],
-                "state": merged["state"],
-                "change_type": plan["change_type"],
-                "changed_replica_fields": merged["changed_replica_fields"],
-                "enriched_fields_used": plan["enriched_fields_used"],
-                "resolution": plan["resolution"],
-                "unmapped_crm_fields": plan["unmapped_crm_fields"],
-                "findings": findings,
-            })
+                record = self.store.update(
+                    existing["id"], merged["data"], actor=actor, source=source
+                )
+            written.append(
+                {
+                    "external_id": plan["external_id"],
+                    "replica_id": str(record["id"]),
+                    "action": plan["action"],
+                    "state": merged["state"],
+                    "change_type": plan["change_type"],
+                    "changed_replica_fields": merged["changed_replica_fields"],
+                    "enriched_fields_used": plan["enriched_fields_used"],
+                    "resolution": plan["resolution"],
+                    "unmapped_crm_fields": plan["unmapped_crm_fields"],
+                    "findings": findings,
+                }
+            )
 
         invalidations = [
-            self._invalidate(
-                room_id, channel, row, buffer, source=source, actor=actor
-            )
+            self._invalidate(room_id, channel, row, buffer, source=source, actor=actor)
             for row in written
         ]
 
         self._mark_events_committed(events, buffer=buffer, source=source, actor=actor)
 
-        usage = usage_rules.merge(
-            self.require_subscription(subscription_id)["data"].get("usage")
-        )
+        usage = usage_rules.merge(self.require_subscription(subscription_id)["data"].get("usage"))
         self._patch_usage(
             subscription_id,
             usage_rules.record_commit(usage, events=len(events), writes=len(written)),
@@ -963,7 +990,9 @@ class ChangeStreamEngine:
         Where the field map declares no account field the invalidation records
         ``resolved: false`` rather than picking one.
         """
-        account = str((self.store.get(str(row["replica_id"])) or {}).get("data", {}).get("account") or "")
+        account = str(
+            (self.store.get(str(row["replica_id"])) or {}).get("data", {}).get("account") or ""
+        )
         resolved = bool(account)
         unresolved_note = (
             None
@@ -1110,8 +1139,13 @@ class ChangeStreamEngine:
             where["entity"] = entity
         records = self.store.find(CHANGE_EVENTS, where, limit=min(int(limit), 1000))
         rows = [record for record in records if str(record.get("room_id") or "") == str(room_id)]
-        rows.sort(key=lambda record: (str(record["data"].get("commit_timestamp") or ""),
-                                      int(record["data"].get("sequence_number") or 0)), reverse=True)
+        rows.sort(
+            key=lambda record: (
+                str(record["data"].get("commit_timestamp") or ""),
+                int(record["data"].get("sequence_number") or 0),
+            ),
+            reverse=True,
+        )
         return [self.present_event(record) for record in rows]
 
     def present_event(self, record: Mapping[str, Any]) -> dict[str, Any]:
@@ -1257,17 +1291,23 @@ class ChangeStreamEngine:
         a room that never took that step should not be assumed to have.
         """
         data = dataverse_rules.normalise_table(payload)
-        existing = [r for r in self.store.list(TABLES, limit=500)
-                    if str((r["data"] or {}).get("logical_name")) == data["logical_name"]]
+        existing = [
+            r
+            for r in self.store.list(TABLES, limit=500)
+            if str((r["data"] or {}).get("logical_name")) == data["logical_name"]
+        ]
         if existing:
             raise _duplicate_table_error(data["logical_name"], existing[0]["id"])
         record = self.store.create(TABLES, data, actor=actor, source=source)
-        return {"id": record["id"], **data,
-                "annotation": None,
-                "how_to_enable": (
-                    "In Power Apps, select Data > Tables and the specific table. Under Advanced "
-                    "options, you find the Track changes property."
-                )}
+        return {
+            "id": record["id"],
+            **data,
+            "annotation": None,
+            "how_to_enable": (
+                "In Power Apps, select Data > Tables and the specific table. Under Advanced "
+                "options, you find the Track changes property."
+            ),
+        }
 
     def enable_track_changes(
         self, table_id: str, *, actor: str | None, source: str
@@ -1342,9 +1382,7 @@ class ChangeStreamEngine:
             **result,
         }
 
-    def count_table(
-        self, table_id: str, *, deltatoken: str | None
-    ) -> dict[str, Any]:
+    def count_table(self, table_id: str, *, deltatoken: str | None) -> dict[str, Any]:
         record = self.require_table(table_id)
         return {
             "table_id": record["id"],
@@ -1397,8 +1435,12 @@ class ChangeStreamEngine:
         record = self.store.create(
             HUBSPOT_SUBSCRIPTIONS, data, room_id=room_id, actor=actor, source=source
         )
-        return {"id": record["id"], "room_id": record.get("room_id"), **data,
-                "capacity": self.hubspot_capacity()}
+        return {
+            "id": record["id"],
+            "room_id": record.get("room_id"),
+            **data,
+            "capacity": self.hubspot_capacity(),
+        }
 
     def hubspot_require_capacity(self) -> None:
         hubspot_rules.require_capacity(len(self.store.list(HUBSPOT_SUBSCRIPTIONS, limit=1000)))
@@ -1426,7 +1468,9 @@ class ChangeStreamEngine:
                 budget = dict(org["data"].get("call_budget") or budget)
         subscriptions = self.store.list(HUBSPOT_SUBSCRIPTIONS, limit=1000)
         received = sum(int((r["data"] or {}).get("calls_received") or 0) for r in subscriptions)
-        exempt = sum(int((r["data"] or {}).get("calls_exempt_from_rate_limit") or 0) for r in subscriptions)
+        exempt = sum(
+            int((r["data"] or {}).get("calls_exempt_from_rate_limit") or 0) for r in subscriptions
+        )
         return {
             **hubspot_rules.describe(),
             "budget": budget,
@@ -1452,7 +1496,9 @@ class ChangeStreamEngine:
         if record is None or record["collection"] != HUBSPOT_SUBSCRIPTIONS:
             raise ChangeStreamError(f"hubspot webhook subscription {subscription_id} not found")
         data = dict(record["data"])
-        budget = dict(data.get("call_budget") or {"limit": vocabulary.DEFAULT_API_CALL_BUDGET, "spent": 0})
+        budget = dict(
+            data.get("call_budget") or {"limit": vocabulary.DEFAULT_API_CALL_BUDGET, "spent": 0}
+        )
         result = hubspot_rules.charge_or_exempt(budget, via_workflow=via_workflow)
         updated = self.store.update(
             record["id"],
@@ -1476,8 +1522,10 @@ class ChangeStreamEngine:
     def usage(self, *, room_id: str | None = None) -> dict[str, Any]:
         """Every subscription's delivery usage, against the researched defaults."""
         records = self.store.list(SUBSCRIPTIONS, room_id=room_id, limit=500)
-        rows = [usage_rules.describe(dict(r["data"], id=r["id"], room_id=r.get("room_id")))
-                for r in records]
+        rows = [
+            usage_rules.describe(dict(r["data"], id=r["id"], room_id=r.get("room_id")))
+            for r in records
+        ]
         totals = usage_rules.blank()
         for row in rows:
             for key in totals:
@@ -1509,9 +1557,7 @@ class ChangeStreamEngine:
             "events": len(events),
             "events_by_change_type": change_types,
             "events_by_state": states,
-            "buffered_now": sum(
-                self._buffer_set(str(r["id"])).event_count() for r in buffers
-            ),
+            "buffered_now": sum(self._buffer_set(str(r["id"])).event_count() for r in buffers),
             "replica_rows": len(replica_rows),
             "replica_live": sum(
                 1 for r in replica_rows if str((r["data"] or {}).get("replica_state")) == "live"

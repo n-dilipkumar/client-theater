@@ -99,7 +99,7 @@ def _child(node: Any, name: str) -> list[Any]:
         return []
     if isinstance(node, (list, tuple)):
         found = []
-        for index, item in enumerate(node):
+        for _index, item in enumerate(node):
             found.extend(_child(item, name))
         return found
     return []
@@ -528,7 +528,9 @@ def _split_alternatives(text: str) -> list[str]:
         elif char == "]":
             depth -= 1
             if depth < 0:
-                raise FilterError(f"unbalanced ']' in {text!r}", remediation="Close every bracket you open.")
+                raise FilterError(
+                    f"unbalanced ']' in {text!r}", remediation="Close every bracket you open."
+                )
         elif char == "|" and depth == 0:
             parts.append("".join(current))
             current = []
@@ -537,7 +539,9 @@ def _split_alternatives(text: str) -> list[str]:
     if quote:
         raise FilterError(f"unterminated quoted string in {text!r}", remediation="Close the quote.")
     if depth != 0:
-        raise FilterError(f"unbalanced '[' in {text!r}", remediation="Close every bracket you open.")
+        raise FilterError(
+            f"unbalanced '[' in {text!r}", remediation="Close every bracket you open."
+        )
     parts.append("".join(current))
     return parts
 

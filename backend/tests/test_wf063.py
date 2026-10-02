@@ -56,8 +56,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -87,10 +85,10 @@ from dsr.reassign import (
     NAIVE_IS_UTC,
     OUTCOMES,
     PAYLOAD_VERSION,
+    REASSIGN_MODES,
+    REASSIGNABLE_STATUSES,
     REASSIGNED_PAYLOAD_KEYS,
     REASSIGNMENT_COLLECTION,
-    REASSIGNABLE_STATUSES,
-    REASSIGN_MODES,
     SPECIFIC_HOST,
     SPECIFIC_MODE,
     SURFACE_LABELS,
@@ -125,8 +123,8 @@ from dsr.reassign import (
     require_status,
     require_surface,
     require_tab,
+    rules as reassign_rules,
 )
-from dsr.reassign import rules as reassign_rules
 from dsr.reassign.rules import (
     REFUSED,
     REFUSED_ADDON_NOT_READY,
@@ -147,6 +145,7 @@ from dsr.reassign.webhooks import (
     webhook_catalogue,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -233,7 +232,9 @@ def make_distribution(engine, **overrides):
         "min_notice_minutes": 60,
         "max_range_days": 90,
     } | overrides
-    return engine.store.create(DISTRIBUTION_COLLECTION, normalise_distribution(spec), actor="dana", source=SOURCE)
+    return engine.store.create(
+        DISTRIBUTION_COLLECTION, normalise_distribution(spec), actor="dana", source=SOURCE
+    )
 
 
 def make_meeting(engine, room_id, host_id, **overrides):
@@ -346,9 +347,11 @@ def source_names_a_mounted_route(source, routes):
         if mounted_method != method:
             continue
         parts = re.split(r"(\{[^}]+\})", template)
-        pattern = "^" + "".join(
-            r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts
-        ) + "$"
+        pattern = (
+            "^"
+            + "".join(r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts)
+            + "$"
+        )
         if re.match(pattern, path):
             return True
     return False
@@ -380,7 +383,10 @@ def test_individual_is_the_specific_path_and_the_others_are_automatic():
 
 
 def test_the_round_robin_limit_is_quoted_verbatim():
-    assert AUTO_IS_ROUND_ROBIN_ONLY == "Currently only supports reassigning host for round robin bookings"
+    assert (
+        AUTO_IS_ROUND_ROBIN_ONLY
+        == "Currently only supports reassigning host for round robin bookings"
+    )
     assert SPECIFIC_HOST == "Reassign a booking to a specific host"
 
 
@@ -392,7 +398,10 @@ def test_the_bounds_exemption_is_quoted_verbatim():
 
 
 def test_the_addon_precondition_is_quoted_verbatim():
-    assert "ChiliCal's extension installed and be logged in" in EXTENSION_MUST_BE_INSTALLED_AND_LOGGED_IN
+    assert (
+        "ChiliCal's extension installed and be logged in"
+        in EXTENSION_MUST_BE_INSTALLED_AND_LOGGED_IN
+    )
 
 
 def test_the_events_history_row_is_quoted_verbatim():
@@ -423,7 +432,13 @@ def test_only_the_calendar_addon_is_gated():
 
 def test_the_invite_fields_are_the_ones_that_change_between_assignees():
     """'name, links, and other details that possibly changed'."""
-    assert INVITE_FIELDS == ("organizer", "organizer_email", "conference_link", "dial_in", "location")
+    assert INVITE_FIELDS == (
+        "organizer",
+        "organizer_email",
+        "conference_link",
+        "dial_in",
+        "location",
+    )
     assert "conference_link" in INVITE_FIELDS
 
 
@@ -514,7 +529,13 @@ def test_a_meeting_must_start_before_it_ends():
 
 def test_a_meeting_without_an_end_gets_the_default_duration():
     meeting = normalise_meeting(
-        {"title": "X", "host_id": "h1", "meeting_type": "demo", "workspace": "northwind", "starts_at": CLEAN_START}
+        {
+            "title": "X",
+            "host_id": "h1",
+            "meeting_type": "demo",
+            "workspace": "northwind",
+            "starts_at": CLEAN_START,
+        }
     )
     assert meeting["ends_at"] == CLEAN_END
     assert DEFAULT_DURATION_MINUTES == 30
@@ -530,7 +551,13 @@ def test_a_distribution_needs_a_team_for_any_team_member_to_resolve_to():
 def test_a_distribution_cannot_repeat_a_member():
     with pytest.raises(ReassignError):
         normalise_distribution(
-            {"name": "X", "team": "t", "workspace": "w", "meeting_type": "demo", "member_ids": ["a", "a"]}
+            {
+                "name": "X",
+                "team": "t",
+                "workspace": "w",
+                "meeting_type": "demo",
+                "member_ids": ["a", "a"],
+            }
         )
 
 
@@ -580,12 +607,18 @@ def test_a_block_ending_exactly_when_the_meeting_starts_is_not_a_conflict():
 
 
 def test_a_block_overlapping_the_slot_by_a_minute_is_a_conflict():
-    host = {"busy": [{"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=1)}]}
+    host = {
+        "busy": [{"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=1)}]
+    }
     assert len(conflicts_with(host, parse_instant(CLEAN_START), parse_instant(CLEAN_END))) == 1
 
 
 def test_a_block_starting_inside_the_slot_is_a_conflict():
-    host = {"busy": [{"starts_at": _shift(CLEAN_START, minutes=5), "ends_at": _shift(CLEAN_END, minutes=5)}]}
+    host = {
+        "busy": [
+            {"starts_at": _shift(CLEAN_START, minutes=5), "ends_at": _shift(CLEAN_END, minutes=5)}
+        ]
+    }
     assert len(conflicts_with(host, parse_instant(CLEAN_START), parse_instant(CLEAN_END))) == 1
 
 
@@ -609,8 +642,11 @@ def _shift(iso: str, *, minutes: int) -> str:
 
 
 def test_an_inactive_host_is_not_free_even_with_an_empty_calendar():
-    """"Known and free" has two halves, and leaving the team breaks one."""
-    assert is_free({"active": False, "busy": []}, parse_instant(CLEAN_START), parse_instant(CLEAN_END)) is False
+    """ "Known and free" has two halves, and leaving the team breaks one."""
+    assert (
+        is_free({"active": False, "busy": []}, parse_instant(CLEAN_START), parse_instant(CLEAN_END))
+        is False
+    )
 
 
 def test_a_calendar_block_with_no_end_is_a_fixed_point_not_an_open_ended_range():
@@ -621,14 +657,23 @@ def test_a_calendar_block_with_no_end_is_a_fixed_point_not_an_open_ended_range()
     # it conflicts, the next day's does not. The boundary is half-open, so a
     # window *starting* exactly when the block starts and running forwards does
     # overlap - that is what the separate boundary test covers.
-    assert conflicts_with(host, parse_instant(CLEAN_START) - timedelta(minutes=5), parse_instant(CLEAN_END))
-    assert is_free(host, parse_instant(CLEAN_START) + timedelta(days=1), parse_instant(CLEAN_END) + timedelta(days=1))
+    assert conflicts_with(
+        host, parse_instant(CLEAN_START) - timedelta(minutes=5), parse_instant(CLEAN_END)
+    )
+    assert is_free(
+        host,
+        parse_instant(CLEAN_START) + timedelta(days=1),
+        parse_instant(CLEAN_END) + timedelta(days=1),
+    )
 
 
 def test_a_calendar_block_that_ends_before_it_starts_is_refused():
     with pytest.raises(ReassignError):
         normalise_host(
-            {"name": "A", "busy": [{"starts_at": "2026-10-05T11:00:00Z", "ends_at": "2026-10-05T09:00:00Z"}]}
+            {
+                "name": "A",
+                "busy": [{"starts_at": "2026-10-05T11:00:00Z", "ends_at": "2026-10-05T09:00:00Z"}],
+            }
         )
 
 
@@ -662,7 +707,9 @@ def test_an_unconfigured_bound_is_not_breached():
 
 
 def test_the_bypass_summary_records_the_numbers_even_when_nothing_is_breached():
-    summary = bounds_summary({"min_notice_minutes": 60, "max_range_days": 90}, parse_instant(CLEAN_START), NOW)
+    summary = bounds_summary(
+        {"min_notice_minutes": 60, "max_range_days": 90}, parse_instant(CLEAN_START), NOW
+    )
     assert summary["honoured"] is False
     assert summary["bypassed"] == []
     assert summary["min_notice_minutes"] == 60
@@ -671,12 +718,16 @@ def test_the_bypass_summary_records_the_numbers_even_when_nothing_is_breached():
 
 def test_the_bypass_summary_names_both_when_both_are_breached():
     summary = bounds_summary(
-        {"min_notice_minutes": 1440, "max_range_days": 7}, parse_instant("2026-09-28T09:40:00Z"), NOW
+        {"min_notice_minutes": 1440, "max_range_days": 7},
+        parse_instant("2026-09-28T09:40:00Z"),
+        NOW,
     )
     assert summary["bypassed"] == ["min_notice"]
     # Beyond a 7-day range as well, from a second evaluation.
     far = bounds_summary(
-        {"min_notice_minutes": None, "max_range_days": 7}, parse_instant("2026-10-20T10:00:00Z"), NOW
+        {"min_notice_minutes": None, "max_range_days": 7},
+        parse_instant("2026-10-20T10:00:00Z"),
+        NOW,
     )
     assert far["bypassed"] == ["max_range"]
 
@@ -687,11 +738,13 @@ def test_the_bypass_summary_names_both_when_both_are_breached():
 
 
 def test_a_distribution_member_is_in_scope():
-    assert in_distribution_scope({"id": "h1", "team": "enterprise"}, {"member_ids": ["h1"], "team": "enterprise"})
+    assert in_distribution_scope(
+        {"id": "h1", "team": "enterprise"}, {"member_ids": ["h1"], "team": "enterprise"}
+    )
 
 
 def test_an_out_of_team_host_is_out_of_scope_when_the_control_is_off():
-    """"whether you allow rescheduling with any team member or not"."""
+    """ "whether you allow rescheduling with any team member or not"."""
     distribution = {"member_ids": ["h1"], "team": "enterprise", "allow_any_team_member": False}
     assert not in_distribution_scope({"id": "h2", "team": "enterprise"}, distribution)
     assert not in_distribution_scope({"id": "h3", "team": "mid-market"}, distribution)
@@ -708,7 +761,8 @@ def test_the_control_widens_and_never_narrows():
     """A distribution member is in scope whichever way the control is set."""
     for flag in (True, False):
         assert in_distribution_scope(
-            {"id": "h1", "team": "mid-market"}, {"member_ids": ["h1"], "team": "enterprise", "allow_any_team_member": flag}
+            {"id": "h1", "team": "mid-market"},
+            {"member_ids": ["h1"], "team": "enterprise", "allow_any_team_member": flag},
         )
 
 
@@ -721,7 +775,11 @@ def test_asking_for_a_team_is_answered_by_the_team_whatever_the_control_says():
 
 def test_candidates_separate_the_two_reasons_and_return_both_kinds():
     meeting = {"host_id": "current"}
-    distribution = {"member_ids": ["current", "free", "busy", "away"], "team": "enterprise", "allow_any_team_member": False}
+    distribution = {
+        "member_ids": ["current", "free", "busy", "away"],
+        "team": "enterprise",
+        "allow_any_team_member": False,
+    }
     hosts = [
         {"id": "current", "team": "enterprise", "active": True, "busy": []},
         {"id": "free", "team": "enterprise", "active": True, "busy": [], "round_robin_credits": 5},
@@ -730,11 +788,15 @@ def test_candidates_separate_the_two_reasons_and_return_both_kinds():
             "team": "enterprise",
             "active": True,
             "round_robin_credits": 0,
-            "busy": [{"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=30)}],
+            "busy": [
+                {"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=30)}
+            ],
         },
         {"id": "away", "team": "enterprise", "active": False, "busy": [], "round_robin_credits": 0},
     ]
-    rows = candidates(hosts, meeting, distribution, parse_instant(CLEAN_START), parse_instant(CLEAN_END))
+    rows = candidates(
+        hosts, meeting, distribution, parse_instant(CLEAN_START), parse_instant(CLEAN_END)
+    )
     by_id = {row["id"]: row for row in rows}
     assert by_id["free"]["eligible"] is True
     assert by_id["busy"]["ineligible_because"] == ["busy"]
@@ -759,10 +821,14 @@ def test_a_host_out_of_scope_and_busy_is_reported_out_of_scope_first():
             "id": "both",
             "team": "mid-market",
             "active": True,
-            "busy": [{"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=30)}],
+            "busy": [
+                {"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=30)}
+            ],
         },
     ]
-    rows = candidates(hosts, meeting, distribution, parse_instant(CLEAN_START), parse_instant(CLEAN_END))
+    rows = candidates(
+        hosts, meeting, distribution, parse_instant(CLEAN_START), parse_instant(CLEAN_END)
+    )
     by_id = {row["id"]: row for row in rows}
     assert by_id["both"]["ineligible_because"] == ["not_in_distribution", "busy"]
 
@@ -802,21 +868,33 @@ def test_auto_never_picks_an_ineligible_host():
 
 
 def test_the_credit_moves_from_the_previous_host_to_the_new_one():
-    movement = move_credit({"id": "a", "round_robin_credits": 3}, {"id": "b", "round_robin_credits": 1}, already_returned=False)
+    movement = move_credit(
+        {"id": "a", "round_robin_credits": 3},
+        {"id": "b", "round_robin_credits": 1},
+        already_returned=False,
+    )
     assert movement["outcome"] == CREDIT_MOVED
     assert credit_patch(movement) == (-1, 1)
 
 
 def test_a_credit_back_that_already_returned_the_credit_suppresses_the_move():
-    """"no-show credit-back interacts with reassignment"."""
-    movement = move_credit({"id": "a", "round_robin_credits": 3}, {"id": "b", "round_robin_credits": 1}, already_returned=True)
+    """ "no-show credit-back interacts with reassignment"."""
+    movement = move_credit(
+        {"id": "a", "round_robin_credits": 3},
+        {"id": "b", "round_robin_credits": 1},
+        already_returned=True,
+    )
     assert movement["outcome"] == CREDIT_ALREADY_RETURNED
     assert credit_patch(movement) is None
     assert "already returned" in movement["reason"]
 
 
 def test_reassigning_to_the_host_who_already_has_it_moves_nothing():
-    movement = move_credit({"id": "a", "round_robin_credits": 3}, {"id": "a", "round_robin_credits": 3}, already_returned=False)
+    movement = move_credit(
+        {"id": "a", "round_robin_credits": 3},
+        {"id": "a", "round_robin_credits": 3},
+        already_returned=False,
+    )
     assert credit_patch(movement) is None
     assert "staying with the host" in movement["reason"]
 
@@ -827,8 +905,10 @@ def test_reassigning_to_the_host_who_already_has_it_moves_nothing():
 
 
 def test_the_invite_is_built_from_the_new_host_not_carried_over():
-    """"the new assignee's name, links, and other details"."""
-    invite = invite_for({"name": "Priya Raman", "email": "p@x.example", "conference_link": "https://meet/p"})
+    """ "the new assignee's name, links, and other details"."""
+    invite = invite_for(
+        {"name": "Priya Raman", "email": "p@x.example", "conference_link": "https://meet/p"}
+    )
     assert invite["organizer"] == "Priya Raman"
     assert invite["conference_link"] == "https://meet/p"
 
@@ -865,7 +945,7 @@ def test_the_meeting_update_webhook_fires_for_every_reassignment():
 
 
 def test_the_booking_reassigned_webhook_is_scoped_to_round_robin_bookings():
-    """"Fires when a round-robin booking's host is reassigned"."""
+    """ "Fires when a round-robin booking's host is reassigned"."""
     assert BOOKING_REASSIGNED not in events_for({"round_robin": False})
 
 
@@ -897,7 +977,7 @@ def test_the_reassigned_payload_names_the_hosts_added_and_removed():
 
 
 def test_the_previous_host_appears_only_under_removed_hosts():
-    """"organizer reflects the new host" - so the old one is nowhere else."""
+    """ "organizer reflects the new host" - so the old one is nowhere else."""
     payload = booking_reassigned_payload(
         {"booking_uid": "bk-1"},
         {"id": "h2", "name": "Priya"},
@@ -926,7 +1006,9 @@ def test_the_catalogue_publishes_both_events_and_their_scope():
 # --------------------------------------------------------------------------- #
 
 
-def test_changing_the_meeting_type_is_refused_and_quotes_the_rule(engine, room, host, other, distribution):
+def test_changing_the_meeting_type_is_refused_and_quotes_the_rule(
+    engine, room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"])
     decision = engine._decision(
         _only_meeting(engine, "Northwind — Enterprise Demo"),
@@ -948,7 +1030,9 @@ def test_changing_the_workspace_is_refused(engine, room, host, other, distributi
     assert "workspace" in decision.reason
 
 
-def test_echoing_the_unchanged_locked_fields_is_not_a_change(engine, room, host, other, distribution):
+def test_echoing_the_unchanged_locked_fields_is_not_a_change(
+    engine, room, host, other, distribution
+):
     """A scheduler that echoes the context it reopened must not be refused for it.
 
     The values are read off the meeting rather than hard-coded, so the test
@@ -997,7 +1081,9 @@ def _only_meeting(engine, title):
 # --------------------------------------------------------------------------- #
 
 
-def test_the_calendar_addon_without_the_extension_is_refused(engine, room, host, other, distribution):
+def test_the_calendar_addon_without_the_extension_is_refused(
+    engine, room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"])
     decision = engine._decision(
         _only_meeting(engine, "Northwind — Enterprise Demo"),
@@ -1009,7 +1095,9 @@ def test_the_calendar_addon_without_the_extension_is_refused(engine, room, host,
     assert "You must have ChiliCal's extension installed and be logged in there" in decision.reason
 
 
-def test_the_calendar_addon_installed_but_not_logged_in_is_refused(engine, room, host, other, distribution):
+def test_the_calendar_addon_installed_but_not_logged_in_is_refused(
+    engine, room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"])
     decision = engine._decision(
         _only_meeting(engine, "Northwind — Enterprise Demo"),
@@ -1025,7 +1113,9 @@ def test_the_calendar_addon_installed_but_not_logged_in_is_refused(engine, room,
     assert "the extension" not in decision.reason
 
 
-def test_the_calendar_addon_installed_and_logged_in_is_accepted(engine, room, host, other, distribution):
+def test_the_calendar_addon_installed_and_logged_in_is_accepted(
+    engine, room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"])
     decision = engine._decision(
         _only_meeting(engine, "Northwind — Enterprise Demo"),
@@ -1047,12 +1137,14 @@ def test_the_other_surfaces_are_not_gated(engine, room, host, other, distributio
             _only_meeting(engine, "Northwind — Enterprise Demo"),
             {"assign_to": {"kind": "individual", "id": other["id"]}, "surface": surface},
         )
-        assert decision.outcome == ASSIGNED, f"{surface} was gated but only the add-on carries a rule"
+        assert decision.outcome == ASSIGNED, (
+            f"{surface} was gated but only the add-on carries a rule"
+        )
         assert decision.add_on["required"] is False
 
 
 def test_a_missing_extension_key_is_a_missing_requirement_not_a_default_true():
-    """"You must have ChiliCal's extension installed" - a caller who forgets is not ready."""
+    """ "You must have ChiliCal's extension installed" - a caller who forgets is not ready."""
     decision_fields = reassign_rules._add_on_state("chilical_home", {})
     assert decision_fields["ready"] is False
     assert decision_fields["installed"] is False
@@ -1086,7 +1178,13 @@ def test_a_host_who_does_not_exist_is_refused_by_name(engine, room, host, distri
 def test_a_committed_individual_assignment_with_no_id_is_refused():
     with pytest.raises(ReassignError) as caught:
         decide(
-            {"id": "m1", "host_id": "h1", "starts_at": CLEAN_START, "ends_at": CLEAN_END, "round_robin": True},
+            {
+                "id": "m1",
+                "host_id": "h1",
+                "starts_at": CLEAN_START,
+                "ends_at": CLEAN_END,
+                "round_robin": True,
+            },
             {"name": "D", "team": "t", "member_ids": ["h1"]},
             [{"id": "h1", "team": "t", "active": True, "busy": []}],
             {"assign_to": {"kind": "individual"}},
@@ -1095,7 +1193,9 @@ def test_a_committed_individual_assignment_with_no_id_is_refused():
     assert "must name the host" in str(caught.value)
 
 
-def test_a_host_outside_the_distribution_is_refused_when_the_control_is_off(engine, room, host, distribution):
+def test_a_host_outside_the_distribution_is_refused_when_the_control_is_off(
+    engine, room, host, distribution
+):
     outsider = make_host(engine, "Rui Silva", team="mid-market")
     make_meeting(engine, room["id"], host["id"])
     decision = engine._decision(
@@ -1109,9 +1209,7 @@ def test_a_host_outside_the_distribution_is_refused_when_the_control_is_off(engi
 def test_the_same_host_is_accepted_once_the_distribution_allows_the_team(engine, room, host, other):
     """The control on this distribution, so the same outsider is now in scope."""
     outsider = make_host(engine, "Rui Silva", team="enterprise")
-    make_distribution(
-        engine, name="Open Team", allow_any_team_member=True, member_ids=[host["id"]]
-    )
+    make_distribution(engine, name="Open Team", allow_any_team_member=True, member_ids=[host["id"]])
     make_meeting(engine, room["id"], host["id"], distribution="Open Team")
     decision = engine._decision(
         _only_meeting(engine, "Northwind — Enterprise Demo"),
@@ -1137,7 +1235,13 @@ def test_a_busy_host_is_refused_naming_the_clash(engine, room, host, distributio
     busy = make_host(
         engine,
         "Rui Silva",
-        busy=[{"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=90), "label": "Renewal call"}],
+        busy=[
+            {
+                "starts_at": "2026-01-01T09:00:00Z",
+                "ends_at": _shift(CLEAN_END, minutes=90),
+                "label": "Renewal call",
+            }
+        ],
     )
     make_distribution(engine, name="Enterprise Demo", member_ids=[host["id"], busy["id"]])
     make_meeting(engine, room["id"], host["id"])
@@ -1150,9 +1254,13 @@ def test_a_busy_host_is_refused_naming_the_clash(engine, room, host, distributio
     assert decision.availability["free"] is False
 
 
-def test_the_busy_refusal_says_the_bounds_are_not_what_was_exempted(engine, room, host, distribution):
+def test_the_busy_refusal_says_the_bounds_are_not_what_was_exempted(
+    engine, room, host, distribution
+):
     busy = make_host(
-        engine, "Rui Silva", busy=[{"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=90)}]
+        engine,
+        "Rui Silva",
+        busy=[{"starts_at": "2026-01-01T09:00:00Z", "ends_at": _shift(CLEAN_END, minutes=90)}],
     )
     make_distribution(engine, name="Enterprise Demo", member_ids=[host["id"], busy["id"]])
     make_meeting(engine, room["id"], host["id"])
@@ -1175,7 +1283,9 @@ def test_a_host_with_no_eligible_alternative_is_refused_as_a_group(engine, room,
     assert "Edit Meeting" in decision.reason
 
 
-def test_an_unnamed_individual_is_a_candidate_listing_not_an_error(engine, room, host, distribution):
+def test_an_unnamed_individual_is_a_candidate_listing_not_an_error(
+    engine, room, host, distribution
+):
     """The availability step, before the operator has chosen anybody."""
     make_meeting(engine, room["id"], host["id"])
     decision = engine._decision(
@@ -1193,7 +1303,9 @@ def test_an_unnamed_individual_is_a_candidate_listing_not_an_error(engine, room,
 # --------------------------------------------------------------------------- #
 
 
-def test_a_group_assignment_on_a_non_round_robin_booking_is_refused(engine, room, host, other, distribution):
+def test_a_group_assignment_on_a_non_round_robin_booking_is_refused(
+    engine, room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"], round_robin=False)
     for kind in ("team", "distribution"):
         decision = engine._decision(
@@ -1205,7 +1317,9 @@ def test_a_group_assignment_on_a_non_round_robin_booking_is_refused(engine, room
         assert "name the individual host instead" in decision.reason
 
 
-def test_a_group_assignment_on_a_round_robin_booking_is_accepted(engine, room, host, other, distribution):
+def test_a_group_assignment_on_a_round_robin_booking_is_accepted(
+    engine, room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"], round_robin=True)
     decision = engine._decision(
         _only_meeting(engine, "Northwind — Enterprise Demo"),
@@ -1215,7 +1329,9 @@ def test_a_group_assignment_on_a_round_robin_booking_is_accepted(engine, room, h
     assert decision.mode == AUTO_MODE
 
 
-def test_a_named_host_on_a_non_round_robin_booking_is_still_accepted(engine, room, host, other, distribution):
+def test_a_named_host_on_a_non_round_robin_booking_is_still_accepted(
+    engine, room, host, other, distribution
+):
     """The limit belongs to the automatic endpoint, not to the booking."""
     make_meeting(engine, room["id"], host["id"], round_robin=False)
     decision = engine._decision(
@@ -1272,11 +1388,16 @@ def test_keeping_the_slot_is_not_a_change(engine, room, host, other, distributio
     assert decision.slot_changed is False
 
 
-def test_a_new_slot_keeps_the_meetings_duration_when_no_end_is_given(engine, room, host, other, distribution):
+def test_a_new_slot_keeps_the_meetings_duration_when_no_end_is_given(
+    engine, room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"])
     decision = engine._decision(
         _only_meeting(engine, "Northwind — Enterprise Demo"),
-        {"assign_to": {"kind": "individual", "id": other["id"]}, "starts_at": "2026-10-06T10:00:00Z"},
+        {
+            "assign_to": {"kind": "individual", "id": other["id"]},
+            "starts_at": "2026-10-06T10:00:00Z",
+        },
     )
     assert decision.ends_at == "2026-10-06T10:30:00Z"
 
@@ -1284,13 +1405,23 @@ def test_a_new_slot_keeps_the_meetings_duration_when_no_end_is_given(engine, roo
 def test_a_slot_that_ends_before_it_starts_is_refused():
     with pytest.raises(ReassignError):
         decide(
-            {"id": "m1", "host_id": "h1", "starts_at": CLEAN_START, "ends_at": CLEAN_END, "round_robin": True},
+            {
+                "id": "m1",
+                "host_id": "h1",
+                "starts_at": CLEAN_START,
+                "ends_at": CLEAN_END,
+                "round_robin": True,
+            },
             {"name": "D", "team": "t", "member_ids": ["h1", "h2"]},
             [
                 {"id": "h1", "team": "t", "active": True, "busy": []},
                 {"id": "h2", "team": "t", "active": True, "busy": []},
             ],
-            {"assign_to": {"kind": "individual", "id": "h2"}, "starts_at": "2026-10-06T10:00:00Z", "ends_at": "2026-10-06T09:00:00Z"},
+            {
+                "assign_to": {"kind": "individual", "id": "h2"},
+                "starts_at": "2026-10-06T10:00:00Z",
+                "ends_at": "2026-10-06T09:00:00Z",
+            },
             NOW,
         )
 
@@ -1304,13 +1435,19 @@ def test_a_reassignment_moves_the_meeting_to_the_new_host(engine, room, host, ot
     meeting = make_meeting(engine, room["id"], host["id"])
     result = engine.reassign(
         meeting["id"],
-        {"assign_to": {"kind": "individual", "id": other["id"]}, "surface": "meetings_activity", "requested_by": "dana"},
+        {
+            "assign_to": {"kind": "individual", "id": other["id"]},
+            "surface": "meetings_activity",
+            "requested_by": "dana",
+        },
         source=SOURCE,
     )
     assert result["meeting"]["data"]["host_id"] == other["id"]
 
 
-def test_a_reassignment_updates_the_invite_with_the_new_assignee(engine, room, host, other, distribution):
+def test_a_reassignment_updates_the_invite_with_the_new_assignee(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
     result = engine.reassign(
         meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
@@ -1321,16 +1458,27 @@ def test_a_reassignment_updates_the_invite_with_the_new_assignee(engine, room, h
 
 def test_a_reassignment_moves_the_round_robin_credit(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"])
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert engine.store.get(host["id"])["data"]["round_robin_credits"] == 2
     assert engine.store.get(other["id"])["data"]["round_robin_credits"] == 2
 
 
-def test_a_no_show_credit_back_suppresses_the_credit_movement(engine, room, host, other, distribution):
+def test_a_no_show_credit_back_suppresses_the_credit_movement(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(
-        engine, room["id"], host["id"], status="no_show", no_show_credit_back=True, no_show_credited_host_id=host["id"]
+        engine,
+        room["id"],
+        host["id"],
+        status="no_show",
+        no_show_credit_back=True,
+        no_show_credited_host_id=host["id"],
     )
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert result["credit"]["outcome"] == CREDIT_ALREADY_RETURNED
     assert engine.store.get(host["id"])["data"]["round_robin_credits"] == 3
     assert engine.store.get(other["id"])["data"]["round_robin_credits"] == 1
@@ -1342,7 +1490,12 @@ def test_a_reassignment_writes_the_events_history_row_with_the_four_named_facts(
     meeting = make_meeting(engine, room["id"], host["id"])
     result = engine.reassign(
         meeting["id"],
-        {"assign_to": {"kind": "individual", "id": other["id"]}, "surface": "chilical_home", "extension": {"installed": True, "logged_in": True}, "requested_by": "dana"},
+        {
+            "assign_to": {"kind": "individual", "id": other["id"]},
+            "surface": "chilical_home",
+            "extension": {"installed": True, "logged_in": True},
+            "requested_by": "dana",
+        },
         source=SOURCE,
     )
     row = result["history"]["data"]
@@ -1356,25 +1509,43 @@ def test_a_reassignment_writes_the_events_history_row_with_the_four_named_facts(
 def test_the_requested_by_falls_back_to_the_actor(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"])
     result = engine.reassign(
-        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, actor="sam", source=SOURCE
+        meeting["id"],
+        {"assign_to": {"kind": "individual", "id": other["id"]}},
+        actor="sam",
+        source=SOURCE,
     )
     assert result["history"]["data"]["reassigned_by"] == "sam"
 
 
 def test_a_round_robin_booking_fires_both_webhooks(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"], round_robin=True)
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
-    assert [payload["event"] for payload in result["webhooks"]] == [MEETING_UPDATE, BOOKING_REASSIGNED]
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
+    assert [payload["event"] for payload in result["webhooks"]] == [
+        MEETING_UPDATE,
+        BOOKING_REASSIGNED,
+    ]
 
 
-def test_a_non_round_robin_booking_fires_only_the_meeting_update(engine, room, host, other, distribution):
+def test_a_non_round_robin_booking_fires_only_the_meeting_update(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"], round_robin=False)
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert [payload["event"] for payload in result["webhooks"]] == [MEETING_UPDATE]
 
 
 def test_a_reassignment_records_the_bounds_it_ignored(engine, room, host, other):
-    make_distribution(engine, name="Tight", min_notice_minutes=1440, max_range_days=7, member_ids=[host["id"], other["id"]])
+    make_distribution(
+        engine,
+        name="Tight",
+        min_notice_minutes=1440,
+        max_range_days=7,
+        member_ids=[host["id"], other["id"]],
+    )
     meeting = make_meeting(
         engine,
         room["id"],
@@ -1383,39 +1554,69 @@ def test_a_reassignment_records_the_bounds_it_ignored(engine, room, host, other)
         starts_at=format_instant(NOW + timedelta(minutes=40)),
         ends_at=format_instant(NOW + timedelta(minutes=70)),
     )
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert result["bounds_bypassed"] == ["min_notice"]
     assert result["reassignment"]["data"]["bounds_bypassed"] == ["min_notice"]
 
 
 def test_a_reassignment_records_a_max_range_breach_too(engine, room, host, other):
     """The second researched bound, not only the first."""
-    make_distribution(engine, name="Short", min_notice_minutes=60, max_range_days=2, member_ids=[host["id"], other["id"]])
-    meeting = make_meeting(engine, room["id"], host["id"], distribution="Short", starts_at=CLEAN_START, ends_at=CLEAN_END)
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    make_distribution(
+        engine,
+        name="Short",
+        min_notice_minutes=60,
+        max_range_days=2,
+        member_ids=[host["id"], other["id"]],
+    )
+    meeting = make_meeting(
+        engine,
+        room["id"],
+        host["id"],
+        distribution="Short",
+        starts_at=CLEAN_START,
+        ends_at=CLEAN_END,
+    )
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert result["bounds_bypassed"] == ["max_range"]
 
 
 def test_a_clean_reassignment_bypasses_nothing_and_says_so(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"])
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert result["bounds_bypassed"] == []
 
 
-def test_a_reassignment_bumps_the_meetings_reassignment_count(engine, room, host, other, distribution):
+def test_a_reassignment_bumps_the_meetings_reassignment_count(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE)
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE
+    )
     assert result["meeting"]["data"]["reassignment_count"] == 2
     # The second one is back where it started, having been there and come back.
     assert result["meeting"]["data"]["host_id"] == host["id"]
 
 
-def test_a_reassignment_of_a_meeting_moves_the_slot_when_asked(engine, room, host, other, distribution):
+def test_a_reassignment_of_a_meeting_moves_the_slot_when_asked(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
     result = engine.reassign(
         meeting["id"],
-        {"assign_to": {"kind": "individual", "id": other["id"]}, "starts_at": "2026-10-07T09:00:00Z"},
+        {
+            "assign_to": {"kind": "individual", "id": other["id"]},
+            "starts_at": "2026-10-07T09:00:00Z",
+        },
         source=SOURCE,
     )
     assert result["meeting"]["data"]["starts_at"] == "2026-10-07T09:00:00Z"
@@ -1441,22 +1642,30 @@ def test_a_refused_reassignment_writes_nothing_at_all(engine, room, host, other,
 def test_a_refusal_does_not_move_the_credit(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"])
     with pytest.raises(ReassignError):
-        engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE)
+        engine.reassign(
+            meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE
+        )
     assert engine.store.get(host["id"])["data"]["round_robin_credits"] == 3
     assert engine.store.get(other["id"])["data"]["round_robin_credits"] == 1
 
 
-def test_a_cancelled_meeting_is_a_state_conflict_not_a_bad_request(engine, room, host, distribution):
+def test_a_cancelled_meeting_is_a_state_conflict_not_a_bad_request(
+    engine, room, host, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"], status="cancelled")
     with pytest.raises(MeetingStateError) as caught:
-        engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE)
+        engine.reassign(
+            meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE
+        )
     assert "cancelled" in str(caught.value)
 
 
 def test_a_completed_meeting_is_also_a_state_conflict(engine, room, host, distribution):
     meeting = make_meeting(engine, room["id"], host["id"], status="completed")
     with pytest.raises(MeetingStateError):
-        engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE)
+        engine.reassign(
+            meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE
+        )
 
 
 def test_the_state_error_is_a_reassign_error_so_a_catch_all_still_works():
@@ -1524,13 +1733,17 @@ def test_a_meeting_whose_distribution_is_missing_is_refused(engine, room, host, 
 def test_the_preview_writes_nothing(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"])
     before = len(engine.store.list(REASSIGNMENT_COLLECTION))
-    preview = engine.preview(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}})
+    preview = engine.preview(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}
+    )
     assert preview["outcome"] == ASSIGNED
     assert len(engine.store.list(REASSIGNMENT_COLLECTION)) == before
     assert engine.store.get(meeting["id"])["data"]["host_id"] == host["id"]
 
 
-def test_the_preview_reports_the_same_outcome_the_write_would_refuse_with(engine, room, host, distribution):
+def test_the_preview_reports_the_same_outcome_the_write_would_refuse_with(
+    engine, room, host, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
     request = {"assign_to": {"kind": "individual", "id": host["id"]}}
     preview = engine.preview(meeting["id"], request)
@@ -1540,14 +1753,22 @@ def test_the_preview_reports_the_same_outcome_the_write_would_refuse_with(engine
     assert str(caught.value) == preview["reason"]
 
 
-def test_the_preview_of_an_allowed_request_predicts_the_host_chosen(engine, room, host, other, distribution):
+def test_the_preview_of_an_allowed_request_predicts_the_host_chosen(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
-    preview = engine.preview(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}})
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    preview = engine.preview(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}
+    )
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert preview["to_host"]["id"] == result["meeting"]["data"]["host_id"]
 
 
-def test_the_preview_of_a_group_assignment_predicts_the_auto_selected_host(engine, room, host, other, distribution):
+def test_the_preview_of_a_group_assignment_predicts_the_auto_selected_host(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"], round_robin=True)
     preview = engine.preview(meeting["id"], {"assign_to": {"kind": "team"}})
     result = engine.reassign(meeting["id"], {"assign_to": {"kind": "team"}}, source=SOURCE)
@@ -1561,7 +1782,14 @@ def test_the_preview_of_a_group_assignment_predicts_the_auto_selected_host(engin
 
 def test_the_upcoming_tab_holds_meetings_that_start_later(engine, room, host, other, distribution):
     future = make_meeting(engine, room["id"], host["id"], title="Future")
-    make_meeting(engine, room["id"], host["id"], title="Past", starts_at="2026-09-01T10:00:00Z", ends_at="2026-09-01T10:30:00Z")
+    make_meeting(
+        engine,
+        room["id"],
+        host["id"],
+        title="Past",
+        starts_at="2026-09-01T10:00:00Z",
+        ends_at="2026-09-01T10:30:00Z",
+    )
     upcoming = engine.meeting_activity(room["id"], "upcoming")
     assert [record["data"]["title"] for record in upcoming] == ["Future"]
     assert future["id"] == upcoming[0]["id"]
@@ -1569,12 +1797,21 @@ def test_the_upcoming_tab_holds_meetings_that_start_later(engine, room, host, ot
 
 def test_the_past_tab_holds_meetings_that_have_started(engine, room, host, other, distribution):
     make_meeting(engine, room["id"], host["id"], title="Future")
-    make_meeting(engine, room["id"], host["id"], title="Past", starts_at="2026-09-01T10:00:00Z", ends_at="2026-09-01T10:30:00Z")
+    make_meeting(
+        engine,
+        room["id"],
+        host["id"],
+        title="Past",
+        starts_at="2026-09-01T10:00:00Z",
+        ends_at="2026-09-01T10:30:00Z",
+    )
     past = engine.meeting_activity(room["id"], "past")
     assert [record["data"]["title"] for record in past] == ["Past"]
 
 
-def test_a_cancelled_meeting_still_in_the_future_is_still_upcoming(engine, room, host, other, distribution):
+def test_a_cancelled_meeting_still_in_the_future_is_still_upcoming(
+    engine, room, host, other, distribution
+):
     """The tab answers "when is it", not "will it happen"."""
     make_meeting(engine, room["id"], host["id"], title="Cancelled tomorrow", status="cancelled")
     upcoming = engine.meeting_activity(room["id"], "upcoming")
@@ -1583,32 +1820,66 @@ def test_a_cancelled_meeting_still_in_the_future_is_still_upcoming(engine, room,
 
 def test_the_all_tab_holds_both(engine, room, host, other, distribution):
     make_meeting(engine, room["id"], host["id"], title="Future")
-    make_meeting(engine, room["id"], host["id"], title="Past", starts_at="2026-09-01T10:00:00Z", ends_at="2026-09-01T10:30:00Z")
+    make_meeting(
+        engine,
+        room["id"],
+        host["id"],
+        title="Past",
+        starts_at="2026-09-01T10:00:00Z",
+        ends_at="2026-09-01T10:30:00Z",
+    )
     assert len(engine.meeting_activity(room["id"], "all")) == 2
 
 
-def test_each_of_the_five_researched_filters_narrows_the_list(engine, room, host, other, distribution):
+def test_each_of_the_five_researched_filters_narrows_the_list(
+    engine, room, host, other, distribution
+):
     """Meeting Type / Assignee / Booker / Status / product source."""
-    first = make_meeting(engine, room["id"], host["id"], title="One", booker="a@northwind.example", product_source="myapp")
-    make_meeting(engine, room["id"], other["id"], title="Two", booker="b@northwind.example", product_source="chilical_home")
+    first = make_meeting(
+        engine,
+        room["id"],
+        host["id"],
+        title="One",
+        booker="a@northwind.example",
+        product_source="myapp",
+    )
+    make_meeting(
+        engine,
+        room["id"],
+        other["id"],
+        title="Two",
+        booker="b@northwind.example",
+        product_source="chilical_home",
+    )
     room_id = room["id"]
 
-    assert [r["id"] for r in engine.meeting_activity(room_id, "all", host_id=host["id"])] == [first["id"]]
-    assert [r["data"]["title"] for r in engine.meeting_activity(room_id, "all", booker="b@northwind.example")] == ["Two"]
-    assert [r["data"]["title"] for r in engine.meeting_activity(room_id, "all", product_source="myapp")] == ["One"]
+    assert [r["id"] for r in engine.meeting_activity(room_id, "all", host_id=host["id"])] == [
+        first["id"]
+    ]
+    assert [
+        r["data"]["title"]
+        for r in engine.meeting_activity(room_id, "all", booker="b@northwind.example")
+    ] == ["Two"]
+    assert [
+        r["data"]["title"] for r in engine.meeting_activity(room_id, "all", product_source="myapp")
+    ] == ["One"]
     assert len(engine.meeting_activity(room_id, "all", meeting_type="demo")) == 2
     assert engine.meeting_activity(room_id, "all", meeting_type="workshop") == []
     assert len(engine.meeting_activity(room_id, "all", status="scheduled")) == 2
 
 
-def test_the_activity_list_is_scoped_to_its_room(engine, room, other_room, host, other, distribution):
+def test_the_activity_list_is_scoped_to_its_room(
+    engine, room, other_room, host, other, distribution
+):
     make_meeting(engine, room["id"], host["id"], title="Mine")
     make_meeting(engine, other_room["id"], host["id"], title="Theirs")
     titles = {record["data"]["title"] for record in engine.meeting_activity(room["id"], "all")}
     assert titles == {"Mine"}
 
 
-def test_a_filter_that_matches_nothing_returns_an_empty_list_not_an_error(engine, room, host, distribution):
+def test_a_filter_that_matches_nothing_returns_an_empty_list_not_an_error(
+    engine, room, host, distribution
+):
     make_meeting(engine, room["id"], host["id"])
     assert engine.meeting_activity(room["id"], "all", booker="nobody@example") == []
 
@@ -1618,9 +1889,19 @@ def test_a_filter_that_matches_nothing_returns_an_empty_list_not_an_error(engine
 # --------------------------------------------------------------------------- #
 
 
-def test_availability_returns_the_eligible_and_the_ineligible_separately(engine, room, host, other, distribution):
+def test_availability_returns_the_eligible_and_the_ineligible_separately(
+    engine, room, host, other, distribution
+):
     busy = make_host(
-        engine, "Rui Silva", busy=[{"starts_at": "2026-10-05T09:00:00Z", "ends_at": "2026-10-05T12:00:00Z", "label": "Renewal"}]
+        engine,
+        "Rui Silva",
+        busy=[
+            {
+                "starts_at": "2026-10-05T09:00:00Z",
+                "ends_at": "2026-10-05T12:00:00Z",
+                "label": "Renewal",
+            }
+        ],
     )
     meeting = make_meeting(engine, room["id"], host["id"])
     result = engine.availability(meeting["id"], {"assign_to": {"kind": "individual"}})
@@ -1637,9 +1918,13 @@ def test_availability_writes_nothing(engine, room, host, other, distribution):
     assert engine.store.list(REASSIGNMENT_COLLECTION) == []
 
 
-def test_a_meetings_history_reports_the_count_and_the_window(engine, room, host, other, distribution):
+def test_a_meetings_history_reports_the_count_and_the_window(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     history = engine.meeting_history(meeting["id"])
     assert history["reassignment_count"] == 1
     assert history["host_id"] == other["id"]
@@ -1648,13 +1933,24 @@ def test_a_meetings_history_reports_the_count_and_the_window(engine, room, host,
 
 
 def test_a_meeting_inside_the_notice_window_is_flagged_as_urgent(engine, room, host, other):
-    make_distribution(engine, name="Tight", member_ids=[host["id"], other["id"]], min_notice_minutes=1440, max_range_days=7)
+    make_distribution(
+        engine,
+        name="Tight",
+        member_ids=[host["id"], other["id"]],
+        min_notice_minutes=1440,
+        max_range_days=7,
+    )
     # Forty minutes from the engine's clock, against a 24-hour notice window,
     # and inside the 7-day range so the notice is the only breach.
     imminent_start = format_instant(NOW + timedelta(minutes=40))
     imminent_end = format_instant(NOW + timedelta(minutes=70))
     meeting = make_meeting(
-        engine, room["id"], host["id"], distribution="Tight", starts_at=imminent_start, ends_at=imminent_end
+        engine,
+        room["id"],
+        host["id"],
+        distribution="Tight",
+        starts_at=imminent_start,
+        ends_at=imminent_end,
     )
     verdict = evaluate_bounds(
         {"min_notice_minutes": 1440, "max_range_days": 7}, parse_instant(imminent_start), NOW
@@ -1666,7 +1962,9 @@ def test_a_meeting_inside_the_notice_window_is_flagged_as_urgent(engine, room, h
     assert history["notice_window_open"] is False
 
 
-def test_a_meeting_outside_the_notice_window_is_not_flagged(engine, room, host, other, distribution):
+def test_a_meeting_outside_the_notice_window_is_not_flagged(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
     history = engine.meeting_history(meeting["id"])
     assert history["bounds"]["min_notice_breached"] is False
@@ -1676,7 +1974,9 @@ def test_a_meeting_outside_the_notice_window_is_not_flagged(engine, room, host, 
 
 def test_a_meeting_with_no_configured_notice_is_never_flagged(engine, room, host, other):
     """An unconfigured bound is not breached, so the queue stays empty."""
-    make_distribution(engine, name="Open", member_ids=[host["id"]], min_notice_minutes=None, max_range_days=None)
+    make_distribution(
+        engine, name="Open", member_ids=[host["id"]], min_notice_minutes=None, max_range_days=None
+    )
     imminent_start = format_instant(NOW + timedelta(minutes=5))
     meeting = make_meeting(
         engine,
@@ -1691,8 +1991,12 @@ def test_a_meeting_with_no_configured_notice_is_never_flagged(engine, room, host
 
 def test_events_history_is_newest_first_and_capped(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"])
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE)
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE
+    )
     history = engine.events_history(meeting_id=meeting["id"])
     assert len(history) == 2
     assert history[0]["data"]["reassigned_to_host_id"] == host["id"]
@@ -1705,11 +2009,17 @@ def test_events_history_is_newest_first_and_capped(engine, room, host, other, di
 
 
 def test_a_booking_inside_the_minimum_notice_is_refused(engine, room, host):
-    make_distribution(engine, name="Tight", member_ids=[host["id"]], min_notice_minutes=1440, max_range_days=7)
+    make_distribution(
+        engine, name="Tight", member_ids=[host["id"]], min_notice_minutes=1440, max_range_days=7
+    )
     imminent = format_instant(NOW + timedelta(minutes=40))
     with pytest.raises(ReassignError) as caught:
         engine.require_slot_within_bounds(
-            {"distribution": "Tight", "starts_at": imminent, "ends_at": _shift(imminent, minutes=30)},
+            {
+                "distribution": "Tight",
+                "starts_at": imminent,
+                "ends_at": _shift(imminent, minutes=30),
+            },
             host["id"],
         )
     assert "cannot start 1440 minutes" in str(caught.value)
@@ -1717,11 +2027,14 @@ def test_a_booking_inside_the_minimum_notice_is_refused(engine, room, host):
 
 
 def test_a_booking_beyond_the_maximum_range_is_refused(engine, room, host):
-    make_distribution(engine, name="Short", member_ids=[host["id"]], min_notice_minutes=60, max_range_days=2)
+    make_distribution(
+        engine, name="Short", member_ids=[host["id"]], min_notice_minutes=60, max_range_days=2
+    )
     far = format_instant(NOW + timedelta(days=30))
     with pytest.raises(ReassignError) as caught:
         engine.require_slot_within_bounds(
-            {"distribution": "Short", "starts_at": far, "ends_at": _shift(far, minutes=30)}, host["id"]
+            {"distribution": "Short", "starts_at": far, "ends_at": _shift(far, minutes=30)},
+            host["id"],
         )
     # The *configured* limit is what the message quotes, and only the breached
     # one: a distribution with no min-notice must not be told about one.
@@ -1732,7 +2045,8 @@ def test_a_booking_beyond_the_maximum_range_is_refused(engine, room, host):
 
 def test_a_booking_within_the_bounds_is_accepted(engine, room, host, distribution):
     verdict = engine.require_slot_within_bounds(
-        {"distribution": "Enterprise Demo", "starts_at": CLEAN_START, "ends_at": CLEAN_END}, host["id"]
+        {"distribution": "Enterprise Demo", "starts_at": CLEAN_START, "ends_at": CLEAN_END},
+        host["id"],
     )
     assert verdict["would_block"] is False
 
@@ -1743,18 +2057,31 @@ def test_a_booking_that_doubles_up_the_host_is_refused(engine, room, host, distr
     busy = make_host(
         engine,
         "Rui Silva",
-        busy=[{"starts_at": _shift(CLEAN_START, minutes=-60), "ends_at": _shift(CLEAN_END, minutes=60), "label": "Renewal"}],
+        busy=[
+            {
+                "starts_at": _shift(CLEAN_START, minutes=-60),
+                "ends_at": _shift(CLEAN_END, minutes=60),
+                "label": "Renewal",
+            }
+        ],
     )
     with pytest.raises(ReassignError) as caught:
         engine.require_slot_within_bounds(
-            {"distribution": "Enterprise Demo", "starts_at": CLEAN_START, "ends_at": CLEAN_END}, busy["id"]
+            {"distribution": "Enterprise Demo", "starts_at": CLEAN_START, "ends_at": CLEAN_END},
+            busy["id"],
         )
     assert "Renewal" in str(caught.value)
 
 
 def test_the_rescue_works_end_to_end_a_stale_booking_is_reassigned(engine, room, host, other):
     """The researched purpose: rescue a booking the bounds would have refused."""
-    make_distribution(engine, name="Tight", member_ids=[host["id"], other["id"]], min_notice_minutes=1440, max_range_days=7)
+    make_distribution(
+        engine,
+        name="Tight",
+        member_ids=[host["id"], other["id"]],
+        min_notice_minutes=1440,
+        max_range_days=7,
+    )
     # Forty minutes out against a 24-hour notice: the stale booking the
     # researched note says reassignment exists to rescue.
     stale_start = format_instant(NOW + timedelta(minutes=40))
@@ -1767,9 +2094,16 @@ def test_the_rescue_works_end_to_end_a_stale_booking_is_reassigned(engine, room,
         engine.require_slot_within_bounds(stale, host["id"])
 
     meeting = make_meeting(
-        engine, room["id"], host["id"], distribution="Tight", starts_at=stale_start, ends_at=stale["ends_at"]
+        engine,
+        room["id"],
+        host["id"],
+        distribution="Tight",
+        starts_at=stale_start,
+        ends_at=stale["ends_at"],
     )
-    result = engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    result = engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     assert result["reassignment"]["data"]["outcome"] == ASSIGNED
     assert result["bounds_bypassed"] == ["min_notice"]
 
@@ -1799,9 +2133,18 @@ def test_a_meeting_with_no_distribution_is_refused_at_booking(engine):
 # --------------------------------------------------------------------------- #
 
 
-def test_the_summary_counts_meetings_tabs_reassignments_and_sources(engine, room, host, other, distribution):
+def test_the_summary_counts_meetings_tabs_reassignments_and_sources(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
-    make_meeting(engine, room["id"], host["id"], title="Old", starts_at="2026-09-01T10:00:00Z", ends_at="2026-09-01T10:30:00Z")
+    make_meeting(
+        engine,
+        room["id"],
+        host["id"],
+        title="Old",
+        starts_at="2026-09-01T10:00:00Z",
+        ends_at="2026-09-01T10:30:00Z",
+    )
     engine.reassign(
         meeting["id"],
         {"assign_to": {"kind": "individual", "id": other["id"]}, "surface": "myapp"},
@@ -1973,7 +2316,12 @@ def test_the_inferences_are_served_over_http(http):
 def test_a_distribution_can_be_declared_over_http(http):
     response = http.post(
         f"{PREFIX}/distributions",
-        json={"name": "Enterprise Demo", "team": "enterprise", "workspace": "northwind", "meeting_type": "demo"},
+        json={
+            "name": "Enterprise Demo",
+            "team": "enterprise",
+            "workspace": "northwind",
+            "meeting_type": "demo",
+        },
     )
     assert response.status_code == 201
     assert response.json()["data"]["allow_any_team_member"] is False
@@ -1988,7 +2336,10 @@ def test_a_distribution_with_no_team_is_a_400_over_http(http):
 
 
 def test_a_host_can_be_registered_over_http(http):
-    response = http.post(f"{PREFIX}/hosts", json={"name": "Dana Okoro", "email": "dana@dsr.example", "team": "enterprise"})
+    response = http.post(
+        f"{PREFIX}/hosts",
+        json={"name": "Dana Okoro", "email": "dana@dsr.example", "team": "enterprise"},
+    )
     assert response.status_code == 201
     assert response.json()["data"]["active"] is True
 
@@ -2000,7 +2351,12 @@ def test_a_host_with_no_name_is_a_400_over_http(http):
 def test_a_distribution_can_be_read_back(http):
     created = http.post(
         f"{PREFIX}/distributions",
-        json={"name": "Enterprise Demo", "team": "enterprise", "workspace": "northwind", "meeting_type": "demo"},
+        json={
+            "name": "Enterprise Demo",
+            "team": "enterprise",
+            "workspace": "northwind",
+            "meeting_type": "demo",
+        },
     ).json()
     assert http.get(f"{PREFIX}/distributions/{created['id']}").json()["id"] == created["id"]
 
@@ -2019,7 +2375,11 @@ def test_bookings_flow_end_to_end_over_http(http):
 
     result = http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}/reassign",
-        json={"assign_to": {"kind": "individual", "id": priya["id"]}, "surface": "meetings_activity", "requested_by": "dana"},
+        json={
+            "assign_to": {"kind": "individual", "id": priya["id"]},
+            "surface": "meetings_activity",
+            "requested_by": "dana",
+        },
     )
     assert result.status_code == 200
     body = result.json()
@@ -2031,13 +2391,28 @@ def test_bookings_flow_end_to_end_over_http(http):
 def test_a_booking_that_breaches_the_bounds_is_a_400_over_http(http):
     http.post(
         f"{PREFIX}/distributions",
-        json={"name": "Tight", "team": "enterprise", "workspace": "w", "meeting_type": "demo", "min_notice_minutes": 1440, "max_range_days": 7},
+        json={
+            "name": "Tight",
+            "team": "enterprise",
+            "workspace": "w",
+            "meeting_type": "demo",
+            "min_notice_minutes": 1440,
+            "max_range_days": 7,
+        },
     )
-    host = http.post(f"{PREFIX}/hosts", json={"name": "Dana", "email": "d@x.example", "team": "enterprise"}).json()
+    host = http.post(
+        f"{PREFIX}/hosts", json={"name": "Dana", "email": "d@x.example", "team": "enterprise"}
+    ).json()
     room = http.post("/api/records/room", json={"name": "R"}).json()
     response = http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings",
-        json={"title": "Stale", "host_id": host["id"], "distribution": "Tight", "starts_at": "2026-09-28T09:40:00Z", "ends_at": "2026-09-28T10:10:00Z"},
+        json={
+            "title": "Stale",
+            "host_id": host["id"],
+            "distribution": "Tight",
+            "starts_at": "2026-09-28T09:40:00Z",
+            "ends_at": "2026-09-28T10:10:00Z",
+        },
     )
     assert response.status_code == 400
     assert "1440 minutes" in response.json()["detail"]
@@ -2050,13 +2425,24 @@ def test_a_booking_on_an_unknown_room_is_a_404(http):
 def test_a_booking_naming_a_host_that_does_not_exist_is_a_400(http):
     http.post(
         f"{PREFIX}/distributions",
-        json={"name": "Enterprise Demo", "team": "enterprise", "workspace": "northwind", "meeting_type": "demo"},
+        json={
+            "name": "Enterprise Demo",
+            "team": "enterprise",
+            "workspace": "northwind",
+            "meeting_type": "demo",
+        },
     )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     starts_at, ends_at = http_slot()
     response = http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings",
-        json={"title": "X", "host_id": "host_nope", "distribution": "Enterprise Demo", "starts_at": starts_at, "ends_at": ends_at},
+        json={
+            "title": "X",
+            "host_id": "host_nope",
+            "distribution": "Enterprise Demo",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        },
     )
     assert response.status_code == 400
     assert "not found" in response.json()["detail"]
@@ -2064,11 +2450,19 @@ def test_a_booking_naming_a_host_that_does_not_exist_is_a_400(http):
 
 def test_a_booking_naming_a_distribution_that_does_not_exist_is_a_400(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    host = http.post(f"{PREFIX}/hosts", json={"name": "Dana", "email": "d@x.example", "team": "t"}).json()
+    host = http.post(
+        f"{PREFIX}/hosts", json={"name": "Dana", "email": "d@x.example", "team": "t"}
+    ).json()
     starts_at, ends_at = http_slot()
     response = http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings",
-        json={"title": "X", "host_id": host["id"], "distribution": "Vanished", "starts_at": starts_at, "ends_at": ends_at},
+        json={
+            "title": "X",
+            "host_id": host["id"],
+            "distribution": "Vanished",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        },
     )
     assert response.status_code == 400
     assert "not configured" in response.json()["detail"]
@@ -2078,7 +2472,12 @@ def test_a_booking_against_a_host_with_no_team_is_still_refused(http):
     """The distribution's team is what `any team member` resolves to, so it is required."""
     http.post(
         f"{PREFIX}/distributions",
-        json={"name": "Enterprise Demo", "team": "enterprise", "workspace": "northwind", "meeting_type": "demo"},
+        json={
+            "name": "Enterprise Demo",
+            "team": "enterprise",
+            "workspace": "northwind",
+            "meeting_type": "demo",
+        },
     )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     host = http.post(f"{PREFIX}/hosts", json={"name": "Dana", "email": "d@x.example"}).json()
@@ -2088,7 +2487,13 @@ def test_a_booking_against_a_host_with_no_team_is_still_refused(http):
     # here would lock in a rule the research does not state.
     response = http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings",
-        json={"title": "X", "host_id": host["id"], "distribution": "Enterprise Demo", "starts_at": starts_at, "ends_at": ends_at},
+        json={
+            "title": "X",
+            "host_id": host["id"],
+            "distribution": "Enterprise Demo",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        },
     )
     assert response.status_code == 201
     assert response.json()["data"]["host_id"] == host["id"]
@@ -2161,10 +2566,23 @@ def _http_fixture(http):
     starts_at, ends_at = http_slot()
     http.post(
         f"{PREFIX}/distributions",
-        json={"name": "Enterprise Demo", "team": "enterprise", "workspace": "northwind", "meeting_type": "demo", "min_notice_minutes": 60, "max_range_days": 90},
+        json={
+            "name": "Enterprise Demo",
+            "team": "enterprise",
+            "workspace": "northwind",
+            "meeting_type": "demo",
+            "min_notice_minutes": 60,
+            "max_range_days": 90,
+        },
     )
-    dana = http.post(f"{PREFIX}/hosts", json={"name": "Dana Okoro", "email": "dana@dsr.example", "team": "enterprise"}).json()
-    priya = http.post(f"{PREFIX}/hosts", json={"name": "Priya Raman", "email": "priya@dsr.example", "team": "enterprise"}).json()
+    dana = http.post(
+        f"{PREFIX}/hosts",
+        json={"name": "Dana Okoro", "email": "dana@dsr.example", "team": "enterprise"},
+    ).json()
+    priya = http.post(
+        f"{PREFIX}/hosts",
+        json={"name": "Priya Raman", "email": "priya@dsr.example", "team": "enterprise"},
+    ).json()
     # The membership is patched in once both hosts exist, which is also how a
     # deployment does it: the hosts are people, the distribution is the config.
     RecordStore(client_store(http)).update(
@@ -2174,7 +2592,13 @@ def _http_fixture(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     meeting = http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings",
-        json={"title": "Demo", "host_id": dana["id"], "distribution": "Enterprise Demo", "starts_at": starts_at, "ends_at": ends_at},
+        json={
+            "title": "Demo",
+            "host_id": dana["id"],
+            "distribution": "Enterprise Demo",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        },
     ).json()
     return room, dana, priya, meeting
 
@@ -2199,12 +2623,18 @@ def test_the_activity_list_serves_the_tabs_and_the_filters(http):
     assert body["tab"] == "upcoming"
     assert body["count"] == 1
 
-    assert http.get(f"{PREFIX}/rooms/{room['id']}/meetings", params={"tab": "archived"}).status_code == 400
+    assert (
+        http.get(f"{PREFIX}/rooms/{room['id']}/meetings", params={"tab": "archived"}).status_code
+        == 400
+    )
 
 
 def test_a_meeting_can_be_read_back_and_not_found_is_a_404(http):
     room, _dana, _priya, meeting = _http_fixture(http)
-    assert http.get(f"{PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}").json()["id"] == meeting["id"]
+    assert (
+        http.get(f"{PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}").json()["id"]
+        == meeting["id"]
+    )
     assert http.get(f"{PREFIX}/rooms/{room['id']}/meetings/nope").status_code == 404
 
 
@@ -2224,7 +2654,10 @@ def test_availability_is_served_over_http(http):
 def test_availability_on_another_rooms_meeting_is_a_404(http):
     room, _dana, _priya, meeting = _http_fixture(http)
     other = http.post("/api/records/room", json={"name": "Other"}).json()
-    assert http.get(f"{PREFIX}/rooms/{other['id']}/meetings/{meeting['id']}/availability").status_code == 404
+    assert (
+        http.get(f"{PREFIX}/rooms/{other['id']}/meetings/{meeting['id']}/availability").status_code
+        == 404
+    )
 
 
 def test_the_preview_writes_nothing_over_http(http):
@@ -2256,7 +2689,11 @@ def test_the_events_history_tab_serves_the_four_named_facts(http):
     room, _dana, priya, meeting = _http_fixture(http)
     http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}/reassign",
-        json={"assign_to": {"kind": "individual", "id": priya["id"]}, "surface": "myapp", "requested_by": "dana"},
+        json={
+            "assign_to": {"kind": "individual", "id": priya["id"]},
+            "surface": "myapp",
+            "requested_by": "dana",
+        },
     )
     body = http.get(f"{PREFIX}/rooms/{room['id']}/events-history").json()
     assert body["count"] == 1
@@ -2269,7 +2706,10 @@ def test_the_events_history_tab_serves_the_four_named_facts(http):
 
 def test_the_events_history_serves_no_more_than_its_limit(http):
     room, _dana, _priya, _meeting = _http_fixture(http)
-    assert http.get(f"{PREFIX}/rooms/{room['id']}/events-history", params={"limit": 5000}).status_code == 422
+    assert (
+        http.get(f"{PREFIX}/rooms/{room['id']}/events-history", params={"limit": 5000}).status_code
+        == 422
+    )
 
 
 def test_a_meetings_history_is_served_over_http(http):
@@ -2298,7 +2738,13 @@ def test_the_upcoming_view_spans_every_room(http):
     starts_at, ends_at = http_slot(4)
     http.post(
         f"{PREFIX}/rooms/{other['id']}/meetings",
-        json={"title": "Other demo", "host_id": host["id"], "distribution": "Enterprise Demo", "starts_at": starts_at, "ends_at": ends_at},
+        json={
+            "title": "Other demo",
+            "host_id": host["id"],
+            "distribution": "Enterprise Demo",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+        },
     )
     body = http.get(f"{PREFIX}/upcoming").json()
     assert body["count"] == 2
@@ -2331,9 +2777,13 @@ def test_a_comma_in_a_title_does_not_shift_the_csv_columns(http):
 # --------------------------------------------------------------------------- #
 
 
-def test_every_reassignment_is_audited_with_the_source_it_was_given(engine, room, host, other, distribution):
+def test_every_reassignment_is_audited_with_the_source_it_was_given(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     for collection in (REASSIGNMENT_COLLECTION, HISTORY_COLLECTION):
         rows = engine.store.audit(collection=collection)
         assert rows, f"{collection} was written without an audit row"
@@ -2342,24 +2792,36 @@ def test_every_reassignment_is_audited_with_the_source_it_was_given(engine, room
 
 def test_the_meeting_update_is_audited_too(engine, room, host, other, distribution):
     meeting = make_meeting(engine, room["id"], host["id"])
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
     room_entries = engine.store.audit(collection=MEETING_COLLECTION)
     assert [row["action"] for row in room_entries] == ["update", "insert"]
     assert room_entries[0]["source"] == SOURCE
 
 
-def test_the_credit_moves_are_audited_under_the_same_source(engine, room, host, other, distribution):
+def test_the_credit_moves_are_audited_under_the_same_source(
+    engine, room, host, other, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
-    engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE)
-    updates = [row for row in engine.store.audit(collection=HOST_COLLECTION) if row["action"] == "update"]
+    engine.reassign(
+        meeting["id"], {"assign_to": {"kind": "individual", "id": other["id"]}}, source=SOURCE
+    )
+    updates = [
+        row for row in engine.store.audit(collection=HOST_COLLECTION) if row["action"] == "update"
+    ]
     assert len(updates) == 2
     assert {row["source"] for row in updates} == {SOURCE}
 
 
-def test_a_refusal_writes_no_audit_row_for_the_reassignment_collection(engine, room, host, distribution):
+def test_a_refusal_writes_no_audit_row_for_the_reassignment_collection(
+    engine, room, host, distribution
+):
     meeting = make_meeting(engine, room["id"], host["id"])
     with pytest.raises(ReassignError):
-        engine.reassign(meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE)
+        engine.reassign(
+            meeting["id"], {"assign_to": {"kind": "individual", "id": host["id"]}}, source=SOURCE
+        )
     assert engine.store.audit(collection=REASSIGNMENT_COLLECTION) == []
     assert engine.store.audit(collection=HISTORY_COLLECTION) == []
 
@@ -2389,15 +2851,29 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
     would pass for the wrong reason and fail for an unrelated one.
     """
     room, dana, priya, meeting = _http_fixture(http)
-    http.post(f"{PREFIX}/hosts", json={"name": "Rui Silva", "email": "rui@dsr.example", "team": "enterprise"})
+    http.post(
+        f"{PREFIX}/hosts",
+        json={"name": "Rui Silva", "email": "rui@dsr.example", "team": "enterprise"},
+    )
     http.post(
         f"{PREFIX}/distributions",
-        json={"name": "Mid-Market Demo", "team": "mid-market", "workspace": "contoso", "meeting_type": "demo"},
+        json={
+            "name": "Mid-Market Demo",
+            "team": "mid-market",
+            "workspace": "contoso",
+            "meeting_type": "demo",
+        },
     )
     later_start, later_end = http_slot(4)
     http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings",
-        json={"title": "Second", "host_id": dana["id"], "distribution": "Enterprise Demo", "starts_at": later_start, "ends_at": later_end},
+        json={
+            "title": "Second",
+            "host_id": dana["id"],
+            "distribution": "Enterprise Demo",
+            "starts_at": later_start,
+            "ends_at": later_end,
+        },
     )
     http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}/reassign",
@@ -2426,11 +2902,20 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
     perfectly valid *core* path. This one cannot.
     """
     room, _dana, priya, meeting = _http_fixture(http)
-    http.post(f"{PREFIX}/hosts", json={"name": "Rui Silva", "email": "rui@dsr.example", "team": "enterprise"})
+    http.post(
+        f"{PREFIX}/hosts",
+        json={"name": "Rui Silva", "email": "rui@dsr.example", "team": "enterprise"},
+    )
     later_start, later_end = http_slot(4)
     http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings",
-        json={"title": "Second", "host_id": priya["id"], "distribution": "Enterprise Demo", "starts_at": later_start, "ends_at": later_end},
+        json={
+            "title": "Second",
+            "host_id": priya["id"],
+            "distribution": "Enterprise Demo",
+            "starts_at": later_start,
+            "ends_at": later_end,
+        },
     )
     http.post(
         f"{PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}/reassign",
@@ -2468,7 +2953,9 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
         f"the feature recorded {len(mine)} sources ({sorted(mine)}), fewer than its four write routes"
     )
     for source in sorted(mine):
-        assert source.startswith(f"POST {PREFIX}"), f"{source!r} does not name a route under this feature's own prefix"
+        assert source.startswith(f"POST {PREFIX}"), (
+            f"{source!r} does not name a route under this feature's own prefix"
+        )
         assert source_names_a_mounted_route(source, routes), f"{source!r} names no mounted route"
 
 
@@ -2480,18 +2967,16 @@ def test_a_reassignment_written_over_http_records_its_own_route(http):
     )
     store = RecordStore(client_store(http))
     sources = {row["source"] for row in store.audit(collection=REASSIGNMENT_COLLECTION)}
-    assert sources == {
-        f"POST {PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}/reassign"
-    }
+    assert sources == {f"POST {PREFIX}/rooms/{room['id']}/meetings/{meeting['id']}/reassign"}
 
 
 def test_a_meeting_booked_over_http_records_its_own_route(http):
     room, dana, _priya, meeting = _http_fixture(http)
     store = RecordStore(client_store(http))
-    inserts = [row for row in store.audit(collection=MEETING_COLLECTION) if row["action"] == "insert"]
-    assert {row["source"] for row in inserts} == {
-        f"POST {PREFIX}/rooms/{room['id']}/meetings"
-    }
+    inserts = [
+        row for row in store.audit(collection=MEETING_COLLECTION) if row["action"] == "insert"
+    ]
+    assert {row["source"] for row in inserts} == {f"POST {PREFIX}/rooms/{room['id']}/meetings"}
 
 
 # --------------------------------------------------------------------------- #
@@ -2506,7 +2991,8 @@ def seed_module():
 
 def seed_rooms(store, names=("Northwind", "Contoso", "Fabrikam", "Adventure")):
     return [
-        (store.create("room", {"name": name}, actor="dana", source="core")["id"], name) for name in names
+        (store.create("room", {"name": name}, actor="dana", source="core")["id"], name)
+        for name in names
     ]
 
 
@@ -2535,13 +3021,19 @@ def test_the_seed_shows_both_bypassed_bounds_and_both_webhooks(db, seed_module):
     seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
     reassignments = store.list(REASSIGNMENT_COLLECTION)
     assert any(record["data"]["bounds_bypassed"] for record in reassignments)
-    assert any(record["data"]["webhooks"] == [MEETING_UPDATE, BOOKING_REASSIGNED] for record in reassignments)
+    assert any(
+        record["data"]["webhooks"] == [MEETING_UPDATE, BOOKING_REASSIGNED]
+        for record in reassignments
+    )
 
 
 def test_the_seed_shows_a_credit_that_did_not_move_after_a_no_show(db, seed_module):
     store = RecordStore(db)
     seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
-    outcomes = {record["data"]["credit_movement"]["outcome"] for record in store.list(REASSIGNMENT_COLLECTION)}
+    outcomes = {
+        record["data"]["credit_movement"]["outcome"]
+        for record in store.list(REASSIGNMENT_COLLECTION)
+    }
     assert CREDIT_ALREADY_RETURNED in outcomes
     assert CREDIT_MOVED in outcomes
 
@@ -2581,7 +3073,9 @@ def test_every_seeded_reassignment_carries_a_real_before_and_after(db, seed_modu
 def test_the_seeded_reassignments_report_at_least_one_field_changing(db, seed_module):
     store = RecordStore(db)
     seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
-    changes = [record["data"]["invite_fields_changed"] for record in store.list(REASSIGNMENT_COLLECTION)]
+    changes = [
+        record["data"]["invite_fields_changed"] for record in store.list(REASSIGNMENT_COLLECTION)
+    ]
     assert all(changes), "a reassignment reported no invite change at all"
     assert any("dial_in" in changed for changed in changes)
 
@@ -2623,13 +3117,19 @@ def test_the_seed_actually_refuses_what_it_says_it_refuses(db, seed_module):
     with pytest.raises(ReassignError):
         engine.reassign(
             meetings["Northwind Traders — Enterprise Demo"]["id"],
-            {"assign_to": {"kind": "individual", "id": host_ids["Priya Raman"]}, "surface": "chilical_home"},
+            {
+                "assign_to": {"kind": "individual", "id": host_ids["Priya Raman"]},
+                "surface": "chilical_home",
+            },
             source="seed",
         )
     with pytest.raises(ReassignError):
         engine.reassign(
             meetings["Fabrikam Logistics — Renewal Review"]["id"],
-            {"assign_to": {"kind": "individual", "id": host_ids["Priya Raman"]}, "meeting_type": "demo"},
+            {
+                "assign_to": {"kind": "individual", "id": host_ids["Priya Raman"]},
+                "meeting_type": "demo",
+            },
             source="seed",
         )
 
@@ -2670,7 +3170,9 @@ def test_the_seed_distributions_disagree_about_any_team_member(db, seed_module):
     """Otherwise the researched control has nothing to decide."""
     store = RecordStore(db)
     seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
-    flags = {record["data"]["allow_any_team_member"] for record in store.list(DISTRIBUTION_COLLECTION)}
+    flags = {
+        record["data"]["allow_any_team_member"] for record in store.list(DISTRIBUTION_COLLECTION)
+    }
     assert flags == {True, False}
 
 
@@ -2703,7 +3205,9 @@ def test_the_seeded_reassignment_labels_match_what_the_engine_produced(db, seed_
 
 def test_the_module_does_not_import_the_app():
     """Importing dsr.api from a feature reintroduces the shared-file coupling."""
-    text = (Path(__file__).resolve().parents[1] / "dsr" / "features" / f"{MODULE}.py").read_text(encoding="utf-8")
+    text = (Path(__file__).resolve().parents[1] / "dsr" / "features" / f"{MODULE}.py").read_text(
+        encoding="utf-8"
+    )
     assert "from dsr.api" not in text and "import dsr.api" not in text
 
 
@@ -2716,7 +3220,7 @@ def test_the_seeded_demo_has_no_misleading_labels(db, seed_module):
     save them reconstructing the diff.
     """
     store = RecordStore(db)
-    engine = ReassignEngine(store, clock=lambda: NOW)
+    ReassignEngine(store, clock=lambda: NOW)
     seed_module.seed(db, {"room_ids": seed_rooms(store), "now": NOW})
     bypassed = {
         record["data"]["meeting_id"]: set(record["data"]["bounds_bypassed"])
@@ -2732,7 +3236,9 @@ def test_the_seeded_demo_has_no_misleading_labels(db, seed_module):
             for record in store.list(MEETING_COLLECTION)
             if record["data"].get("title") == spec["title"]
         ]
-        assert len(matches) == 1, f"the demo title {spec['title']!r} is not unique, so its label is ambiguous"
+        assert len(matches) == 1, (
+            f"the demo title {spec['title']!r} is not unique, so its label is ambiguous"
+        )
         if "bypassing" in label:
             assert bypassed.get(matches[0]), f"{label!r} claims a bypass the engine did not make"
 

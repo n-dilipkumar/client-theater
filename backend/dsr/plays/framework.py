@@ -121,8 +121,8 @@ def canonical(payload: Mapping[str, Any], *, for_amendment: bool = False) -> dic
                 continue
             raise FrameworkError(
                 f"{name!r} is this product's own bookkeeping and is not accepted from a "
-                "caller. A Play is registered disabled: \"After registration, the registered "
-                "Play must be enabled in the Salesloft UI.\" Use the enable route to switch "
+                'caller. A Play is registered disabled: "After registration, the registered '
+                'Play must be enabled in the Salesloft UI." Use the enable route to switch '
                 "it on, so the audit row names the request that did it."
             )
         if name not in FRAMEWORK_FIELDS:
@@ -132,9 +132,9 @@ def canonical(payload: Mapping[str, Any], *, for_amendment: bool = False) -> dic
     if unknown:
         raise FrameworkError(
             f"unrecognised field(s) {', '.join(sorted(unknown))}. A Play body is "
-            f"{', '.join(FRAMEWORK_FIELDS)}, from \"signal_registration_id, localized "
+            f'{", ".join(FRAMEWORK_FIELDS)}, from "signal_registration_id, localized '
             "name/label/description, the indicators[] that should trigger it, and "
-            "attributes\"."
+            'attributes".'
         )
     return folded
 
@@ -162,9 +162,7 @@ def normalise_indicators(value: Any) -> list[str]:
         if isinstance(entry, Mapping):
             entry = entry.get("key")
         if not isinstance(entry, str) or not entry.strip():
-            raise FrameworkError(
-                f"an indicator entry must be a non-empty key; got {entry!r}"
-            )
+            raise FrameworkError(f"an indicator entry must be a non-empty key; got {entry!r}")
         text = entry.strip()
         if text not in keys:
             keys.append(text)
@@ -184,14 +182,16 @@ def normalise_attributes(value: Any, warnings: list[dict[str, Any]]) -> dict[str
     """
     if value is None:
         raise FrameworkError(
-            "attributes is required: a Play is \"an automation that generates a one-off "
-            f"action\", and it names what action through attributes.task_type "
+            'attributes is required: a Play is "an automation that generates a one-off '
+            f'action", and it names what action through attributes.task_type '
             f"({', '.join(TASK_TYPES)})"
         )
     if not isinstance(value, Mapping) or not value:
         raise FrameworkError("attributes must be a non-empty object")
 
-    folded: dict[str, Any] = {CANONICAL.get(str(key), str(key)): item for key, item in value.items()}
+    folded: dict[str, Any] = {
+        CANONICAL.get(str(key), str(key)): item for key, item in value.items()
+    }
     unknown = [str(key) for key in folded if key not in ALL_ATTRIBUTE_KEYS]
     if unknown:
         raise FrameworkError(
@@ -233,7 +233,7 @@ def normalise_attributes(value: Any, warnings: list[dict[str, Any]]) -> dict[str
                     "severity": "warning",
                     "field": "attributes.cadence_id",
                     "detail": (
-                        "\"Add Person to a Cadence\" names no attribute identifying which "
+                        '"Add Person to a Cadence" names no attribute identifying which '
                         "cadence in the researched request body, so there is nowhere to add "
                         "anyone. This Play is registered and warned about rather than "
                         "refused, and the task it creates will say it has no cadence. Add "
@@ -295,14 +295,10 @@ def _require_hours(value: Any) -> int:
             f"attributes.task_reminder_hours must be a number of hours; got {value!r}"
         )
     if float(value) != int(value):
-        raise FrameworkError(
-            f"attributes.task_reminder_hours must be whole hours; got {value!r}"
-        )
+        raise FrameworkError(f"attributes.task_reminder_hours must be whole hours; got {value!r}")
     hours = int(value)
     if hours < 0:
-        raise FrameworkError(
-            f"attributes.task_reminder_hours must not be negative; got {hours}"
-        )
+        raise FrameworkError(f"attributes.task_reminder_hours must not be negative; got {hours}")
     return hours
 
 
@@ -338,13 +334,13 @@ def _check_dynamic_fields(key: str, text: str, warnings: list[dict[str, Any]]) -
             return
         raise FrameworkError(
             f"attributes.{key} uses dynamic field(s) {', '.join(unsupported)}, which the "
-            f"research does not support there. \"The only exception here is that "
-            f"{key} supports {', '.join(SUPPORTED_DYNAMIC_FIELDS)}\" - a field it does "
+            f'research does not support there. "The only exception here is that '
+            f'{key} supports {", ".join(SUPPORTED_DYNAMIC_FIELDS)}" - a field it does '
             "not name would render empty in a seller's task list."
         )
     raise FrameworkError(
-        f"attributes.{key} uses dynamic field(s) {', '.join(found)}. \"At this time, "
-        f"Dynamic Fields are not supported outside of email templates\", so the only "
+        f'attributes.{key} uses dynamic field(s) {", ".join(found)}. "At this time, '
+        f'Dynamic Fields are not supported outside of email templates", so the only '
         f"place a field is rendered is attributes.{DYNAMIC_FIELD_ATTRIBUTE}."
     )
 
@@ -368,7 +364,7 @@ def normalise_framework(
     if not isinstance(registration, str) or not registration.strip():
         raise FrameworkError(
             "signal_registration_id is required: a Play is registered against a signal "
-            "registration, and \"After registering a signal (see #12), register a Play\""
+            'registration, and "After registering a signal (see #12), register a Play"'
         )
 
     warnings: list[dict[str, Any]] = []
@@ -380,8 +376,8 @@ def normalise_framework(
             raise UndeclaredTrigger(
                 f"indicator(s) {', '.join(undeclared)} are not declared by signal "
                 "registration "
-                f"{registration.strip()!r}. \"When a matching signal arrives, Salesloft "
-                "creates the task\", and a signal only carries indicators its "
+                f'{registration.strip()!r}. "When a matching signal arrives, Salesloft '
+                'creates the task", and a signal only carries indicators its '
                 "registration declares, so a Play triggering on an undeclared one can "
                 "never fire. Declared here: "
                 f"{', '.join(sorted(declared)) or 'none'}."

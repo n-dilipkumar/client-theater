@@ -37,8 +37,8 @@ The WF-004/WF-015 collision is already decided, by measurement and then by Jev:
 So WF-004 is told to rename its module and WF-015 is told to keep it, and neither
 is left to guess.
 """
+
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -104,7 +104,6 @@ NOTES = {
    why a role change needs confirmation but a reassertion of the same role does
    not, and why expiry lapses in UTC. Those are product decisions and they should
    survive the port intact.""",
-
     "WF-015": """1. **Keep `backend/dsr/access.py`. It is yours, and the other feature has been
    told to move.** WF-004's branch also adds a file by that name, but its content
    is about granting roles and yours is about verifying identity. They were
@@ -138,7 +137,6 @@ NOTES = {
    domain entry point; its error types (`PolicyError` and friends) belong in
    `EXCEPTION_HANDLERS` so the mapping lives in your module rather than in the
    shared `api.py`.""",
-
     "WF-017": """1. **You are the first port in this programme to add a frontend test suite.**
    Your branch carries `frontend/src/test/setup.js`, `frontend/src/test/fixtures.js`
    and `frontend/src/test/white-label.test.jsx`, and adds dependencies to
@@ -177,42 +175,57 @@ NOTES = {
 }
 
 META = {
-    "WF-004": ("Invite buyers to a room with a role",
-               "Grant a buyer or collaborator access to a room with a role, by invitation, with expiry and confirmation on destructive changes.",
-               "feature/WF-004-invite-buyers-to-a-room-with-a-role", "wf-004-invite-buyer"),
-    "WF-015": ("Verify buyer identity and restrict by email domain",
-               "Gate a room behind identity verification and an email-domain policy, with a template policy that inheriting rooms defer to.",
-               "feature/WF-015-verify-buyer-identity-and-restrict-by-email-domain", "wf-015-identity-gate"),
-    "WF-017": ("White-label rooms on a custom domain",
-               "Serve a room on the buyer's own domain, with branding, a verified link secret and domain resolution.",
-               "feature/WF-017-white-label-rooms-on-a-custom-domain", "wf-017-white-label"),
+    "WF-004": (
+        "Invite buyers to a room with a role",
+        "Grant a buyer or collaborator access to a room with a role, by invitation, with expiry and confirmation on destructive changes.",
+        "feature/WF-004-invite-buyers-to-a-room-with-a-role",
+        "wf-004-invite-buyer",
+    ),
+    "WF-015": (
+        "Verify buyer identity and restrict by email domain",
+        "Gate a room behind identity verification and an email-domain policy, with a template policy that inheriting rooms defer to.",
+        "feature/WF-015-verify-buyer-identity-and-restrict-by-email-domain",
+        "wf-015-identity-gate",
+    ),
+    "WF-017": (
+        "White-label rooms on a custom domain",
+        "Serve a room on the buyer's own domain, with branding, a verified link secret and domain resolution.",
+        "feature/WF-017-white-label-rooms-on-a-custom-domain",
+        "wf-017-white-label",
+    ),
 }
 
 PAYLOAD = {
-    "WF-004": ["backend/dsr/access.py -> backend/dsr/roles.py",
-               "backend/dsr/access_api.py -> backend/dsr/roles_api.py",
-               "backend/tests/test_access.py -> backend/tests/test_roles.py",
-               "backend/tests/test_access_api.py -> backend/tests/test_roles_api.py",
-               "frontend/src/components/EmailChips.jsx",
-               "frontend/src/components/ShareDialog.jsx",
-               "docs/research/digital-sales-room-workflows/wf/WF-004.md"],
-    "WF-015": ["backend/dsr/access.py",
-               "backend/tests/test_access.py",
-               "backend/tests/test_access_api.py",
-               "frontend/src/pages/AccessSettings.jsx",
-               "frontend/src/pages/Gate.jsx",
-               "docs/design/WF-015-identity-and-domain-access.md",
-               "docs/research/digital-sales-room-workflows/wf/WF-015.md"],
-    "WF-017": ["backend/dsr/domains.py",
-               "backend/dsr/domain_service.py",
-               "backend/tests/test_domains.py",
-               "backend/tests/test_white_label_api.py",
-               "frontend/src/pages/WhiteLabel.jsx",
-               "frontend/src/pages/PublicRoom.jsx",
-               "frontend/src/test/setup.js",
-               "frontend/src/test/fixtures.js",
-               "frontend/src/test/white-label.test.jsx",
-               "docs/research/digital-sales-room-workflows/wf/WF-017.md"],
+    "WF-004": [
+        "backend/dsr/access.py -> backend/dsr/roles.py",
+        "backend/dsr/access_api.py -> backend/dsr/roles_api.py",
+        "backend/tests/test_access.py -> backend/tests/test_roles.py",
+        "backend/tests/test_access_api.py -> backend/tests/test_roles_api.py",
+        "frontend/src/components/EmailChips.jsx",
+        "frontend/src/components/ShareDialog.jsx",
+        "docs/research/digital-sales-room-workflows/wf/WF-004.md",
+    ],
+    "WF-015": [
+        "backend/dsr/access.py",
+        "backend/tests/test_access.py",
+        "backend/tests/test_access_api.py",
+        "frontend/src/pages/AccessSettings.jsx",
+        "frontend/src/pages/Gate.jsx",
+        "docs/design/WF-015-identity-and-domain-access.md",
+        "docs/research/digital-sales-room-workflows/wf/WF-015.md",
+    ],
+    "WF-017": [
+        "backend/dsr/domains.py",
+        "backend/dsr/domain_service.py",
+        "backend/tests/test_domains.py",
+        "backend/tests/test_white_label_api.py",
+        "frontend/src/pages/WhiteLabel.jsx",
+        "frontend/src/pages/PublicRoom.jsx",
+        "frontend/src/test/setup.js",
+        "frontend/src/test/fixtures.js",
+        "frontend/src/test/white-label.test.jsx",
+        "docs/research/digital-sales-room-workflows/wf/WF-017.md",
+    ],
 }
 
 HELD = """# Port brief: WF-001 - Create a room from a template
@@ -299,8 +312,9 @@ def main():
         (OUT / f"{ticket}.md").write_text(body, encoding="utf-8")
         print(f"  wrote orchestration\\ports\\{ticket}.md  ({len(body):,} chars)")
 
-    held = HELD.replace("WF-001 - Create a room from a template",
-                        "WF-001 - Create room from template")
+    held = HELD.replace(
+        "WF-001 - Create a room from a template", "WF-001 - Create room from template"
+    )
     (OUT / "WF-001.md").write_text(held, encoding="utf-8")
     print(f"  wrote orchestration\\ports\\WF-001.md  ({len(held):,} chars, HELD)")
 
@@ -309,32 +323,42 @@ def main():
         "dispatched": ["WF-004", "WF-015", "WF-017"],
         "held": {
             "WF-001": "its branch edits backend/dsr/db/audited.py, the audit guarantee "
-                      "itself. A port is a mechanical transformation and is the wrong "
-                      "instrument for deciding what a change to the core means. Same "
-                      "reason as WF-005 and WF-014.",
+            "itself. A port is a mechanical transformation and is the wrong "
+            "instrument for deciding what a change to the core means. Same "
+            "reason as WF-005 and WF-014.",
         },
         "decided_before_dispatch": {
             "WF-004_vs_WF-015": {
                 "collision": "both add backend/dsr/access.py; both serve "
-                             "GET /api/rooms/{room_id}/access",
-                "measured_overlap": {"access.py": 3.2, "test_access.py": 1.0,
-                                     "test_access_api.py": 4.8},
+                "GET /api/rooms/{room_id}/access",
+                "measured_overlap": {
+                    "access.py": 3.2,
+                    "test_access.py": 1.0,
+                    "test_access_api.py": 4.8,
+                },
                 "shared_symbols": "2 of 74, one of them __init__",
-                "jev_first_ask": {"verdict": "uncertain", "confidence": 0.68,
-                                  "threshold": 0.75,
-                                  "audit_id": "jev-20260927T052726-8696-46556",
-                                  "why": "content overlap had not been measured"},
-                "jev_second_ask": {"verdict": "pass", "confidence": 1.00,
-                                   "selected": "B_two_features_self_contained",
-                                   "audit_id": "jev-20260927T052837-24152-17484"},
+                "jev_first_ask": {
+                    "verdict": "uncertain",
+                    "confidence": 0.68,
+                    "threshold": 0.75,
+                    "audit_id": "jev-20260927T052726-8696-46556",
+                    "why": "content overlap had not been measured",
+                },
+                "jev_second_ask": {
+                    "verdict": "pass",
+                    "confidence": 1.00,
+                    "selected": "B_two_features_self_contained",
+                    "audit_id": "jev-20260927T052837-24152-17484",
+                },
                 "outcome": "two self-contained features. WF-004's module is renamed to "
-                           "roles.py; WF-015 keeps access.py. The shared route resolves "
-                           "when each takes its own prefix.",
+                "roles.py; WF-015 keeps access.py. The shared route resolves "
+                "when each takes its own prefix.",
             },
         },
     }
     (ROOT / "orchestration" / "ports" / "SET-4.json").write_text(
-        json.dumps(manifest, indent=2), encoding="utf-8")
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
     print("  wrote orchestration\\ports\\SET-4.json")
     return 0
 

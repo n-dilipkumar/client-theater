@@ -126,7 +126,9 @@ router = APIRouter(prefix="/api/wf-019", tags=["wf019"])
 
 def _influence_error(request: Request, exc: InfluenceError) -> JSONResponse:
     """A refusal the caller has to fix. 400, with the message saying which rule."""
-    return JSONResponse(status_code=400, content={"error": "invalid_influence_request", "detail": str(exc)})
+    return JSONResponse(
+        status_code=400, content={"error": "invalid_influence_request", "detail": str(exc)}
+    )
 
 
 def _unknown_room(request: Request, exc: UnknownRoom) -> JSONResponse:
@@ -153,7 +155,12 @@ def _unparseable_time(request: Request, exc: UnparseableTime) -> JSONResponse:
     """
     return JSONResponse(
         status_code=400,
-        content={"error": "invalid_timestamp", "detail": str(exc), "field": exc.what, "value": exc.value},
+        content={
+            "error": "invalid_timestamp",
+            "detail": str(exc),
+            "field": exc.what,
+            "value": exc.value,
+        },
     )
 
 
@@ -220,9 +227,7 @@ def _filters(
     shared_from: str | None = Query(
         default=None, description="Shares from, ISO-8601. Bounds shares only."
     ),
-    shared_to: str | None = Query(
-        default=None, description="Shares to, ISO-8601. Inclusive."
-    ),
+    shared_to: str | None = Query(default=None, description="Shares to, ISO-8601. Inclusive."),
 ) -> Filters:
     """The researched filter set, without a workspace.
 
@@ -488,7 +493,9 @@ def influence_record_event(
     )
 
 
-@router.post("/events/ingest-activity", summary="Project the activity collection into the event log")
+@router.post(
+    "/events/ingest-activity", summary="Project the activity collection into the event log"
+)
 def influence_ingest_activity(
     room_id: str | None = Query(default=None),
     limit: int = Query(default=1000, ge=1, le=20000),
@@ -508,7 +515,10 @@ def influence_ingest_activity(
     there.
     """
     return ingest_activity(
-        store, room_id=room_id, limit=limit, actor=actor,
+        store,
+        room_id=room_id,
+        limit=limit,
+        actor=actor,
         source=f"POST {router.prefix}/events/ingest-activity",
     )
 

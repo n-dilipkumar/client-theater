@@ -126,7 +126,8 @@ class FilterSet:
                 days = DEFAULT_DAYS
 
         sources = tuple(
-            value.lower() for value in _strings(payload.get("traffic_sources"), where="traffic_sources")
+            value.lower()
+            for value in _strings(payload.get("traffic_sources"), where="traffic_sources")
         )
         for source in sources:
             if source not in TRAFFIC_SOURCES:

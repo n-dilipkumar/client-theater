@@ -81,9 +81,11 @@ from fastapi.responses import JSONResponse
 
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
-from dsr.headless_booking import assets as assets_mod
-from dsr.headless_booking import inferences as headless_inferences
-from dsr.headless_booking import vocabulary as vocab
+from dsr.headless_booking import (
+    assets as assets_mod,
+    inferences as headless_inferences,
+    vocabulary as vocab,
+)
 from dsr.headless_booking.engine import (
     ASSET_COLLECTION,
     CALENDAR_COLLECTION,
@@ -332,9 +334,7 @@ def create_credential(
 
 
 @router.get("/credentials/{credential_id}", summary="Read one token's metadata")
-def read_credential(
-    credential_id: str, headless: HeadlessBooking = HeadlessDep
-) -> dict[str, Any]:
+def read_credential(credential_id: str, headless: HeadlessBooking = HeadlessDep) -> dict[str, Any]:
     """The scope and the masked hint. Never the token."""
     return headless.get_credential(credential_id)
 
@@ -445,9 +445,7 @@ def delete_asset(
     headless: HeadlessBooking = HeadlessDep,
 ) -> Response:
     """Soft-delete an asset. Its sessions and meetings stay, and stay readable."""
-    headless.delete_asset(
-        asset_id, actor=actor, source=f"DELETE {router.prefix}/assets/{asset_id}"
-    )
+    headless.delete_asset(asset_id, actor=actor, source=f"DELETE {router.prefix}/assets/{asset_id}")
     return Response(status_code=204)
 
 
@@ -599,7 +597,10 @@ def book(
     time, and the call log records both attempts so the mistake is visible.
     """
     return headless.book(
-        room_id, route_id, payload, actor=actor,
+        room_id,
+        route_id,
+        payload,
+        actor=actor,
         source=f"POST {router.prefix}/rooms/{room_id}/sessions/{route_id}/book",
     )
 
@@ -956,9 +957,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     assets: dict[str, dict[str, Any]] = {}
     for index, spec in enumerate(DEMO_ASSETS):
-        record = headless.create_asset(
-            room_at(index), spec, actor=actor, source=source
-        )
+        record = headless.create_asset(room_at(index), spec, actor=actor, source=source)
         assets[str(spec["name"])] = record
 
     by_slug = {
@@ -1068,7 +1067,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
                 session["routeId"],
                 # Not on the list. A real caller gets this by rounding a
                 # timestamp, and the researched remedy is a fresh discover.
-                {"startTime": "2026-01-01T09:00:00Z", "guest": {"guestEmail": "ops@fabrikam.example"}},
+                {
+                    "startTime": "2026-01-01T09:00:00Z",
+                    "guest": {"guestEmail": "ops@fabrikam.example"},
+                },
                 actor=actor,
                 source=source,
             )
@@ -1079,7 +1081,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
             headless.book(
                 room_at(1),
                 session["routeId"],
-                {"startTime": "2026-01-01T09:00:00Z", "guest": {"guestEmail": "ops@fabrikam.example"}},
+                {
+                    "startTime": "2026-01-01T09:00:00Z",
+                    "guest": {"guestEmail": "ops@fabrikam.example"},
+                },
                 actor=actor,
                 source=source,
             )
@@ -1160,7 +1165,8 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     return (
         f"{len(assets)} bookable assets (concierge, personal and ownership links, a two-path "
         f"handoff router, one disabled), 2 scoped tokens, {len(DEMO_CALENDAR)} calendar blocks, "
-        f"{len(outcomes)} sessions: " + ", ".join(outcomes)
+        f"{len(outcomes)} sessions: "
+        + ", ".join(outcomes)
         + (", 1 ownership link refused for a missing guestEmail" if ownership_refused else "")
         + (", 1 read-only token refused" if read_only_refused else "")
     )

@@ -297,9 +297,7 @@ class LocalCrm:
         # message is captured here too, because after a rollback the step's
         # outcome says "rolled back", and quoting that back at a rep would point
         # them at the rollback rather than at the thing that caused it.
-        failed_set = {
-            ref for ref, step in outcomes.items() if step.outcome == OUTCOME_FAILED
-        }
+        failed_set = {ref for ref, step in outcomes.items() if step.outcome == OUTCOME_FAILED}
         failed = [ref for ref in plan.order if ref in failed_set]
         actionable = _actionable(outcomes, plan.order, failed)
 
@@ -339,7 +337,8 @@ class LocalCrm:
             steps=tuple(outcomes[step.reference_id] for step in plan.steps),
             committed=tuple(committed),
             created_record_ids=tuple(created_rows[reference] for reference in created_rows),
-            rolled_back=tuple(rolled_back),            failed=tuple(failed),
+            rolled_back=tuple(rolled_back),
+            failed=tuple(failed),
             skipped=tuple(skipped),
             actionable_error=actionable,
             atomic=atomic,
@@ -587,9 +586,7 @@ class LocalCrm:
         ``?where=linked_to=…`` and not a join.
         """
         if parent_id and self.store.get(record_id) is not None:
-            self.store.update(
-                record_id, {"linked_to": parent_id}, actor=self.actor, source=source
-            )
+            self.store.update(record_id, {"linked_to": parent_id}, actor=self.actor, source=source)
 
     # -- rollback and compensation ------------------------------------------ #
 
@@ -608,9 +605,7 @@ class LocalCrm:
         """
         rolled_back: list[str] = []
         for reference in reversed(list(created_rows)):
-            self.store.delete(
-                created_rows[reference], actor=self.actor, source=source, hard=True
-            )
+            self.store.delete(created_rows[reference], actor=self.actor, source=source, hard=True)
             rolled_back.append(reference)
             previous = outcomes[reference]
             outcomes[reference] = StepOutcome(
@@ -658,9 +653,7 @@ class LocalCrm:
                     ),
                 )
                 continue
-            self.store.delete(
-                created_rows[reference], actor=self.actor, source=source, hard=True
-            )
+            self.store.delete(created_rows[reference], actor=self.actor, source=source, hard=True)
             rolled_back.append(reference)
             outcomes[reference] = StepOutcome(
                 reference_id=reference,
@@ -742,9 +735,7 @@ def _part_steps(part: RequestPart, plan: Any) -> tuple[str, ...]:
     """Which declared steps one rendered part covers."""
     if part.kind == "batch-create":
         body = json.loads(part.body or "{}")
-        return tuple(
-            str(entry["id"]) for entry in body.get("inputs", []) if entry.get("id")
-        )
+        return tuple(str(entry["id"]) for entry in body.get("inputs", []) if entry.get("id"))
     if part.kind == "association":
         return (part.reference_id.removesuffix("-association"),)
     return (part.reference_id,)

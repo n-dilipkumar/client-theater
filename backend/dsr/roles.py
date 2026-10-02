@@ -53,7 +53,7 @@ from __future__ import annotations
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping
 
 from dsr.db.audited import utcnow
 from dsr.store import RecordStore
@@ -349,7 +349,11 @@ class AccessService:
 
     def is_owner(self, room: Mapping[str, Any], principal: str | None) -> bool:
         owner = (room.get("data") or {}).get("owner")
-        return bool(principal) and bool(owner) and str(owner).strip().lower() == str(principal).strip().lower()
+        return (
+            bool(principal)
+            and bool(owner)
+            and str(owner).strip().lower() == str(principal).strip().lower()
+        )
 
     def actor_role(self, room_id: str, actor: str | None) -> str | None:
         """The role ``actor`` holds in this room, or ``None`` for no access.
@@ -401,13 +405,17 @@ class AccessService:
 
     # -- reads ------------------------------------------------------------- #
 
-    def _member_view(self, room: Mapping[str, Any], record: Mapping[str, Any], now: datetime) -> dict[str, Any]:
+    def _member_view(
+        self, room: Mapping[str, Any], record: Mapping[str, Any], now: datetime
+    ) -> dict[str, Any]:
         data = record.get("data") or {}
         owner = self.is_owner(room, data.get("principal"))
         role = OWNER if owner else (data.get("role") or DEFAULT_ROLE)
         expires_at = end_of_day_utc(data.get("access_valid_until"))
-        expiring_soon = expires_at is not None and now <= expires_at and expires_at - now <= timedelta(
-            days=EXPIRING_SOON_DAYS
+        expiring_soon = (
+            expires_at is not None
+            and now <= expires_at
+            and expires_at - now <= timedelta(days=EXPIRING_SOON_DAYS)
         )
         return {
             "id": record["id"],
@@ -571,9 +579,15 @@ class AccessService:
             # as documented; a new invitee joins when they accept the email.
             existing = self._live_grant(room_id, address)
             if existing is not None:
-                self._apply_grant(existing, role=role, access_valid_until=expires_on,
-                                  actor=actor, source=source, joined_immediately=True,
-                                  invitation_id=invitation["id"])
+                self._apply_grant(
+                    existing,
+                    role=role,
+                    access_valid_until=expires_on,
+                    actor=actor,
+                    source=source,
+                    joined_immediately=True,
+                    invitation_id=invitation["id"],
+                )
                 self.store.update(
                     invitation["id"],
                     {
@@ -599,7 +613,9 @@ class AccessService:
             "message": _invite_message(len(invitations), role, expires_on, len(joined)),
         }
 
-    def accept(self, invitation_id: str, actor: str | None = None, *, source: str) -> dict[str, Any]:
+    def accept(
+        self, invitation_id: str, actor: str | None = None, *, source: str
+    ) -> dict[str, Any]:
         """Accept an invitation, creating the grant it promised.
 
         The invitee becomes a member of the room on acceptance, with the role
@@ -613,9 +629,7 @@ class AccessService:
         now = self.now()
 
         if data.get("state") != "pending":
-            raise AccessInvalid(
-                f"invitation {invitation_id} is {data.get('state')}, not pending"
-            )
+            raise AccessInvalid(f"invitation {invitation_id} is {data.get('state')}, not pending")
         try:
             deadline = datetime.fromisoformat(str(data.get("expires_at")).replace("Z", "+00:00"))
         except (TypeError, ValueError) as exc:
@@ -624,8 +638,10 @@ class AccessService:
             # Record the lapse rather than only reporting it, so an expired
             # invitation is visible in the audit trail. Send a new one.
             self.store.update(
-                invitation_id, {"state": "expired", "expired_at": _iso(now)},
-                actor=actor or "system", source=source,
+                invitation_id,
+                {"state": "expired", "expired_at": _iso(now)},
+                actor=actor or "system",
+                source=source,
             )
             raise AccessInvalid(
                 f"invitation {invitation_id} expired after {INVITATION_TTL_HOURS} hours; send a new invitation"

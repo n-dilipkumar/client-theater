@@ -44,15 +44,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.crm_workflows import (
     ACTION_KINDS,
     ACTIVITY,
     DELIVERY_PATHS,
-    ENROLLMENTS,
     ENROLLMENT_TYPES,
+    ENROLLMENTS,
     FILTER_FAMILIES,
     INTEGRATIONS,
     LIFECYCLE_STAGES,
@@ -95,8 +93,8 @@ from dsr.crm_workflows.criteria import describe_vocabulary as matcher_vocabulary
 from dsr.crm_workflows.definition import apply_patch, normalise_actions
 from dsr.crm_workflows.inferences import INFERENCES, by_id
 from dsr.crm_workflows.vocabulary import (
-    ACTIONABILITY_NOTE,
     ACTION_FAMILIES,
+    ACTIONABILITY_NOTE,
     ALL_REFINEMENTS,
     DEFAULT_INTEGRATION,
     FIELD_ALIASES,
@@ -106,6 +104,7 @@ from dsr.crm_workflows.vocabulary import (
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point of
@@ -321,9 +320,7 @@ def http_published(http, http_workflow):
 
 def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     """The route resolves even though no shared file names this feature."""
-    entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID
-    )
+    entry = next(f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID)
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-030"
     assert entry["exception_handlers"] == ["WorkflowError"]
@@ -344,9 +341,9 @@ def test_the_prefix_is_ours_alone(http):
     for feature in body["features"]:
         if feature["id"] == FEATURE_ID:
             continue
-        assert not any(
-            route["path"].startswith(PREFIX) for route in feature["routes"]
-        ), f"{feature['id']} also serves under {PREFIX}"
+        assert not any(route["path"].startswith(PREFIX) for route in feature["routes"]), (
+            f"{feature['id']} also serves under {PREFIX}"
+        )
 
 
 def test_no_other_feature_claims_this_error_type(http):
@@ -358,9 +355,7 @@ def test_no_other_feature_claims_this_error_type(http):
     """
     features = http.get("/api/features").json()["features"]
     claiming = [
-        feature["id"]
-        for feature in features
-        if "WorkflowError" in feature["exception_handlers"]
+        feature["id"] for feature in features if "WorkflowError" in feature["exception_handlers"]
     ]
     assert claiming == [FEATURE_ID]
 
@@ -432,13 +427,13 @@ def test_seed_is_exported_by_the_feature_module():
 
 
 def test_there_are_exactly_five_filter_families():
-    """ you'll see **five different options** for your filter"."""
+    """you'll see **five different options** for your filter"."""
     assert len(FILTER_FAMILIES) == 5
     assert FILTER_FAMILIES == ("views", "clicks", "downloads", "interactions", "map_activity")
 
 
 def test_the_five_are_four_analytics_events_plus_map_activity():
-    """ Analytics events (Views, Clicks, Downloads, or Interactions), or MAP activity"."""
+    """Analytics events (Views, Clicks, Downloads, or Interactions), or MAP activity"."""
     served = describe_vocabulary()["filter_families"]
     analytics = [row for row in served if row["group"] == "analytics_events"]
     assert [row["name"] for row in analytics] == ["views", "clicks", "downloads", "interactions"]
@@ -479,7 +474,7 @@ def test_a_filter_refining_on_an_unpublished_family_is_refused_over_http(http):
 
 
 def test_the_refinement_matrix_is_exactly_what_the_source_publishes():
-    """ **Views:** filter by date", "**Downloads:** filter by date and/or file name",
+    """**Views:** filter by date", "**Downloads:** filter by date and/or file name",
     "Clicks/Interactions by date or link URL", MAP activity by activity text."""
     assert REFINEMENTS == {
         # "**Views:** filter by date." - date only.
@@ -494,7 +489,7 @@ def test_the_refinement_matrix_is_exactly_what_the_source_publishes():
 
 
 def test_views_may_not_be_refined_by_a_file_name():
-    """ **Views:** filter by date." - refining a view by file name is a category error."""
+    """**Views:** filter by date." - refining a view by file name is a category error."""
     with pytest.raises(UnsupportedRefinement) as caught:
         require_refinement("views", "file_name")
     assert "occurred" in str(caught.value)
@@ -595,7 +590,7 @@ def test_a_criteria_may_be_written_flat():
 
 
 def test_a_workflow_must_be_contact_based():
-    """ Dock only supports Contact based workflows since the activities are tied to
+    """Dock only supports Contact based workflows since the activities are tied to
     the contact record."""
     with pytest.raises(NotContactBased) as caught:
         normalise_workflow(workflow_payload(enrollment_type="company"))
@@ -605,13 +600,13 @@ def test_a_workflow_must_be_contact_based():
 def test_contact_based_is_the_only_supported_type():
     assert ENROLLMENT_TYPES == ("contact",)
     assert normalise_workflow(workflow_payload())["enrollment_type"] == "contact"
-    assert normalise_workflow(workflow_payload(enrollment_type=None))["enrollment_type"] == "contact"
+    assert (
+        normalise_workflow(workflow_payload(enrollment_type=None))["enrollment_type"] == "contact"
+    )
 
 
 def test_a_company_workflow_is_refused_over_http_with_the_quote(http):
-    response = http.post(
-        f"{PREFIX}/workflows", json=workflow_payload(enrollment_type="company")
-    )
+    response = http.post(f"{PREFIX}/workflows", json=workflow_payload(enrollment_type="company"))
     assert response.status_code == 400
     assert response.json()["error"] == "workflow_must_be_contact_based"
     assert "contact record" in response.json()["detail"]
@@ -620,14 +615,17 @@ def test_a_company_workflow_is_refused_over_http_with_the_quote(http):
 def test_the_only_documented_trigger_mode_is_filter_criteria_met():
     assert TRIGGER_MODES == ("filter_criteria_met",)
     with pytest.raises(UnknownTriggerMode) as caught:
-        normalise_workflow(workflow_payload(trigger={"mode": "event_completed", "criteria": criteria()}))
+        normalise_workflow(
+            workflow_payload(trigger={"mode": "event_completed", "criteria": criteria()})
+        )
     assert "When filter criteria is met" in str(caught.value)
 
 
 def test_the_trigger_mode_defaults_to_the_documented_one():
-    assert normalise_workflow(workflow_payload(trigger={"criteria": criteria()}))["trigger"][
-        "mode"
-    ] == "filter_criteria_met"
+    assert (
+        normalise_workflow(workflow_payload(trigger={"criteria": criteria()}))["trigger"]["mode"]
+        == "filter_criteria_met"
+    )
 
 
 def test_a_workflow_with_no_filter_is_refused():
@@ -638,7 +636,7 @@ def test_a_workflow_with_no_filter_is_refused():
 
 
 def test_a_workflow_needs_at_least_one_action():
-    """ send emails, slack notifications, update fields, change stages" - the filter
+    """send emails, slack notifications, update fields, change stages" - the filter
     is the trigger and the actions are what it is for."""
     with pytest.raises(NoActions) as caught:
         normalise_workflow(workflow_payload(actions=[]))
@@ -668,7 +666,7 @@ def test_several_filters_on_one_workflow_are_accepted():
 
 
 def test_more_filters_than_families_are_still_accepted():
-    """ five different options" counts the families, not a workflow's filters."""
+    """five different options" counts the families, not a workflow's filters."""
     definition = normalise_workflow(
         workflow_payload(
             trigger={
@@ -696,7 +694,7 @@ def test_the_four_action_kinds_are_exactly_the_researched_ones():
 
 
 def test_an_action_kind_outside_the_four_is_stored_not_dropped():
-    """ send emails, slack notifications, update fields, change stages **and more!**"""
+    """send emails, slack notifications, update fields, change stages **and more!**"""
     actions = normalise_actions([{"kind": "enroll_in_sequence", "sequence": "nurture"}])
     assert actions[0]["kind"] == "enroll_in_sequence"
     assert actions[0]["resolved"] is False
@@ -731,9 +729,10 @@ def test_a_change_stage_without_a_stage_is_refused():
 
 def test_the_two_stage_vocabularies_cannot_be_guessed():
     """A lifecyclestage obeys the forward-only rule and a deal_stage does not."""
-    assert normalise_actions([{"kind": "change_stage", "stage": "proposal"}])[0][
-        "stage_kind"
-    ] == "deal_stage"
+    assert (
+        normalise_actions([{"kind": "change_stage", "stage": "proposal"}])[0]["stage_kind"]
+        == "deal_stage"
+    )
     with pytest.raises(WorkflowError) as caught:
         normalise_actions([{"kind": "change_stage", "stage": "x", "stage_kind": "pipeline"}])
     assert "forward-only" in str(caught.value)
@@ -763,7 +762,9 @@ def test_connections_accept_both_shapes_a_client_builds(engine):
         source=INTEGRATION_SOURCE,
     )["connections"]
     as_map = engine.register_integration(
-        {"name": "b", "connections": {"r1": {"deal_id": "d"}}}, actor="dana", source=INTEGRATION_SOURCE
+        {"name": "b", "connections": {"r1": {"deal_id": "d"}}},
+        actor="dana",
+        source=INTEGRATION_SOURCE,
     )["connections"]
     as_shorthand = engine.register_integration(
         {"name": "c", "connections": {"r1": "d"}}, actor="dana", source=INTEGRATION_SOURCE
@@ -803,7 +804,10 @@ def test_unlinking_a_connected_room_a_published_workflow_depends_on_is_refused(
     target = engine.integration_by_name(DEFAULT_INTEGRATION)
     with pytest.raises(IntegrationInUse):
         engine.amend_integration(
-            target["id"], {"connections": {room["id"]: None}}, actor="dana", source=INTEGRATION_SOURCE
+            target["id"],
+            {"connections": {room["id"]: None}},
+            actor="dana",
+            source=INTEGRATION_SOURCE,
         )
 
 
@@ -812,7 +816,10 @@ def test_a_null_connection_unlinks_a_room_when_nothing_published_depends_on_it(
 ):
     target = engine.integration_by_name(DEFAULT_INTEGRATION)
     engine.amend_integration(
-        target["id"], {"connections": {room["id"]: {"deal_id": "006NW"}}}, actor="dana", source=INTEGRATION_SOURCE
+        target["id"],
+        {"connections": {room["id"]: {"deal_id": "006NW"}}},
+        actor="dana",
+        source=INTEGRATION_SOURCE,
     )
     unlinked = engine.amend_integration(
         target["id"], {"connections": {room["id"]: None}}, actor="dana", source=INTEGRATION_SOURCE
@@ -822,9 +829,12 @@ def test_a_null_connection_unlinks_a_room_when_nothing_published_depends_on_it(
 
 def test_a_draft_does_not_block_turning_the_integration_off(engine, integration, draft):
     target = engine.integration_by_name(DEFAULT_INTEGRATION)
-    assert engine.amend_integration(
-        target["id"], {"enabled": False}, actor="dana", source=INTEGRATION_SOURCE
-    )["enabled"] is False
+    assert (
+        engine.amend_integration(
+            target["id"], {"enabled": False}, actor="dana", source=INTEGRATION_SOURCE
+        )["enabled"]
+        is False
+    )
 
 
 def test_publishing_against_an_unregistered_integration_is_a_missing_prerequisite(engine):
@@ -878,7 +888,7 @@ def test_publishing_twice_is_refused(engine, published):
 
 
 def test_a_published_workflow_cannot_be_amended_in_place(engine, published):
-    """ Publish the workflow" - the definition is what is already firing."""
+    """Publish the workflow" - the definition is what is already firing."""
     with pytest.raises(PublishedWorkflowIsImmutable) as caught:
         engine.amend(published["id"], {"name": "New name"}, actor="dana", source=AMEND_SOURCE)
     assert "may already have enrolled contacts" in str(caught.value)
@@ -886,10 +896,16 @@ def test_a_published_workflow_cannot_be_amended_in_place(engine, published):
 
 def test_unpublish_then_amend_then_publish_is_the_documented_path(engine, published):
     engine.unpublish(published["id"], actor="dana", source=UNPUBLISH_SOURCE)
-    assert engine.amend(
-        published["id"], {"name": "Renamed"}, actor="dana", source=AMEND_SOURCE
-    )["name"] == "Renamed"
-    assert engine.publish(published["id"], actor="dana", source=PUBLISH_SOURCE)["status"] == "published"
+    assert (
+        engine.amend(published["id"], {"name": "Renamed"}, actor="dana", source=AMEND_SOURCE)[
+            "name"
+        ]
+        == "Renamed"
+    )
+    assert (
+        engine.publish(published["id"], actor="dana", source=PUBLISH_SOURCE)["status"]
+        == "published"
+    )
 
 
 def test_unpublishing_stops_it_firing_without_retiring_it(engine, published, room):
@@ -1009,7 +1025,12 @@ def test_asserting_a_family_the_table_does_not_have_is_reported_and_ignored():
 
 def test_an_assertion_that_conflicts_with_the_table_is_reported_and_the_assertion_wins():
     result = normalise_activity(
-        {"person": BUYER, "action": "viewed", "action_family": "map_activity", "occurred_at": ago(5)}
+        {
+            "person": BUYER,
+            "action": "viewed",
+            "action_family": "map_activity",
+            "occurred_at": ago(5),
+        }
     )
     assert result["action_family"] == "map_activity"
     assert [w["code"] for w in result["warnings"]] == ["family_assertion_conflicts"]
@@ -1072,9 +1093,9 @@ def test_an_event_with_no_timestamp_is_reported_rather_than_assumed_to_be_now():
 )
 def test_a_timestamp_is_read_in_utc(value):
     """A naive local reading would move a buyer's event across a day boundary."""
-    assert parse_timestamp(value) == datetime(2026, 9, 27, 12, 0, tzinfo=timezone.utc) or parse_timestamp(
-        value
-    ).date() == date(2026, 9, 27)
+    assert parse_timestamp(value) == datetime(
+        2026, 9, 27, 12, 0, tzinfo=timezone.utc
+    ) or parse_timestamp(value).date() == date(2026, 9, 27)
 
 
 def test_a_naive_timestamp_is_read_as_utc_not_as_local_time():
@@ -1126,7 +1147,7 @@ def test_a_backwards_window_is_not_a_window():
 
 
 def test_a_single_midnight_does_not_lose_the_day_it_names():
-    """ filter by date" that means one instant of midnight silently discards the day."""
+    """filter by date" that means one instant of midnight silently discards the day."""
     _, end = occurred_window("2026-09-27")
     assert parse_timestamp("2026-09-27T23:59:00+00:00") <= end
 
@@ -1170,7 +1191,9 @@ def test_a_criterion_naming_the_documented_form_or_the_bare_name_is_the_same_one
 
 
 def test_a_matching_event_is_a_match_with_its_reasoning():
-    result = matches(criteria("downloads", file_name="Pricing One-Pager"), normalise_activity(event()))
+    result = matches(
+        criteria("downloads", file_name="Pricing One-Pager"), normalise_activity(event())
+    )
     assert result["matched"] is True
     assert result["reason"] == "matched"
     assert [row["refinement"] for row in result["checked"]] == ["file_name"]
@@ -1208,14 +1231,20 @@ def test_a_file_name_matches_case_insensitively_and_whitespace_insensitively():
 
 def test_a_link_url_is_compared_exactly():
     """ "filter by date or link URL" publishes no partial-match option."""
-    assert matches(
-        criteria("clicks", link_url="https://n.example/p"),
-        normalise_activity(click("https://n.example/p")),
-    )["matched"] is True
-    assert matches(
-        criteria("clicks", link_url="https://n.example/p"),
-        normalise_activity(click("https://n.example/pricing")),
-    )["reason"] == "link_url_mismatch"
+    assert (
+        matches(
+            criteria("clicks", link_url="https://n.example/p"),
+            normalise_activity(click("https://n.example/p")),
+        )["matched"]
+        is True
+    )
+    assert (
+        matches(
+            criteria("clicks", link_url="https://n.example/p"),
+            normalise_activity(click("https://n.example/pricing")),
+        )["reason"]
+        == "link_url_mismatch"
+    )
 
 
 def test_a_link_url_is_case_sensitive_because_a_path_is_an_identifier():
@@ -1246,7 +1275,8 @@ def test_an_event_with_no_file_name_cannot_be_checked_rather_than_missing():
 def test_an_unverifiable_refinement_is_reported_apart_from_a_plain_miss():
     """The distinction is the whole point: a "no" and an unanswered question differ."""
     result = matches(
-        criteria("downloads", file_name="Anything"), normalise_activity({"person": BUYER, "action": "downloaded"})
+        criteria("downloads", file_name="Anything"),
+        normalise_activity({"person": BUYER, "action": "downloaded"}),
     )
     assert result["reason"] == "refinement_unverifiable"
     assert [row["refinement"] for row in result["unverifiable"]] == ["file_name"]
@@ -1278,7 +1308,11 @@ def test_every_refinement_that_holds_is_reported_not_only_the_failing_one():
 def test_map_activity_matches_the_documented_activity_text_whatever_the_capitalisation():
     c = criteria("map_activity", activity_text='completed task "Intro call"')
     event_with = normalise_activity(
-        {"person": BUYER, "action": "completed_section", "activity_text": "completed task 'Intro call'"}
+        {
+            "person": BUYER,
+            "action": "completed_section",
+            "activity_text": "completed task 'Intro call'",
+        }
     )
     assert matches(c, event_with)["matched"] is True
 
@@ -1286,7 +1320,11 @@ def test_map_activity_matches_the_documented_activity_text_whatever_the_capitali
 def test_map_activity_matches_the_bare_task_name_too():
     c = criteria("map_activity", activity_text="Intro call")
     event_with = normalise_activity(
-        {"person": BUYER, "action": "completed_section", "activity_text": "completed task 'Intro call'"}
+        {
+            "person": BUYER,
+            "action": "completed_section",
+            "activity_text": "completed task 'Intro call'",
+        }
     )
     assert matches(c, event_with)["matched"] is True
 
@@ -1294,7 +1332,11 @@ def test_map_activity_matches_the_bare_task_name_too():
 def test_a_different_task_declines():
     c = criteria("map_activity", activity_text='completed task "Sign up for free account"')
     event_with = normalise_activity(
-        {"person": BUYER, "action": "completed_section", "activity_text": "completed task 'Intro call'"}
+        {
+            "person": BUYER,
+            "action": "completed_section",
+            "activity_text": "completed task 'Intro call'",
+        }
     )
     assert matches(c, event_with)["reason"] == "activity_text_mismatch"
 
@@ -1320,9 +1362,7 @@ def test_a_criteria_with_no_refinement_matches_every_event_of_its_family():
 def test_several_refinements_of_one_family_must_all_hold():
     c = criteria("downloads", file_name="Pricing One-Pager", occurred="2026-09-27")
     assert evaluate([c], normalise_activity(download()))["matched"] is True
-    outside = evaluate(
-        [c], normalise_activity(download(occurred_at="2026-09-20T10:00:00Z"))
-    )
+    outside = evaluate([c], normalise_activity(download(occurred_at="2026-09-20T10:00:00Z")))
     assert outside["matched"] is False
     assert outside["reason"] == "occurred_before_window"
 
@@ -1424,7 +1464,9 @@ def test_the_lint_reports_a_missing_integration_without_refusing_the_draft():
 
 
 def test_the_lint_reports_a_disabled_integration(engine, integration, draft):
-    engine.amend_integration(integration["id"], {"enabled": False}, actor="dana", source=INTEGRATION_SOURCE)
+    engine.amend_integration(
+        integration["id"], {"enabled": False}, actor="dana", source=INTEGRATION_SOURCE
+    )
     codes = [w["code"] for w in engine.workflow(draft["id"])["warnings"]]
     assert "integration_disabled" in codes
 
@@ -1487,9 +1529,7 @@ def test_another_buyers_activity_does_not_enrol_this_one(engine, connected, publ
     assert result["events_considered"] == 0
 
 
-def test_a_room_with_no_deal_connection_enrols_nobody_and_says_why(
-    engine, integration, room
-):
+def test_a_room_with_no_deal_connection_enrols_nobody_and_says_why(engine, integration, room):
     """Step 1 pairs the integration being on with the workspace being connected.
 
     Built from ``integration`` rather than ``connected`` on purpose: the ``connected``
@@ -1529,7 +1569,9 @@ def test_a_workflow_naming_an_integration_nobody_registered_is_skipped_naming_it
     reachable way to lose one is the core API removing the record. The branch still
     has to report rather than crash, and it has to say which of the two it was."""
     engine.record_activity(room["id"], download(), actor="dana", source=SOURCE)
-    engine.store.delete(connected["id"], actor="dana", source="DELETE /api/records/crm_integration/x")
+    engine.store.delete(
+        connected["id"], actor="dana", source="DELETE /api/records/crm_integration/x"
+    )
     result = engine.evaluate(room["id"], BUYER, actor="dana", source=EVALUATE_SOURCE)
     assert result["enrolled"] == 0
     assert [row["reason"] for row in result["skipped"]] == ["integration_unavailable"]
@@ -1542,9 +1584,7 @@ def test_a_draft_is_reported_as_a_draft_rather_than_ignored(engine, connected, d
     assert [row["reason"] for row in result["skipped"]] == ["not_published"]
 
 
-def test_a_workflow_that_matched_nothing_reports_why_with_a_sample(
-    engine, connected, draft, room
-):
+def test_a_workflow_that_matched_nothing_reports_why_with_a_sample(engine, connected, draft, room):
     engine.publish(draft["id"], actor="dana", source=PUBLISH_SOURCE)
     engine.record_activity(room["id"], event(action="viewed"), actor="dana", source=SOURCE)
     result = engine.evaluate(room["id"], BUYER, actor="dana", source=EVALUATE_SOURCE)
@@ -1596,8 +1636,12 @@ def test_the_sample_covers_each_filter_of_a_two_filter_workflow(engine, connecte
         source=CREATE_SOURCE,
     )
     engine.publish(both["id"], actor="dana", source=PUBLISH_SOURCE)
-    engine.record_activity(room["id"], download(file_name="Something Else.pdf"), actor="dana", source=SOURCE)
-    engine.record_activity(room["id"], click("https://n.example/other"), actor="dana", source=SOURCE)
+    engine.record_activity(
+        room["id"], download(file_name="Something Else.pdf"), actor="dana", source=SOURCE
+    )
+    engine.record_activity(
+        room["id"], click("https://n.example/other"), actor="dana", source=SOURCE
+    )
     result = engine.evaluate(
         room["id"], BUYER, actor="dana", source=EVALUATE_SOURCE, workflow_ids=[both["id"]]
     )
@@ -1651,9 +1695,7 @@ def test_a_lookback_is_measured_from_now_not_from_the_latest_event(engine, conne
         actor="dana",
         source=PUBLISH_SOURCE,
     )
-    engine.record_activity(
-        room["id"], download(occurred_at=ago(60)), actor="dana", source=SOURCE
-    )
+    engine.record_activity(room["id"], download(occurred_at=ago(60)), actor="dana", source=SOURCE)
     assert engine.evaluate(room["id"], BUYER, actor="dana", source=EVALUATE_SOURCE)["enrolled"] == 1
 
 
@@ -1669,12 +1711,10 @@ def test_the_webhook_alternative_path_is_recorded(engine, connected, published, 
     """ "Dock's alternative path is to send the same events as webhooks into a HubSpot
     workflow webhook endpoint." """
     assert DELIVERY_PATHS == ("filter", "webhook")
-    engine.record_activity(
-        room["id"], download(delivery="webhook"), actor="dana", source=SOURCE
-    )
-    enrollment = engine.evaluate(room["id"], BUYER, actor="dana", source=EVALUATE_SOURCE)["enrollments"][0][
-        "enrollment"
-    ]
+    engine.record_activity(room["id"], download(delivery="webhook"), actor="dana", source=SOURCE)
+    enrollment = engine.evaluate(room["id"], BUYER, actor="dana", source=EVALUATE_SOURCE)[
+        "enrollments"
+    ][0]["enrollment"]
     assert enrollment["via"] == "webhook"
 
 
@@ -1726,8 +1766,13 @@ def test_an_update_field_writes_a_literal_value():
 
 def test_an_update_field_can_read_its_value_out_of_the_room():
     row = resolve_action(
-        {"kind": "update_field", "index": 0, "resolved": True, "field": "stage",
-         "value": {"from": "stage"}},
+        {
+            "kind": "update_field",
+            "index": 0,
+            "resolved": True,
+            "field": "stage",
+            "value": {"from": "stage"},
+        },
         room={"stage": "evaluation"},
     )
     assert row["write"]["value"] == "evaluation"
@@ -1735,15 +1780,20 @@ def test_an_update_field_can_read_its_value_out_of_the_room():
 
 def test_a_path_that_resolves_to_nothing_yields_none_rather_than_crashing_the_run():
     row = resolve_action(
-        {"kind": "update_field", "index": 0, "resolved": True, "field": "x",
-         "value": {"from": "nope.deeper"}},
+        {
+            "kind": "update_field",
+            "index": 0,
+            "resolved": True,
+            "field": "x",
+            "value": {"from": "nope.deeper"},
+        },
         room={"stage": "evaluation"},
     )
     assert row["write"]["value"] is None
 
 
 def test_a_lifecycle_stage_may_only_move_forward():
-    """ you can only set the value *forward* in the stage order"."""
+    """you can only set the value *forward* in the stage order"."""
     action = {"kind": "change_stage", "index": 0, "resolved": True, "stage_kind": "lifecyclestage"}
     forward = resolve_action({**action, "stage": "salesqualifiedlead"}, lifecycle_stage="lead")
     assert forward["status"] == "planned"
@@ -1760,7 +1810,7 @@ def test_a_lifecycle_stage_at_or_behind_the_current_one_is_refused_for_that_acti
 
 
 def test_a_deal_stage_moves_in_either_direction():
-    """ Change stages in HubSpot based on onboarding or mutual action plan tasks" is a
+    """Change stages in HubSpot based on onboarding or mutual action plan tasks" is a
     pipeline, and a pipeline moves backwards."""
     action = {"kind": "change_stage", "index": 0, "resolved": True, "stage_kind": "deal_stage"}
     row = resolve_action({**action, "stage": "closed lost"})
@@ -1770,8 +1820,13 @@ def test_a_deal_stage_moves_in_either_direction():
 
 def test_a_stage_outside_the_documented_lifecycle_list_is_refused():
     row = resolve_action(
-        {"kind": "change_stage", "index": 0, "resolved": True, "stage_kind": "lifecyclestage",
-         "stage": "quantum"},
+        {
+            "kind": "change_stage",
+            "index": 0,
+            "resolved": True,
+            "stage_kind": "lifecyclestage",
+            "stage": "quantum",
+        },
         lifecycle_stage="lead",
     )
     assert row["status"] == "refused"
@@ -1782,9 +1837,20 @@ def test_a_refused_stage_does_not_refuse_the_workflow():
     """The constraint is about the property, not about the rule."""
     plan = resolve_actions(
         [
-            {"kind": "change_stage", "index": 0, "resolved": True, "stage_kind": "lifecyclestage",
-             "stage": "lead"},
-            {"kind": "update_field", "index": 1, "resolved": True, "field": "reviewed", "value": True},
+            {
+                "kind": "change_stage",
+                "index": 0,
+                "resolved": True,
+                "stage_kind": "lifecyclestage",
+                "stage": "lead",
+            },
+            {
+                "kind": "update_field",
+                "index": 1,
+                "resolved": True,
+                "field": "reviewed",
+                "value": True,
+            },
         ],
         contact={"contact": BUYER},
         lifecycle_stage="opportunity",
@@ -1860,7 +1926,7 @@ def test_no_enrollment_carries_a_field_that_claims_a_seller_must_act(store, fire
 
 
 def test_recording_activity_writes_to_the_products_own_stream(engine, room):
-    """ one collection, one fact" - so this page and every other analytics page agree."""
+    """one collection, one fact" - so this page and every other analytics page agree."""
     result = engine.record_activity(room["id"], event(), actor="dana", source=SOURCE)
     assert result["outcome"] == "recorded"
     assert engine.store.list(ACTIVITY, room_id=room["id"])[0]["id"] == result["activity"]["id"]
@@ -1895,9 +1961,7 @@ def test_an_event_with_no_key_is_unaffected(engine, room):
     assert len(engine.store.list(ACTIVITY)) == 2
 
 
-def test_a_row_another_feature_wrote_into_the_shared_stream_is_reported_not_raised(
-    engine, room
-):
+def test_a_row_another_feature_wrote_into_the_shared_stream_is_reported_not_raised(engine, room):
     """The `activity` collection is the product's own stream and is shared.
 
     A row one of the analytics features wrote may not carry a contact under any of
@@ -1947,7 +2011,10 @@ def test_activity_is_listed_oldest_first(engine, room):
 def test_activity_can_be_filtered_by_contact_and_by_family(engine, room):
     engine.record_activity(room["id"], event(action="viewed"), actor="dana", source=SOURCE)
     engine.record_activity(
-        room["id"], event(action="downloaded", person="other@example.com"), actor="dana", source=SOURCE
+        room["id"],
+        event(action="downloaded", person="other@example.com"),
+        actor="dana",
+        source=SOURCE,
     )
     assert len(engine.activity(room_id=room["id"], family="downloads")) == 1
     assert len(engine.activity(room_id=room["id"], contact="other@example.com")) == 1
@@ -1988,9 +2055,7 @@ def test_a_field_a_team_added_to_a_connection_needs_no_migration(engine, room, c
 
 def test_an_unknown_filter_in_a_query_is_a_json_path_not_a_column(engine, room):
     """`?where=` and find() resolve dotted paths through the dynamic index."""
-    engine.record_activity(
-        room["id"], event(campaign="q3-enterprise"), actor="dana", source=SOURCE
-    )
+    engine.record_activity(room["id"], event(campaign="q3-enterprise"), actor="dana", source=SOURCE)
     found = engine.store.find(ACTIVITY, {"campaign": "q3-enterprise"}, limit=10)
     assert len(found) == 1
 
@@ -2125,9 +2190,7 @@ def test_a_duplicate_webhook_answers_200_not_201_over_http(http, http_room, http
 
 def test_the_contact_may_arrive_as_a_query_parameter(http, http_room, http_published):
     http.post(f"{PREFIX}/rooms/{http_room['id']}/activity", json=download())
-    body = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/evaluate", params={"contact": BUYER}
-    ).json()
+    body = http.post(f"{PREFIX}/rooms/{http_room['id']}/evaluate", params={"contact": BUYER}).json()
     assert body["enrolled"] == 1
 
 
@@ -2144,11 +2207,11 @@ def test_a_404_for_an_unknown_workflow(http):
 def test_a_404_for_an_enrollment_in_another_room(http, http_room, http_published):
     other = http.post("/api/records/room", json={**ROOM, "name": "Other"}).json()
     http.post(f"{PREFIX}/rooms/{http_room['id']}/activity", json=download())
-    body = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/evaluate", json={"contact": BUYER}
-    ).json()
+    body = http.post(f"{PREFIX}/rooms/{http_room['id']}/evaluate", json={"contact": BUYER}).json()
     enrollment_id = body["enrollments"][0]["enrollment"]["id"]
-    assert http.get(f"{PREFIX}/rooms/{http_room['id']}/enrollments/{enrollment_id}").status_code == 200
+    assert (
+        http.get(f"{PREFIX}/rooms/{http_room['id']}/enrollments/{enrollment_id}").status_code == 200
+    )
     assert http.get(f"{PREFIX}/rooms/{other['id']}/enrollments/{enrollment_id}").status_code == 404
 
 
@@ -2166,10 +2229,13 @@ def test_the_library_can_be_filtered_by_status_over_http(http, http_workflow, ht
 
 
 def test_the_library_can_be_filtered_by_integration_over_http(http, http_workflow):
-    assert http.get(f"{PREFIX}/workflows", params={"integration": "salesforce"}).json()["count"] == 0
-    assert http.get(
-        f"{PREFIX}/workflows", params={"integration": DEFAULT_INTEGRATION}
-    ).json()["count"] == 1
+    assert (
+        http.get(f"{PREFIX}/workflows", params={"integration": "salesforce"}).json()["count"] == 0
+    )
+    assert (
+        http.get(f"{PREFIX}/workflows", params={"integration": DEFAULT_INTEGRATION}).json()["count"]
+        == 1
+    )
 
 
 def test_a_withdrawn_workflow_is_listed_only_when_asked_over_http(http, http_workflow):
@@ -2206,9 +2272,12 @@ def test_the_enrollments_route_is_room_scoped_and_filterable(http, http_room, ht
     ).json()
     assert listed["count"] == 1
     assert listed["executed"] == 0
-    assert http.get(
-        f"{PREFIX}/rooms/{http_room['id']}/enrollments", params={"contact": "nobody"}
-    ).json()["count"] == 0
+    assert (
+        http.get(
+            f"{PREFIX}/rooms/{http_room['id']}/enrollments", params={"contact": "nobody"}
+        ).json()["count"]
+        == 0
+    )
 
 
 def test_the_activity_route_groups_by_family(http, http_room):
@@ -2220,9 +2289,7 @@ def test_the_activity_route_groups_by_family(http, http_room):
 
 
 def test_an_event_with_no_contact_is_a_400_over_http(http, http_room):
-    response = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/activity", json={"action": "viewed"}
-    )
+    response = http.post(f"{PREFIX}/rooms/{http_room['id']}/activity", json={"action": "viewed"})
     assert response.status_code == 400
     assert response.json()["error"] == "malformed_activity"
 
@@ -2235,17 +2302,13 @@ def test_publishing_over_http_reports_the_missing_integration_as_409(http):
 
 
 def test_amending_a_published_workflow_over_http_is_409(http, http_published):
-    response = http.patch(
-        f"{PREFIX}/workflows/{http_published['id']}", json={"name": "New"}
-    )
+    response = http.patch(f"{PREFIX}/workflows/{http_published['id']}", json={"name": "New"})
     assert response.status_code == 409
     assert response.json()["error"] == "published_workflow_is_immutable"
 
 
 def test_the_error_body_carries_the_code_the_status_and_the_detail(http):
-    body = http.post(
-        f"{PREFIX}/workflows", json=workflow_payload(enrollment_type="company")
-    ).json()
+    body = http.post(f"{PREFIX}/workflows", json=workflow_payload(enrollment_type="company")).json()
     assert body["error"] == "workflow_must_be_contact_based"
     assert body["status"] == 400
 
@@ -2296,7 +2359,9 @@ def test_enrolling_is_audited_to_the_evaluate_route(store, fired):
     assert store.audit(collection=ENROLLMENTS)[0]["source"] == EVALUATE_SOURCE
 
 
-def test_an_already_enrolled_match_is_audited_as_an_update(store, engine, connected, published, room):
+def test_an_already_enrolled_match_is_audited_as_an_update(
+    store, engine, connected, published, room
+):
     engine.record_activity(room["id"], download(), actor="dana", source=SOURCE)
     engine.evaluate(room["id"], BUYER, actor="dana", source=EVALUATE_SOURCE)
     engine.record_activity(room["id"], download(), actor="dana", source=SOURCE)
@@ -2350,9 +2415,13 @@ def test_a_withdrawn_workflow_reports_itself_as_withdrawn_not_as_missing(engine,
 
 def test_nothing_ever_records_a_vendor_url_as_the_audit_source(http, http_room, http_published):
     """The researched write side is HubSpot's API; this product is not a proxy for it."""
-    http.post(f"{PREFIX}/rooms/{http_room['id']}/activity", json=download(), params={"actor": "dana"})
     http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/evaluate", json={"contact": BUYER}, params={"actor": "dana"}
+        f"{PREFIX}/rooms/{http_room['id']}/activity", json=download(), params={"actor": "dana"}
+    )
+    http.post(
+        f"{PREFIX}/rooms/{http_room['id']}/evaluate",
+        json={"contact": BUYER},
+        params={"actor": "dana"},
     )
     for entry in http.get("/api/audit", params={"limit": 500}).json()["entries"]:
         source = (entry.get("source") or "").lower()
@@ -2387,7 +2456,7 @@ def test_every_source_the_feature_module_passes_names_its_own_prefix():
     assert prefixes == {"POST", "PATCH", "DELETE"}, prefixes
     for line in source.splitlines():
         if "source=f" in line:
-            assert f"{{router.prefix}}" in line, line.strip()
+            assert "{router.prefix}" in line, line.strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -2411,7 +2480,7 @@ def _matches_registered_route(source: str, served: list[dict[str, Any]]) -> bool
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -2430,9 +2499,13 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http, http_room):
     http.post(f"{PREFIX}/workflows/{created['id']}/publish")
     http.post(f"{PREFIX}/workflows/{created['id']}/unpublish")
     http.post(f"{PREFIX}/workflows/{created['id']}/publish")
-    http.post(f"{PREFIX}/rooms/{http_room['id']}/activity", json=download(), params={"actor": "dana"})
     http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/evaluate", json={"contact": BUYER}, params={"actor": "dana"}
+        f"{PREFIX}/rooms/{http_room['id']}/activity", json=download(), params={"actor": "dana"}
+    )
+    http.post(
+        f"{PREFIX}/rooms/{http_room['id']}/evaluate",
+        json={"contact": BUYER},
+        params={"actor": "dana"},
     )
     http.delete(f"{PREFIX}/workflows/{created['id']}")
 

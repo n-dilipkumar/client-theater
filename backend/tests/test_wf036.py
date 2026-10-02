@@ -36,8 +36,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.crm_provisioning import ProvisioningEngine
 from dsr.crm_provisioning.diff import key_metadata, object_request, property_request
@@ -74,8 +72,8 @@ from dsr.crm_provisioning.vocabulary import (
     KEY_ACTIONS,
     KEY_MAX_BYTES,
     KEY_MAX_COLUMNS,
-    KEY_STATUSES,
     KEY_STATUS_PROGRESSION,
+    KEY_STATUSES,
     OBJECT_ACTIONS,
     OUTCOMES,
     PROPERTY_ACTIONS,
@@ -86,6 +84,7 @@ from dsr.crm_provisioning.vocabulary import (
 from dsr.db.audited import AuditedDatabase, RecordNotFound
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -117,17 +116,38 @@ def manifest_body(**overrides: Any) -> dict[str, Any]:
         "room_object_id": "dsr.engagement",
         "object": {"name": "dsr_engagement", "label": "Sales-room engagement"},
         "properties": [
-            {"name": "engagement_id", "label": "Engagement id", "type": "string",
-             "group_name": GROUP, "length": 64, "required": True,
-             "description": "The sales room's own row id. Carries the sync key."},
-            {"name": "room_name", "label": "Room name", "type": "string",
-             "group_name": GROUP, "length": 120},
-            {"name": "action", "label": "Action", "type": "enumeration",
-             "group_name": GROUP,
-             "options": [{"label": "Viewed", "value": "viewed"},
-                         {"label": "Downloaded", "value": "downloaded"}]},
-            {"name": "seconds_on_page", "label": "Seconds on page", "type": "number",
-             "group_name": GROUP},
+            {
+                "name": "engagement_id",
+                "label": "Engagement id",
+                "type": "string",
+                "group_name": GROUP,
+                "length": 64,
+                "required": True,
+                "description": "The sales room's own row id. Carries the sync key.",
+            },
+            {
+                "name": "room_name",
+                "label": "Room name",
+                "type": "string",
+                "group_name": GROUP,
+                "length": 120,
+            },
+            {
+                "name": "action",
+                "label": "Action",
+                "type": "enumeration",
+                "group_name": GROUP,
+                "options": [
+                    {"label": "Viewed", "value": "viewed"},
+                    {"label": "Downloaded", "value": "downloaded"},
+                ],
+            },
+            {
+                "name": "seconds_on_page",
+                "label": "Seconds on page",
+                "type": "number",
+                "group_name": GROUP,
+            },
         ],
         "sync_key": {"columns": [{"name": "engagement_id", "length": 64}]},
     }
@@ -138,13 +158,23 @@ def manifest_body(**overrides: Any) -> dict[str, Any]:
 def wide_key_manifest(**overrides: Any) -> dict[str, Any]:
     """A manifest whose key is over the researched 900 byte limit."""
     columns = [
-        {"name": "engagement_id", "label": "Engagement id", "type": "string",
-         "group_name": GROUP, "length": 200}
+        {
+            "name": "engagement_id",
+            "label": "Engagement id",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 200,
+        }
     ]
     for index in range(1, 5):
         columns.append(
-            {"name": f"scoped_{index}", "label": f"Scoped {index}", "type": "string",
-             "group_name": GROUP, "length": 200}
+            {
+                "name": f"scoped_{index}",
+                "label": f"Scoped {index}",
+                "type": "string",
+                "group_name": GROUP,
+                "length": 200,
+            }
         )
     return manifest_body(
         manifest_id="dsr_engagement_scoped",
@@ -193,9 +223,7 @@ def manifest(engine):
 
 @pytest.fixture()
 def installed(engine, connection, manifest):
-    return engine.install(
-        connection["id"], "dsr_engagement", "1.0.0", actor="dana", source=SOURCE
-    )
+    return engine.install(connection["id"], "dsr_engagement", "1.0.0", actor="dana", source=SOURCE)
 
 
 @pytest.fixture()
@@ -218,9 +246,13 @@ def http_engine(http):
 
 def seed_rooms(store: RecordStore) -> list[tuple[str, str]]:
     """Demo rooms in the shape ``backend/seed.py`` passes: ``[(room_id, account)]``."""
-    first = store.create("room", {"name": "Northwind", "account": "Northwind Traders"}, actor="dana")
+    first = store.create(
+        "room", {"name": "Northwind", "account": "Northwind Traders"}, actor="dana"
+    )
     second = store.create("room", {"name": "Contoso", "account": "Contoso Health"}, actor="dana")
-    third = store.create("room", {"name": "Fabrikam", "account": "Fabrikam Logistics"}, actor="dana")
+    third = store.create(
+        "room", {"name": "Fabrikam", "account": "Fabrikam Logistics"}, actor="dana"
+    )
     return [
         (first["id"], "Northwind Traders"),
         (second["id"], "Contoso Health"),
@@ -262,7 +294,7 @@ def _matches_registered_route(source: str, served: list[dict[str, Any]]) -> bool
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, segments)
+            for expected, found in zip(template, segments, strict=False)
         ):
             return True
     return False
@@ -276,7 +308,9 @@ def _matches_registered_route(source: str, served: list[dict[str, Any]]) -> bool
 def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     """The route resolves even though no shared file names this feature."""
     module = load_feature(MODULE_NAME)
-    entry = next(f for f in http.get("/api/features").json()["features"] if f["id"] == module.FEATURE["id"])
+    entry = next(
+        f for f in http.get("/api/features").json()["features"] if f["id"] == module.FEATURE["id"]
+    )
 
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-036"
@@ -289,12 +323,16 @@ def test_the_frontend_descriptor_id_matches_the_backend_feature_id():
     module = load_feature(MODULE_NAME)
     descriptor = (
         Path(__file__).resolve().parents[2]
-        / "frontend" / "src" / "features" / module.FEATURE["id"] / "index.jsx"
+        / "frontend"
+        / "src"
+        / "features"
+        / module.FEATURE["id"]
+        / "index.jsx"
     )
     text = descriptor.read_text(encoding="utf-8")
 
-    assert f'id: {module.FEATURE["id"]!r}' in text
-    assert f'label:' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
+    assert "label:" in text
     assert "Component:" in text
 
 
@@ -350,7 +388,13 @@ def test_no_migration_and_no_typed_column_was_added():
     schema = (Path(__file__).resolve().parents[1] / "dsr" / "db" / "schema.sql").read_text(
         encoding="utf-8"
     )
-    for fragment in ("crm_object", "crm_manifest", "crm_property", "crm_sync_key", "crm_installation"):
+    for fragment in (
+        "crm_object",
+        "crm_manifest",
+        "crm_property",
+        "crm_sync_key",
+        "crm_installation",
+    ):
         assert fragment not in schema
 
 
@@ -453,7 +497,11 @@ def test_dataverse_names_the_attribute_metadata_fields():
 
 
 def test_hubspot_reads_and_writes_the_researched_paths():
-    assert HUBSPOT.schema_read == ("/", "/crm-object-schemas/2026-09/schemas", "/crm/v3/schemas/...")
+    assert HUBSPOT.schema_read == (
+        "/",
+        "/crm-object-schemas/2026-09/schemas",
+        "/crm/v3/schemas/...",
+    )
     assert HUBSPOT.object_create == "/crm-object-schemas/2026-09/schemas"
     assert HUBSPOT.property_create == "/crm/properties/2026-09/{object_type}"
 
@@ -534,7 +582,10 @@ def test_a_manifest_is_normalised_from_arbitrary_json():
     assert record["room_object_id"] == "dsr.engagement"
     assert record["object"]["name"] == "dsr_engagement"
     assert [prop["name"] for prop in record["properties"]] == [
-        "engagement_id", "room_name", "action", "seconds_on_page",
+        "engagement_id",
+        "room_name",
+        "action",
+        "seconds_on_page",
     ]
 
 
@@ -550,8 +601,9 @@ def test_a_manifest_needs_an_object_with_a_usable_name():
 
 def test_an_object_name_must_be_a_crm_safe_identifier():
     with pytest.raises(ManifestError, match="object.name"):
-        normalise_manifest({"manifest_id": "m", "object": {"name": "9 bad-name"},
-                            "properties": [{"name": "a"}]})
+        normalise_manifest(
+            {"manifest_id": "m", "object": {"name": "9 bad-name"}, "properties": [{"name": "a"}]}
+        )
 
 
 def test_a_manifest_needs_at_least_one_property():
@@ -561,14 +613,20 @@ def test_a_manifest_needs_at_least_one_property():
 
 def test_a_property_needs_a_name():
     with pytest.raises(ManifestError, match="properties\\[1\\].name is required"):
-        normalise_manifest({"manifest_id": "m", "object": {"name": "m"},
-                            "properties": [{"name": "a"}, {"label": "b"}]})
+        normalise_manifest(
+            {
+                "manifest_id": "m",
+                "object": {"name": "m"},
+                "properties": [{"name": "a"}, {"label": "b"}],
+            }
+        )
 
 
 def test_a_property_name_must_be_a_crm_safe_identifier():
     with pytest.raises(ManifestError, match="must start with a letter"):
-        normalise_manifest({"manifest_id": "m", "object": {"name": "m"},
-                            "properties": [{"name": "9lives"}]})
+        normalise_manifest(
+            {"manifest_id": "m", "object": {"name": "m"}, "properties": [{"name": "9lives"}]}
+        )
 
 
 def test_a_version_must_be_a_short_opaque_token():
@@ -584,8 +642,9 @@ def test_a_version_defaults_to_one():
 
 def test_a_manifest_id_must_be_crm_safe():
     with pytest.raises(ManifestError, match="manifest_id"):
-        normalise_manifest({"manifest_id": "1bad", "object": {"name": "m"},
-                            "properties": [{"name": "a"}]})
+        normalise_manifest(
+            {"manifest_id": "1bad", "object": {"name": "m"}, "properties": [{"name": "a"}]}
+        )
 
 
 def test_a_label_defaults_from_the_name():
@@ -594,8 +653,9 @@ def test_a_label_defaults_from_the_name():
 
 
 def test_an_object_label_defaults_from_the_name():
-    record = normalise_manifest({"manifest_id": "m", "object": {"name": "dsr_thing"},
-                                 "properties": [{"name": "a"}]})
+    record = normalise_manifest(
+        {"manifest_id": "m", "object": {"name": "dsr_thing"}, "properties": [{"name": "a"}]}
+    )
     assert record["object"]["label"] == "Dsr Thing"
 
 
@@ -618,16 +678,23 @@ def test_a_sync_key_needs_at_least_one_column():
 
 def test_a_sync_key_column_length_must_be_a_positive_integer():
     with pytest.raises(ManifestError, match="positive integer length"):
-        normalise_manifest(manifest_body(sync_key={"columns": [{"name": "engagement_id", "length": 0}]}))
+        normalise_manifest(
+            manifest_body(sync_key={"columns": [{"name": "engagement_id", "length": 0}]})
+        )
 
 
 def test_a_sync_key_column_may_be_named_by_its_field_alias():
-    record = normalise_manifest(manifest_body(sync_key={"columns": [{"field": "engagement_id", "length": 8}]}))
+    record = normalise_manifest(
+        manifest_body(sync_key={"columns": [{"field": "engagement_id", "length": 8}]})
+    )
     assert record["sync_key"]["columns"] == [{"name": "engagement_id", "length": 8}]
 
 
 def test_an_option_set_accepts_labels_and_values_or_plain_strings():
-    assert normalise_options(["a", "b"]) == [{"label": "a", "value": "a"}, {"label": "b", "value": "b"}]
+    assert normalise_options(["a", "b"]) == [
+        {"label": "a", "value": "a"},
+        {"label": "b", "value": "b"},
+    ]
     assert normalise_options([{"label": "A", "value": "a"}]) == [{"label": "A", "value": "a"}]
 
 
@@ -696,8 +763,14 @@ def test_a_repeated_option_is_advisory_not_blocking():
     body = manifest_body()
     body["properties"] = [
         {
-            "name": "action", "label": "Action", "type": "enumeration", "group_name": GROUP,
-            "options": [{"label": "Viewed", "value": "viewed"}, {"label": "Viewed", "value": "again"}],
+            "name": "action",
+            "label": "Action",
+            "type": "enumeration",
+            "group_name": GROUP,
+            "options": [
+                {"label": "Viewed", "value": "viewed"},
+                {"label": "Viewed", "value": "again"},
+            ],
         }
     ]
     found = findings_for(normalise_manifest(body), HUBSPOT)
@@ -706,16 +779,18 @@ def test_a_repeated_option_is_advisory_not_blocking():
 
 def test_an_enumeration_with_no_option_set_is_advisory():
     body = manifest_body()
-    body["properties"] = [{"name": "action", "label": "Action", "type": "enumeration",
-                           "group_name": GROUP}]
+    body["properties"] = [
+        {"name": "action", "label": "Action", "type": "enumeration", "group_name": GROUP}
+    ]
     found = findings_for(normalise_manifest(body), HUBSPOT)
     assert "no_options" in [f["code"] for f in advisory(found)]
 
 
 def test_a_string_with_no_length_is_advisory():
     body = manifest_body()
-    body["properties"] = [{"name": "room_name", "label": "Room", "type": "string",
-                           "group_name": GROUP}]
+    body["properties"] = [
+        {"name": "room_name", "label": "Room", "type": "string", "group_name": GROUP}
+    ]
     found = findings_for(normalise_manifest(body), HUBSPOT)
     assert "no_length" in [f["code"] for f in advisory(found)]
 
@@ -770,8 +845,13 @@ def test_a_key_over_900_bytes_is_refused():
 
 def test_a_key_over_16_columns_is_refused():
     properties = [
-        {"name": f"col_{index}", "label": f"Col {index}", "type": "string",
-         "group_name": GROUP, "length": 4}
+        {
+            "name": f"col_{index}",
+            "label": f"Col {index}",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 4,
+        }
         for index in range(17)
     ]
     body = manifest_body(
@@ -792,8 +872,14 @@ def test_a_key_naming_an_undeclared_property_is_refused():
 
 def test_a_string_key_column_with_no_declared_length_is_refused():
     body = manifest_body(
-        properties=[{"name": "engagement_id", "label": "Engagement id", "type": "string",
-                     "group_name": GROUP}],
+        properties=[
+            {
+                "name": "engagement_id",
+                "label": "Engagement id",
+                "type": "string",
+                "group_name": GROUP,
+            }
+        ],
         sync_key={"columns": [{"name": "engagement_id"}]},
     )
     with pytest.raises(KeyConstraintError) as excinfo:
@@ -814,11 +900,11 @@ def test_key_bytes_measures_a_numbered_key_as_eight_each():
         {"name": "a", "label": "A", "type": "number", "group_name": GROUP},
         {"name": "b", "label": "B", "type": "bool", "group_name": GROUP},
         {"name": "c", "label": "C", "type": "datetime", "group_name": GROUP},
-        {"name": "d", "label": "D", "type": "enumeration", "group_name": GROUP,
-         "options": ["x"]},
+        {"name": "d", "label": "D", "type": "enumeration", "group_name": GROUP, "options": ["x"]},
     ]
-    body = manifest_body(properties=properties,
-                         sync_key={"columns": [{"name": n} for n in ("a", "b", "c", "d")]})
+    body = manifest_body(
+        properties=properties, sync_key={"columns": [{"name": n} for n in ("a", "b", "c", "d")]}
+    )
     assert key_bytes(normalise_manifest(body)) == 8 + 1 + 8 + 4
 
 
@@ -929,10 +1015,13 @@ def test_the_key_body_is_an_entity_key_metadata_with_its_columns_set():
 
 def test_a_multi_column_key_body_names_each_column():
     body = manifest_body(
-        sync_key={"columns": [{"name": "engagement_id", "length": 8}, {"name": "room_name", "length": 8}]}
+        sync_key={
+            "columns": [{"name": "engagement_id", "length": 8}, {"name": "room_name", "length": 8}]
+        }
     )
     assert key_metadata(normalise_manifest(body), DATAVERSE)["KeyAttributes"] == [
-        "engagement_id", "room_name",
+        "engagement_id",
+        "room_name",
     ]
 
 
@@ -944,7 +1033,8 @@ def test_a_multi_column_key_body_names_each_column():
 def test_a_connection_is_registered_with_its_vendor_and_environment(engine):
     row = engine.register_connection(
         {"name": "Northwind", "vendor": "hubspot", "environment": "sandbox"},
-        actor="dana", source=SOURCE,
+        actor="dana",
+        source=SOURCE,
     )
     assert row["vendor"] == "hubspot"
     assert row["environment"] == "sandbox"
@@ -972,7 +1062,8 @@ def test_an_unknown_environment_is_refused(engine):
 def test_a_simulated_index_outcome_must_be_one_of_two(engine):
     with pytest.raises(ProvisioningError, match="key_index"):
         engine.register_connection(
-            {"name": "x", "vendor": "dataverse", "simulate": {"key_index": "explode"}}, source=SOURCE
+            {"name": "x", "vendor": "dataverse", "simulate": {"key_index": "explode"}},
+            source=SOURCE,
         )
 
 
@@ -1163,9 +1254,9 @@ def test_a_property_that_exists_and_differs_is_a_conflict_and_is_not_written(
 ):
     """The researched rule: never destructively rename or change an existing field."""
     engine.store.update(
-        engine.crm.find_property(
-            engine.connection(connection["id"]), "dsr_engagement", "action"
-        )["id"],
+        engine.crm.find_property(engine.connection(connection["id"]), "dsr_engagement", "action")[
+            "id"
+        ],
         {"label": "Engagement action"},
         source=SOURCE,
     )
@@ -1174,9 +1265,12 @@ def test_a_property_that_exists_and_differs_is_a_conflict_and_is_not_written(
     assert [row["property"] for row in result["run"]["conflicts"]] == ["action"]
     assert result["run"]["counts"]["conflicts"] == 1
     # And the label in the CRM is still the one a person typed.
-    assert engine.crm.find_property(
-        engine.connection(connection["id"]), "dsr_engagement", "action"
-    )["label"] == "Engagement action"
+    assert (
+        engine.crm.find_property(engine.connection(connection["id"]), "dsr_engagement", "action")[
+            "label"
+        ]
+        == "Engagement action"
+    )
 
 
 def test_a_conflict_names_what_the_crm_actually_has(engine, installed, connection):
@@ -1194,9 +1288,7 @@ def test_a_conflict_names_what_the_crm_actually_has(engine, installed, connectio
     assert "never changes an existing property" in conflict["reason"]
 
 
-def test_a_manifest_that_stops_declaring_a_field_leaves_it_in_place(
-    engine, installed, connection
-):
+def test_a_manifest_that_stops_declaring_a_field_leaves_it_in_place(engine, installed, connection):
     """The dangerous direction of the same rule: a removed field is not dropped."""
     body = manifest_body(version="2.0.0")
     body["properties"] = [p for p in body["properties"] if p["name"] != "room_name"]
@@ -1205,9 +1297,10 @@ def test_a_manifest_that_stops_declaring_a_field_leaves_it_in_place(
     result = engine.install(connection["id"], "dsr_engagement", "2.0.0", source=SOURCE)
     assert result["created"] == 0
     assert [row["name"] for row in result["run"]["left_in_place"]] == ["room_name"]
-    assert engine.crm.find_property(
-        engine.connection(connection["id"]), "dsr_engagement", "room_name"
-    ) is not None
+    assert (
+        engine.crm.find_property(engine.connection(connection["id"]), "dsr_engagement", "room_name")
+        is not None
+    )
 
 
 def test_a_rename_creates_the_new_name_and_keeps_the_old_column(engine, installed, connection):
@@ -1277,9 +1370,7 @@ def test_a_manifest_with_no_sync_key_plans_no_key(engine, connection, manifest):
     assert plan["key"]["action"] == "absent"
 
 
-def test_a_narrower_crm_column_is_advisory_rather_than_a_conflict(
-    engine, installed, connection
-):
+def test_a_narrower_crm_column_is_advisory_rather_than_a_conflict(engine, installed, connection):
     """No code path can widen a column either, so calling it a conflict would be noise."""
     engine.store.update(
         engine.crm.find_property(
@@ -1319,7 +1410,10 @@ def test_a_first_install_creates_the_object_and_every_missing_property(
     assert result["created"] == 5  # one object and four properties
     assert result["complete"] is True
     assert [p["name"] for p in result["properties"]] == [
-        "engagement_id", "room_name", "action", "seconds_on_page",
+        "engagement_id",
+        "room_name",
+        "action",
+        "seconds_on_page",
     ]
 
 
@@ -1353,9 +1447,9 @@ def test_an_install_records_the_schema_reads_it_made(engine, connection, manifes
 
 
 def test_a_dataverse_install_sends_the_metadata_reads(engine, dataverse_connection, manifest):
-    run = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )["run"]
+    run = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)[
+        "run"
+    ]
     gets = [row["path"] for row in run["requests"] if row["method"] == "GET"]
     assert gets == ["/api/data/v9.2/$metadata", "/api/data/v9.2/EntityDefinitions"]
 
@@ -1363,9 +1457,9 @@ def test_a_dataverse_install_sends_the_metadata_reads(engine, dataverse_connecti
 def test_a_dataverse_property_request_carries_the_object_name_in_its_path(
     engine, dataverse_connection, manifest
 ):
-    run = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )["run"]
+    run = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)[
+        "run"
+    ]
     posts = [row for row in run["requests"] if "Attributes" in str(row.get("path"))]
     assert posts
     assert all("dsr_engagement" in row["path"] for row in posts)
@@ -1374,10 +1468,12 @@ def test_a_dataverse_property_request_carries_the_object_name_in_its_path(
 def test_a_dataverse_install_requests_the_key_with_the_researched_call(
     engine, dataverse_connection, manifest
 ):
-    run = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )["run"]
-    key_requests = [row for row in run["requests"] if row.get("path") == "/api/data/v9.2/CreateEntityKey"]
+    run = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)[
+        "run"
+    ]
+    key_requests = [
+        row for row in run["requests"] if row.get("path") == "/api/data/v9.2/CreateEntityKey"
+    ]
     assert len(key_requests) == 1
     assert key_requests[0]["body"]["KeyAttributes"] == ["engagement_id"]
 
@@ -1468,8 +1564,13 @@ def test_a_new_version_creates_only_the_field_it_adds(engine, connection, manife
     engine.install(connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     body = manifest_body(version="1.1.0")
     body["properties"] = body["properties"] + [
-        {"name": "campaign_touch", "label": "Campaign touch", "type": "string",
-         "group_name": GROUP, "length": 80},
+        {
+            "name": "campaign_touch",
+            "label": "Campaign touch",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 80,
+        },
     ]
     engine.register_manifest(body, source=SOURCE)
 
@@ -1489,9 +1590,7 @@ def test_a_first_install_reports_one_object_and_four_properties(engine, connecti
     assert result["created"] == result["applied"] == 5
 
 
-def test_a_manifest_the_key_limit_rejects_is_refused_and_writes_nothing(
-    store, engine, connection
-):
+def test_a_manifest_the_key_limit_rejects_is_refused_and_writes_nothing(store, engine, connection):
     engine.register_manifest(wide_key_manifest(), source=SOURCE)
     before = len(store.audit(limit=1000))
     with pytest.raises(KeyConstraintError):
@@ -1555,9 +1654,9 @@ def test_a_dry_run_records_that_it_was_a_preview(engine, connection, manifest):
 
 def test_a_dry_run_still_reports_the_requests_it_would_have_sent(engine, connection, manifest):
     """A preview that reported only the object would be telling a third of the truth."""
-    run = engine.install(
-        connection["id"], "dsr_engagement", "1.0.0", dry_run=True, source=SOURCE
-    )["run"]
+    run = engine.install(connection["id"], "dsr_engagement", "1.0.0", dry_run=True, source=SOURCE)[
+        "run"
+    ]
     posts = [row for row in run["requests"] if row["method"] == "POST"]
     assert len(posts) == 5
     assert posts[0]["path"] == "/crm-object-schemas/2026-09/schemas"
@@ -1588,9 +1687,7 @@ def test_a_dry_run_does_not_touch_an_already_installed_object(engine, installed,
 
 
 def test_a_requested_key_lands_pending_with_an_async_job(engine, dataverse_connection, manifest):
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     key = result["key"]
     assert key["status"] == "Pending"
     assert key["async_job_id"]
@@ -1601,9 +1698,7 @@ def test_the_background_build_is_not_blocked_on_by_the_install(
     engine, dataverse_connection, manifest
 ):
     """The object is usable before the key is, which is the point of a background build."""
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     assert result["object"] is not None
     assert result["key"]["status"] == "Pending"
 
@@ -1611,18 +1706,14 @@ def test_the_background_build_is_not_blocked_on_by_the_install(
 def test_a_key_reaches_active_after_the_researched_progression(
     engine, dataverse_connection, manifest
 ):
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     key_id = result["key"]["id"]
     seen = [engine.poll_key(key_id, source=SOURCE)["status"] for _ in range(DEFAULT_INDEX_POLLS)]
     assert seen == ["In Progress", "Active"]
 
 
 def test_polling_an_active_key_leaves_it_active(engine, dataverse_connection, manifest):
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     key_id = result["key"]["id"]
     for _ in range(DEFAULT_INDEX_POLLS):
         engine.poll_key(key_id, source=SOURCE)
@@ -1630,9 +1721,7 @@ def test_polling_an_active_key_leaves_it_active(engine, dataverse_connection, ma
 
 
 def test_an_active_key_records_when_it_was_activated(engine, dataverse_connection, manifest):
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     key_id = result["key"]["id"]
     for _ in range(DEFAULT_INDEX_POLLS):
         row = engine.poll_key(key_id, source=SOURCE)
@@ -1692,9 +1781,7 @@ def test_a_reactivated_key_then_reaches_active(engine, connection, manifest):
 
 
 def test_reactivating_an_active_key_is_a_no_op(engine, dataverse_connection, manifest):
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     key_id = result["key"]["id"]
     for _ in range(DEFAULT_INDEX_POLLS):
         engine.poll_key(key_id, source=SOURCE)
@@ -1706,9 +1793,7 @@ def test_reactivating_an_active_key_is_a_no_op(engine, dataverse_connection, man
 def test_reactivating_a_key_still_building_leaves_it_building(
     engine, dataverse_connection, manifest
 ):
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     key_id = result["key"]["id"]
     engine.poll_key(key_id, source=SOURCE)
     assert engine.reactivate_key(key_id, source=SOURCE)["status"] == "In Progress"
@@ -1722,9 +1807,7 @@ def test_a_reinstall_does_not_request_a_second_key(engine, dataverse_connection,
 
 
 def test_a_key_whose_index_is_not_active_diffs_as_failed(engine, dataverse_connection, manifest):
-    result = engine.install(
-        dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE
-    )
+    result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     plan = engine.plan(dataverse_connection["id"], "dsr_engagement", "1.0.0")
     assert plan["key"]["action"] == "failed"
     assert result["key"]["status"] == "Pending"
@@ -1748,7 +1831,10 @@ def test_reactivating_an_unknown_key_is_a_core_not_found(engine):
 def test_an_object_lists_its_properties(engine, installed, connection):
     obj = engine.objects(connection_id=connection["id"])[0]
     assert [p["name"] for p in engine.properties(obj["id"])] == [
-        "action", "engagement_id", "room_name", "seconds_on_page",
+        "action",
+        "engagement_id",
+        "room_name",
+        "seconds_on_page",
     ]
 
 
@@ -1765,8 +1851,13 @@ def test_a_property_created_by_hand_does_not_claim_to_have_been_installed(
     result = engine.install(connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     added = engine.add_property(
         result["object"]["id"],
-        {"name": "campaign_touch", "label": "Campaign touch", "type": "string",
-         "group_name": GROUP, "length": 80},
+        {
+            "name": "campaign_touch",
+            "label": "Campaign touch",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 80,
+        },
         source=SOURCE,
     )
     assert added["origin"] == "manual"
@@ -1777,8 +1868,13 @@ def test_a_field_can_be_added_without_a_new_manifest_version(engine, connection,
     result = engine.install(connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     added = engine.add_property(
         result["object"]["id"],
-        {"name": "campaign_touch", "label": "Campaign touch", "type": "string",
-         "group_name": GROUP, "length": 80},
+        {
+            "name": "campaign_touch",
+            "label": "Campaign touch",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 80,
+        },
         source=SOURCE,
     )
     assert added["name"] == "campaign_touch"
@@ -1789,8 +1885,8 @@ def test_adding_a_property_that_already_exists_is_refused(engine, installed, con
     obj = engine.objects(connection_id=connection["id"])[0]
     with pytest.raises(PropertyConflict) as excinfo:
         engine.add_property(
-            obj["id"], {"name": "room_name", "label": "Something else", "type": "string",
-                        "group_name": GROUP},
+            obj["id"],
+            {"name": "room_name", "label": "Something else", "type": "string", "group_name": GROUP},
             source=SOURCE,
         )
     assert excinfo.value.status == 409
@@ -1801,11 +1897,13 @@ def test_adding_a_property_does_not_change_an_existing_one(engine, installed, co
     obj = engine.objects(connection_id=connection["id"])[0]
     with pytest.raises(PropertyConflict):
         engine.add_property(
-            obj["id"], {"name": "room_name", "label": "Changed", "type": "string",
-                        "group_name": GROUP},
+            obj["id"],
+            {"name": "room_name", "label": "Changed", "type": "string", "group_name": GROUP},
             source=SOURCE,
         )
-    remote = engine.crm.find_property(engine.connection(connection["id"]), "dsr_engagement", "room_name")
+    remote = engine.crm.find_property(
+        engine.connection(connection["id"]), "dsr_engagement", "room_name"
+    )
     assert remote["label"] == "Room name"
 
 
@@ -1920,8 +2018,12 @@ def test_a_room_summary_names_its_unsupported_connections(engine):
 
 def test_a_room_summary_counts_keys_that_need_a_person(engine, connection, manifest):
     failing = engine.register_connection(
-        {"name": "Contoso", "vendor": "dataverse", "room_id": "room_2",
-         "simulate": {"key_index": "failed"}},
+        {
+            "name": "Contoso",
+            "vendor": "dataverse",
+            "room_id": "room_2",
+            "simulate": {"key_index": "failed"},
+        },
         source=SOURCE,
     )
     result = engine.install(failing["id"], "dsr_engagement", "1.0.0", source=SOURCE)
@@ -1976,11 +2078,13 @@ def test_the_gateway_reads_only_its_own_connections_state(
 
 def test_the_gateway_refuses_to_create_a_second_object_of_one_name(engine, connection):
     created = engine.crm.create_object(
-        connection, {"name": "twice", "label": "Twice", "_object_id_style": "numeric"},
+        connection,
+        {"name": "twice", "label": "Twice", "_object_id_style": "numeric"},
         source=SOURCE,
     )
     again = engine.crm.create_object(
-        connection, {"name": "twice", "label": "Twice", "_object_id_style": "numeric"},
+        connection,
+        {"name": "twice", "label": "Twice", "_object_id_style": "numeric"},
         source=SOURCE,
     )
     assert created["created"] is True
@@ -2041,7 +2145,9 @@ def test_installing_is_audited_to_the_install_route(store, engine, connection, m
         assert all(entry["source"] == SOURCE for entry in entries), collection
 
 
-def test_poll_and_reactivate_are_audited_to_their_own_routes(store, engine, dataverse_connection, manifest):
+def test_poll_and_reactivate_are_audited_to_their_own_routes(
+    store, engine, dataverse_connection, manifest
+):
     result = engine.install(dataverse_connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     key_id = result["key"]["id"]
     engine.poll_key(key_id, source=f"POST {PREFIX}/keys/{{key_id}}/poll")
@@ -2058,8 +2164,13 @@ def test_adding_a_property_is_audited_to_the_property_route(store, engine, conne
     result = engine.install(connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     engine.add_property(
         result["object"]["id"],
-        {"name": "campaign_touch", "label": "Campaign touch", "type": "string",
-         "group_name": GROUP, "length": 80},
+        {
+            "name": "campaign_touch",
+            "label": "Campaign touch",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 80,
+        },
         source=f"POST {PREFIX}/objects/{{object_id}}/properties",
     )
     assert store.audit(collection="crm_property")[0]["source"] == (
@@ -2073,7 +2184,9 @@ def test_the_vendor_state_is_audited_too(store, engine, connection, manifest):
         assert all(entry["source"] == SOURCE for entry in store.audit(collection=collection))
 
 
-def test_an_audit_row_carries_the_room_the_installation_belongs_to(store, engine, connection, manifest):
+def test_an_audit_row_carries_the_room_the_installation_belongs_to(
+    store, engine, connection, manifest
+):
     engine.install(connection["id"], "dsr_engagement", "1.0.0", source=SOURCE)
     assert store.audit(collection="crm_object")[0]["room_id"] == "room_1"
 
@@ -2261,8 +2374,12 @@ def test_a_dry_run_over_http_is_a_200_and_creates_nothing(http, http_engine):
     connection = register_demo(http)
     response = http.post(
         f"{PREFIX}/install",
-        json={"connection_id": connection["id"], "manifest_id": "dsr_engagement",
-              "version": "1.0.0", "dry_run": True},
+        json={
+            "connection_id": connection["id"],
+            "manifest_id": "dsr_engagement",
+            "version": "1.0.0",
+            "dry_run": True,
+        },
     )
     assert response.status_code == 200
     assert response.json()["outcome"] == "dry_run"
@@ -2327,8 +2444,13 @@ def test_adding_a_property_over_http_is_a_201(http):
     object_id = http.get(f"{PREFIX}/objects").json()["objects"][0]["id"]
     response = http.post(
         f"{PREFIX}/objects/{object_id}/properties",
-        json={"name": "campaign_touch", "label": "Campaign touch", "type": "string",
-              "group_name": GROUP, "length": 80},
+        json={
+            "name": "campaign_touch",
+            "label": "Campaign touch",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 80,
+        },
     )
     assert response.status_code == 201
     assert response.json()["origin"] == "manual"
@@ -2417,8 +2539,12 @@ def test_the_installations_route_counts_over_the_rows_it_returns(http):
     connection = http.get(f"{PREFIX}/connections").json()["connections"][0]
     http.post(
         f"{PREFIX}/install",
-        json={"connection_id": connection["id"], "manifest_id": "dsr_engagement",
-              "version": "1.0.0", "dry_run": True},
+        json={
+            "connection_id": connection["id"],
+            "manifest_id": "dsr_engagement",
+            "version": "1.0.0",
+            "dry_run": True,
+        },
     )
     body = http.get(f"{PREFIX}/installations").json()
     assert body["count"] == 2
@@ -2430,8 +2556,12 @@ def test_the_installations_route_can_filter_by_outcome(http):
     connection = http.get(f"{PREFIX}/connections").json()["connections"][0]
     http.post(
         f"{PREFIX}/install",
-        json={"connection_id": connection["id"], "manifest_id": "dsr_engagement",
-              "version": "1.0.0", "dry_run": True},
+        json={
+            "connection_id": connection["id"],
+            "manifest_id": "dsr_engagement",
+            "version": "1.0.0",
+            "dry_run": True,
+        },
     )
     assert http.get(f"{PREFIX}/installations", params={"outcome": "dry_run"}).json()["count"] == 1
 
@@ -2457,8 +2587,10 @@ def test_the_room_objects_route_serves_the_room(http):
 
 
 def test_the_room_objects_route_names_its_unsupported_connections(http):
-    http.post(f"{PREFIX}/connections", json={"name": "Fabrikam", "vendor": "salesforce",
-                                             "room_id": "room_a"})
+    http.post(
+        f"{PREFIX}/connections",
+        json={"name": "Fabrikam", "vendor": "salesforce", "room_id": "room_a"},
+    )
     body = http.get(f"{PREFIX}/rooms/room_a/objects").json()
     assert body["unsupported"][0]["name"] == "Fabrikam"
     assert "could not be sourced" in body["unsupported"][0]["reason"]
@@ -2491,8 +2623,13 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http):
     object_id = http.get(f"{PREFIX}/objects").json()["objects"][0]["id"]
     http.post(
         f"{PREFIX}/objects/{object_id}/properties",
-        json={"name": "campaign_touch", "label": "Campaign touch", "type": "string",
-              "group_name": GROUP, "length": 80},
+        json={
+            "name": "campaign_touch",
+            "label": "Campaign touch",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 80,
+        },
     )
     dataverse = http.post(
         f"{PREFIX}/connections", json={"name": "Contoso", "vendor": "dataverse"}
@@ -2529,8 +2666,13 @@ def test_a_property_added_by_hand_audits_against_its_own_route(http):
     object_id = http.get(f"{PREFIX}/objects").json()["objects"][0]["id"]
     http.post(
         f"{PREFIX}/objects/{object_id}/properties",
-        json={"name": "campaign_touch", "label": "Campaign touch", "type": "string",
-              "group_name": GROUP, "length": 80},
+        json={
+            "name": "campaign_touch",
+            "label": "Campaign touch",
+            "type": "string",
+            "group_name": GROUP,
+            "length": 80,
+        },
     )
     entries = http.get("/api/audit", params={"collection": "crm_property"}).json()["entries"]
     assert entries[0]["source"] == f"POST {PREFIX}/objects/{{object_id}}/properties"
@@ -2627,7 +2769,9 @@ def test_the_simulated_vendor_inference_says_the_effect_is_stored():
 def test_the_simulated_vendor_inference_lists_both_sets_of_collections():
     entry = inference("simulated-vendor-state")
     assert entry["value"]["remote_collections"] == [
-        "crm_remote_object", "crm_remote_property", "crm_remote_key",
+        "crm_remote_object",
+        "crm_remote_property",
+        "crm_remote_key",
     ]
     assert "crm_object" in entry["value"]["own_collections"]
 
@@ -2705,9 +2849,9 @@ def test_the_dry_run_inference_says_a_preview_stores_one_row_and_nothing_else():
 
 def test_the_dry_run_inference_says_a_preview_reports_the_requests(engine, connection, manifest):
     """The requests are recorded for a preview too, which is the point of recording them."""
-    run = engine.install(
-        connection["id"], "dsr_engagement", "1.0.0", dry_run=True, source=SOURCE
-    )["run"]
+    run = engine.install(connection["id"], "dsr_engagement", "1.0.0", dry_run=True, source=SOURCE)[
+        "run"
+    ]
     assert any(row["method"] == "POST" for row in run["requests"])
 
 
@@ -2757,7 +2901,9 @@ def test_the_seed_marks_the_salesforce_connection_unsupported(seeded):
 def test_the_seed_registers_three_versions_of_the_engagement_manifest(seeded):
     engine, _, _ = seeded
     assert [m["version"] for m in engine.manifests(manifest_id="dsr_engagement")] == [
-        "1.0.0", "1.1.0", "1.2.0",
+        "1.0.0",
+        "1.1.0",
+        "1.2.0",
     ]
 
 
@@ -2779,7 +2925,9 @@ def test_the_seed_proves_idempotency_with_a_second_run(seeded):
 def test_the_seed_leaves_a_relabelled_field_untouched(seeded):
     engine, _, _ = seeded
     dataverse = next(c for c in engine.connections() if c["vendor"] == "dataverse")
-    conflicts = [row for run in engine.runs(connection_id=dataverse["id"]) for row in run["conflicts"]]
+    conflicts = [
+        row for run in engine.runs(connection_id=dataverse["id"]) for row in run["conflicts"]
+    ]
     assert [row["property"] for row in conflicts] == ["action"]
     remote = engine.crm.find_property(
         engine.connection(dataverse["id"]), "dsr_engagement", "action"
@@ -2835,10 +2983,14 @@ def test_the_seed_is_deterministic(store):
     second = AuditedDatabase(store.db.path)
     try:
         rooms = seed_rooms(store)
-        module.seed(first, {"room_ids": rooms, "now": datetime.now(timezone.utc),
-                            "rng": random.Random("wf036")})
-        module.seed(second, {"room_ids": rooms, "now": datetime.now(timezone.utc),
-                             "rng": random.Random("wf036")})
+        module.seed(
+            first,
+            {"room_ids": rooms, "now": datetime.now(timezone.utc), "rng": random.Random("wf036")},
+        )
+        module.seed(
+            second,
+            {"room_ids": rooms, "now": datetime.now(timezone.utc), "rng": random.Random("wf036")},
+        )
     finally:
         first.close()
         second.close()

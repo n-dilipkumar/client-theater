@@ -68,7 +68,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "value": {
             "unknown_types": "accepted, stored, and reported as unknown_types on the subscription",
             "empty_or_non_string": "refused with 400",
-            "where_reported": ["GET /subscriptions", "GET /webhooks/{id}/subscriptions", "GET /vocabulary"],
+            "where_reported": [
+                "GET /subscriptions",
+                "GET /webhooks/{id}/subscriptions",
+                "GET /vocabulary",
+            ],
         },
         "why": (
             "A closed enum is the tidier product and it is what most of this repository's other "
@@ -89,7 +93,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "basis": (
             'The research quotes exactly one permission sentence: "You must be an account `admin` '
             'to create a webhook." It says nothing about viewing, pausing, or unsubscribing, even '
-            'though the user flow has an admin doing all of them from Settings -> Webhooks.'
+            "though the user flow has an admin doing all of them from Settings -> Webhooks."
         ),
         "value": {
             "POST /webhooks": "requires role=admin; absent role is refused as firmly as a wrong one",
@@ -244,8 +248,15 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "share-link-field-name",
         "topic": "the field name a share link travels in",
-        "basis": 'The research says the activity comes from a share link and never names the field.',
-        "value": {"field": "shareLink", "required_for": ["presentation.viewed", "presentation.downloaded", "presentation.shared"]},
+        "basis": "The research says the activity comes from a share link and never names the field.",
+        "value": {
+            "field": "shareLink",
+            "required_for": [
+                "presentation.viewed",
+                "presentation.downloaded",
+                "presentation.shared",
+            ],
+        },
         "why": (
             "A rule that cannot be expressed cannot be enforced, so the field had to be named. "
             "camelCase matches the researched `associatedObjects` spelling rather than this "
@@ -261,7 +272,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "The research lists `propertyName` / `propertyPreviousValue` / `propertyValue` on the "
             "payload. It does not say the middle one is always present."
         ),
-        "value": {"when_absent": "the key is omitted from the payload", "never": '"propertyPreviousValue": null'},
+        "value": {
+            "when_absent": "the key is omitted from the payload",
+            "never": '"propertyPreviousValue": null',
+        },
         "why": (
             "A view has no previous state. Sending null would claim a value that does not exist, "
             "and a subscriber diffing two payloads would see a change from nothing to something."
@@ -272,7 +286,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "property-name-defaults-to-the-event",
         "topic": "what propertyName holds when the caller does not name one",
-        "basis": 'The research says the field is on the payload and never says what it contains for a view.',
+        "basis": "The research says the field is on the payload and never says what it contains for a view.",
         "value": {
             "default": "the event's own family plus '.activity', e.g. workspace.activity",
             "override": "propertyName on the record_event call",
@@ -290,13 +304,23 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "associated-object-url",
         "topic": "which associated objects carry a url",
         "basis": (
-            'The research\'s example object carries a `url` into the vendor\'s API, and its pull '
+            "The research's example object carries a `url` into the vendor's API, and its pull "
             "list publishes item paths for workspaces only. It publishes no pull route for account, "
             "user, file, or workspaceForm in this workflow."
         ),
         "value": {
-            "with_url": {"workspace": "/api/wf-025/backfill/workspaces/{id}", "workspacePlanTask": "/api/wf-025/backfill/workspace-plan-tasks"},
-            "without_url": ["account", "user", "file", "workspaceForm", "workspacePage", "workspaceSection"],
+            "with_url": {
+                "workspace": "/api/wf-025/backfill/workspaces/{id}",
+                "workspacePlanTask": "/api/wf-025/backfill/workspace-plan-tasks",
+            },
+            "without_url": [
+                "account",
+                "user",
+                "file",
+                "workspaceForm",
+                "workspacePage",
+                "workspaceSection",
+            ],
             "missing_url_means": "the key is absent, not null",
         },
         "why": (
@@ -371,7 +395,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "value": {
             "generations": 1,
             "headers": {"current": "X-DSR-Signature", "previous": "X-DSR-Signature-Old"},
-            "ends_when": ["the first delivery that succeeds under the new secret", "the next rotation"],
+            "ends_when": [
+                "the first delivery that succeeds under the new secret",
+                "the next rotation",
+            ],
             "confirmation_stored_as": "previous_secret_confirmed, not by clearing previous_secret",
         },
         "why": (
@@ -412,7 +439,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "value": {
             "stored_in": "records.data on the webhook row, alongside every other field",
             "consequence": "the audit row for the write contains the secret in after_state",
-            "mitigations": ["read paths only ever return a masked hint", "the raw secret is returned exactly once, at creation and at each rotation"],
+            "mitigations": [
+                "read paths only ever return a masked hint",
+                "the raw secret is returned exactly once, at creation and at each rotation",
+            ],
         },
         "why": (
             "The honest problem, stated rather than hidden. records.data is the only payload this "
@@ -435,12 +465,22 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "filters-are-a-subset-and-refuse-to-parse",
         "topic": "the subscription filter language",
         "basis": (
-            'The research gives one JSONPath example for the *other* vendor - '
+            "The research gives one JSONPath example for the *other* vendor - "
             "`$.data..[?(@.teamSiteId == '1')]` - and says for Dock that 'sub-filtering happens in "
             "the subscriber'."
         ),
         "value": {
-            "supported": ["$", ".name", "['name']", "..name", "..", "[n]", "[?(@.k op v)]", "['a','b']", "|"],
+            "supported": [
+                "$",
+                ".name",
+                "['name']",
+                "..name",
+                "..",
+                "[n]",
+                "[?(@.k op v)]",
+                "['a','b']",
+                "|",
+            ],
             "operators": ["==", "!=", ">", "<", ">=", "<="],
             "unparseable": "refused at compile time, at subscribe time",
             "no_filter": "receives everything it subscribed to (the researched Dock behaviour)",
@@ -527,8 +567,12 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "event-requires-its-associated-objects",
         "topic": "whether an event can be recorded without the objects its type names",
-        "basis": 'The research says the payload carries them; it does not say the emitter enforces it.',
-        "value": {"enforced": True, "always": ["workspace", "account"], "per_type": "see subscription-type-payloads-inferred"},
+        "basis": "The research says the payload carries them; it does not say the emitter enforces it.",
+        "value": {
+            "enforced": True,
+            "always": ["workspace", "account"],
+            "per_type": "see subscription-type-payloads-inferred",
+        },
         "why": (
             "A subscriber written against the researched payload will read "
             "`associatedObjects.workspacePage` for a `workspace.page.viewed` because the research "
@@ -582,7 +626,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "webhooks-are-account-level",
         "topic": "whether a webhook belongs to a room",
         "basis": 'The research puts webhooks under "**Settings** and click on **Webhooks** from the **Data Management** section", which is account-level.',
-        "value": {"webhook_room_id": None, "subscription_room_id": "optional", "event_room_id": "required in practice, not in schema"},
+        "value": {
+            "webhook_room_id": None,
+            "subscription_room_id": "optional",
+            "event_room_id": "required in practice, not in schema",
+        },
         "why": (
             "One URL, one signing secret, one verification handshake: that is an account-level "
             "object, and putting a room on it would mean re-verifying the same URL once per deal. "
@@ -595,10 +643,14 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "backfill-is-a-pull-surface-not-an-export",
         "topic": "what " + "/backfill" + " does and does not do",
-        "basis": 'The research describes the REST API as the way to backfill missed activity, with no cursor, no since, and no export format.',
+        "basis": "The research describes the REST API as the way to backfill missed activity, with no cursor, no since, and no export format.",
         "value": {
             "implemented": ["the five researched paths", "properties", "the 429 limit"],
-            "not_implemented": ["incremental since/modifiedAt cursors", "text/csv output", "authentication"],
+            "not_implemented": [
+                "incremental since/modifiedAt cursors",
+                "text/csv output",
+                "authentication",
+            ],
         },
         "why": (
             "Each of those is documented in the research corpus for a *different* workflow in the same "

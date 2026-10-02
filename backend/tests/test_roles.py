@@ -21,13 +21,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
+from dsr.db.audited import AuditedDatabase
 from dsr.roles import (
     ACCESS,
     DEFAULT_ROLE,
     EXPIRING_SOON_DAYS,
-    INVITATIONS,
     INVITATION_TTL_HOURS,
+    INVITATIONS,
     OWNER,
     AccessDenied,
     AccessInvalid,
@@ -42,7 +42,6 @@ from dsr.roles import (
     normalise_emails,
     role_vocabulary,
 )
-from dsr.db.audited import AuditedDatabase
 from dsr.store import RecordStore
 
 NOW = datetime(2026, 9, 26, 12, 0, tzinfo=timezone.utc)
@@ -135,7 +134,11 @@ def test_viewers_may_not_share():
 
 def test_vocabulary_marks_which_roles_the_actor_may_assign():
     viewer_view = {r["id"]: r["assignable"] for r in role_vocabulary("viewer")}
-    assert viewer_view == {"room_collaborator": False, "content_contributor": False, "viewer": False}
+    assert viewer_view == {
+        "room_collaborator": False,
+        "content_contributor": False,
+        "viewer": False,
+    }
 
     owner_view = {r["id"]: r["assignable"] for r in role_vocabulary(OWNER)}
     assert all(owner_view.values())
@@ -192,8 +195,7 @@ def test_access_ends_at_the_end_of_the_expiration_date_in_utc():
 
 def test_invite_creates_one_invitation_per_address(service, room):
     result = service.invite(
-        room["id"], ["a@example.com", "b@example.com"], actor="dana",
-        source=INVITE_SOURCE
+        room["id"], ["a@example.com", "b@example.com"], actor="dana", source=INVITE_SOURCE
     )
 
     assert result["invites"] == 2
@@ -222,7 +224,9 @@ def test_one_role_and_one_expiry_apply_to_the_whole_invitation(service, room):
     )
 
     roles = {i["data"]["role"] for i in service.store.list(INVITATIONS, room_id=room["id"])}
-    dates = {i["data"]["access_valid_until"] for i in service.store.list(INVITATIONS, room_id=room["id"])}
+    dates = {
+        i["data"]["access_valid_until"] for i in service.store.list(INVITATIONS, room_id=room["id"])
+    }
     assert roles == {"content_contributor"}
     assert dates == {"2027-01-31"}
 
@@ -240,18 +244,29 @@ def test_invitation_carries_a_48_hour_acceptance_window(service, room):
 
 def test_invite_rejects_an_expiry_that_has_already_passed(service, room):
     with pytest.raises(AccessInvalid, match="in the past"):
-        service.invite(room["id"], ["a@example.com"], access_valid_until="2020-01-01", actor="dana", source=INVITE_SOURCE)
+        service.invite(
+            room["id"],
+            ["a@example.com"],
+            access_valid_until="2020-01-01",
+            actor="dana",
+            source=INVITE_SOURCE,
+        )
 
 
 def test_invite_rejects_an_unknown_role(service, room):
     with pytest.raises(AccessInvalid, match="unknown role"):
-        service.invite(room["id"], ["a@example.com"], role="superuser", actor="dana", source=INVITE_SOURCE)
+        service.invite(
+            room["id"], ["a@example.com"], role="superuser", actor="dana", source=INVITE_SOURCE
+        )
 
 
 def test_invite_confirmation_message_states_the_role_and_window(service, room):
     result = service.invite(
-        room["id"], ["a@example.com"], role="content_contributor", actor="dana",
-        source=INVITE_SOURCE
+        room["id"],
+        ["a@example.com"],
+        role="content_contributor",
+        actor="dana",
+        source=INVITE_SOURCE,
     )
 
     assert "1 invitation sent as Content Contributor" in result["message"]
@@ -262,48 +277,79 @@ def test_invite_confirmation_message_states_the_role_and_window(service, room):
 
 
 def test_the_room_owner_may_share(service, room):
-    assert service.invite(room["id"], ["a@example.com"], actor="dana", source=INVITE_SOURCE)["invites"] == 1
+    assert (
+        service.invite(room["id"], ["a@example.com"], actor="dana", source=INVITE_SOURCE)["invites"]
+        == 1
+    )
 
 
 def test_a_viewer_may_not_share(service, room):
     _grant(service, room["id"], "watcher@example.com", role="viewer")
 
     with pytest.raises(AccessDenied, match="cannot share"):
-        service.invite(room["id"], ["a@example.com"], actor="watcher@example.com", source=INVITE_SOURCE)
+        service.invite(
+            room["id"], ["a@example.com"], actor="watcher@example.com", source=INVITE_SOURCE
+        )
 
 
 def test_someone_with_no_access_may_not_share(service, room):
     with pytest.raises(AccessDenied, match="cannot share"):
-        service.invite(room["id"], ["a@example.com"], actor="stranger@example.com", source=INVITE_SOURCE)
+        service.invite(
+            room["id"], ["a@example.com"], actor="stranger@example.com", source=INVITE_SOURCE
+        )
 
 
 def test_a_contributor_may_not_assign_room_collaborator(service, room):
     _grant(service, room["id"], "lead@example.com", role="content_contributor")
 
     with pytest.raises(AccessDenied, match="only the room owner"):
-        service.invite(room["id"], ["a@example.com"], role="room_collaborator", actor="lead@example.com", source=INVITE_SOURCE)
+        service.invite(
+            room["id"],
+            ["a@example.com"],
+            role="room_collaborator",
+            actor="lead@example.com",
+            source=INVITE_SOURCE,
+        )
 
 
 def test_a_contributor_may_assign_viewer_and_contributor(service, room):
     _grant(service, room["id"], "lead@example.com", role="content_contributor")
 
     for role in ("viewer", "content_contributor"):
-        result = service.invite(room["id"], [f"{role}@example.com"], role=role, actor="lead@example.com", source=INVITE_SOURCE)
+        result = service.invite(
+            room["id"],
+            [f"{role}@example.com"],
+            role=role,
+            actor="lead@example.com",
+            source=INVITE_SOURCE,
+        )
         assert result["invites"] == 1
 
 
 def test_the_owner_may_assign_room_collaborator(service, room):
-    assert service.invite(
-        room["id"], ["peer@example.com"], role="room_collaborator", actor="dana",
-        source=INVITE_SOURCE
-    )["invites"] == 1
+    assert (
+        service.invite(
+            room["id"],
+            ["peer@example.com"],
+            role="room_collaborator",
+            actor="dana",
+            source=INVITE_SOURCE,
+        )["invites"]
+        == 1
+    )
 
 
 # -- accepting an invitation -------------------------------------------------- #
 
 
 def test_accepting_creates_the_access_grant(service, room):
-    service.invite(room["id"], ["a@example.com"], role="content_contributor", actor="dana", source=INVITE_SOURCE)
+    service.invite(
+        room["id"],
+        ["a@example.com"],
+        role="content_contributor",
+        actor="dana",
+        source=INVITE_SOURCE,
+    )
     invitation = service.store.list(INVITATIONS, room_id=room["id"])[0]
 
     result = service.accept(invitation["id"], actor="a@example.com", source=ACCEPT_SOURCE)
@@ -352,8 +398,12 @@ def test_an_invitation_accepted_one_minute_before_the_deadline_still_works(db, r
     service.invite(room["id"], ["a@example.com"], actor="dana", source=INVITE_SOURCE)
     invitation = service.store.list(INVITATIONS, room_id=room["id"])[0]
 
-    just_in_time = AccessService(RecordStore(db), clock=lambda: NOW + timedelta(hours=47, minutes=59))
-    assert just_in_time.accept(invitation["id"], actor="a@example.com", source=ACCEPT_SOURCE)["access"]["id"]
+    just_in_time = AccessService(
+        RecordStore(db), clock=lambda: NOW + timedelta(hours=47, minutes=59)
+    )
+    assert just_in_time.accept(invitation["id"], actor="a@example.com", source=ACCEPT_SOURCE)[
+        "access"
+    ]["id"]
 
 
 def test_accepting_an_unknown_invitation_is_a_miss(service):
@@ -367,7 +417,13 @@ def test_accepting_an_unknown_invitation_is_a_miss(service):
 def test_someone_already_in_the_room_joins_on_send_not_on_accept(service, room):
     _grant(service, room["id"], "a@example.com", role="viewer")
 
-    result = service.invite(room["id"], ["a@example.com"], role="content_contributor", actor="dana", source=INVITE_SOURCE)
+    result = service.invite(
+        room["id"],
+        ["a@example.com"],
+        role="content_contributor",
+        actor="dana",
+        source=INVITE_SOURCE,
+    )
 
     assert result["joined_immediately"] == ["a@example.com"]
     assert result["pending"] == []
@@ -402,8 +458,7 @@ def test_a_mixed_invitation_reports_who_joined_and_who_did_not(service, room):
     _grant(service, room["id"], "known@example.com")
 
     result = service.invite(
-        room["id"], ["known@example.com", "new@example.com"], actor="dana",
-        source=INVITE_SOURCE
+        room["id"], ["known@example.com", "new@example.com"], actor="dana", source=INVITE_SOURCE
     )
 
     assert result["joined_immediately"] == ["known@example.com"]
@@ -416,14 +471,20 @@ def test_a_mixed_invitation_reports_who_joined_and_who_did_not(service, room):
 def test_access_survives_to_the_last_moment_of_the_expiration_date(db, room, service):
     _grant(service, room["id"], "a@example.com", access_valid_until="2026-09-26")
 
-    end_of_day = AccessService(RecordStore(db), clock=lambda: datetime(2026, 9, 26, 23, 59, 59, tzinfo=timezone.utc))
-    assert [m["principal"] for m in end_of_day.snapshot(room["id"], "dana")["members"]] == ["a@example.com"]
+    end_of_day = AccessService(
+        RecordStore(db), clock=lambda: datetime(2026, 9, 26, 23, 59, 59, tzinfo=timezone.utc)
+    )
+    assert [m["principal"] for m in end_of_day.snapshot(room["id"], "dana")["members"]] == [
+        "a@example.com"
+    ]
 
 
 def test_access_is_gone_one_second_after_midnight_utc(db, room, service):
     _grant(service, room["id"], "a@example.com", access_valid_until="2026-09-26")
 
-    next_day = AccessService(RecordStore(db), clock=lambda: datetime(2026, 9, 27, 0, 0, 0, tzinfo=timezone.utc))
+    next_day = AccessService(
+        RecordStore(db), clock=lambda: datetime(2026, 9, 27, 0, 0, 0, tzinfo=timezone.utc)
+    )
     assert next_day.snapshot(room["id"], "dana")["members"] == []
 
 
@@ -437,8 +498,13 @@ def test_a_lapsed_grant_is_filtered_out_not_deleted(db, room, service):
 
 
 def test_a_lapsed_grant_loses_its_share_capability(db, room, service):
-    _grant(service, room["id"], "lead@example.com", role="content_contributor",
-           access_valid_until="2026-09-25")
+    _grant(
+        service,
+        room["id"],
+        "lead@example.com",
+        role="content_contributor",
+        access_valid_until="2026-09-25",
+    )
 
     later = AccessService(RecordStore(db), clock=lambda: NOW)
     with pytest.raises(AccessDenied):
@@ -496,7 +562,10 @@ def test_the_banner_uses_singular_agreement_for_one_user(service, room):
     soon = (NOW + timedelta(days=2)).strftime("%Y-%m-%d")
     _grant(service, room["id"], "one@example.com", access_valid_until=soon)
 
-    assert service.snapshot(room["id"], "dana")["banner"] == "1 user has access expiring within 7 days."
+    assert (
+        service.snapshot(room["id"], "dana")["banner"]
+        == "1 user has access expiring within 7 days."
+    )
 
 
 def test_no_banner_when_nobody_is_lapsing(service, room):
@@ -524,8 +593,11 @@ def test_the_owners_role_cannot_be_assigned(service, room):
 
     with pytest.raises(AccessInvalid, match="owner role cannot be assigned"):
         service.update_access(
-            _only_grant(service, room["id"])["id"], role=OWNER, actor="dana", confirm=True,
-            source=PATCH_SOURCE
+            _only_grant(service, room["id"])["id"],
+            role=OWNER,
+            actor="dana",
+            confirm=True,
+            source=PATCH_SOURCE,
         )
 
 
@@ -539,7 +611,9 @@ def test_a_grant_for_the_owners_own_address_cannot_be_removed(service, room):
     _grant(service, room["id"], "dana")
 
     with pytest.raises(AccessInvalid, match="owner cannot be changed or removed"):
-        service.remove_access(_only_grant(service, room["id"])["id"], actor="dana", confirm=True, source=DELETE_SOURCE)
+        service.remove_access(
+            _only_grant(service, room["id"])["id"], actor="dana", confirm=True, source=DELETE_SOURCE
+        )
 
 
 # -- changing access ---------------------------------------------------------- #
@@ -565,8 +639,10 @@ def test_a_role_change_needs_confirmation(service, room):
 
     with pytest.raises(ConfirmationRequired):
         service.update_access(
-            _only_grant(service, room["id"])["id"], role="content_contributor", actor="dana",
-            source=PATCH_SOURCE
+            _only_grant(service, room["id"])["id"],
+            role="content_contributor",
+            actor="dana",
+            source=PATCH_SOURCE,
         )
 
 
@@ -574,8 +650,7 @@ def test_reasserting_the_same_role_needs_no_confirmation(service, room):
     _grant(service, room["id"], "a@example.com", role="viewer")
 
     result = service.update_access(
-        _only_grant(service, room["id"])["id"], role="viewer", actor="dana",
-        source=PATCH_SOURCE
+        _only_grant(service, room["id"])["id"], role="viewer", actor="dana", source=PATCH_SOURCE
     )
 
     assert result["access"]["role"] == "viewer"
@@ -599,8 +674,11 @@ def test_the_expiry_can_be_cleared_back_to_no_expiration(service, room):
     _grant(service, room["id"], "a@example.com", access_valid_until="2027-03-31")
 
     result = service.update_access(
-        _only_grant(service, room["id"])["id"], access_valid_until=None, set_expiry=True, actor="dana",
-        source=PATCH_SOURCE
+        _only_grant(service, room["id"])["id"],
+        access_valid_until=None,
+        set_expiry=True,
+        actor="dana",
+        source=PATCH_SOURCE,
     )
 
     assert result["access"]["access_valid_until"] is None
@@ -626,8 +704,10 @@ def test_a_viewer_cannot_change_anyone_s_role(service, room):
 
     with pytest.raises(AccessDenied, match="cannot share"):
         service.update_access(
-            watcher["id"], role="content_contributor", actor="watcher@example.com",
-            source=PATCH_SOURCE
+            watcher["id"],
+            role="content_contributor",
+            actor="watcher@example.com",
+            source=PATCH_SOURCE,
         )
 
 
@@ -642,7 +722,9 @@ def test_changing_an_unknown_grant_is_a_miss(service):
 def test_removing_someone_soft_deletes_their_grant(service, room):
     _grant(service, room["id"], "a@example.com")
 
-    service.remove_access(_only_grant(service, room["id"])["id"], actor="dana", confirm=True, source=DELETE_SOURCE)
+    service.remove_access(
+        _only_grant(service, room["id"])["id"], actor="dana", confirm=True, source=DELETE_SOURCE
+    )
 
     assert service.grants(room["id"]) == []
     assert service.store.get(_only_grant_ids(service, room["id"])) is None
@@ -656,16 +738,22 @@ def test_removal_needs_confirmation(service, room):
     _grant(service, room["id"], "a@example.com")
 
     with pytest.raises(ConfirmationRequired, match="needs confirmation"):
-        service.remove_access(_only_grant(service, room["id"])["id"], actor="dana", source=DELETE_SOURCE)
+        service.remove_access(
+            _only_grant(service, room["id"])["id"], actor="dana", source=DELETE_SOURCE
+        )
 
 
 def test_a_removed_person_loses_their_share_capability(service, room):
     _grant(service, room["id"], "lead@example.com", role="content_contributor")
 
-    service.remove_access(_only_grant(service, room["id"])["id"], actor="dana", confirm=True, source=DELETE_SOURCE)
+    service.remove_access(
+        _only_grant(service, room["id"])["id"], actor="dana", confirm=True, source=DELETE_SOURCE
+    )
 
     with pytest.raises(AccessDenied):
-        service.invite(room["id"], ["a@example.com"], actor="lead@example.com", source=INVITE_SOURCE)
+        service.invite(
+            room["id"], ["a@example.com"], actor="lead@example.com", source=INVITE_SOURCE
+        )
 
 
 def test_removal_revokes_an_invitation_still_in_flight(service, room):
@@ -732,11 +820,23 @@ def test_a_record_that_is_not_a_room_is_a_miss(service):
 
 
 def test_every_access_mutation_is_audited(service, db, room):
-    service.invite(room["id"], ["a@example.com"], role="content_contributor", actor="dana", source=INVITE_SOURCE)
+    service.invite(
+        room["id"],
+        ["a@example.com"],
+        role="content_contributor",
+        actor="dana",
+        source=INVITE_SOURCE,
+    )
     invitation = service.store.list(INVITATIONS, room_id=room["id"])[0]
     service.accept(invitation["id"], actor="a@example.com", source=ACCEPT_SOURCE)
     grant = service.grants(room["id"])[0]
-    service.update_access(grant["id"], access_valid_until="2027-06-30", set_expiry=True, actor="dana", source=PATCH_SOURCE)
+    service.update_access(
+        grant["id"],
+        access_valid_until="2027-06-30",
+        set_expiry=True,
+        actor="dana",
+        source=PATCH_SOURCE,
+    )
     service.remove_access(grant["id"], actor="dana", confirm=True, source=DELETE_SOURCE)
 
     # The room insert predates the workflow, so only the access mutations count.
@@ -761,7 +861,9 @@ def test_a_role_change_audits_before_and_after(service, db, room):
     _grant(service, room["id"], "a@example.com", role="viewer")
     grant = service.grants(room["id"])[0]
 
-    service.update_access(grant["id"], role="content_contributor", actor="dana", confirm=True, source=PATCH_SOURCE)
+    service.update_access(
+        grant["id"], role="content_contributor", actor="dana", confirm=True, source=PATCH_SOURCE
+    )
 
     entry = db.audit(record_id=grant["id"], action="update")[0]
     assert entry["before_state"]["role"] == "viewer"
@@ -769,9 +871,7 @@ def test_a_role_change_audits_before_and_after(service, db, room):
 
 
 def test_a_team_can_add_its_own_field_to_a_grant_without_a_migration(service, room):
-    grant = _grant(
-        service, room["id"], "a@example.com", cost_centre="CC-4417", region="anz"
-    )
+    grant = _grant(service, room["id"], "a@example.com", cost_centre="CC-4417", region="anz")
 
     stored = service.store.get(grant["id"])
     assert stored["data"]["cost_centre"] == "CC-4417"
@@ -790,7 +890,13 @@ def test_a_team_added_role_is_rejected_by_the_delegation_rule_not_silently_accep
     _grant(service, room["id"], "lead@example.com", role="content_contributor")
 
     with pytest.raises(AccessInvalid, match="unknown role"):
-        service.invite(room["id"], ["a@example.com"], role="legal_counsel", actor="lead@example.com", source=INVITE_SOURCE)
+        service.invite(
+            room["id"],
+            ["a@example.com"],
+            role="legal_counsel",
+            actor="lead@example.com",
+            source=INVITE_SOURCE,
+        )
 
 
 def test_an_unexpected_role_still_renders_with_a_readable_label(service, room):
@@ -814,15 +920,11 @@ def test_an_unexpected_role_still_renders_with_a_readable_label(service, room):
 def test_an_invite_audits_under_the_source_its_caller_supplied(service, db, room):
     service.invite(room["id"], ["a@example.com"], actor="dana", source="POST /served/here")
 
-    assert [entry["source"] for entry in db.audit(collection=INVITATIONS)] == [
-        "POST /served/here"
-    ]
+    assert [entry["source"] for entry in db.audit(collection=INVITATIONS)] == ["POST /served/here"]
 
 
 def test_an_accept_audits_under_the_source_its_caller_supplied(service, db, room):
-    service.invite(
-        room["id"], ["a@example.com"], actor="dana", source=INVITE_SOURCE
-    )
+    service.invite(room["id"], ["a@example.com"], actor="dana", source=INVITE_SOURCE)
     invitation = service.store.list(INVITATIONS, room_id=room["id"])[0]
 
     service.accept(invitation["id"], actor="a@example.com", source="POST /somewhere/else")
@@ -830,13 +932,10 @@ def test_an_accept_audits_under_the_source_its_caller_supplied(service, db, room
     # The two writes this method makes, the new grant and the invitation's own
     # state change, carry the caller's path and not a path the module made up.
     # The invite's own insert is excluded by asking for the update specifically.
-    assert [entry["source"] for entry in db.audit(collection=ACCESS)] == [
+    assert [entry["source"] for entry in db.audit(collection=ACCESS)] == ["POST /somewhere/else"]
+    assert [entry["source"] for entry in db.audit(record_id=invitation["id"], action="update")] == [
         "POST /somewhere/else"
     ]
-    assert [
-        entry["source"]
-        for entry in db.audit(record_id=invitation["id"], action="update")
-    ] == ["POST /somewhere/else"]
 
 
 def test_a_role_change_audits_under_the_source_its_caller_supplied(service, db, room):
@@ -862,7 +961,9 @@ def test_a_removal_audits_under_the_source_its_caller_supplied(service, db, room
 @pytest.mark.parametrize(
     "call",
     [
-        pytest.param(lambda s, room_id: s.invite(room_id, ["a@example.com"], actor="dana"), id="invite"),
+        pytest.param(
+            lambda s, room_id: s.invite(room_id, ["a@example.com"], actor="dana"), id="invite"
+        ),
         pytest.param(lambda s, access_id: s.accept(access_id), id="accept"),
         pytest.param(
             lambda s, access_id: s.update_access(access_id, role="viewer", actor="dana"),

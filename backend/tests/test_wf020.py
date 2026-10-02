@@ -34,13 +34,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
-from dsr.features import load_feature
-from dsr.features import wf020_reporting_domain as reporting
+from dsr.features import load_feature, wf020_reporting_domain as reporting
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-020"
 FEATURE_ID = "wf-020-extract-dsr-viewing-sessions-dwell-tim"
@@ -190,7 +188,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
 
     assert descriptor.is_file(), f"{descriptor} is missing"
     text = descriptor.read_text(encoding="utf-8")
-    assert f'id: {module.FEATURE["id"]!r}' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
     assert "Component:" in text
 
 
@@ -439,7 +437,10 @@ def test_a_window_may_be_given_in_the_apis_own_parameter_names():
 
 def test_the_session_filter_pair_is_recognised():
     window = reporting.build_window(
-        {"sessionStartedAtTime": "2026-09-26T00:00:00Z", "sessionEndedAtTime": "2026-09-26T12:00:00Z"}
+        {
+            "sessionStartedAtTime": "2026-09-26T00:00:00Z",
+            "sessionEndedAtTime": "2026-09-26T12:00:00Z",
+        }
     )
     assert window.kind == "session"
     assert set(window.as_query()) == {"sessionStartedAtTime", "sessionEndedAtTime"}
@@ -534,7 +535,11 @@ def test_an_unparseable_window_bound_is_refused():
 
 def test_a_window_offset_is_normalised_to_utc():
     window = reporting.build_window(
-        {"kind": "modified", "start": "2026-09-26T10:00:00+10:00", "end": "2026-09-26T11:00:00+10:00"}
+        {
+            "kind": "modified",
+            "start": "2026-09-26T10:00:00+10:00",
+            "end": "2026-09-26T11:00:00+10:00",
+        }
     )
     assert window.as_query() == {
         "modifiedAtStartTime": "2026-09-26T00:00:00+00:00",
@@ -768,8 +773,9 @@ def test_undocumented_fields_are_still_queryable(store):
 
 def test_fully_missing_geography_is_flagged():
     payload = reporting.normalise_session(
-        api_session(city=..., state=..., country=..., geolocationLatitude=...,
-                    geoLocationLongitude=...)
+        api_session(
+            city=..., state=..., country=..., geolocationLatitude=..., geoLocationLongitude=...
+        )
     )
     assert "geography_missing" in payload["quality_flags"]
 
@@ -791,12 +797,18 @@ def test_a_non_object_row_is_refused():
 
 
 def test_a_boolean_internal_flag_survives_both_spellings():
-    assert reporting.normalise_session(
-        api_session(isEngagementUserInternal="true")
-    )["is_engagement_user_internal"] is True
-    assert reporting.normalise_session(
-        api_session(isEngagementUserInternal=..., is_engagement_user_internal=False)
-    )["is_engagement_user_internal"] is False
+    assert (
+        reporting.normalise_session(api_session(isEngagementUserInternal="true"))[
+            "is_engagement_user_internal"
+        ]
+        is True
+    )
+    assert (
+        reporting.normalise_session(
+            api_session(isEngagementUserInternal=..., is_engagement_user_internal=False)
+        )["is_engagement_user_internal"]
+        is False
+    )
 
 
 def test_an_absent_internal_flag_stays_unknown_rather_than_becoming_false():
@@ -854,8 +866,9 @@ def live(store, collection, limit=100):
 
 
 def test_landing_creates_one_record_per_row(store):
-    counters = reporting.land_sessions(store, None, [api_session(), api_session(userId="u-2")],
-                                      source="test")
+    counters = reporting.land_sessions(
+        store, None, [api_session(), api_session(userId="u-2")], source="test"
+    )
     assert counters["created"] == 2
     assert counters["landed"] == 2
     assert len(live(store, reporting.SESSIONS)) == 2
@@ -1033,20 +1046,40 @@ def test_an_inventory_row_can_be_bound_to_a_core_room_as_it_lands(store):
 def sample_rows():
     """Four tab sessions: three viewers across two rooms, one of them internal."""
     return [
-        {**reporting.normalise_session(
-            api_session(userId="u-1", roomDurationSeconds=100, digitalSalesRoomId="dsr-001")
-         ), "room_name": "Room A"},
-        {**reporting.normalise_session(
-            api_session(userId="u-1", roomDurationSeconds=50, digitalSalesRoomId="dsr-001")
-         ), "room_name": "Room A"},
-        {**reporting.normalise_session(
-            api_session(userId="u-2", roomDurationSeconds=25, digitalSalesRoomId="dsr-002",
-                        isEngagementUserInternal=False)
-         ), "room_name": "Room B"},
-        {**reporting.normalise_session(
-            api_session(userId="u-3", roomDurationSeconds=10, digitalSalesRoomId="dsr-002",
-                        isEngagementUserInternal=True)
-         ), "room_name": "Room B"},
+        {
+            **reporting.normalise_session(
+                api_session(userId="u-1", roomDurationSeconds=100, digitalSalesRoomId="dsr-001")
+            ),
+            "room_name": "Room A",
+        },
+        {
+            **reporting.normalise_session(
+                api_session(userId="u-1", roomDurationSeconds=50, digitalSalesRoomId="dsr-001")
+            ),
+            "room_name": "Room A",
+        },
+        {
+            **reporting.normalise_session(
+                api_session(
+                    userId="u-2",
+                    roomDurationSeconds=25,
+                    digitalSalesRoomId="dsr-002",
+                    isEngagementUserInternal=False,
+                )
+            ),
+            "room_name": "Room B",
+        },
+        {
+            **reporting.normalise_session(
+                api_session(
+                    userId="u-3",
+                    roomDurationSeconds=10,
+                    digitalSalesRoomId="dsr-002",
+                    isEngagementUserInternal=True,
+                )
+            ),
+            "room_name": "Room B",
+        },
     ]
 
 
@@ -1098,9 +1131,19 @@ def test_the_centroid_is_the_mean_and_says_how_much_it_covers():
 
 
 def test_a_rollup_with_no_coordinates_reports_no_centroid():
-    rows = [dict(reporting.normalise_session(api_session(city=..., state=...,
-                                                         country=..., geolocationLatitude=...,
-                                                         geoLocationLongitude=...)))]
+    rows = [
+        dict(
+            reporting.normalise_session(
+                api_session(
+                    city=...,
+                    state=...,
+                    country=...,
+                    geolocationLatitude=...,
+                    geoLocationLongitude=...,
+                )
+            )
+        )
+    ]
     assert reporting.geography_rollup(rows)[0]["centroid"] is None
 
 
@@ -1120,16 +1163,18 @@ def test_the_viewer_rollup_reports_first_and_last_seen():
 def test_the_summary_counts_quality_flags_by_name():
     rows = [
         reporting.normalise_session(
-            api_session(city=..., state=..., country=..., geolocationLatitude=...,
-                        geoLocationLongitude=...)
+            api_session(
+                city=..., state=..., country=..., geolocationLatitude=..., geoLocationLongitude=...
+            )
         )
     ]
     assert reporting.summarise(rows)["quality_flags"] == {"geography_missing": 1}
 
 
 def test_the_summary_counts_a_partial_geography_as_partial():
-    rows = [reporting.normalise_session(api_session(geolocationLatitude=...,
-                                                    geoLocationLongitude=...))]
+    rows = [
+        reporting.normalise_session(api_session(geolocationLatitude=..., geoLocationLongitude=...))
+    ]
     assert reporting.summarise(rows)["quality_flags"] == {"geography_partial": 1}
 
 
@@ -1169,8 +1214,14 @@ def test_there_is_no_watermark_before_anything_lands(store):
 def test_a_run_opens_as_requested(store):
     window = reporting.build_window({"kind": "modified", "end": "2026-09-27T00:00:00Z"})
     run = reporting.open_run(
-        store, window=window, resource="viewing_sessions", run_kind="sweep",
-        fmt=reporting.ACCEPT_JSON, limit=None, started=NOW, source="test",
+        store,
+        window=window,
+        resource="viewing_sessions",
+        run_kind="sweep",
+        fmt=reporting.ACCEPT_JSON,
+        limit=None,
+        started=NOW,
+        source="test",
     )
     assert run["data"]["state"] == "requested"
     assert run["data"]["landed_at"] is None
@@ -1179,8 +1230,14 @@ def test_a_run_opens_as_requested(store):
 def test_closing_a_run_records_the_counters_and_the_advanced_watermark(store):
     window = reporting.build_window({"kind": "modified", "end": "2026-09-27T00:00:00Z"})
     run = reporting.open_run(
-        store, window=window, resource="viewing_sessions", run_kind="sweep",
-        fmt=reporting.ACCEPT_JSON, limit=None, started=NOW, source="test",
+        store,
+        window=window,
+        resource="viewing_sessions",
+        run_kind="sweep",
+        fmt=reporting.ACCEPT_JSON,
+        limit=None,
+        started=NOW,
+        source="test",
     )
     closed = reporting.close_run(store, run["id"], {"landed": 3}, finished=NOW, source="test")
     assert closed["data"]["state"] == "landed"
@@ -1191,8 +1248,14 @@ def test_closing_a_run_records_the_counters_and_the_advanced_watermark(store):
 def test_a_run_cannot_be_landed_twice(store):
     window = reporting.build_window({"kind": "modified", "end": "2026-09-27T00:00:00Z"})
     run = reporting.open_run(
-        store, window=window, resource="viewing_sessions", run_kind="sweep",
-        fmt=reporting.ACCEPT_JSON, limit=None, started=NOW, source="test",
+        store,
+        window=window,
+        resource="viewing_sessions",
+        run_kind="sweep",
+        fmt=reporting.ACCEPT_JSON,
+        limit=None,
+        started=NOW,
+        source="test",
     )
     reporting.close_run(store, run["id"], {}, finished=NOW, source="test")
     with pytest.raises(reporting.PayloadError, match="already landed"):
@@ -1208,8 +1271,14 @@ def test_an_unsupported_format_is_refused_when_a_run_opens(store):
     window = reporting.build_window({"kind": "modified", "end": "2026-09-27T00:00:00Z"})
     with pytest.raises(reporting.PayloadError, match="unsupported Accept"):
         reporting.open_run(
-            store, window=window, resource="viewing_sessions", run_kind="sweep",
-            fmt="application/xml", limit=None, started=NOW, source="test",
+            store,
+            window=window,
+            resource="viewing_sessions",
+            run_kind="sweep",
+            fmt="application/xml",
+            limit=None,
+            started=NOW,
+            source="test",
         )
 
 
@@ -1221,8 +1290,14 @@ def land_a_run(store, end="2026-09-27T00:00:00Z", kind="modified", resource="vie
         resource=resource,
     )
     run = reporting.open_run(
-        store, window=window, resource=resource, run_kind="extract",
-        fmt=reporting.ACCEPT_JSON, limit=None, started=NOW, source="test",
+        store,
+        window=window,
+        resource=resource,
+        run_kind="extract",
+        fmt=reporting.ACCEPT_JSON,
+        limit=None,
+        started=NOW,
+        source="test",
     )
     return reporting.close_run(store, run["id"], {}, finished=NOW, source="test")
 
@@ -1247,8 +1322,14 @@ def test_a_session_filtered_run_does_not_move_the_watermark(store):
 def test_a_requested_run_does_not_move_the_watermark(store):
     window = reporting.build_window({"kind": "modified", "end": "2026-09-28T00:00:00Z"})
     reporting.open_run(
-        store, window=window, resource="viewing_sessions", run_kind="sweep",
-        fmt=reporting.ACCEPT_JSON, limit=None, started=NOW, source="test",
+        store,
+        window=window,
+        resource="viewing_sessions",
+        run_kind="sweep",
+        fmt=reporting.ACCEPT_JSON,
+        limit=None,
+        started=NOW,
+        source="test",
     )
     assert reporting.watermark(store) is None
 
@@ -1334,8 +1415,14 @@ def test_a_run_that_never_landed_blocks_a_second_window(store):
     """Two overlapping pages of the same incremental filter double-count the day."""
     window = reporting.build_window({"kind": "modified", "end": "2026-09-28T00:00:00Z"})
     reporting.open_run(
-        store, window=window, resource="viewing_sessions", run_kind="sweep",
-        fmt=reporting.ACCEPT_JSON, limit=None, started=NOW, source="test",
+        store,
+        window=window,
+        resource="viewing_sessions",
+        run_kind="sweep",
+        fmt=reporting.ACCEPT_JSON,
+        limit=None,
+        started=NOW,
+        source="test",
     )
     state = reporting.due_state(store, now=NOW)
     assert state["due"] is False
@@ -1462,8 +1549,9 @@ def test_landing_with_a_mixed_window_is_a_422_naming_the_rule(client):
 
 
 def test_landing_with_a_reversed_window_is_a_422(client):
-    response = land(client, [api_session()], start="2026-09-27T00:00:00Z",
-                    end="2026-09-26T00:00:00Z")
+    response = land(
+        client, [api_session()], start="2026-09-27T00:00:00Z", end="2026-09-26T00:00:00Z"
+    )
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_window"
 
@@ -1502,8 +1590,9 @@ def test_a_second_extraction_inside_the_sla_is_flagged_as_high_frequency(client)
 def test_landing_into_an_open_run_closes_it(client):
     opened = client.post(f"{PREFIX}/sweep").json()
     run_id = opened["run"]["id"]
-    body = land(client, [api_session()], run_id=run_id,
-                **opened["run"]["data"]["window"]["query"]).json()
+    body = land(
+        client, [api_session()], run_id=run_id, **opened["run"]["data"]["window"]["query"]
+    ).json()
     assert body["run"]["data"]["state"] == "landed"
     assert body["run"]["data"]["counters"]["landed"] == 1
 
@@ -1518,8 +1607,11 @@ def test_landing_into_a_run_with_a_different_window_is_refused(client):
     """The lineage must not claim one window and the rows say another."""
     opened = client.post(f"{PREFIX}/sweep").json()
     response = land(
-        client, [api_session()], run_id=opened["run"]["id"],
-        start="2026-01-01T00:00:00Z", end="2026-01-02T00:00:00Z",
+        client,
+        [api_session()],
+        run_id=opened["run"]["id"],
+        start="2026-01-01T00:00:00Z",
+        end="2026-01-02T00:00:00Z",
     )
     assert response.status_code == 422
     assert "land it into its own run" in response.json()["detail"]
@@ -1567,11 +1659,17 @@ def test_the_inventory_refuses_the_session_only_filter(client):
 
 def test_the_summary_keeps_sessions_apart_from_visitors(client):
     """One buyer, two tabs: the exact shape that makes a row count a visit count."""
-    land(client, [
-        api_session(userId="u-1", sessionEndedAt="2026-09-26T09:02:00Z"),
-        api_session(userId="u-1", sessionStartedAt="2026-09-26T09:05:00Z",
-                    sessionEndedAt="2026-09-26T09:11:00Z"),
-    ])
+    land(
+        client,
+        [
+            api_session(userId="u-1", sessionEndedAt="2026-09-26T09:02:00Z"),
+            api_session(
+                userId="u-1",
+                sessionStartedAt="2026-09-26T09:05:00Z",
+                sessionEndedAt="2026-09-26T09:11:00Z",
+            ),
+        ],
+    )
     summary = client.get(f"{PREFIX}/summary").json()["summary"]
     assert summary["sessions"] == 2
     assert summary["visitors"] == 1
@@ -1605,7 +1703,9 @@ def test_the_sessions_list_hands_over_sensitive_fields_when_asked(client):
 def test_the_sessions_list_scopes_to_a_core_room(client):
     room_id = make_room(client)
     other = make_room(client, name="Other")
-    land_rooms(client, [api_room(bound_room_id=room_id), api_room(id="dsr-002", bound_room_id=other)])
+    land_rooms(
+        client, [api_room(bound_room_id=room_id), api_room(id="dsr-002", bound_room_id=other)]
+    )
     land(client, [api_session(), api_session(digitalSalesRoomId="dsr-002", userId="u-2")])
 
     scoped = client.get(f"{PREFIX}/rooms/{room_id}/sessions").json()
@@ -1664,9 +1764,20 @@ def test_an_unknown_dwell_grouping_is_refused(client):
 
 
 def test_the_geography_rollup_reports_where_the_sessions_came_from(client):
-    land(client, [api_session(), api_session(userId="u-2", country="US", state="WA",
-                                             city="Seattle", geolocationLatitude=47.6062,
-                                             geoLocationLongitude=-122.3321)])
+    land(
+        client,
+        [
+            api_session(),
+            api_session(
+                userId="u-2",
+                country="US",
+                state="WA",
+                city="Seattle",
+                geolocationLatitude=47.6062,
+                geoLocationLongitude=-122.3321,
+            ),
+        ],
+    )
     body = client.get(f"{PREFIX}/geography").json()
     assert body["countries"] == 2
     assert {entry["country"] for entry in body["geography"]} == {"AU", "US"}
@@ -1785,7 +1896,7 @@ def _names_a_served_route(source, routes):
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -1828,17 +1939,18 @@ def test_the_sources_are_exactly_the_routes_that_served_them(client):
 
 def test_a_sweep_names_the_sweep_route(client):
     client.post(f"{PREFIX}/sweep")
-    sources = [
-        entry["source"]
-        for entry in audit(client, collection=reporting.RUNS, limit=50)
-    ]
+    sources = [entry["source"] for entry in audit(client, collection=reporting.RUNS, limit=50)]
     assert f"POST {PREFIX}/sweep" in sources
 
 
 def test_landing_into_a_run_names_the_landing_route_not_the_sweep(client):
     opened = client.post(f"{PREFIX}/sweep").json()
-    land(client, [api_session()], run_id=opened["run"]["id"],
-         **opened["run"]["data"]["window"]["query"])
+    land(
+        client,
+        [api_session()],
+        run_id=opened["run"]["id"],
+        **opened["run"]["data"]["window"]["query"],
+    )
     sources = {entry["source"] for entry in audit(client, collection=reporting.RUNS, limit=50)}
     assert sources == {f"POST {PREFIX}/sweep", f"POST {PREFIX}/extract"}
 
@@ -1859,9 +1971,7 @@ def test_a_retracted_row_that_came_back_names_the_landing_route(client):
 
     actions = {entry["action"] for entry in audit(client, limit=50)}
     assert "restore" in actions
-    restored = [
-        entry for entry in audit(client, limit=50) if entry["action"] == "restore"
-    ][0]
+    restored = [entry for entry in audit(client, limit=50) if entry["action"] == "restore"][0]
     assert restored["source"] == f"POST {PREFIX}/extract"
 
 
@@ -1921,14 +2031,17 @@ def test_the_seed_contains_a_long_session_a_tab_left_open(seeded):
 
 def test_the_seed_seeds_an_internal_viewer_so_the_split_is_not_vacuous(seeded):
     internal = [
-        record["data"] for record in seeded["sessions"]
+        record["data"]
+        for record in seeded["sessions"]
         if record["data"]["is_engagement_user_internal"] is True
     ]
     assert internal
 
 
 def test_the_seed_seeds_an_unattributed_session(seeded):
-    flagged = [r["data"] for r in seeded["sessions"] if "unattributed" in r["data"]["quality_flags"]]
+    flagged = [
+        r["data"] for r in seeded["sessions"] if "unattributed" in r["data"]["quality_flags"]
+    ]
     assert flagged
     assert flagged[0]["viewer_key"] == "anonymous"
 
@@ -1941,8 +2054,7 @@ def test_the_seed_seeds_a_session_whose_room_is_not_in_the_inventory(seeded):
 def test_the_seed_seeds_a_room_with_no_sessions_at_all(seeded):
     seen = {record["data"]["digital_sales_room_id"] for record in seeded["sessions"]}
     quiet = [
-        record for record in seeded["rooms"]
-        if record["data"]["digital_sales_room_id"] not in seen
+        record for record in seeded["rooms"] if record["data"]["digital_sales_room_id"] not in seen
     ]
     assert quiet
 
@@ -1965,10 +2077,7 @@ def test_the_seed_shows_the_merge_doing_both_of_its_jobs(seeded):
 
 
 def test_the_seed_seeds_an_undocumented_field_which_is_kept(seeded):
-    extras = [
-        record["data"]["extra"] for record in seeded["sessions"]
-        if "extra" in record["data"]
-    ]
+    extras = [record["data"]["extra"] for record in seeded["sessions"] if "extra" in record["data"]]
     assert extras
     assert "documentId" in extras[0]
 

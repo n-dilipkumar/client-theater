@@ -431,7 +431,11 @@ DRAFTS = [
 
 DYNAMIC_FOLDERS = [
     {"name": "EMEA buyer-facing", "profile": "emea-buyers", "matches": {"metadata.region": "emea"}},
-    {"name": "External collateral", "profile": "public", "matches": {"metadata.audience": "external"}},
+    {
+        "name": "External collateral",
+        "profile": "public",
+        "matches": {"metadata.audience": "external"},
+    },
 ]
 
 SUBSCRIBERS = ["a.buyer@northwind.example", "procurement@contoso.example"]
@@ -487,7 +491,9 @@ def seed(db, context: dict[str, Any]) -> str:
                 "kind": kind,
                 "status": "Draft",
                 "metadata": metadata,
-                "versions": [{"version_id": "v1", "uploaded_at": now.isoformat(timespec="seconds")}],
+                "versions": [
+                    {"version_id": "v1", "uploaded_at": now.isoformat(timespec="seconds")}
+                ],
             },
             room_id=room,
             actor="dana",

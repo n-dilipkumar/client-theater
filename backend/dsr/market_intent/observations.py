@@ -167,6 +167,7 @@ def normalise_visit(payload: Any, *, resolver: Any = None) -> dict[str, Any]:
         "known": bool(company_key),
     }
 
+
 def normalise_research(payload: Any) -> dict[str, Any]:
     """Validate a research observation: a topic match, or a company news signal.
 

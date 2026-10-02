@@ -79,9 +79,7 @@ def slot_end(start: datetime, minutes: int) -> datetime:
     return start + timedelta(minutes=int(minutes))
 
 
-def overlaps(
-    a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime
-) -> bool:
+def overlaps(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> bool:
     """Do two intervals share any time at all?
 
     Half-open, so a 09:00-09:30 meeting and a 09:30-10:00 one do not conflict.

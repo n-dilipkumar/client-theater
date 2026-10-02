@@ -34,7 +34,7 @@ class RegistrationError(SignalError):
 
 
 class DuplicateSignalType(RegistrationError):
-    """"Per integration, the signal type can only be registered once."
+    """ "Per integration, the signal type can only be registered once."
 
     The research states this as a property of the vendor's registry, and it is
     also the property that makes a registration a *contract* rather than a
@@ -47,7 +47,7 @@ class DuplicateSignalType(RegistrationError):
 
 
 class ImmutableContractError(RegistrationError):
-    """"Globally installed signals ... only additive changes will be allowed."
+    """ "Globally installed signals ... only additive changes will be allowed."
 
     Raised by :func:`dsr.signals.registration.amendment_findings` when a patch
     would invalidate something that was already valid, or would rewrite a string

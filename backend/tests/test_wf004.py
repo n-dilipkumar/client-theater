@@ -30,12 +30,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.roles import ACCESS, INVITATIONS, AccessError, AccessService
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-004-invite-buyer"
 MODULE = "wf004_roles"
@@ -114,7 +113,7 @@ def test_the_feature_did_not_collide_with_anything(client):
 
 def test_the_whole_share_surface_sits_under_one_prefix(client):
     """Every route this feature serves, on one prefix, and no other."""
-    record = client.get(f"/api/features/wf-004-invite-buyer").json()
+    record = client.get("/api/features/wf-004-invite-buyer").json()
     paths = {route["path"] for route in record["routes"]}
 
     assert paths == {
@@ -227,8 +226,7 @@ def test_this_branch_owns_roles_and_not_access():
             and not line.strip().startswith("#")
         ]
         assert not offenders, (
-            f"{path.name} must not import dsr.access - that module belongs to "
-            f"WF-015: {offenders}"
+            f"{path.name} must not import dsr.access - that module belongs to WF-015: {offenders}"
         )
 
 
@@ -372,9 +370,9 @@ def test_every_write_audits_the_path_this_router_serves(client):
         params={"actor": "dana"},
         json={"emails": ["a@example.com"], "role": "content_contributor"},
     )
-    invitation = client.get(
-        "/api/records/room_invitation", params={"room_id": room}
-    ).json()["records"][0]
+    invitation = client.get("/api/records/room_invitation", params={"room_id": room}).json()[
+        "records"
+    ][0]
 
     client.post(f"{PREFIX}/invitations/{invitation['id']}/accept")
     row = grant(client, room, "b@example.com")
@@ -414,9 +412,10 @@ def test_reads_write_nothing(client):
         client.get(f"{PREFIX}/rooms/{room}/access", params={"actor": "dana"})
 
     assert client.get("/api/audit").json()["count"] == before
-    assert client.get(f"{PREFIX}/rooms/{room}/access", params={"actor": "dana"}).json()[
-        "banner"
-    ] == "1 user has access expiring within 7 days."
+    assert (
+        client.get(f"{PREFIX}/rooms/{room}/access", params={"actor": "dana"}).json()["banner"]
+        == "1 user has access expiring within 7 days."
+    )
 
 
 def test_a_lapsed_grant_is_filtered_out_and_left_in_storage(client):
@@ -473,7 +472,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
     module = load_feature(MODULE)
 
     assert descriptor.exists()
-    assert f'id: {module.FEATURE["id"]!r}' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
     # The shared nav file must not have learned this feature's name.
     assert "wf-004-invite-buyer" not in (
         Path(__file__).resolve().parents[2] / "frontend" / "src" / "App.jsx"
@@ -492,7 +491,7 @@ def test_the_frontend_prefix_matches_the_router_prefix():
     ).read_text(encoding="utf-8")
 
     # api.js writes the path without the `/api` that apiRequest prepends.
-    assert f"PREFIX = '{PREFIX[len('/api'):]}'" in wrapper
+    assert f"PREFIX = '{PREFIX[len('/api') :]}'" in wrapper
 
     import dsr.roles_api
 
@@ -501,7 +500,13 @@ def test_the_frontend_prefix_matches_the_router_prefix():
 
 def test_the_frontend_does_not_reach_for_a_shared_api_method():
     """``apiRequest``, not a method appended to the shared ``api`` object."""
-    folder = Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / "wf-004-invite-buyer"
+    folder = (
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "features"
+        / "wf-004-invite-buyer"
+    )
     for module in folder.glob("*.js*"):
         text = module.read_text(encoding="utf-8")
         assert "from '@/lib/api'" in text or "apiRequest" not in text
@@ -528,7 +533,12 @@ def test_seed_leaves_a_readable_share_dialog():
     try:
         db = AuditedDatabase(str(Path(tmp.name) / "seeded.db"), actor="seed")
         try:
-            accounts = ("Northwind Traders", "Contoso Health", "Fabrikam Logistics", "Adventure Works")
+            accounts = (
+                "Northwind Traders",
+                "Contoso Health",
+                "Fabrikam Logistics",
+                "Adventure Works",
+            )
             rooms = [
                 db.create("room", {"name": name, "owner": "dana"}, actor="dana", source="seed")
                 for name in accounts
@@ -537,7 +547,10 @@ def test_seed_leaves_a_readable_share_dialog():
             summary = module.seed(
                 db,
                 {
-                    "room_ids": [(room["id"], account) for room, account in zip(rooms, accounts)],
+                    "room_ids": [
+                        (room["id"], account)
+                        for room, account in zip(rooms, accounts, strict=False)
+                    ],
                     "now": NOW,
                     "rng": random.Random(MODULE),
                 },
@@ -605,8 +618,17 @@ def test_seed_derives_its_dates_from_now():
     try:
         db = AuditedDatabase(str(Path(tmp.name) / "late.db"), actor="seed")
         try:
-            room = db.create("room", {"name": "Northwind", "owner": "dana"}, actor="dana", source="seed")
-            module.seed(db, {"room_ids": [(room["id"], "Northwind Traders")], "now": much_later, "rng": random.Random(1)})
+            room = db.create(
+                "room", {"name": "Northwind", "owner": "dana"}, actor="dana", source="seed"
+            )
+            module.seed(
+                db,
+                {
+                    "room_ids": [(room["id"], "Northwind Traders")],
+                    "now": much_later,
+                    "rng": random.Random(1),
+                },
+            )
 
             snapshot = AccessService(db, clock=lambda: much_later).snapshot(room["id"], "dana")
             assert snapshot["banner"] is not None
@@ -623,9 +645,7 @@ def test_seed_reports_when_there_is_nothing_to_attach_to():
     try:
         db = AuditedDatabase(str(Path(tmp.name) / "empty.db"), actor="seed")
         try:
-            assert module.seed(
-                db, {"room_ids": [], "now": NOW, "rng": random.Random("x")}
-            )
+            assert module.seed(db, {"room_ids": [], "now": NOW, "rng": random.Random("x")})
         finally:
             db.close()
     finally:

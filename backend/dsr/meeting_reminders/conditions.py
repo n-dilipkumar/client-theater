@@ -72,7 +72,9 @@ def parse_instant(value: Any) -> datetime | None:
     a skip reason, not a 400 on a list endpoint that was only trying to read it.
     """
     if isinstance(value, datetime):
-        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return (
+            value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        )
     if value is None or value == "":
         return None
     text = str(value).strip()
@@ -330,9 +332,7 @@ def _has_phone(guest: Mapping[str, Any]) -> bool:
     return bool(str(guest.get("phone") or "").strip())
 
 
-def resolve_recipients(
-    reminder: Mapping[str, Any], booking: Mapping[str, Any]
-) -> dict[str, Any]:
+def resolve_recipients(reminder: Mapping[str, Any], booking: Mapping[str, Any]) -> dict[str, Any]:
     """Work out who this reminder is addressed to, and who is actually reachable.
 
     Returns the resolved recipients, the ones that could not be addressed, and
@@ -420,7 +420,11 @@ def _recipients(
             # Only the address the channel actually uses. An SMS delivery row
             # carrying a guest's email address is information the researched flow
             # never needed, and the same reasoning applies to the reverse.
-            **({"phone": str(guest.get("phone") or "")} if channel == vocab.SMS else {"email": str(guest.get("email") or "")}),
+            **(
+                {"phone": str(guest.get("phone") or "")}
+                if channel == vocab.SMS
+                else {"email": str(guest.get("email") or "")}
+            ),
             "no_show": bool(guest.get(vocab.NO_SHOW)),
         }
         for guest in reachable
@@ -434,7 +438,9 @@ def _recipients(
     }
 
 
-def sender_for(reminder: Mapping[str, Any], booking: Mapping[str, Any], org: Mapping[str, Any]) -> str:
+def sender_for(
+    reminder: Mapping[str, Any], booking: Mapping[str, Any], org: Mapping[str, Any]
+) -> str:
     """The address or number the reminder goes out from.
 
     Email follows ``Send Email From``: the host's address, the booker's, or the
@@ -577,7 +583,11 @@ def plan(
     checks: list[dict[str, Any]] = []
     if when is None:
         checks.append(
-            {"check": "fire_time", "passed": False, "detail": "the booking has no usable start time"}
+            {
+                "check": "fire_time",
+                "passed": False,
+                "detail": "the booking has no usable start time",
+            }
         )
         return Decision(
             status=vocab.SKIPPED,
@@ -610,7 +620,9 @@ def plan(
                 "moment at which it could have been sent"
             ),
         )
-    checks.append({"check": "schedule_time", "passed": True, "detail": f"fires at {when.isoformat()}"})
+    checks.append(
+        {"check": "schedule_time", "passed": True, "detail": f"fires at {when.isoformat()}"}
+    )
     return Decision(
         status=vocab.SCHEDULED,
         fire_at=when,
@@ -719,7 +731,9 @@ def decide(
     )
     if not group["passed"]:
         failed = ", ".join(group["failed"]) or group["match"]
-        refuse(vocab.VIOLATED_RESTRICTION, f"the configured restriction was not satisfied: {failed}")
+        refuse(
+            vocab.VIOLATED_RESTRICTION, f"the configured restriction was not satisfied: {failed}"
+        )
 
     if refusal is not None:
         return skipped(refusal[0], refusal[1], checks)

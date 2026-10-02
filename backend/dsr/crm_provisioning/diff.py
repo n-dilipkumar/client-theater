@@ -88,9 +88,13 @@ def property_request(prop: Mapping[str, Any], adapter: VendorAdapter) -> dict[st
     }
     body.update(typed)
     if prop.get("group_name"):
-        body["groupName" if adapter.vendor == "hubspot" else "AttributeGroupName"] = prop["group_name"]
+        body["groupName" if adapter.vendor == "hubspot" else "AttributeGroupName"] = prop[
+            "group_name"
+        ]
     if prop.get("description"):
-        body["description" if adapter.vendor == "hubspot" else "AttributeDescription"] = prop["description"]
+        body["description" if adapter.vendor == "hubspot" else "AttributeDescription"] = prop[
+            "description"
+        ]
     if prop.get("length") and prop.get("type") == "string":
         body["MaxLength"] = int(prop["length"])
     if prop.get("options"):
@@ -231,7 +235,9 @@ def compute(
             )
         elif existing is not None:
             if _matches(existing, prop, adapter):
-                entry.update(action="unchanged", reason="already present and identical", request=None)
+                entry.update(
+                    action="unchanged", reason="already present and identical", request=None
+                )
                 width = _width_finding(existing, prop)
                 if width is not None:
                     advisories.append(width)
@@ -269,7 +275,11 @@ def compute(
     sync_key = manifest.get(SYNC_KEY_FIELD)
     key_plan: dict[str, Any]
     if not sync_key:
-        key_plan = {"action": "absent", "reason": "the manifest declares no sync key", "columns": []}
+        key_plan = {
+            "action": "absent",
+            "reason": "the manifest declares no sync key",
+            "columns": [],
+        }
     elif not adapter.key_create:
         key_plan = {
             "action": "unsupported",
@@ -304,7 +314,9 @@ def compute(
                 "request": None,
             }
 
-    counts = {action: sum(1 for row in plans if row["action"] == action) for action in PROPERTY_ACTIONS}
+    counts = {
+        action: sum(1 for row in plans if row["action"] == action) for action in PROPERTY_ACTIONS
+    }
     counts["left_in_place"] = len(orphans)
     return {
         "vendor": adapter.vendor,
@@ -326,7 +338,6 @@ def compute(
         "findings": [dict(f) for f in findings],
         "advisories": advisories,
         "will_create": 1 if object_action == "create" else 0,
-        "complete": counts["unmappable"] == 0 and not [
-            f for f in findings if f.get("severity") == "blocking"
-        ],
+        "complete": counts["unmappable"] == 0
+        and not [f for f in findings if f.get("severity") == "blocking"],
     }

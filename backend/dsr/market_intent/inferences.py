@@ -128,7 +128,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "default_timeframe",
         "question": "What time frame does a view get when the request names none?",
-        "reading": "Thirty days, and an explicit \"days\": null asks for no time frame at all.",
+        "reading": 'Thirty days, and an explicit "days": null asks for no time frame at all.',
         "why": (
             "The research names a 90-day ceiling and no default. Thirty days is short enough that "
             "a company that has genuinely gone quiet falls out of a view instead of being tracked "

@@ -539,7 +539,11 @@ DEMO_WORKFLOWS: tuple[dict[str, Any], ...] = (
         },
         "actions": [
             {"kind": "slack_notification", "channel": "#deals", "text": "Pricing pack downloaded."},
-            {"kind": "send_email", "template": "pricing-follow-up", "subject": "Pricing, and a next step"},
+            {
+                "kind": "send_email",
+                "template": "pricing-follow-up",
+                "subject": "Pricing, and a next step",
+            },
         ],
     },
     {
@@ -673,8 +677,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     connections: list[dict[str, Any]] = []
     for index, (candidate, account) in enumerate(rooms[:2]):
-        connections.append({"room_id": candidate, "deal_id": f"deal{index:03d}", "account": account})
-    integration = engine.register_integration(
+        connections.append(
+            {"room_id": candidate, "deal_id": f"deal{index:03d}", "account": account}
+        )
+    engine.register_integration(
         {
             "name": "hubspot",
             "label": "HubSpot",
@@ -691,7 +697,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         )["id"]
         for spec in (*DEMO_WORKFLOWS, DEMO_UNMATCHED)
     ]
-    draft = engine.create(
+    engine.create(
         {
             "name": DEMO_DRAFT_NAME,
             "description": (
@@ -707,7 +713,11 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
                 },
             },
             "actions": [
-                {"kind": "change_stage", "stage": "salesqualifiedlead", "stage_kind": "lifecyclestage"},
+                {
+                    "kind": "change_stage",
+                    "stage": "salesqualifiedlead",
+                    "stage_kind": "lifecyclestage",
+                },
                 {"kind": "update_field", "field": "intro_call_completed", "value": True},
             ],
         },
@@ -859,9 +869,17 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # row. Only meaningful when the seeder was given a third room.
     isolated_skips = 0
     if len(rooms) > 2:
-        send(rooms[2][0], "downloaded", "Pricing One-Pager", minutes_ago=15, file_name="Pricing One-Pager")
+        send(
+            rooms[2][0],
+            "downloaded",
+            "Pricing One-Pager",
+            minutes_ago=15,
+            file_name="Pricing One-Pager",
+        )
         isolated = engine.evaluate(rooms[2][0], buyer, actor="dana", source=source)
-        isolated_skips = sum(1 for row in isolated["skipped"] if row["reason"] == "room_not_connected")
+        isolated_skips = sum(
+            1 for row in isolated["skipped"] if row["reason"] == "room_not_connected"
+        )
 
     missed = evaluated["misses"]
     reasons = sorted({row["reason"] for entry in missed for row in entry["sample"]})
@@ -877,6 +895,8 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         f"{duplicate['duplicate_attempts']} duplicate webhook not stored, "
         f"1 event in no filter family"
         + (
-            f", {isolated_skips} workflow(s) skipped for an unconnected room" if isolated_skips else ""
+            f", {isolated_skips} workflow(s) skipped for an unconnected room"
+            if isolated_skips
+            else ""
         )
     )

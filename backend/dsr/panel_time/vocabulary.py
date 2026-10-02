@@ -185,9 +185,7 @@ SUGGESTION_REASON_ALL_FREE = (
 
 #: [sourced] The research quotes the reason inside a Graph response body, so it is
 #: carried with the JSON key it arrived under.
-SUGGESTION_REASON_QUOTE = (
-    f'"suggestionReason": "{SUGGESTION_REASON_ALL_FREE}"'
-)
+SUGGESTION_REASON_QUOTE = f'"suggestionReason": "{SUGGESTION_REASON_ALL_FREE}"'
 
 #: [sourced] The presence of ``suggestionReason`` is the ``returnSuggestionReasons``
 #: toggle's whole effect: with it off, the key is not in the response at all.
@@ -237,9 +235,7 @@ EMPTY_REASONS: tuple[str, ...] = (
 
 #: [sourced] "averaged **confidence** score, sorted high→low then chronologically".
 #: The tie-break is part of the sentence, not a detail of it.
-SORT_QUOTE = (
-    "averaged confidence score, sorted high→low then chronologically"
-)
+SORT_QUOTE = "averaged confidence score, sorted high→low then chronologically"
 
 #: [sourced] The researched ranking.
 RANK_CONFIDENCE = "confidence"
@@ -267,10 +263,10 @@ GOOGLE_CONFERENCE_SOLUTION_KEY = {"type": "hangoutsMeet"}
 
 #: [sourced] The five researched steps, carried as the flow this build serves.
 USER_FLOW: tuple[str, ...] = (
-    "User opens a \"find a time\" surface (in a sales room, a CRM record, or a "
+    'User opens a "find a time" surface (in a sales room, a CRM record, or a '
     "scheduling page) and picks a set of participants + a date range.",
     "The app collects the attendees' email addresses and location constraints "
-    "(room / \"suggest a location\").",
+    '(room / "suggest a location").',
     "The app calls each attendee's calendar free/busy service (Google) or Graph "
     "findMeetingTimes (Microsoft).",
     "Ranked candidate slots are returned, each with a confidence percentage and a "
@@ -328,7 +324,7 @@ ADJACENT_SURFACES: tuple[dict[str, str], ...] = (
         "why_not": (
             "The research's own gap list says so: 'I read freebusy.query (pull) "
             "but not Google events.watch / Graph change notifications, so "
-            "\"availability sync\" in #7 is documented as a *pull* free/busy read. "
+            '"availability sync" in #7 is documented as a *pull* free/busy read. '
             "I did not verify a push-based availability invalidation flow.' Every "
             "read here is a pull, and a commit re-reads rather than trusting a "
             "stored answer."
@@ -412,7 +408,7 @@ def _endpoints() -> dict[str, Any]:
             "method": "POST",
             "scope": GRAPH_DELEGATED_SCOPE,
             "delegated": True,
-            "headers": {f"Prefer": GRAPH_PREFER_HEADER},
+            "headers": {"Prefer": GRAPH_PREFER_HEADER},
             "request_body_fields": [
                 "attendees",
                 "timeConstraint",

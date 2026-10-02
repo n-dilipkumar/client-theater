@@ -1,4 +1,4 @@
-﻿"""Tests for WF-039: write account + contact + opportunity as one atomic transaction.
+"""Tests for WF-039: write account + contact + opportunity as one atomic transaction.
 
 The claims under test come from
 ``docs/research/digital-sales-room-workflows/wf/WF-039.md``, and each section below
@@ -36,8 +36,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.atomic_bundle import (
     ATOMICITY,
@@ -45,7 +43,6 @@ from dsr.atomic_bundle import (
     CONNECTOR_COLLECTION,
     DIALECTS,
     FAIL_COLLATION_VIOLATION,
-    HS_ASSOCIATION_PATH,
     HS_CONTACTS_BATCH_PATH,
     INFERENCES,
     LIMITS,
@@ -94,6 +91,7 @@ from dsr.atomic_bundle.vocabulary import (
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -215,7 +213,9 @@ def test_the_four_documented_dialects_are_all_present():
 def test_the_vocabulary_carries_the_documented_endpoints():
     endpoints = describe_vocabulary()["endpoints"]
     assert endpoints["salesforce_composite"] == "/services/data/vXX.X/composite"
-    assert endpoints["salesforce_sobject_tree"] == "/services/data/vXX.X/composite/tree/{sobject_name}"
+    assert (
+        endpoints["salesforce_sobject_tree"] == "/services/data/vXX.X/composite/tree/{sobject_name}"
+    )
     assert endpoints["dataverse_batch"] == "/api/data/v9.2/$batch"
     assert endpoints["hubspot_associations"]["batch_create"] == HS_CONTACTS_BATCH_PATH
     assert "2026-09" in endpoints["hubspot_associations"]["association"]
@@ -248,7 +248,7 @@ def test_the_two_documented_atomicity_quotes_are_carried_verbatim():
 
 
 def test_the_outcome_vocabulary_distinguishes_skipped_from_failed():
-    """"Dependent subrequests aren't executed" is not the same as a refusal.
+    """ "Dependent subrequests aren't executed" is not the same as a refusal.
 
     A skipped subrequest has nothing wrong with it; its input never arrived. A
     vocabulary that collapsed the two would make a run over-report its failures.
@@ -355,9 +355,10 @@ def test_a_whole_string_that_is_one_reference_resolves_to_the_value_not_a_string
 
 
 def test_a_reference_inside_a_larger_string_is_substituted_in_place():
-    resolved = resolve_sf({"note": "city is @{NewAccount.BillingAddress.city}!"}, {
-        "NewAccount": {"BillingAddress": {"city": "Leeds"}}
-    })
+    resolved = resolve_sf(
+        {"note": "city is @{NewAccount.BillingAddress.city}!"},
+        {"NewAccount": {"BillingAddress": {"city": "Leeds"}}},
+    )
     assert resolved == {"note": "city is Leeds!"}
 
 
@@ -369,7 +370,7 @@ def test_the_documented_indexed_path_resolves_into_a_list():
 
 
 def test_a_reference_to_a_path_the_result_does_not_carry_resolves_to_null():
-    """"Real record URIs" means a field a record does not have has no value.
+    """ "Real record URIs" means a field a record does not have has no value.
 
     Crashing here would turn a CRM that returned a thinner object than expected
     into a 500 on a write that would otherwise have gone through.
@@ -395,7 +396,9 @@ def test_a_content_id_is_the_one_based_position_of_a_step():
 
 
 def test_a_dataverse_reference_resolves_to_the_uri_the_crm_returned():
-    resolved = resolve_dv({"originatingleadid@odata.bind": "$1"}, {1: "/api/data/v9.2/accounts(abc)"})
+    resolved = resolve_dv(
+        {"originatingleadid@odata.bind": "$1"}, {1: "/api/data/v9.2/accounts(abc)"}
+    )
     assert resolved == {"originatingleadid@odata.bind": "/api/data/v9.2/accounts(abc)"}
 
 
@@ -527,7 +530,9 @@ def test_a_record_with_no_reference_id_is_refused():
 
 def test_a_reference_id_that_is_not_an_identifier_is_refused():
     with pytest.raises(BundleShapeError, match="not an identifier"):
-        plan_bundle({"name": "x", "records": [{"reference_id": "a b", "type": "A", "fields": {"n": 1}}]})
+        plan_bundle(
+            {"name": "x", "records": [{"reference_id": "a b", "type": "A", "fields": {"n": 1}}]}
+        )
 
 
 def test_a_repeated_reference_id_is_refused():
@@ -609,8 +614,18 @@ def test_the_declared_depth_is_the_longest_parent_chain():
         "name": "chain",
         "records": [
             {"reference_id": "a", "type": "A", "fields": {"n": 1}},
-            {"reference_id": "b", "type": "B", "fields": {"n": 1}, "parent": {"reference": "a", "field": "a"}},
-            {"reference_id": "c", "type": "C", "fields": {"n": 1}, "parent": {"reference": "b", "field": "b"}},
+            {
+                "reference_id": "b",
+                "type": "B",
+                "fields": {"n": 1},
+                "parent": {"reference": "a", "field": "a"},
+            },
+            {
+                "reference_id": "c",
+                "type": "C",
+                "fields": {"n": 1},
+                "parent": {"reference": "b", "field": "b"},
+            },
         ],
     }
     assert plan_bundle(spec, dialect="salesforce_sobject_tree").depth == 3
@@ -657,7 +672,9 @@ def test_five_sobject_collections_is_the_ceiling():
     spec = {"name": "six collections", "records": [collection(i) for i in range(6)]}
     with pytest.raises(LimitExceeded, match="sObject Collections"):
         plan_bundle(spec)
-    assert plan_bundle({"name": "five", "records": [collection(i) for i in range(5)]}).collections == 5
+    assert (
+        plan_bundle({"name": "five", "records": [collection(i) for i in range(5)]}).collections == 5
+    )
 
 
 def test_a_collection_counts_as_one_subrequest_and_many_records():
@@ -750,7 +767,11 @@ def test_five_levels_deep_is_the_tree_ceiling():
                     # five-types rule - which is checked on its own.
                     "type": "Custom__c",
                     "fields": {"n": index},
-                    **({"parent": {"reference": f"l{index - 1}", "field": "parent"}} if index else {}),
+                    **(
+                        {"parent": {"reference": f"l{index - 1}", "field": "parent"}}
+                        if index
+                        else {}
+                    ),
                 }
                 for index in range(length)
             ],
@@ -801,7 +822,7 @@ def test_strict_maps_to_all_or_none_true_and_partial_to_false():
 
 
 def test_a_partial_policy_is_refused_on_a_dialect_with_no_partial_mode():
-    """"If an error occurs while creating a record, the entire request fails."
+    """ "If an error occurs while creating a record, the entire request fails."
 
     There is no partial mode to ask for on the tree endpoint, and silently
     downgrading to "whatever the endpoint does" would make the run record lie.
@@ -928,7 +949,7 @@ def test_the_dataverse_parts_are_numbered_one_two_three():
 
 
 def test_the_dataverse_parent_link_is_the_researched_bind_property_with_a_dollar_reference():
-    """"originatingleadid@odata.bind": "$1" - the research quotes this example."""
+    """ "originatingleadid@odata.bind": "$1" - the research quotes this example."""
     _plan, document = rendered(BUNDLE, dialect="dataverse_batch")
     contact = next(p for p in document.parts if p.reference_id == "refContact")
     assert json.loads(contact.body)["AccountId@odata.bind"] == "$1"
@@ -1002,7 +1023,7 @@ def test_hubspot_uses_the_documented_batch_create_and_association_put():
 
 
 def test_a_contact_is_created_by_the_batch_not_also_by_its_own_request():
-    """"with an associations array, **or** PUT" - the research's or, read per record.
+    """ "with an associations array, **or** PUT" - the research's or, read per record.
 
     Emitting both for one contact would associate it twice.
     """
@@ -1070,7 +1091,7 @@ def test_a_clean_commit_creates_one_row_per_subrequest(store):
 
 
 def test_the_opportunity_lands_on_the_account_this_run_just_created(store):
-    """"so the Opportunity is created against the just-created Account rather than a
+    """ "so the Opportunity is created against the just-created Account rather than a
     stale one" - step 5 of the researched flow."""
     plan, document = rendered(BUNDLE, dialect="salesforce_composite")
     result = crm(store).send(document, source=SOURCE)
@@ -1132,17 +1153,18 @@ def test_a_partial_failure_on_the_root_skips_rather_than_fails_its_dependents(st
         "refOpportunity": OUTCOME_SKIPPED,
     }
     assert set(result.skipped) == {"refContact", "refOpportunity"}
-    assert "Dependent subrequests aren't executed" in next(
-        s for s in result.steps if s.reference_id == "refContact"
-    ).message
+    assert (
+        "Dependent subrequests aren't executed"
+        in next(s for s in result.steps if s.reference_id == "refContact").message
+    )
 
 
 def test_the_single_actionable_error_is_the_first_failure_in_declared_order(store):
     """[sourced] "the room shows a single actionable error" - one, not three."""
     plan, document = rendered(BUNDLE, dialect="salesforce_composite", policy=POLICY_STRICT)
-    result = crm(
-        store, {"refContact": FAILURE, "refOpportunity": "DUPLICATE_VALUE"}
-    ).send(document, source=SOURCE)
+    result = crm(store, {"refContact": FAILURE, "refOpportunity": "DUPLICATE_VALUE"}).send(
+        document, source=SOURCE
+    )
     assert result.actionable_error["reference_id"] == "refContact"
     assert result.actionable_error["message"] == FAILURE
     assert "2 of 3 subrequests failed" in result.actionable_error["detail"]
@@ -1155,8 +1177,12 @@ def test_the_actionable_error_outranks_a_plain_refusal_when_it_is_a_setting(stor
         "records": [
             {"reference_id": "refPrior", "type": "Audit__c", "fields": {"n": 1}},
             {"reference_id": "refAccount", "type": "Account", "fields": {"Name": "P"}},
-            {"reference_id": "refAudit", "type": "Audit__c", "fields": {"n": 2},
-             "implicit_depends_on": ["refAccount"]},
+            {
+                "reference_id": "refAudit",
+                "type": "Audit__c",
+                "fields": {"n": 2},
+                "implicit_depends_on": ["refAccount"],
+            },
         ],
     }
     plan, document = rendered(spec, dialect="salesforce_composite", collate_subrequests=True)
@@ -1177,7 +1203,11 @@ def test_a_clean_run_has_no_actionable_error(store):
 IMPLICIT_SPEC: dict = {
     "name": "implicit dependency",
     "records": [
-        {"reference_id": "refPriorAudit", "type": "AccountAudit__c", "fields": {"Reason__c": "prior"}},
+        {
+            "reference_id": "refPriorAudit",
+            "type": "AccountAudit__c",
+            "fields": {"Reason__c": "prior"},
+        },
         {"reference_id": "refAccount", "type": "Account", "fields": {"Name": "Proseware"}},
         {
             "reference_id": "refAudit",
@@ -1210,7 +1240,9 @@ def test_no_warning_about_an_implicit_dependency_once_collation_is_off():
 def test_a_collation_violation_fails_while_collation_is_on(store):
     """[sourced] "Collation can cause issues if there are implicit but not explicit
     dependencies between items." Modelled, not described."""
-    _plan, document = rendered(IMPLICIT_SPEC, dialect="salesforce_composite", collate_subrequests=True)
+    _plan, document = rendered(
+        IMPLICIT_SPEC, dialect="salesforce_composite", collate_subrequests=True
+    )
     result = crm(store).send(document, source=SOURCE)
     audit = next(s for s in result.steps if s.reference_id == "refAudit")
     assert audit.outcome == OUTCOME_FAILED
@@ -1220,7 +1252,9 @@ def test_a_collation_violation_fails_while_collation_is_on(store):
 
 def test_the_same_bundle_commits_once_the_knob_is_turned(store):
     """The whole point of the toggle: one setting, and the failure is gone."""
-    _plan, document = rendered(IMPLICIT_SPEC, dialect="salesforce_composite", collate_subrequests=False)
+    _plan, document = rendered(
+        IMPLICIT_SPEC, dialect="salesforce_composite", collate_subrequests=False
+    )
     result = crm(store).send(document, source=SOURCE)
     assert result.ok
     assert result.committed == ("refPriorAudit", "refAccount", "refAudit")
@@ -1473,9 +1507,7 @@ def test_the_preview_says_a_non_atomic_dialect_is_a_blocker(committer, room, con
     assert "not_atomic" in {entry["code"] for entry in preview["blockers"]}
 
 
-def test_a_connector_with_no_base_url_blocks_a_urllib_commit_not_a_preview(
-    committer, room, store
-):
+def test_a_connector_with_no_base_url_blocks_a_urllib_commit_not_a_preview(committer, room, store):
     from dsr.atomic_bundle.errors import BundleNotConfigured
 
     connector = committer.create_connector(
@@ -1582,7 +1614,9 @@ def test_patching_a_connector_swaps_the_dialect(committer, connector):
     assert updated["dialect"] == "dataverse_batch"
 
 
-def test_a_deleted_connector_is_soft_so_its_runs_stay_readable(store, committer, room, bundle, connector):
+def test_a_deleted_connector_is_soft_so_its_runs_stay_readable(
+    store, committer, room, bundle, connector
+):
     """A hard delete would leave a run pointing at a connector nobody can read."""
     run = committer.commit(room["id"], bundle["id"], actor="dana", source=SOURCE)
     committer.delete_connector(connector["id"], actor="dana", source=SOURCE)
@@ -1712,7 +1746,9 @@ def test_the_connector_crud_over_http(http):
 
 def test_a_connector_cannot_be_created_without_a_name(http):
     assert http.post(f"{PREFIX}/connectors", json={}).status_code == 400
-    assert http.post(f"{PREFIX}/connectors", json={"name": "x", "dialect": "sap"}).status_code == 400
+    assert (
+        http.post(f"{PREFIX}/connectors", json={"name": "x", "dialect": "sap"}).status_code == 400
+    )
 
 
 def test_the_bundle_crud_over_http(http, http_room, http_connector):
@@ -1759,7 +1795,9 @@ def test_the_preview_over_http_writes_nothing_and_returns_the_order(http, http_r
     assert http.get("/api/stats").json()["records"] == before
 
 
-def test_the_preview_accepts_the_researched_knobs_and_the_body_changes(http, http_room, http_bundle):
+def test_the_preview_accepts_the_researched_knobs_and_the_body_changes(
+    http, http_room, http_bundle
+):
     path = f"{PREFIX}/rooms/{http_room['id']}/bundles/{http_bundle['id']}/preview"
     strict = http.post(path, json={"policy": "strict"}).json()
     partial = http.post(path, json={"policy": "partial"}).json()
@@ -1811,7 +1849,9 @@ def test_the_runs_list_filters(http, http_room, http_bundle, http_connector):
     http.post(f"{room_path}/bundles/{http_bundle['id']}/commit", json={})
     http.post(f"{room_path}/bundles/{other['id']}/commit", json={})
     assert http.get(f"{room_path}/runs").json()["count"] == 2
-    assert http.get(f"{room_path}/runs", params={"bundle_id": http_bundle["id"]}).json()["count"] == 1
+    assert (
+        http.get(f"{room_path}/runs", params={"bundle_id": http_bundle["id"]}).json()["count"] == 1
+    )
     assert http.get(f"{room_path}/runs", params={"ok": "false"}).json()["count"] == 0
 
 
@@ -1896,9 +1936,7 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted(
         ), f"audit names a route the app does not serve: {entry['source']}"
 
 
-def test_the_rows_the_crm_creates_are_audited_with_the_commit_route(
-    http, http_room, http_bundle
-):
+def test_the_rows_the_crm_creates_are_audited_with_the_commit_route(http, http_room, http_bundle):
     """They are writes, and an audit row that cannot name its request is not one."""
     room_path = f"{PREFIX}/rooms/{http_room['id']}"
     http.post(f"{room_path}/bundles/{http_bundle['id']}/commit", json={})
@@ -1986,9 +2024,7 @@ def test_the_seed_produces_the_states_the_research_makes_unavoidable(store):
     assert any(run["compensated"] for run in runs)
     assert any(run["compensation_failures"] for run in runs)
     assert any(
-        entry["code"] == WARN_IMPLICIT_DEPENDENCY
-        for run in runs
-        for entry in run["warnings"]
+        entry["code"] == WARN_IMPLICIT_DEPENDENCY for run in runs for entry in run["warnings"]
     )
     assert any(
         run["actionable_error"] and run["actionable_error"]["reason"] == FAIL_COLLATION_VIOLATION

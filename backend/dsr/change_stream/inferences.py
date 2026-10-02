@@ -59,8 +59,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "what happens to the last transaction in a stream",
         "topic_note": "the largest inference in the package",
         "basis": (
-            'The research states the commit rule once - "only commits to the room\'s local '
-            "replica when the key changes\" - and that rule has no terminal case. A stream "
+            "The research states the commit rule once - \"only commits to the room's local "
+            'replica when the key changes" - and that rule has no terminal case. A stream '
             "that ends with a transaction still parked has a change that no later key will ever "
             "close."
         ),
@@ -193,8 +193,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "what to do with enriched fields on a create or undelete event",
         "basis": (
             'Fully sourced: "Fields that you select for enrichment are included in change '
-            'events for update and delete operations. Enriched fields aren\'t included in '
-            'change events for create and undelete operations because these events contain '
+            "events for update and delete operations. Enriched fields aren't included in "
+            "change events for create and undelete operations because these events contain "
             'all the populated fields."'
         ),
         "value": {
@@ -305,8 +305,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "what happens to an event delivered with no FetchRequest outstanding",
         "basis": (
             'Sourced: "The Subscribe method uses bidirectional streaming, enabling the client '
-            'to request more events as it consumes events. The client can control the flow of '
-            'events received by setting the number of requested events in the FetchRequest '
+            "to request more events as it consumes events. The client can control the flow of "
+            "events received by setting the number of requested events in the FetchRequest "
             'parameter."'
         ),
         "value": {
@@ -395,7 +395,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "the budget a workflow webhook call is exempt from",
         "basis": (
             'Sourced: "Webhook calls made via workflows do not count towards the API rate '
-            "limit.\" The research publishes no limit to be exempt from, and no other "
+            'limit." The research publishes no limit to be exempt from, and no other '
             "vendor's budget either."
         ),
         "value": {
@@ -587,9 +587,7 @@ def describe() -> dict[str, Any]:
             "hubspot_workflow_calls_exempt": (
                 vocabulary.HUBSPOT_WORKFLOW_CALLS_EXEMPT_FROM_RATE_LIMIT
             ),
-            "hubspot_webhook_subscription_limit": (
-                vocabulary.HUBSPOT_WEBHOOK_SUBSCRIPTION_LIMIT
-            ),
+            "hubspot_webhook_subscription_limit": (vocabulary.HUBSPOT_WEBHOOK_SUBSCRIPTION_LIMIT),
         },
         "worked_example": {
             "note": (

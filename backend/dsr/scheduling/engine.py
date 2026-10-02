@@ -48,11 +48,10 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping
 
 from dsr.db.audited import RecordNotFound
-from dsr.scheduling import links as link_tools
-from dsr.scheduling import propagation
+from dsr.scheduling import links as link_tools, propagation
 from dsr.scheduling.availability import (
     DEFAULT_RANGE_DAYS,
     available_slots,
@@ -85,11 +84,10 @@ from dsr.scheduling.vocabulary import (
     CRM_SOBJECT,
     HOST,
     LIVE_STATUSES,
+    REQUEST_RESCHEDULE,
     RESCHEDULE,
     RESCHEDULE_LINK,
-    REQUEST_RESCHEDULE,
     RESCHEDULED,
-    SCOPE_ALL,
     SCOPE_THIS,
     require_actor_kind,
     require_cancel_scope,
@@ -176,7 +174,12 @@ class MeetingChangeEngine:
     # ----------------------------------------------------------------- #
 
     def create_meeting_type(
-        self, spec: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None, source: str
+        self,
+        spec: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         """Declare a Meeting Type: the context a reschedule re-opens.
 
@@ -201,7 +204,12 @@ class MeetingChangeEngine:
         return records
 
     def update_meeting_type(
-        self, meeting_type_id: str, patch: Mapping[str, Any], *, actor: str | None = None, source: str
+        self,
+        meeting_type_id: str,
+        patch: Mapping[str, Any],
+        *,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         """Patch a Meeting Type, re-validating the merged result.
 
@@ -241,7 +249,9 @@ class MeetingChangeEngine:
         """
         return {
             "id": None,
-            "data": normalise_meeting_type({"name": "Ad hoc", "host_email": "host@example.invalid"}),
+            "data": normalise_meeting_type(
+                {"name": "Ad hoc", "host_email": "host@example.invalid"}
+            ),
         }
 
     def resolve_meeting_type(self, meeting_type_id: str | None) -> dict[str, Any]:
@@ -278,7 +288,9 @@ class MeetingChangeEngine:
 
         start_at = parse(body.get("start_at"), label="start_at")
         duration = int(body.get("duration_minutes") or type_data["duration_minutes"])
-        end_at = parse(body["end_at"]) if body.get("end_at") else start_at + timedelta(minutes=duration)
+        end_at = (
+            parse(body["end_at"]) if body.get("end_at") else start_at + timedelta(minutes=duration)
+        )
 
         host_email = str(body.get("host_email") or type_data["host_email"]).strip().lower()
         tokens = link_tools.mint_pair(uid, factory=self.token_factory)
@@ -304,13 +316,20 @@ class MeetingChangeEngine:
             "cancel_token": tokens[CANCEL],
             "reminders": self._reminders_for(body, type_data, start_at),
         }
-        for optional in ("recurring_group", "recurrence_index", "crm_event_id", "calendar_event_id"):
+        for optional in (
+            "recurring_group",
+            "recurrence_index",
+            "crm_event_id",
+            "calendar_event_id",
+        ):
             value = body.get(optional)
             if value not in (None, ""):
                 payload[optional] = value
         if body.get("room_id") and not room_id:
             room_id = str(body["room_id"])
-        return self.store.create(BOOKING_COLLECTION, payload, room_id=room_id, actor=actor, source=source)
+        return self.store.create(
+            BOOKING_COLLECTION, payload, room_id=room_id, actor=actor, source=source
+        )
 
     def _reminders_for(
         self, body: Mapping[str, Any], type_data: Mapping[str, Any], start_at: datetime
@@ -684,7 +703,9 @@ class MeetingChangeEngine:
         if self.store.find(BOOKING_COLLECTION, {"uid": new_uid}, limit=1):
             raise MeetingChangeError(f"a booking with uid {new_uid} already exists")
 
-        new_payload = self._new_booking_payload(booking, type_data, new_uid, target, reason, source_kind, reschedule_id)
+        new_payload = self._new_booking_payload(
+            booking, type_data, new_uid, target, reason, source_kind, reschedule_id
+        )
         new_room_id = booking.get("room_id")
         envelopes = propagation.webhook_envelopes(
             change_type=CHANGE_RESCHEDULED,
@@ -704,7 +725,9 @@ class MeetingChangeEngine:
                 "reschedule_reason": reason,
                 "reschedule_source": source_kind,
                 "rescheduled_by": who,
-                "reminders": propagation.rebase_reminders(data.get("reminders"), target["start_at"]),
+                "reminders": propagation.rebase_reminders(
+                    data.get("reminders"), target["start_at"]
+                ),
             }
             tx.update(booking["id"], old_patch, actor=actor, source=source)
             created = tx.create(
@@ -741,7 +764,9 @@ class MeetingChangeEngine:
                 start_at=target["start_at"],
                 end_at=target["end_at"],
                 change_id=change["id"],
-                existing=self._calendar_event(str(data.get("uid") or ""), self._chain_root(booking)),
+                existing=self._calendar_event(
+                    str(data.get("uid") or ""), self._chain_root(booking)
+                ),
                 room_id=new_room_id,
                 actor=actor,
                 source=source,
@@ -866,7 +891,9 @@ class MeetingChangeEngine:
                     "token": token,
                     "status": "pending",
                     "original_uid": original["data"]["uid"],
-                    "chain_root": str(original["data"].get("chain_root") or original["data"]["uid"]),
+                    "chain_root": str(
+                        original["data"].get("chain_root") or original["data"]["uid"]
+                    ),
                     "meeting_type_id": original["data"].get("meeting_type_id"),
                     # Also on the envelope, which is what `room_id` here writes.
                     # Not repeated in `data` on purpose: the store reserves
@@ -877,7 +904,9 @@ class MeetingChangeEngine:
                     "host_email": original["data"].get("host_email"),
                     "attendee_email": str(
                         body.get("attendee_email") or original["data"].get("attendee_email") or ""
-                    ).strip().lower(),
+                    )
+                    .strip()
+                    .lower(),
                     "reason": reason,
                     "requested_by": who,
                     "requested_by_kind": kind,
@@ -968,12 +997,15 @@ class MeetingChangeEngine:
             "title": original["data"].get("title") or type_data.get("name") or "Meeting",
             "host_email": original["data"].get("host_email"),
             "attendee_name": original["data"].get("attendee_name"),
-            "attendee_email": str(data.get("attendee_email") or original["data"].get("attendee_email") or ""),
+            "attendee_email": str(
+                data.get("attendee_email") or original["data"].get("attendee_email") or ""
+            ),
             "start_at": iso(start),
             "end_at": iso(end),
             "duration_minutes": int(type_data["duration_minutes"]),
             "timezone": type_data.get("timezone") or "UTC",
-            "location": str(payload.get("location") or original["data"].get("location") or "") or None,
+            "location": str(payload.get("location") or original["data"].get("location") or "")
+            or None,
             "calendar_provider": original["data"].get("calendar_provider"),
             "status": BOOKED,
             "chain_root": str(data.get("chain_root") or new_uid),
@@ -998,7 +1030,9 @@ class MeetingChangeEngine:
         )
 
         with self.store.db.transaction(actor=actor, source=source) as tx:
-            created = tx.create(BOOKING_COLLECTION, new_payload, room_id=room_id, actor=actor, source=source)
+            created = tx.create(
+                BOOKING_COLLECTION, new_payload, room_id=room_id, actor=actor, source=source
+            )
             change_payload = self._change_payload(
                 change_type=CHANGE_RESCHEDULED,
                 booking=original["data"],
@@ -1012,7 +1046,9 @@ class MeetingChangeEngine:
                 reason=reason,
                 request_id=request_id,
             )
-            change = tx.create(CHANGE_COLLECTION, change_payload, room_id=room_id, actor=actor, source=source)
+            change = tx.create(
+                CHANGE_COLLECTION, change_payload, room_id=room_id, actor=actor, source=source
+            )
             calendar = propagation.move_calendar_event(
                 tx,
                 # The cancelled original, for the same reason as an immediate
@@ -1200,8 +1236,13 @@ class MeetingChangeEngine:
         return records[:limit]
 
     def webhooks(
-        self, *, booking_uid: str | None = None, change_id: str | None = None, webhook: str | None = None,
-        status: str | None = None, limit: int = 100,
+        self,
+        *,
+        booking_uid: str | None = None,
+        change_id: str | None = None,
+        webhook: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
     ) -> list[dict[str, Any]]:
         where: dict[str, Any] = {}
         if booking_uid is not None:
@@ -1215,8 +1256,12 @@ class MeetingChangeEngine:
         return self.store.find(propagation.WEBHOOK_COLLECTION, where, limit=limit)
 
     def notifications(
-        self, *, booking_uid: str | None = None, change_id: str | None = None,
-        channel: str | None = None, limit: int = 100,
+        self,
+        *,
+        booking_uid: str | None = None,
+        change_id: str | None = None,
+        channel: str | None = None,
+        limit: int = 100,
     ) -> list[dict[str, Any]]:
         where: dict[str, Any] = {}
         if booking_uid is not None:
@@ -1227,9 +1272,13 @@ class MeetingChangeEngine:
             where["channel"] = str(channel)
         return self.store.find(propagation.NOTIFICATION_COLLECTION, where, limit=limit)
 
-    def crm_events(self, *, booking_uid: str | None = None, include_deleted: bool = False) -> list[dict[str, Any]]:
+    def crm_events(
+        self, *, booking_uid: str | None = None, include_deleted: bool = False
+    ) -> list[dict[str, Any]]:
         where = {"booking_uid": str(booking_uid)} if booking_uid else {}
-        return self.store.find(propagation.CRM_EVENT_COLLECTION, where, limit=200, include_deleted=include_deleted)
+        return self.store.find(
+            propagation.CRM_EVENT_COLLECTION, where, limit=200, include_deleted=include_deleted
+        )
 
     def calendar_events(self, *, booking_uid: str | None = None) -> list[dict[str, Any]]:
         where = {"booking_uid": str(booking_uid)} if booking_uid else {}
@@ -1314,10 +1363,14 @@ class MeetingChangeEngine:
         move it has had.
         """
         if chain_root:
-            found = self.store.find(propagation.CALENDAR_EVENT_COLLECTION, {"chain_root": chain_root}, limit=1)
+            found = self.store.find(
+                propagation.CALENDAR_EVENT_COLLECTION, {"chain_root": chain_root}, limit=1
+            )
             if found:
                 return found[0]
-        found = self.store.find(propagation.CALENDAR_EVENT_COLLECTION, {"booking_uid": uid}, limit=1)
+        found = self.store.find(
+            propagation.CALENDAR_EVENT_COLLECTION, {"booking_uid": uid}, limit=1
+        )
         return found[0] if found else None
 
     def _crm_event(self, uid: str, chain_root: str | None = None) -> dict[str, Any] | None:
@@ -1330,7 +1383,9 @@ class MeetingChangeEngine:
         Event, leaving two Salesforce events for one meeting.
         """
         if chain_root:
-            found = self.store.find(propagation.CRM_EVENT_COLLECTION, {"chain_root": chain_root}, limit=1)
+            found = self.store.find(
+                propagation.CRM_EVENT_COLLECTION, {"chain_root": chain_root}, limit=1
+            )
             if found:
                 return found[0]
         found = self.store.find(propagation.CRM_EVENT_COLLECTION, {"booking_uid": uid}, limit=1)
@@ -1422,7 +1477,9 @@ class MeetingChangeEngine:
         token = str(body.get("link_token") or link_tools.token_for(booking, RESCHEDULE))
         resolved, kind = link_tools.find_booking_by_token(self.store, token)
         if str(resolved["data"].get("uid")) != str(booking["data"].get("uid")):
-            raise MeetingNotFound(f"link {token} does not belong to booking {booking['data'].get('uid')}")
+            raise MeetingNotFound(
+                f"link {token} does not belong to booking {booking['data'].get('uid')}"
+            )
         if kind != RESCHEDULE:
             raise MeetingChangeError(
                 f"link {token} is a cancel link; a reschedule needs the reschedule link"
@@ -1469,7 +1526,9 @@ class MeetingChangeEngine:
         # about the horizon rather than about a weekend it happened to land on.
         self._check_horizon(start_at, moment)
         duration = int(body.get("duration_minutes") or type_data["duration_minutes"])
-        host = str(body.get("host_email") or booking["data"].get("host_email") or type_data["host_email"])
+        host = str(
+            body.get("host_email") or booking["data"].get("host_email") or type_data["host_email"]
+        )
         # The window is a week either side rather than a day. Two reasons, both
         # about what the caller is told: a target on a Saturday has no slot of its
         # own but has open slots on Friday and Monday, and a one-day window would
@@ -1525,11 +1584,7 @@ class MeetingChangeEngine:
         else:
             kind = str(body.get("actor_kind") or HOST)
         require_actor_kind(kind)
-        address = (
-            body.get("actor_email")
-            or data.get("attendee_email")
-            or data.get("host_email")
-        )
+        address = body.get("actor_email") or data.get("attendee_email") or data.get("host_email")
         return self._clean_email(address, "actor_email"), kind
 
     def _clean_email(self, value: Any, label: str) -> str:
@@ -1588,7 +1643,9 @@ class MeetingChangeEngine:
             new_booking=None,
             old_booking=data,
             reschedule_id=None,
-            cancellation_reason=self._clean_reason(body.get("reason") or body.get("cancellation_reason")),
+            cancellation_reason=self._clean_reason(
+                body.get("reason") or body.get("cancellation_reason")
+            ),
             cancelled_by_email=self._clean_email(
                 body.get("actor_email") or data.get("attendee_email") or data.get("host_email"),
                 "actor_email",
@@ -1822,7 +1879,9 @@ class MeetingChangeEngine:
             via_source=via_source,
             cause=cause,
         )
-        change = tx.create(CHANGE_COLLECTION, change_payload, room_id=room_id, actor=actor, source=source)
+        change = tx.create(
+            CHANGE_COLLECTION, change_payload, room_id=room_id, actor=actor, source=source
+        )
 
         # A cancellation leaves this booking in force - there is no replacement -
         # so the current uid is the booking's own. Passed explicitly rather than

@@ -101,9 +101,7 @@ def describe_provider(provider: str) -> dict[str, Any]:
         "provision_outcome": outcome,
         "in_cal_integration_enum": name in vocab.CAL_INTEGRATION_ENUM,
         "enum_position": (
-            vocab.CAL_INTEGRATION_ENUM.index(name)
-            if name in vocab.CAL_INTEGRATION_ENUM
-            else None
+            vocab.CAL_INTEGRATION_ENUM.index(name) if name in vocab.CAL_INTEGRATION_ENUM else None
         ),
         "gong_redirects_to_zoom": name == GONG,
         "researched": _provider_quote(name),
@@ -171,7 +169,9 @@ def _known() -> str:
     return ", ".join(sorted(set(vocab.PICKER_PROVIDERS) | set(vocab.CAL_INTEGRATION_ENUM)))
 
 
-def normalise(payload: Mapping[str, Any], *, existing: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def normalise(
+    payload: Mapping[str, Any], *, existing: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     """Resolve a connection body into the shape this package stores.
 
     Merges over ``existing`` so a PATCH validates the *result*, not the patch -
@@ -338,9 +338,10 @@ def require_connected(
     label = vocab.LOCATION_LABELS.get(resolved, resolved)
     prefix = f"connecting {provider} on the Integrations tab is mandatory for {label} to work"
 
-    named = str((location or {}).get("connection_id") or "").strip() or str(
-        (connection or {}).get("id") or ""
-    ).strip()
+    named = (
+        str((location or {}).get("connection_id") or "").strip()
+        or str((connection or {}).get("id") or "").strip()
+    )
     if named:
         raise ProviderNotConnected(
             f"{prefix}; connection {named!r} is not ready ({', '.join(report['missing'])})"
@@ -354,9 +355,7 @@ def require_connected(
             f"({', '.join(candidates)}) rather than have one picked for you"
         )
 
-    raise ProviderNotConnected(
-        f"{prefix}; no connection is configured for {provider}"
-    )
+    raise ProviderNotConnected(f"{prefix}; no connection is configured for {provider}")
 
 
 def find_duplicate(

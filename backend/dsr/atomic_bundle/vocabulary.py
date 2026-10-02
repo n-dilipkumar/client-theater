@@ -77,9 +77,7 @@ HS_CONTACTS_BATCH_PATH = "/crm/v3/objects/contacts/batch/create"
 #: [sourced] "To associate a record with other records or an activity, make a
 #: ``PUT`` request to
 #: ``/crm/objects/2026-09/{objectTypeId}/{fromRecordId}/associations/{toObjectTypeId}/{toRecordId}``."
-HS_ASSOCIATION_PATH = (
-    "/crm/objects/2026-09/{from_type}/{from_id}/associations/{to_type}/{to_id}"
-)
+HS_ASSOCIATION_PATH = "/crm/objects/2026-09/{from_type}/{from_id}/associations/{to_type}/{to_id}"
 
 #: [sourced] ``Content-Type: multipart/mixed`` on the Dataverse batch.
 DV_CONTENT_TYPE = "multipart/mixed"
@@ -446,9 +444,7 @@ def describe_user_flow() -> list[dict[str, str]]:
     the bundle preview cannot disagree about which step is which - the preview's
     whole job is to line the subrequest order up against the flow.
     """
-    return [
-        {"step": str(index), "text": text} for index, text in enumerate(USER_FLOW, start=1)
-    ]
+    return [{"step": str(index), "text": text} for index, text in enumerate(USER_FLOW, start=1)]
 
 
 def describe() -> dict[str, Any]:
@@ -464,15 +460,11 @@ def describe() -> dict[str, Any]:
                 "id": dialect,
                 "atomicity": ATOMICITY[dialect],
                 "reference_syntax": REFERENCE_SYNTAX[dialect],
-                "limits": sorted(
-                    key for key in LIMITS if key.split(".", 1)[0] == dialect
-                ),
+                "limits": sorted(key for key in LIMITS if key.split(".", 1)[0] == dialect),
             }
             for dialect in DIALECTS
         ],
-        "policies": [
-            {"id": policy, "meaning": POLICY_MEANING[policy]} for policy in POLICIES
-        ],
+        "policies": [{"id": policy, "meaning": POLICY_MEANING[policy]} for policy in POLICIES],
         "collation": COLLATE_MEANING,
         "endpoints": {
             "salesforce_composite": SF_COMPOSITE_PATH,
@@ -500,7 +492,9 @@ def describe() -> dict[str, Any]:
             },
         },
         "outcomes": list(OUTCOMES),
-        "skip_reasons": {SKIP_DEPENDENCY_FAILED: "[sourced] Dependent subrequests aren't executed."},
+        "skip_reasons": {
+            SKIP_DEPENDENCY_FAILED: "[sourced] Dependent subrequests aren't executed."
+        },
         "fail_reasons": {
             FAIL_COLLATION_VIOLATION: (
                 "[sourced] An implicit dependency executed before the record it "

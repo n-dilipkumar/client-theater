@@ -207,7 +207,9 @@ def missing_for(kind: str, body: Mapping[str, Any]) -> list[str]:
     return gaps
 
 
-def wire_location(kind: str, body: Mapping[str, Any] | None = None, **overrides: Any) -> dict[str, Any]:
+def wire_location(
+    kind: str, body: Mapping[str, Any] | None = None, **overrides: Any
+) -> dict[str, Any]:
     """Render a Location as the Cal-shaped ``location`` object it would send.
 
     The researched wire is ``{"type": <one of eight>, "integration": <one of
@@ -257,9 +259,7 @@ def wire_location(kind: str, body: Mapping[str, Any] | None = None, **overrides:
 
     if location_type == "link":
         value = str(
-            overrides.get("conference_details")
-            or body.get("conference_details")
-            or ""
+            overrides.get("conference_details") or body.get("conference_details") or ""
         ).strip()
         if value:
             wire["link"] = value
@@ -333,7 +333,9 @@ def catalogue() -> dict[str, Any]:
     kinds = [describe_kind(kind) for kind in vocab.LOCATION_KINDS]
     return {
         "count": len(kinds),
-        "default": "google-meet" if "google-meet" in vocab.LOCATION_KINDS else vocab.LOCATION_KINDS[0],
+        "default": "google-meet"
+        if "google-meet" in vocab.LOCATION_KINDS
+        else vocab.LOCATION_KINDS[0],
         "kinds": kinds,
     }
 

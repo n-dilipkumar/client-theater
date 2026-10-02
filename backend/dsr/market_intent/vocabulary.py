@@ -213,9 +213,7 @@ def describe() -> dict[str, Any]:
         "automation_toggles": [
             {"id": key, "label": AUTOMATION_LABELS[key]} for key in AUTOMATION_TOGGLES
         ],
-        "auto_add_categories": [
-            {"id": key, **CATEGORY_REQUIREMENTS[key]} for key in CATEGORY_IDS
-        ],
+        "auto_add_categories": [{"id": key, **CATEGORY_REQUIREMENTS[key]} for key in CATEGORY_IDS],
         "record_source": RECORD_SOURCE_BUYER_INTENT,
         "credit_cost_add": CREDIT_COST_ADD,
         "credit_cost_track": CREDIT_COST_TRACK,
@@ -231,10 +229,18 @@ def describe() -> dict[str, Any]:
             ),
         },
         "card_fields": [
-            {"id": "website_visits", "label": "Website visits", "note": "the count of sessions of website visits from this company"},
+            {
+                "id": "website_visits",
+                "label": "Website visits",
+                "note": "the count of sessions of website visits from this company",
+            },
             {"id": "unique_visitors", "label": "Unique visitors"},
             {"id": "last_seen", "label": "Last seen"},
-            {"id": "top_page_views", "label": "Top page views", "note": "the pages with the most visits from visitors from this company"},
+            {
+                "id": "top_page_views",
+                "label": "Top page views",
+                "note": "the pages with the most visits from visitors from this company",
+            },
         ],
     }
 

@@ -90,7 +90,9 @@ def normalise_channel(
         try:
             buffer = int(buffer_bytes)
         except (TypeError, ValueError) as exc:
-            raise ChannelError(f"buffer_bytes must be a whole number of bytes; got {buffer_bytes!r}") from exc
+            raise ChannelError(
+                f"buffer_bytes must be a whole number of bytes; got {buffer_bytes!r}"
+            ) from exc
         if buffer <= 0:
             raise ChannelError("buffer_bytes must be greater than zero")
 
@@ -118,7 +120,8 @@ def channel_name_taken(existing: list[Mapping[str, Any]], name: str, *, org_id: 
     channels, and this function is what makes that true rather than an accident.
     """
     return any(
-        str(other.get("name")) == name and (org_id is None or str(other.get("org_id")) == str(org_id))
+        str(other.get("name")) == name
+        and (org_id is None or str(other.get("org_id")) == str(org_id))
         for other in existing
     )
 

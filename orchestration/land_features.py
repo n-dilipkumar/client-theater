@@ -28,6 +28,7 @@ This is the merge pipeline, rebuilt around what was actually learned:
     author AND its co-author trailer, so the commit is made here instead, under
     the one permitted identity, with the agent's subject line kept.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,7 +38,6 @@ import re
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 for _s in (sys.stdout, sys.stderr):
@@ -58,7 +58,7 @@ ROOT = Path(__file__).resolve().parent.parent
 WORKSPACES = Path(os.environ.get("DSR_WORKSPACES") or ROOT.parent)
 PENDING = Path(os.environ.get("DSR_PENDING_PORTS") or ROOT / "data" / "pending_ports.json")
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
-if not PY.exists():                       # a venv elsewhere on PATH, or POSIX layout
+if not PY.exists():  # a venv elsewhere on PATH, or POSIX layout
     PY = Path(sys.executable)
 ME = "Dilip Nithyanandam <ddilipnithyanandam@gmail.com>"
 
@@ -72,27 +72,45 @@ from tools.contract import SHARED  # noqa: E402
 
 TRAILER = re.compile(
     r"^(Co-authored-by|Signed-off-by|Reviewed-by|Generated-with|Thanks-to"
-    r"|Report-Message|Mailmap-To)\s*:", re.I)
+    r"|Report-Message|Mailmap-To)\s*:",
+    re.I,
+)
 
 
 def git(*args, cwd=ROOT, timeout=300):
-    p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     return p.returncode, p.stdout, p.stderr
 
 
 def suite_and_registry():
     """The suite, and the host's own view of what it loaded."""
-    env = {"DSR_DB_PATH": str(Path(tempfile.mkdtemp()) / "t.db"),
-           "DSR_AUDIT_DIR": str(Path(tempfile.mkdtemp()) / "a"),
-           "PATH": r"C:\Windows\System32;C:\Windows",
-           "SYSTEMROOT": r"C:\Windows",
-           "TEMP": tempfile.gettempdir(), "TMP": tempfile.gettempdir(),
-           "USERPROFILE": str(Path.home())}
-    p = subprocess.run([str(PY), "-m", "pytest", "-p", "no:cacheprovider",
-                        "--tb=line", "-o", "addopts=", "-q"],
-                       cwd=ROOT / "backend", capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=7200, env=env)
+    env = {
+        "DSR_DB_PATH": str(Path(tempfile.mkdtemp()) / "t.db"),
+        "DSR_AUDIT_DIR": str(Path(tempfile.mkdtemp()) / "a"),
+        "PATH": r"C:\Windows\System32;C:\Windows",
+        "SYSTEMROOT": r"C:\Windows",
+        "TEMP": tempfile.gettempdir(),
+        "TMP": tempfile.gettempdir(),
+        "USERPROFILE": str(Path.home()),
+    }
+    p = subprocess.run(
+        [str(PY), "-m", "pytest", "-p", "no:cacheprovider", "--tb=line", "-o", "addopts=", "-q"],
+        cwd=ROOT / "backend",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=7200,
+        env=env,
+    )
     out = p.stdout + p.stderr
     passed = failed = 0
     fails = []
@@ -110,8 +128,7 @@ def suite_and_registry():
 
 def features_on(ref="HEAD"):
     _, out, _ = git("ls-tree", "-r", "--name-only", ref, "backend/dsr/features")
-    return {f"WF-{m.group(1)}" for f in out.splitlines()
-            if (m := re.search(r"wf[_-]?(\d{3})", f))}
+    return {f"WF-{m.group(1)}" for f in out.splitlines() if (m := re.search(r"wf[_-]?(\d{3})", f))}
 
 
 def clean_message(sha):
@@ -207,12 +224,19 @@ def main():
         if not added:
             skipped.append((ticket, "adds no files"))
             continue
-        plan.append({"ticket": ticket, "worktree": e["worktree"], "branch": branch,
-                     "commits": own, "files": sorted(added)})
+        plan.append(
+            {
+                "ticket": ticket,
+                "worktree": e["worktree"],
+                "branch": branch,
+                "commits": own,
+                "files": sorted(added),
+            }
+        )
 
     plan.sort(key=lambda p: len(p["files"]))
     if args.limit:
-        plan = plan[:args.limit]
+        plan = plan[: args.limit]
     print(f"  {len(plan)} to land, smallest first")
     for p in plan:
         print(f"    {p['ticket']}  {len(p['commits'])} commit(s), {len(p['files'])} file(s)")
@@ -233,11 +257,15 @@ def main():
     for p in plan:
         print()
         print("=" * 78)
-        print(f"  LANDING {p['ticket']}  ({len(p['commits'])} commit(s), "
-              f"{len(p['files'])} file(s))")
+        print(
+            f"  LANDING {p['ticket']}  ({len(p['commits'])} commit(s), {len(p['files'])} file(s))"
+        )
         print("=" * 78)
-        rc, _, err = git("fetch", str(WORKSPACES / p["worktree"]),
-                         f"{p['branch']}:refs/dsr-staging/{p['ticket']}")
+        rc, _, err = git(
+            "fetch",
+            str(WORKSPACES / p["worktree"]),
+            f"{p['branch']}:refs/dsr-staging/{p['ticket']}",
+        )
         if rc != 0:
             print(f"  fetch FAILED: {err.strip()[:200]}")
             broke.append((p["ticket"], "fetch failed"))
@@ -255,27 +283,29 @@ def main():
         # failure. It is not a failure: the content is already there.
         _, staged, _ = git("diff", "--cached", "--name-only")
         if not staged.strip():
-            _, head_files, _ = git("show", "--name-only", "--format=", p["commits"][-1])
-            missing = [f for f in p["files"] if f in head_files]
-            print(f"  nothing to land: {len(p['files'])} file(s) are already on main "
-                  f"with the same content")
+            print(
+                f"  nothing to land: {len(p['files'])} file(s) are already on main "
+                f"with the same content"
+            )
             print("  That is a no-op, not a failure - continuing.")
             skipped.append((p["ticket"], "already on main"))
             continue
 
         subject, body = clean_message(p["commits"][-1])
-        msg = (subject + "\n\n" + body + "\n\n"
-               "Landed by content rather than by history. Remote main's history has "
-               "been rewritten, so it shares a root commit with the agent worktrees "
-               "and nothing after it; a cherry-pick therefore had a zero-line base and "
-               "reported add/add conflicts on files this commit never touched. A "
-               "feature's contribution is the files it ADDS, and the feature contract "
-               "says a feature adds files, so those were taken and main's version of "
-               "everything else was left alone.\n\n"
-               "Authored and committed solely by ddilipnithyanandam@gmail.com; the "
-               "original commit's agent identity and any co-author trailer were removed "
-               "on landing. The subject line, which describes the work, is the "
-               "agent's and is kept.")
+        msg = (
+            subject + "\n\n" + body + "\n\n"
+            "Landed by content rather than by history. Remote main's history has "
+            "been rewritten, so it shares a root commit with the agent worktrees "
+            "and nothing after it; a cherry-pick therefore had a zero-line base and "
+            "reported add/add conflicts on files this commit never touched. A "
+            "feature's contribution is the files it ADDS, and the feature contract "
+            "says a feature adds files, so those were taken and main's version of "
+            "everything else was left alone.\n\n"
+            "Authored and committed solely by ddilipnithyanandam@gmail.com; the "
+            "original commit's agent identity and any co-author trailer were removed "
+            "on landing. The subject line, which describes the work, is the "
+            "agent's and is kept."
+        )
         mf = ROOT / "data" / "_land.txt"
         mf.write_text(msg, encoding="utf-8")
         rc, _, cerr = git("commit", "-q", f"--author={ME}", "-F", str(mf))
@@ -315,12 +345,13 @@ def main():
     if broke:
         print(f"  stopped on {broke[0][0]}: {broke[0][1]}")
     if refused:
-        print(f"  {len(refused)} refused for a shared file: "
-              f"{', '.join(t for t, _ in refused)}")
+        print(f"  {len(refused)} refused for a shared file: {', '.join(t for t, _ in refused)}")
     _, tip, _ = git("log", "-1", "--format=%h %s")
     print(f"  branch tip: {tip}")
     print(f"  workflows on the branch: {len(features_on('HEAD'))}")
-    print(f"  commits ahead of main  : {git('rev-list', '--count', 'origin/main..HEAD')[1].strip()}")
+    print(
+        f"  commits ahead of main  : {git('rev-list', '--count', 'origin/main..HEAD')[1].strip()}"
+    )
     return 1 if broke else 0
 
 

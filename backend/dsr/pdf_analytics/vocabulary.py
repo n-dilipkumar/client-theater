@@ -141,7 +141,9 @@ def _as_int(value: Any, field: str, *, minimum: int = 0) -> int:
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValidationError(f"{field} must be a whole number, got {value!r}", field=field) from exc
+        raise ValidationError(
+            f"{field} must be a whole number, got {value!r}", field=field
+        ) from exc
     if parsed < minimum:
         raise ValidationError(f"{field} must be at least {minimum}, got {parsed}", field=field)
     return parsed
@@ -153,7 +155,9 @@ def _as_seconds(value: Any, field: str) -> float:
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValidationError(f"{field} must be a number of seconds, got {value!r}", field=field) from exc
+        raise ValidationError(
+            f"{field} must be a number of seconds, got {value!r}", field=field
+        ) from exc
     if parsed != parsed or parsed in (float("inf"), float("-inf")):
         raise ValidationError(f"{field} must be a finite number of seconds", field=field)
     if parsed <= 0:

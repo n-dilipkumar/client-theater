@@ -37,8 +37,7 @@ retried webhook does next - and those are stored and audited rather than sent.
 from __future__ import annotations
 
 from dsr.plays.activation import state as activation_state
-from dsr.plays.assignment import describe as describe_assignment
-from dsr.plays.assignment import resolve_assignment, window_start
+from dsr.plays.assignment import describe as describe_assignment, resolve_assignment, window_start
 from dsr.plays.engine import (
     EVENTS,
     FRAMEWORKS,
@@ -60,9 +59,9 @@ from dsr.plays.errors import (
     SubscriptionError,
     SubscriptionNotFound,
     TaskNotFound,
+    UndeclaredTrigger,
     UnknownSignal,
     UnknownSignalRegistration,
-    UndeclaredTrigger,
 )
 from dsr.plays.events import delivery, next_attempt_at, normalise_subscription
 from dsr.plays.framework import (

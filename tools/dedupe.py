@@ -18,11 +18,9 @@ workflow or genuinely distinct, and which entry should be canonical.
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -33,9 +31,38 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "research" / "digital-sales-room-workflows"
 
 STOPWORDS = {
-    "a", "an", "and", "the", "to", "of", "in", "on", "for", "from", "with", "into",
-    "by", "at", "via", "per", "each", "its", "that", "this", "then", "or", "as",
-    "is", "are", "be", "it", "up", "out", "over", "under", "own", "via",
+    "a",
+    "an",
+    "and",
+    "the",
+    "to",
+    "of",
+    "in",
+    "on",
+    "for",
+    "from",
+    "with",
+    "into",
+    "by",
+    "at",
+    "via",
+    "per",
+    "each",
+    "its",
+    "that",
+    "this",
+    "then",
+    "or",
+    "as",
+    "is",
+    "are",
+    "be",
+    "it",
+    "up",
+    "out",
+    "over",
+    "under",
+    "own",
 }
 
 # Capability nouns that mean two workflows probably do the same thing even when
@@ -138,8 +165,7 @@ def adjudicate(clusters: list[list], client: Jev) -> list[dict]:
     for index, cluster in enumerate(clusters):
         label = f"c{index:02d}"
         listing = "\n".join(
-            f"  {w.uid}: {w.name}\n    domain={w.domain}, sources={len(w.sources)}"
-            for w in cluster
+            f"  {w.uid}: {w.name}\n    domain={w.domain}, sources={len(w.sources)}" for w in cluster
         )
         questions[f"{label}_verdict"] = {
             "type": "choice",
@@ -170,13 +196,17 @@ def adjudicate(clusters: list[list], client: Jev) -> list[dict]:
                 "If these describe one capability, which entry is the most complete and "
                 "best-evidenced version to keep as the canonical workflow?\n" + listing
             ),
-            "criteria": {w.uid: w.name for w in cluster} | {"none": "Not applicable; they are distinct"},
+            "criteria": {w.uid: w.name for w in cluster}
+            | {"none": "Not applicable; they are distinct"},
         }
 
     state = {
         "task": "Deduplicate a Digital Sales Room workflow corpus harvested per domain.",
         "clusters": [
-            {"label": f"c{i:02d}", "members": [{"uid": w.uid, "name": w.name, "domain": w.domain} for w in c]}
+            {
+                "label": f"c{i:02d}",
+                "members": [{"uid": w.uid, "name": w.name, "domain": w.domain} for w in c],
+            }
             for i, c in enumerate(clusters)
         ],
     }

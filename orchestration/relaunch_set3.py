@@ -10,6 +10,7 @@ Same discipline as `repair_set2.py`: no character cmd.exe treats specially in th
 prompt, assert that before sending, and read the screen back afterwards rather
 than trusting the send receipt.
 """
+
 import json
 import re
 import subprocess
@@ -51,8 +52,15 @@ TARGETS = [
 
 
 def orca(args, timeout=150):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         return json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -73,12 +81,21 @@ def main():
 
         # If a live agent tab somehow survived, leave it alone.
         terms = orca(["orca", "terminal", "list", "--worktree", wt["id"], "--json"])
-        existing = [t for t in terms.get("result", {}).get("terminals", [])
-                    if t.get("agentIdentity") == "opencode"]
+        existing = [
+            t
+            for t in terms.get("result", {}).get("terminals", [])
+            if t.get("agentIdentity") == "opencode"
+        ]
         if existing:
             print(f"  agent tab already present: {existing[0]['handle']}")
-            relaunched.append({"ticket": ticket, "handle": existing[0]["handle"],
-                               "worktree": dirname, "title": title})
+            relaunched.append(
+                {
+                    "ticket": ticket,
+                    "handle": existing[0]["handle"],
+                    "worktree": dirname,
+                    "title": title,
+                }
+            )
             continue
 
         text = POINTER.format(ticket=ticket)
@@ -87,8 +104,20 @@ def main():
             print(f"  REFUSING TO SEND, prompt contains {bad}")
             continue
 
-        res = orca(["orca", "terminal", "create", "--worktree", wt["id"],
-                    "--title", title, "--command", "opencode", "--json"])
+        res = orca(
+            [
+                "orca",
+                "terminal",
+                "create",
+                "--worktree",
+                wt["id"],
+                "--title",
+                title,
+                "--command",
+                "opencode",
+                "--json",
+            ]
+        )
         if not res.get("ok"):
             print(f"  terminal create failed: {str(res)[:150]}")
             continue
@@ -96,17 +125,44 @@ def main():
 
         # A fresh TUI drops an early prompt.
         time.sleep(10)
-        orca(["orca", "terminal", "wait", "--terminal", handle,
-              "--for", "tui-idle", "--timeout-ms", "45000", "--json"], timeout=70)
+        orca(
+            [
+                "orca",
+                "terminal",
+                "wait",
+                "--terminal",
+                handle,
+                "--for",
+                "tui-idle",
+                "--timeout-ms",
+                "45000",
+                "--json",
+            ],
+            timeout=70,
+        )
 
-        send = orca(["orca", "terminal", "send", "--terminal", handle,
-                     "--text", text, "--enter", "--wait-submit", "25", "--json"], timeout=100)
+        send = orca(
+            [
+                "orca",
+                "terminal",
+                "send",
+                "--terminal",
+                handle,
+                "--text",
+                text,
+                "--enter",
+                "--wait-submit",
+                "25",
+                "--json",
+            ],
+            timeout=100,
+        )
         print(f"  tab {handle}  sent={send.get('ok')}")
-        relaunched.append({"ticket": ticket, "handle": handle,
-                           "worktree": dirname, "title": title})
+        relaunched.append({"ticket": ticket, "handle": handle, "worktree": dirname, "title": title})
 
     (ROOT / "data" / "dispatched_set3.json").write_text(
-        json.dumps(relaunched, indent=2), encoding="utf-8")
+        json.dumps(relaunched, indent=2), encoding="utf-8"
+    )
 
     print()
     print("=== read back: is each agent actually running? ===")

@@ -22,12 +22,11 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import pytest
-
 from dsr.crm_backfill import (
     CURSORS_STORE,
+    REPLICA,
     RUNS,
     BackfillEngine,
-    REPLICA,
     SimulatedHistory,
     default_registry,
 )
@@ -88,9 +87,7 @@ def test_landing_a_page_asks_the_store_often_enough_to_be_a_page(store):
     store.list = watched_list  # type: ignore[method-assign]
     store.find = watched_find  # type: ignore[method-assign]
     try:
-        engine = BackfillEngine(
-            store, registry=default_registry(SimulatedHistory(_rows(1_000)))
-        )
+        engine = BackfillEngine(store, registry=default_registry(SimulatedHistory(_rows(1_000))))
         connection = engine.create_connection({"vendor": "dataverse"}, source=SOURCE)
         lists.clear()
         engine.start(
@@ -178,9 +175,9 @@ def test_the_replica_index_resolves_every_key_of_a_page_even_when_the_room_is_la
     first_batch = store.list(REPLICA, room_id="room-1", limit=1_000, offset=0)
     second_batch = store.list(REPLICA, room_id="room-1", limit=1_000, offset=1_000)
     assert len(first_batch) + len(second_batch) == 1_500
-    assert all(
-        row["data"]["Name"] == "Renamed" for row in first_batch + second_batch
-    ), "the second read renamed every row, which only happens if the walk found them"
+    assert all(row["data"]["Name"] == "Renamed" for row in first_batch + second_batch), (
+        "the second read renamed every row, which only happens if the walk found them"
+    )
 
 
 def test_the_replica_index_does_not_leak_rows_from_another_connection(store):

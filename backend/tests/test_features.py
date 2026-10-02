@@ -13,12 +13,11 @@ import tempfile
 from pathlib import Path
 from types import ModuleType
 
+import dsr.features as host
 import pytest
+from dsr.api import app
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
-
-import dsr.features as host
-from dsr.api import app
 
 
 @pytest.fixture()

@@ -339,7 +339,9 @@ class PublishingService:
 
     # -- helpers ------------------------------------------------------------ #
 
-    def _find(self, collection: str, where: Mapping[str, Any], *, limit: int = 1000) -> list[dict[str, Any]]:
+    def _find(
+        self, collection: str, where: Mapping[str, Any], *, limit: int = 1000
+    ) -> list[dict[str, Any]]:
         return self.store.find(collection, dict(where), limit=limit)
 
     def _document(self, document_id: str) -> dict[str, Any] | None:
@@ -413,8 +415,12 @@ class PublishingService:
         payload.update({"name": name, "steps": _sort_steps(steps)})
         return self.store.create(PROCESS, payload, room_id=room_id, actor=actor, source=source)
 
-    def list_processes(self, *, room_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        return self.store.list(PROCESS, room_id=room_id, limit=limit, order_by="updated_at", descending=False)
+    def list_processes(
+        self, *, room_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        return self.store.list(
+            PROCESS, room_id=room_id, limit=limit, order_by="updated_at", descending=False
+        )
 
     # -- submissions --------------------------------------------------------- #
 
@@ -490,7 +496,9 @@ class PublishingService:
             "decided_at": None,
             "comment": comment,
         }
-        return self.store.create(WORKFLOW, payload, room_id=resolved_room, actor=actor, source=source)
+        return self.store.create(
+            WORKFLOW, payload, room_id=resolved_room, actor=actor, source=source
+        )
 
     def _open_workflow_for(self, document_id: str) -> dict[str, Any] | None:
         """The live ``Pending`` workflow a document is stuck in, if any.
@@ -550,7 +558,9 @@ class PublishingService:
             "total_count": total,
             "limit": limit,
             "offset": offset,
-            "next_page": (f"{queue_path}?limit={limit}&offset={next_offset}" if next_offset < total else None),
+            "next_page": (
+                f"{queue_path}?limit={limit}&offset={next_offset}" if next_offset < total else None
+            ),
         }
 
     def get_workflow(self, workflow_id: str) -> dict[str, Any] | None:
@@ -601,9 +611,7 @@ class PublishingService:
             )
 
         if not _actor_may_act(target, actor):
-            raise ApprovalConflict(
-                f"{actor or 'anonymous'} is not assigned to step {step_key!r}"
-            )
+            raise ApprovalConflict(f"{actor or 'anonymous'} is not assigned to step {step_key!r}")
 
         verdict = str(decision or "").strip().casefold()
         if verdict not in ("approve", "reject"):
@@ -631,7 +639,9 @@ class PublishingService:
             self._notify_watchers(updated, actor=actor, source=source)
         return view_workflow(updated)
 
-    def _notify_watchers(self, workflow: Mapping[str, Any], *, actor: str | None, source: str) -> None:
+    def _notify_watchers(
+        self, workflow: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> None:
         """Record watcher notification when a workflow reaches a terminal state.
 
         Inference 6: the research documents notification for *subscribers* only.
@@ -808,7 +818,7 @@ class PublishingService:
         data = publication["data"]
         requester = data.get("requested_by") or actor
         notify = bool(data.get("is_send_notification", True))
-        comment = data.get("comment")
+        data.get("comment")
         now = utcnow()
 
         succeeded: list[dict[str, Any]] = []
@@ -959,7 +969,9 @@ class PublishingService:
         known = self.store.list(SUBSCRIPTION, limit=1000)
         by_name: dict[str, dict[str, Any]] = {}
         for subscription in known:
-            name = subscription["data"].get("subscriber") or subscription["data"].get("subscriber_id")
+            name = subscription["data"].get("subscriber") or subscription["data"].get(
+                "subscriber_id"
+            )
             if name:
                 by_name.setdefault(str(name), subscription)
 
@@ -992,7 +1004,10 @@ class PublishingService:
         subscriptions = self.store.list(SUBSCRIPTION, room_id=room_id, limit=1000)
         return _dedupe(
             [
-                str(subscription["data"].get("subscriber") or subscription["data"].get("subscriber_id"))
+                str(
+                    subscription["data"].get("subscriber")
+                    or subscription["data"].get("subscriber_id")
+                )
                 for subscription in subscriptions
                 if subscription["data"].get("active") is not False
             ]
@@ -1041,9 +1056,15 @@ class PublishingService:
                     "total_errors": result["total_errors"],
                 }
             )
-        return {"ran_at": moment.isoformat(timespec="seconds"), "applied": applied, "count": len(applied)}
+        return {
+            "ran_at": moment.isoformat(timespec="seconds"),
+            "applied": applied,
+            "count": len(applied),
+        }
 
-    def list_publications(self, *, room_id: str | None = None, limit: int = 100, status: str | None = None) -> dict[str, Any]:
+    def list_publications(
+        self, *, room_id: str | None = None, limit: int = 100, status: str | None = None
+    ) -> dict[str, Any]:
         if status:
             records = self._find(PUBLICATION, {"status": status}, limit=1000)
             if room_id:
@@ -1140,7 +1161,9 @@ class PublishingService:
         return True
 
     def list_folders(self, *, room_id: str | None = None) -> dict[str, Any]:
-        folders = self.store.list(FOLDER, room_id=room_id, limit=1000, order_by="updated_at", descending=False)
+        folders = self.store.list(
+            FOLDER, room_id=room_id, limit=1000, order_by="updated_at", descending=False
+        )
         return {"count": len(folders), "entries": folders}
 
     # -- subscriptions -------------------------------------------------------- #
@@ -1162,7 +1185,9 @@ class PublishingService:
         return self.store.create(SUBSCRIPTION, payload, room_id=room_id, actor=actor, source=source)
 
     def list_subscriptions(self, *, room_id: str | None = None) -> dict[str, Any]:
-        records = self.store.list(SUBSCRIPTION, room_id=room_id, limit=1000, order_by="updated_at", descending=False)
+        records = self.store.list(
+            SUBSCRIPTION, room_id=room_id, limit=1000, order_by="updated_at", descending=False
+        )
         return {"count": len(records), "entries": records}
 
 

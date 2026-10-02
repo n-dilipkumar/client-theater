@@ -29,12 +29,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.features import load_feature
-from dsr.triage import filters as engine
-from dsr.triage import vocabulary as vocab
+from dsr.triage import filters as engine, vocabulary as vocab
 from dsr.triage.errors import TriageError
 from dsr.triage.fields import (
     as_number,
@@ -47,6 +44,7 @@ from dsr.triage.fields import (
     parse_time,
 )
 from dsr.triage.rows import Engagement, aggregate_engagement, declared_sections
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-022"
 FEATURE_ID = "wf-022-triage-the-pipeline-with-saved-workspa"
@@ -95,9 +93,7 @@ def crm_link(client, room_id, **payload):
 
 
 def order_form(client, room_id, **payload):
-    return client.post(
-        "/api/records/order_form", json=payload, params={"room_id": room_id}
-    ).json()
+    return client.post("/api/records/order_form", json=payload, params={"room_id": room_id}).json()
 
 
 def make_template(client, name, template_type=None):
@@ -201,7 +197,7 @@ def test_deal_type_appears_twice_and_the_group_keeps_them_apart():
 
 
 def test_the_dock_columns_the_user_flow_names_are_published():
-    """"add **Views**, **Actions**, **Last Client View**, `Stage`, `Team`"."""
+    """ "add **Views**, **Actions**, **Last Client View**, `Stage`, `Team`"."""
     labels = {column["label"] for column in vocab.COLUMNS}
     assert {"Views", "Actions", "Last Client View", "Stage", "Team"} <= labels
 
@@ -351,7 +347,7 @@ def test_active_pipeline_arm_two_admits_a_linked_workspace_that_is_not_typed_sal
     ],
 )
 def test_either_joined_crm_object_satisfies_the_second_arm(crm):
-    """"an opportunity **or deal** connected from your CRM" - both are accepted."""
+    """ "an opportunity **or deal** connected from your CRM" - both are accepted."""
     plan = _active_pipeline_plan()
     row = {"dock.type": "General", **crm}
     assert plan.matches(row, engine.FilterContext(reference=NOW))
@@ -360,7 +356,11 @@ def test_either_joined_crm_object_satisfies_the_second_arm(crm):
 def test_active_pipeline_excludes_a_workspace_with_neither_arm():
     plan = _active_pipeline_plan()
     context = engine.FilterContext(reference=NOW)
-    row = {"dock.type": "Implementation", "salesforce.opportunity_stage": None, "hubspot.deal_stage": None}
+    row = {
+        "dock.type": "Implementation",
+        "salesforce.opportunity_stage": None,
+        "hubspot.deal_stage": None,
+    }
     assert not plan.workspace.matches(row, context)
     assert not plan.domain.matches(row, context)
     assert not plan.matches(row, context), "the disjunction has to exclude something"
@@ -370,7 +370,11 @@ def test_active_pipeline_admits_a_workspace_satisfying_both_arms_once():
     """Both arms true is still one row, not two."""
     plan = _active_pipeline_plan()
     context = engine.FilterContext(reference=NOW)
-    row = {"dock.type": "Sales", "salesforce.opportunity_stage": "Closed Won", "hubspot.deal_stage": None}
+    row = {
+        "dock.type": "Sales",
+        "salesforce.opportunity_stage": "Closed Won",
+        "hubspot.deal_stage": None,
+    }
     assert plan.workspace.matches(row, context)
     assert plan.domain.matches(row, context)
     assert plan.matches(row, context)
@@ -378,14 +382,17 @@ def test_active_pipeline_admits_a_workspace_satisfying_both_arms_once():
 
 def test_the_sales_type_value_is_the_one_the_research_quotes():
     assert vocab.SOURCED_TYPE == "Sales"
-    assert vocab.default_view("active-pipeline")["workspace_filters"]["conditions"][0]["value"] == "Sales"
+    assert (
+        vocab.default_view("active-pipeline")["workspace_filters"]["conditions"][0]["value"]
+        == "Sales"
+    )
 
 
 # -- DEAL DESK ---------------------------------------------------------------- #
 
 
 def test_deal_desk_keys_on_the_presence_of_an_order_form_not_its_status():
-    """"Any workspaces that uses Dock's order forms" - presence, not state."""
+    """ "Any workspaces that uses Dock's order forms" - presence, not state."""
     plan = engine.compile_filters(*_plan_args(vocab.default_view("deal-desk")))
     conditions = plan.domain.usable
     assert [entry["field"] for entry in conditions] == ["order_form.status"]
@@ -440,9 +447,12 @@ def test_a_view_with_no_owner_reports_the_unresolved_sentinel_rather_than_matchi
     plan = engine.compile_filters(
         {"join": "and", "conditions": [condition("dock.owner", "is", vocab.ME)]}, group(), "all"
     )
-    assert engine.substitute_me_in_raw(
-        {"join": "and", "conditions": [condition("dock.owner", "is", vocab.ME)]}, None
-    )["conditions"][0]["value"] == vocab.ME
+    assert (
+        engine.substitute_me_in_raw(
+            {"join": "and", "conditions": [condition("dock.owner", "is", vocab.ME)]}, None
+        )["conditions"][0]["value"]
+        == vocab.ME
+    )
     assert engine.unresolved_me_problems(plan)
 
 
@@ -475,7 +485,9 @@ def _row(**overrides):
 
 def _matches(conditions, row=None, join="and", **extra):
     plan = engine.compile_filters({"join": join, "conditions": conditions}, group(), "all")
-    return plan.matches(row if row is not None else _row(), engine.FilterContext(reference=NOW, **extra))
+    return plan.matches(
+        row if row is not None else _row(), engine.FilterContext(reference=NOW, **extra)
+    )
 
 
 @pytest.mark.parametrize(
@@ -527,7 +539,7 @@ def test_is_not_empty_matches_a_row_with_no_value_and_is_empty_does_not():
 
 
 def test_a_negated_filter_does_not_sweep_in_rows_that_have_no_value():
-    """"Stage is not Closed Lost" must not list every unsynced workspace."""
+    """ "Stage is not Closed Lost" must not list every unsynced workspace."""
     assert not _matches(
         [condition("salesforce.opportunity_stage", "is_not", "Closed Lost")],
         _row(**{"salesforce.opportunity_stage": None}),
@@ -552,12 +564,8 @@ def test_comparing_a_date_to_a_bare_date_matches_a_stored_timestamp():
 
 
 def test_dates_compare_as_instants_when_both_sides_carry_a_time():
-    assert _matches(
-        [condition("engagement.last_client_view", "gt", "2026-09-19T00:00:00Z")]
-    )
-    assert not _matches(
-        [condition("engagement.last_client_view", "lt", "2026-09-19T00:00:00Z")]
-    )
+    assert _matches([condition("engagement.last_client_view", "gt", "2026-09-19T00:00:00Z")])
+    assert not _matches([condition("engagement.last_client_view", "lt", "2026-09-19T00:00:00Z")])
 
 
 def test_in_the_last_is_the_recent_client_activity_filter():
@@ -597,10 +605,16 @@ def test_a_join_of_or_admits_either_condition():
 
 def test_a_group_with_one_unreadable_condition_still_applies_its_readable_one():
     """Failing open is the researched sibling behaviour (WF-013's S8)."""
-    conditions = [condition("dock.owner", "is", "dana"), condition("dock.owner", "sorts_alphabetically", "x")]
+    conditions = [
+        condition("dock.owner", "is", "dana"),
+        condition("dock.owner", "sorts_alphabetically", "x"),
+    ]
     assert _matches(conditions, join="and"), "the readable condition must still hold"
     assert not _matches(
-        [condition("dock.owner", "is", "sam"), condition("dock.owner", "sorts_alphabetically", "x")],
+        [
+            condition("dock.owner", "is", "sam"),
+            condition("dock.owner", "sorts_alphabetically", "x"),
+        ],
         join="and",
     ), "and the unreadable one must not be treated as a pass"
 
@@ -629,7 +643,7 @@ def test_an_operator_that_cannot_apply_to_a_known_field_is_refused():
 
 
 def test_an_unknown_field_is_evaluated_rather_than_refused():
-    """"new CRM fields flow through automatically" - a view may name one first."""
+    """ "new CRM fields flow through automatically" - a view may name one first."""
     plan = engine.compile_filters(
         {
             "join": "and",
@@ -647,7 +661,9 @@ def test_an_unknown_field_is_evaluated_rather_than_refused():
 def test_an_unknown_field_with_an_unknown_operator_is_still_dropped():
     problems: list[dict] = []
     engine.compile_group(
-        engine.DOMAIN, {"join": "and", "conditions": [condition("crm.mystery", "sounds_like", 1)]}, problems
+        engine.DOMAIN,
+        {"join": "and", "conditions": [condition("crm.mystery", "sounds_like", 1)]},
+        problems,
     )
     assert [problem["kind"] for problem in problems] == [engine.PROBLEM_UNKNOWN_OPERATOR]
 
@@ -670,7 +686,9 @@ def test_an_unknown_field_with_an_unknown_operator_is_still_dropped():
 )
 def test_a_condition_this_build_cannot_read_is_dropped_and_named(entry, kind):
     problems: list[dict] = []
-    group_out = engine.compile_group(engine.WORKSPACE, {"join": "and", "conditions": [entry]}, problems)
+    group_out = engine.compile_group(
+        engine.WORKSPACE, {"join": "and", "conditions": [entry]}, problems
+    )
     assert group_out.usable == []
     assert [problem["kind"] for problem in problems] == [kind]
 
@@ -689,11 +707,17 @@ def test_an_unary_operator_given_a_value_says_so_and_keeps_the_condition():
 def test_a_malformed_group_is_reported_rather_than_crashing_the_view():
     problems: list[dict] = []
     assert engine.compile_group(engine.WORKSPACE, "nonsense", problems).usable == []
-    assert engine.compile_group(engine.WORKSPACE, {"join": "xor", "conditions": []}, problems).join == "and"
+    assert (
+        engine.compile_group(engine.WORKSPACE, {"join": "xor", "conditions": []}, problems).join
+        == "and"
+    )
     assert engine.compile_group(engine.WORKSPACE, {"conditions": "nope"}, problems).usable == []
-    assert engine.compile_group(
-        engine.WORKSPACE, {"join": "and", "conditions": ["nope"]}, problems
-    ).usable == []
+    assert (
+        engine.compile_group(
+            engine.WORKSPACE, {"join": "and", "conditions": ["nope"]}, problems
+        ).usable
+        == []
+    )
     assert {problem["kind"] for problem in problems} == {"malformed_group", "malformed_condition"}
 
 
@@ -743,7 +767,11 @@ def test_sorting_orders_ascending_and_descending():
 def test_sorting_a_number_column_orders_numerically_not_lexically():
     # 9, 100, 20 - lexically this is 100, 20, 9; numerically it is 9, 20, 100.
     assert _sort([9, 100, 20], field="salesforce.opp_amount") == ["r0", "r2", "r1"]
-    assert _sort([9, 100, 20], field="salesforce.opp_amount", direction="desc") == ["r1", "r2", "r0"]
+    assert _sort([9, 100, 20], field="salesforce.opp_amount", direction="desc") == [
+        "r1",
+        "r2",
+        "r0",
+    ]
 
 
 def test_sorting_a_date_column_orders_by_instant():
@@ -773,7 +801,11 @@ def test_equal_rows_are_ordered_by_id_so_a_refresh_does_not_reshuffle_them():
     """In *both* directions. A single ``reverse=True`` pass would reverse the
     tie-break along with the field, which is the subtlety the two-pass sort
     exists for."""
-    rows = [{"id": "r2", "dock.stage": "x"}, {"id": "r0", "dock.stage": "x"}, {"id": "r1", "dock.stage": "x"}]
+    rows = [
+        {"id": "r2", "dock.stage": "x"},
+        {"id": "r0", "dock.stage": "x"},
+        {"id": "r1", "dock.stage": "x"},
+    ]
     for direction in ("asc", "desc"):
         ordered = engine.sort_rows(
             rows,
@@ -803,11 +835,17 @@ def test_sorting_survives_mixed_types_in_one_column():
     numbers, so it sorts with the rows that have no value - last, in both
     directions - rather than being coerced into something it is not.
     """
-    assert _sort([None, 5, "abc", "", 2.5], field="engagement.views") == ["r4", "r1", "r0", "r2", "r3"]
+    assert _sort([None, 5, "abc", "", 2.5], field="engagement.views") == [
+        "r4",
+        "r1",
+        "r0",
+        "r2",
+        "r3",
+    ]
 
 
 def test_an_unknown_sort_field_is_refused_rather_than_guessed_at():
-    """"Opportunity Stage is not Close Date" is a wrong answer, not a partial one."""
+    """ "Opportunity Stage is not Close Date" is a wrong answer, not a partial one."""
     with pytest.raises(TriageError) as caught:
         engine.validate_sort({"field": "salesforce.close_date"})
     assert "salesforce.opp_amount" in str(caught.value)
@@ -860,7 +898,12 @@ def test_a_number_is_never_invented_out_of_a_value_that_is_not_one(value, expect
 
 @pytest.mark.parametrize(
     "value",
-    ["2026-09-27", "2026-09-27T10:00:00Z", "2026-09-27T10:00:00+00:00", "2026-09-27T20:00:00+10:00"],
+    [
+        "2026-09-27",
+        "2026-09-27T10:00:00Z",
+        "2026-09-27T10:00:00+00:00",
+        "2026-09-27T20:00:00+10:00",
+    ],
 )
 def test_a_timestamp_is_parsed_to_utc(value):
     parsed = parse_time(value)
@@ -911,7 +954,7 @@ def test_engagement_counts_views_and_actions_separately():
 
 
 def test_a_workspace_with_no_activity_has_zeroes_and_no_timestamp():
-    """"Never viewed" and "viewed long ago" are different rows in a triage table."""
+    """ "Never viewed" and "viewed long ago" are different rows in a triage table."""
     empty = aggregate_engagement([])
     assert empty == Engagement(0, 0, None)
     assert empty.last_client_view is None
@@ -929,7 +972,7 @@ def test_a_view_with_an_unreadable_timestamp_still_counts_but_cannot_be_the_last
 
 
 def test_the_researched_workspace_event_names_all_count_as_a_view():
-    """"workspace.viewed", "workspace.page.viewed", "workspace.file.viewed"."""
+    """ "workspace.viewed", "workspace.page.viewed", "workspace.file.viewed"."""
     result = aggregate_engagement(
         [
             {"data": {"event": "workspace.page.viewed", "occurred_at": "2026-09-20T00:00:00Z"}},
@@ -956,7 +999,9 @@ def test_the_researched_workspace_event_names_all_count_as_a_view():
 def test_sections_are_read_from_whatever_the_workspace_declares(declared, expected):
     """The research names the show/hide pattern and no section list, so there is
     no enum here."""
-    assert [entry["key"] for entry in declared_sections({"data": {"sections": declared}})] == expected
+    assert [
+        entry["key"] for entry in declared_sections({"data": {"sections": declared}})
+    ] == expected
 
 
 def test_a_repeated_section_key_is_kept_once():
@@ -995,7 +1040,10 @@ def test_no_other_feature_claims_this_prefix(client):
 def test_vocabulary_serves_the_columns_operators_and_both_filter_groups(client):
     body = client.get(f"{PREFIX}/vocabulary").json()
     assert len(body["columns"]) == len(vocab.ALL_COLUMN_KEYS)
-    assert body["groups"] == {"workspace": ["dock", "engagement"], "domain": ["salesforce", "hubspot", "order_form"]}
+    assert body["groups"] == {
+        "workspace": ["dock", "engagement"],
+        "domain": ["salesforce", "hubspot", "order_form"],
+    }
     assert body["match_modes"] == ["all", "any"]
     assert body["visibilities"] == ["private", "public"]
     assert body["me_sentinel"] == "$me"
@@ -1080,7 +1128,6 @@ def test_creating_a_view_writes_exactly_one_record_and_audits_the_route(client):
     assert entries[0]["actor"] == "dana"
 
 
-
 # -- the joined table ----------------------------------------------------------- #
 
 
@@ -1095,7 +1142,13 @@ def _pipeline(client):
     blank = make_template(client, "Uncategorised room")
 
     both = room(client, "Both arms", type="Sales", owner="dana", template_id=sales)
-    crm_link(client, both, provider="salesforce", opportunity_stage="Negotiation/Review", opp_amount=184000)
+    crm_link(
+        client,
+        both,
+        provider="salesforce",
+        opportunity_stage="Negotiation/Review",
+        opp_amount=184000,
+    )
     # Arm one alone: typed Sales, and no CRM connection at all.
     arm_one = room(client, "Arm one only", type="Sales", owner="sam")
     # Arm two alone: a connected deal, and a type that is not Sales.
@@ -1145,7 +1198,12 @@ def test_a_salesforce_column_is_null_on_a_hubspot_linked_workspace(client):
     view = add_view(
         client,
         name="Both providers",
-        columns=["dock.name", "hubspot.deal_stage", "salesforce.opportunity_stage", "salesforce.opp_amount"],
+        columns=[
+            "dock.name",
+            "hubspot.deal_stage",
+            "salesforce.opportunity_stage",
+            "salesforce.opp_amount",
+        ],
     )
     body = rows_of(client, view["id"])
     hubspot_row = next(row for row in body["rows"] if row["dock.name"] == "Arm two only")
@@ -1167,7 +1225,9 @@ def test_a_salesforce_field_name_on_a_hubspot_record_is_still_gated_off(client):
         opportunity_stage="Closed Lost",
         opp_amount=999999,
     )
-    row = row_of(client, mixed, "hubspot.deal_stage", "salesforce.opportunity_stage", "salesforce.opp_amount")
+    row = row_of(
+        client, mixed, "hubspot.deal_stage", "salesforce.opportunity_stage", "salesforce.opp_amount"
+    )
     assert row["hubspot.deal_stage"] == "Qualified"
     assert row["salesforce.opportunity_stage"] is None
     assert row["salesforce.opp_amount"] is None
@@ -1186,7 +1246,9 @@ def test_engagement_columns_are_computed_on_read_and_stored_nowhere(client):
     row = row_of(client, both)
     assert row["engagement.views"] == 1
     assert row["engagement.actions"] == 2
-    assert row["engagement.last_client_view"] == (NOW - timedelta(days=1)).isoformat(timespec="seconds")
+    assert row["engagement.last_client_view"] == (NOW - timedelta(days=1)).isoformat(
+        timespec="seconds"
+    )
     stored = client.get("/api/records/room", params={"limit": 1000}).json()["records"]
     payload = next(record["data"] for record in stored if record["id"] == both)
     assert "engagement" not in payload and "views" not in payload
@@ -1207,7 +1269,6 @@ def test_a_workspace_nobody_viewed_has_an_empty_last_client_view(client):
     row = row_of(client, silent, "engagement.views", "engagement.last_client_view")
     assert row["engagement.last_client_view"] is None
     assert row["engagement.views"] == 0
-
 
 
 def test_the_table_carries_the_views_columns_in_the_views_order(client):
@@ -1239,7 +1300,7 @@ def test_a_column_the_view_names_but_the_row_cannot_supply_is_present_and_null(c
 
 
 def test_an_unknown_column_is_carried_and_flagged_not_refused(client):
-    """"the column/filter set is user-defined so new CRM fields flow through"."""
+    """ "the column/filter set is user-defined so new CRM fields flow through"."""
     room(client, "No CRM", owner="dana")
     view = add_view(client, name="Future", columns=["dock.name", "salesforce.discount_pct"])
     body = rows_of(client, view["id"])
@@ -1257,7 +1318,9 @@ def test_a_repeated_column_is_dropped_and_reported(client):
 
 
 def test_a_view_with_no_columns_is_refused(client):
-    response = client.post(f"{PREFIX}/views", json={"name": "Empty", "columns": []}, params={"actor": "dana"})
+    response = client.post(
+        f"{PREFIX}/views", json={"name": "Empty", "columns": []}, params={"actor": "dana"}
+    )
     assert response.status_code == 422
     assert "at least one column" in response.json()["detail"]
 
@@ -1292,10 +1355,10 @@ def test_sorting_through_the_table_puts_the_most_recently_viewed_first(client):
     assert all(row["engagement.last_client_view"] is None for row in body["rows"][1:])
 
 
-
 def test_an_unknown_sort_field_is_a_422_naming_the_published_columns(client):
     response = client.post(
-        f"{PREFIX}/views", json={"name": "Bad sort", "sort": {"field": "crm.whatever"}},
+        f"{PREFIX}/views",
+        json={"name": "Bad sort", "sort": {"field": "crm.whatever"}},
         params={"actor": "dana"},
     )
     assert response.status_code == 422
@@ -1306,7 +1369,7 @@ def test_an_unknown_sort_field_is_a_422_naming_the_published_columns(client):
 
 
 def test_omitting_properties_returns_only_id_object_and_url(client):
-    """"If you omit it, the response contains only the resource's `id`, `object`,
+    """ "If you omit it, the response contains only the resource's `id`, `object`,
     and `url`" - implemented literally."""
     target = room(client, "Just the envelope", owner="dana", stage="evaluation")
     body = client.get(f"{PREFIX}/rooms/{target}/row").json()
@@ -1319,7 +1382,9 @@ def test_omitting_properties_returns_only_id_object_and_url(client):
 
 def test_properties_selects_which_fields_come_back(client):
     target = room(client, "Selected", owner="dana")
-    crm_link(client, target, provider="salesforce", opportunity_stage="Qualification", opp_amount=1000)
+    crm_link(
+        client, target, provider="salesforce", opportunity_stage="Qualification", opp_amount=1000
+    )
     body = client.get(
         f"{PREFIX}/rooms/{target}/row", params={"properties": "dock.name,salesforce.opp_amount"}
     ).json()
@@ -1399,7 +1464,7 @@ def test_a_private_view_with_an_empty_owner_is_readable_by_nobody(client):
 
 
 def test_a_teammate_may_edit_a_public_view(client):
-    """"public views for your entire team" - documented in ``public-views-are-team-editable``."""
+    """ "public views for your entire team" - documented in ``public-views-are-team-editable``."""
     view = add_view(client, actor="dana", name="Team", visibility="public")
     patched = client.patch(
         f"{PREFIX}/views/{view['id']}", json={"name": "Team pipeline v2"}, params={"actor": "sam"}
@@ -1410,18 +1475,26 @@ def test_a_teammate_may_edit_a_public_view(client):
 
 def test_a_teammate_may_not_edit_or_delete_someone_elses_private_view(client):
     view = add_view(client, actor="dana", name="Mine")
-    assert client.patch(
-        f"{PREFIX}/views/{view['id']}", json={"name": "Hijacked"}, params={"actor": "sam"}
-    ).status_code == 422
-    assert client.request(
-        "DELETE", f"{PREFIX}/views/{view['id']}", params={"actor": "sam"}
-    ).status_code == 422
+    assert (
+        client.patch(
+            f"{PREFIX}/views/{view['id']}", json={"name": "Hijacked"}, params={"actor": "sam"}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.request(
+            "DELETE", f"{PREFIX}/views/{view['id']}", params={"actor": "sam"}
+        ).status_code
+        == 422
+    )
 
 
 def test_a_clone_of_a_public_view_is_private_and_belongs_to_the_cloner(client):
-    """"clone existing views to make your own customized copy", and a custom copy
+    """ "clone existing views to make your own customized copy", and a custom copy
     is one of the "private views for yourself"."""
-    public = add_view(client, actor="dana", name="Team", visibility="public", base="active-pipeline")
+    public = add_view(
+        client, actor="dana", name="Team", visibility="public", base="active-pipeline"
+    )
     clone = client.post(
         f"{PREFIX}/views/{public['id']}/clone", json={}, params={"actor": "sam"}
     ).json()
@@ -1455,9 +1528,12 @@ def test_a_clone_can_be_customised_in_the_same_request(client):
 
 def test_a_clone_of_someone_elses_private_view_is_a_422(client):
     private = add_view(client, actor="dana", name="Mine")
-    assert client.post(
-        f"{PREFIX}/views/{private['id']}/clone", json={}, params={"actor": "sam"}
-    ).status_code == 422
+    assert (
+        client.post(
+            f"{PREFIX}/views/{private['id']}/clone", json={}, params={"actor": "sam"}
+        ).status_code
+        == 422
+    )
 
 
 def test_cloning_needs_an_actor_because_the_copy_belongs_to_somebody(client):
@@ -1472,7 +1548,11 @@ def test_the_clone_route_audits_the_clone_route(client):
     clone = client.post(
         f"{PREFIX}/views/{public['id']}/clone", json={}, params={"actor": "sam"}
     ).json()
-    sources = [entry["source"] for entry in audit(client) if entry["source"] == f"POST {PREFIX}/views/{public['id']}/clone"]
+    sources = [
+        entry["source"]
+        for entry in audit(client)
+        if entry["source"] == f"POST {PREFIX}/views/{public['id']}/clone"
+    ]
     assert len(sources) == 1
     assert clone["cloned_from"] == public["id"]
 
@@ -1481,7 +1561,7 @@ def test_the_clone_route_audits_the_clone_route(client):
 
 
 def test_editing_replaces_the_column_list_wholesale_so_it_can_be_rearranged(client):
-    """"Edit and rearrange **columns**" is a statement about the whole list."""
+    """ "Edit and rearrange **columns**" is a statement about the whole list."""
     view = add_view(client, name="Editable", columns=["dock.name", "dock.owner", "dock.stage"])
     reordered = client.patch(
         f"{PREFIX}/views/{view['id']}",
@@ -1519,14 +1599,18 @@ def test_editing_a_view_to_private_makes_the_editor_its_owner(client):
 
 def test_an_empty_name_is_refused(client):
     view = add_view(client, name="Named")
-    response = client.patch(f"{PREFIX}/views/{view['id']}", json={"name": "  "}, params={"actor": "dana"})
+    response = client.patch(
+        f"{PREFIX}/views/{view['id']}", json={"name": "  "}, params={"actor": "dana"}
+    )
     assert response.status_code == 422
     assert "name cannot be empty" in response.json()["detail"]
 
 
 def test_an_unrecognised_visibility_is_refused_and_the_two_are_named(client):
     response = client.post(
-        f"{PREFIX}/views", json={"name": "Secret", "visibility": "unlisted"}, params={"actor": "dana"}
+        f"{PREFIX}/views",
+        json={"name": "Secret", "visibility": "unlisted"},
+        params={"actor": "dana"},
     )
     assert response.status_code == 422
     assert "private" in response.json()["detail"] and "public" in response.json()["detail"]
@@ -1545,14 +1629,23 @@ def test_editing_nothing_returns_the_view_unchanged(client):
     response = client.patch(f"{PREFIX}/views/{view['id']}", json={}, params={"actor": "dana"})
     assert response.status_code == 200
     assert response.json()["name"] == "Named"
-    assert len([e for e in audit(client) if e["source"] == f"PATCH {PREFIX}/views/{view['id']}"]) == 0
+    assert (
+        len([e for e in audit(client) if e["source"] == f"PATCH {PREFIX}/views/{view['id']}"]) == 0
+    )
 
 
 def test_deleting_a_view_is_a_soft_delete_that_keeps_the_record_auditable(client):
     view = add_view(client, name="Doomed")
-    assert client.request("DELETE", f"{PREFIX}/views/{view['id']}", params={"actor": "dana"}).status_code == 204
+    assert (
+        client.request(
+            "DELETE", f"{PREFIX}/views/{view['id']}", params={"actor": "dana"}
+        ).status_code
+        == 204
+    )
     assert client.get(f"{PREFIX}/views/{view['id']}", params={"actor": "dana"}).status_code == 422
-    assert client.get("/api/records/saved_view", params={"include_deleted": True}).json()["count"] == 1
+    assert (
+        client.get("/api/records/saved_view", params={"include_deleted": True}).json()["count"] == 1
+    )
     assert audit(client, action="delete")
 
 
@@ -1562,9 +1655,10 @@ def test_listing_views_can_be_narrowed_to_one_visibility(client):
     public = client.get(f"{PREFIX}/views", params={"actor": "dana", "visibility": "public"}).json()
     assert [entry["name"] for entry in public["views"]] == ["Team"]
     assert public["public"] == 1 and public["private"] == 0
-    assert client.get(
-        f"{PREFIX}/views", params={"actor": "dana", "visibility": "secret"}
-    ).status_code == 422
+    assert (
+        client.get(f"{PREFIX}/views", params={"actor": "dana", "visibility": "secret"}).status_code
+        == 422
+    )
 
 
 # -- the remembered open set ------------------------------------------------------- #
@@ -1586,17 +1680,26 @@ def test_the_open_set_is_remembered_per_account(client):
     first = add_view(client, actor="dana", name="Danas")
     second = add_view(client, actor="sam", name="Sams")
     client.put(f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": [first["id"]]})
-    assert client.get(f"{PREFIX}/open-views", params={"actor": "dana"}).json()["view_ids"] == [first["id"]]
+    assert client.get(f"{PREFIX}/open-views", params={"actor": "dana"}).json()["view_ids"] == [
+        first["id"]
+    ]
     assert client.get(f"{PREFIX}/open-views", params={"actor": "sam"}).json()["view_ids"] == []
-    assert second["id"] not in client.get(f"{PREFIX}/open-views", params={"actor": "dana"}).json()["view_ids"]
+    assert (
+        second["id"]
+        not in client.get(f"{PREFIX}/open-views", params={"actor": "dana"}).json()["view_ids"]
+    )
 
 
 def test_remembering_replaces_the_set_rather_than_merging_it(client):
     """A merge would keep a view the user has closed in the set for ever."""
     first = add_view(client, actor="dana", name="One")
     second = add_view(client, actor="dana", name="Two")
-    client.put(f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": [first["id"], second["id"]]})
-    body = client.put(f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": [second["id"]]}).json()
+    client.put(
+        f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": [first["id"], second["id"]]}
+    )
+    body = client.put(
+        f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": [second["id"]]}
+    ).json()
     assert body["view_ids"] == [second["id"]]
 
 
@@ -1614,12 +1717,18 @@ def test_the_active_view_must_be_one_of_the_open_views(client):
 def test_the_open_set_cannot_be_used_to_confirm_a_private_views_id(client):
     """Otherwise the remembered set is a side channel for discovering one."""
     private = add_view(client, actor="dana", name="Mine")
-    assert client.put(
-        f"{PREFIX}/open-views", json={"actor": "sam", "view_ids": [private["id"]]}
-    ).status_code == 422
-    assert client.put(
-        f"{PREFIX}/open-views", json={"actor": "sam", "view_ids": ["saved_view_invented"]}
-    ).status_code == 422
+    assert (
+        client.put(
+            f"{PREFIX}/open-views", json={"actor": "sam", "view_ids": [private["id"]]}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.put(
+            f"{PREFIX}/open-views", json={"actor": "sam", "view_ids": ["saved_view_invented"]}
+        ).status_code
+        == 422
+    )
 
 
 def test_remembering_the_open_set_needs_an_account(client):
@@ -1629,12 +1738,16 @@ def test_remembering_the_open_set_needs_an_account(client):
 
 
 def test_a_view_deleted_since_it_was_remembered_is_reported_not_fatal(client):
-    """"We'll remember which views you had open" - the dashboard has to open."""
+    """ "We'll remember which views you had open" - the dashboard has to open."""
     first = add_view(client, actor="dana", name="One")
     second = add_view(client, actor="dana", name="Two")
     client.put(
         f"{PREFIX}/open-views",
-        json={"actor": "dana", "view_ids": [first["id"], second["id"]], "active_view_id": first["id"]},
+        json={
+            "actor": "dana",
+            "view_ids": [first["id"], second["id"]],
+            "active_view_id": first["id"],
+        },
     )
     client.request("DELETE", f"{PREFIX}/views/{second['id']}", params={"actor": "dana"})
     body = client.get(f"{PREFIX}/open-views", params={"actor": "dana"}).json()
@@ -1665,15 +1778,17 @@ def test_a_duplicate_id_in_the_open_set_is_collapsed(client):
 
 
 def test_the_open_set_must_be_a_list(client):
-    assert client.put(
-        f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": "abc"}
-    ).status_code == 422
+    assert (
+        client.put(f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": "abc"}).status_code
+        == 422
+    )
 
 
 def test_the_dashboard_serves_the_remembered_views_the_defaults_and_your_own(client):
     team = add_view(client, actor="dana", name="Team", visibility="public")
     client.put(
-        f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": [team["id"]], "active_view_id": team["id"]}
+        f"{PREFIX}/open-views",
+        json={"actor": "dana", "view_ids": [team["id"]], "active_view_id": team["id"]},
     )
     body = client.get(f"{PREFIX}/dashboard", params={"actor": "dana"}).json()
     assert body["open_views"] == [team["id"]]
@@ -1711,7 +1826,9 @@ def test_a_workspace_with_no_type_and_no_template_has_none(client):
 def test_a_workspace_inherits_its_templates_type(client):
     """The automation: "Any future workspaces created from that template will be
     automatically categorized"."""
-    sales = client.post("/api/records/workspace_template", json={"name": "Sales room", "type": "Sales"}).json()["id"]
+    sales = client.post(
+        "/api/records/workspace_template", json={"name": "Sales room", "type": "Sales"}
+    ).json()["id"]
     target = room(client, "Inherited", template_id=sales)
     body = client.get(f"{PREFIX}/rooms/{target}/type").json()
     assert body["type"] == "Sales"
@@ -1722,29 +1839,43 @@ def test_a_workspace_inherits_its_templates_type(client):
 
 def test_a_workspaces_own_type_beats_its_templates(client):
     """A template change must never re-categorise a workspace somebody decided about."""
-    sales = client.post("/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}).json()["id"]
+    sales = client.post(
+        "/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}
+    ).json()["id"]
     target = room(client, "Decided", template_id=sales, type="Implementation")
     body = client.get(f"{PREFIX}/rooms/{target}/type").json()
-    assert (body["type"], body["source"], body["own_type"]) == ("Implementation", "workspace", "Implementation")
+    assert (body["type"], body["source"], body["own_type"]) == (
+        "Implementation",
+        "workspace",
+        "Implementation",
+    )
 
 
 def test_changing_a_templates_type_reaches_the_workspaces_that_inherit_it(client):
-    sales = client.post("/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}).json()["id"]
+    sales = client.post(
+        "/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}
+    ).json()["id"]
     target = room(client, "Inherited", template_id=sales)
     assert client.get(f"{PREFIX}/rooms/{target}/type").json()["type"] == "Sales"
-    client.patch(f"{PREFIX}/templates/{sales}", json={"type": "Implementation"}, params={"actor": "dana"})
+    client.patch(
+        f"{PREFIX}/templates/{sales}", json={"type": "Implementation"}, params={"actor": "dana"}
+    )
     assert client.get(f"{PREFIX}/rooms/{target}/type").json()["type"] == "Implementation"
 
 
 def test_changing_a_templates_type_leaves_a_workspace_that_typed_itself_alone(client):
-    sales = client.post("/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}).json()["id"]
+    sales = client.post(
+        "/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}
+    ).json()["id"]
     target = room(client, "Decided", template_id=sales, type="Implementation")
     client.patch(f"{PREFIX}/templates/{sales}", json={"type": "Renewal"}, params={"actor": "dana"})
     assert client.get(f"{PREFIX}/rooms/{target}/type").json()["type"] == "Implementation"
 
 
 def test_clearing_a_workspaces_type_returns_it_to_inheriting(client):
-    sales = client.post("/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}).json()["id"]
+    sales = client.post(
+        "/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}
+    ).json()["id"]
     target = room(client, "Decided", template_id=sales, type="Implementation")
     body = client.patch(
         f"{PREFIX}/rooms/{target}/type", json={"type": None}, params={"actor": "dana"}
@@ -1760,22 +1891,29 @@ def test_writing_a_type_requires_the_field_so_a_clear_is_deliberate(client):
 
 
 def test_typing_a_workspace_that_does_not_exist_is_a_422(client):
-    assert client.patch(
-        f"{PREFIX}/rooms/room_missing/type", json={"type": "Sales"}, params={"actor": "dana"}
-    ).status_code == 422
+    assert (
+        client.patch(
+            f"{PREFIX}/rooms/room_missing/type", json={"type": "Sales"}, params={"actor": "dana"}
+        ).status_code
+        == 422
+    )
 
 
 def test_typing_a_template_that_does_not_exist_is_a_422(client):
     """A type written onto a template nobody can see has no effect and no way back."""
     response = client.patch(
-        f"{PREFIX}/templates/workspace_template_missing", json={"type": "Sales"}, params={"actor": "dana"}
+        f"{PREFIX}/templates/workspace_template_missing",
+        json={"type": "Sales"},
+        params={"actor": "dana"},
     )
     assert response.status_code == 422
     assert "not found" in response.json()["detail"]
 
 
 def test_the_templates_list_counts_only_the_workspaces_that_actually_inherit(client):
-    sales = client.post("/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}).json()["id"]
+    sales = client.post(
+        "/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}
+    ).json()["id"]
     room(client, "Inherits", template_id=sales)
     room(client, "Also inherits", template_id=sales)
     room(client, "Decided", template_id=sales, type="Implementation")
@@ -1795,7 +1933,9 @@ def test_a_template_with_no_type_categorises_nothing(client):
 
 
 def test_clearing_a_templates_type_stops_it_categorising(client):
-    sales = client.post("/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}).json()["id"]
+    sales = client.post(
+        "/api/records/workspace_template", json={"name": "Sales", "type": "Sales"}
+    ).json()["id"]
     target = room(client, "Inherited", template_id=sales)
     client.patch(f"{PREFIX}/templates/{sales}", json={"type": None}, params={"actor": "dana"})
     assert client.get(f"{PREFIX}/rooms/{target}/type").json()["type"] is None
@@ -1804,7 +1944,7 @@ def test_clearing_a_templates_type_stops_it_categorising(client):
 # -- dynamic sections ------------------------------------------------------------- #
 
 
-def test_a_workspace_that_declares_no_sections_has_none(client):
+def test_the_section_endpoint_reports_no_sections_for_an_empty_workspace(client):
     target = room(client, "No sections")
     body = client.get(f"{PREFIX}/rooms/{target}/sections").json()
     assert body["sections"] == []
@@ -1837,8 +1977,13 @@ def test_a_section_whose_rule_does_not_match_is_hidden_with_its_reason(client):
         params={"actor": "dana"},
     ).json()
     assert body["hidden"] == ["order-form"]
-    assert next(entry for entry in body["sections"] if entry["key"] == "order-form")["reason"] == "rule_not_matched"
-    assert next(entry for entry in body["sections"] if entry["key"] == "overview")["visible"] is True
+    assert (
+        next(entry for entry in body["sections"] if entry["key"] == "order-form")["reason"]
+        == "rule_not_matched"
+    )
+    assert (
+        next(entry for entry in body["sections"] if entry["key"] == "overview")["visible"] is True
+    )
 
 
 def test_the_same_rule_hides_nothing_once_the_thing_it_waits_for_has_happened(client):
@@ -1869,9 +2014,7 @@ def test_the_section_rule_uses_the_same_operator_set_as_a_view_filter(client):
             "sections": [
                 {
                     "section": "pricing",
-                    "visible_when": group(
-                        condition("salesforce.opp_amount", "gt", 0), join="or"
-                    ),
+                    "visible_when": group(condition("salesforce.opp_amount", "gt", 0), join="or"),
                 }
             ]
         },
@@ -1897,7 +2040,10 @@ def test_a_rule_with_an_unreadable_condition_is_refused_at_save_time(client):
         f"{PREFIX}/rooms/{target}/sections",
         json={
             "sections": [
-                {"section": "overview", "visible_when": group(condition("dock.stage", "sounds_like", "x"))}
+                {
+                    "section": "overview",
+                    "visible_when": group(condition("dock.stage", "sounds_like", "x")),
+                }
             ]
         },
         params={"actor": "dana"},
@@ -1911,8 +2057,13 @@ def test_a_rule_left_in_storage_by_a_generic_write_leaves_the_section_visible_an
     target = room(client, "Sections", sections=["overview", "pricing"])
     client.post(
         "/api/records/workspace_section_rule",
-        json={"section": "pricing", "visible_when": {"join": "and", "conditions": [
-            {"field": "dock.stage", "op": "sounds_like", "value": "x"}]}},
+        json={
+            "section": "pricing",
+            "visible_when": {
+                "join": "and",
+                "conditions": [{"field": "dock.stage", "op": "sounds_like", "value": "x"}],
+            },
+        },
         params={"room_id": target},
     )
     body = client.get(f"{PREFIX}/rooms/{target}/sections").json()
@@ -1928,7 +2079,11 @@ def test_a_rule_for_a_section_the_workspace_stopped_declaring_is_reported(client
     target = room(client, "Sections", sections=["overview", "pricing"])
     client.put(
         f"{PREFIX}/rooms/{target}/sections",
-        json={"sections": [{"section": "pricing", "visible_when": group(condition("dock.stage", "is", "x"))}]},
+        json={
+            "sections": [
+                {"section": "pricing", "visible_when": group(condition("dock.stage", "is", "x"))}
+            ]
+        },
         params={"actor": "dana"},
     )
     client.patch("/api/records/room/" + target, json={"sections": ["overview"]})
@@ -1940,7 +2095,11 @@ def test_setting_section_rules_replaces_the_whole_ruleset(client):
     target = room(client, "Sections", sections=["overview", "pricing"])
     client.put(
         f"{PREFIX}/rooms/{target}/sections",
-        json={"sections": [{"section": "pricing", "visible_when": group(condition("dock.stage", "is", "x"))}]},
+        json={
+            "sections": [
+                {"section": "pricing", "visible_when": group(condition("dock.stage", "is", "x"))}
+            ]
+        },
         params={"actor": "dana"},
     )
     body = client.put(
@@ -1958,15 +2117,23 @@ def test_setting_section_rules_replaces_the_whole_ruleset(client):
         {"sections": ["pricing"]},
         {"sections": [{"visible_when": group()}]},
         {"sections": [{"section": "overview"}]},
-        {"sections": [{"section": "overview", "visible_when": group()}, {"section": "overview", "visible_when": group()}]},
+        {
+            "sections": [
+                {"section": "overview", "visible_when": group()},
+                {"section": "overview", "visible_when": group()},
+            ]
+        },
         {"sections": [{"section": "overview", "visible_when": {"join": "nope", "conditions": []}}]},
     ],
 )
 def test_a_malformed_ruleset_is_refused(client, body_payload):
     target = room(client, "Sections", sections=["overview"])
-    assert client.put(
-        f"{PREFIX}/rooms/{target}/sections", json=body_payload, params={"actor": "dana"}
-    ).status_code == 422
+    assert (
+        client.put(
+            f"{PREFIX}/rooms/{target}/sections", json=body_payload, params={"actor": "dana"}
+        ).status_code
+        == 422
+    )
 
 
 def test_sections_of_a_workspace_that_does_not_exist_is_a_422(client):
@@ -1996,13 +2163,19 @@ def test_every_audit_source_this_feature_records_names_a_route_it_mounts(client)
     clone = client.post(
         f"{PREFIX}/views/{public['id']}/clone", json={}, params={"actor": "sam"}
     ).json()
-    client.patch(f"{PREFIX}/views/{private['id']}", json={"name": "Renamed"}, params={"actor": "dana"})
+    client.patch(
+        f"{PREFIX}/views/{private['id']}", json={"name": "Renamed"}, params={"actor": "dana"}
+    )
     client.request("DELETE", f"{PREFIX}/views/{clone['id']}", params={"actor": "sam"})
     client.patch(f"{PREFIX}/rooms/{room_id}/type", json={"type": "Sales"}, params={"actor": "dana"})
     client.patch(f"{PREFIX}/templates/{sales}", json={"type": "Sales"}, params={"actor": "dana"})
     client.put(
         f"{PREFIX}/rooms/{room_id}/sections",
-        json={"sections": [{"section": "pricing", "visible_when": group(condition("dock.stage", "is", "x"))}]},
+        json={
+            "sections": [
+                {"section": "pricing", "visible_when": group(condition("dock.stage", "is", "x"))}
+            ]
+        },
         params={"actor": "dana"},
     )
     client.put(f"{PREFIX}/open-views", json={"actor": "dana", "view_ids": [public["id"]]})
@@ -2059,8 +2232,16 @@ def test_no_domain_write_takes_a_default_source(client):
     """``source`` is a required keyword on every domain write, so this cannot
     silently regress to a hard-coded string."""
     text = _domain_source("views")
-    for name in ("create_view", "update_view", "delete_view", "clone_view", "set_room_type",
-                 "set_template_type", "set_section_rules", "remember_open_views"):
+    for name in (
+        "create_view",
+        "update_view",
+        "delete_view",
+        "clone_view",
+        "set_room_type",
+        "set_template_type",
+        "set_section_rules",
+        "remember_open_views",
+    ):
         signature = re.search(rf"def {name}\((.*?)\) ->", text, re.S)
         assert signature, name
         assert re.search(r"\bsource: str\b", signature.group(1)), name
@@ -2091,7 +2272,16 @@ def test_nothing_in_this_feature_opens_the_database_itself(client):
         encoding="utf-8"
     )
     assert "sqlite3" not in feature
-    for name in ("filters", "vocabulary", "rows", "inferences", "fields", "errors", "views", "__init__"):
+    for name in (
+        "filters",
+        "vocabulary",
+        "rows",
+        "inferences",
+        "fields",
+        "errors",
+        "views",
+        "__init__",
+    ):
         text = _domain_source(name)
         assert "sqlite3" not in text, name
         assert "dsr.api" not in text, name
@@ -2185,7 +2375,9 @@ def _seed(client):
     from dsr.db.audited import AuditedDatabase
 
     module = load_feature("wf022_triage_the_pipeline_with_saved_workspa")
-    db = AuditedDatabase(os.environ["DSR_DB_PATH"], mirror_dir=os.environ["DSR_AUDIT_DIR"], actor="seed")
+    db = AuditedDatabase(
+        os.environ["DSR_DB_PATH"], mirror_dir=os.environ["DSR_AUDIT_DIR"], actor="seed"
+    )
     try:
         room_ids = []
         for index in range(4):
@@ -2225,13 +2417,19 @@ def test_the_seed_hook_is_exported_and_describes_what_it_added(client):
 def test_the_seed_produces_a_public_view_a_private_view_and_a_clone(client):
     """All three visibilities the research describes, on a fresh database."""
     _seed(client)
-    dana = {view["name"]: view for view in client.get(f"{PREFIX}/views", params={"actor": "dana"}).json()["views"]}
+    dana = {
+        view["name"]: view
+        for view in client.get(f"{PREFIX}/views", params={"actor": "dana"}).json()["views"]
+    }
     assert dana["Team pipeline"]["visibility"] == "public"
     assert dana["My pipeline"]["visibility"] == "private"
     assert dana["My pipeline"]["owner"] == "dana"
     assert "Signed only" in dana
 
-    sam = {view["name"]: view for view in client.get(f"{PREFIX}/views", params={"actor": "sam"}).json()["views"]}
+    sam = {
+        view["name"]: view
+        for view in client.get(f"{PREFIX}/views", params={"actor": "sam"}).json()["views"]
+    }
     # The public team view is in sam's list too - that is what public means.
     assert sam["Team pipeline"]["visibility"] == "public"
     assert sam["Renewals I am chasing"]["visibility"] == "private"
@@ -2258,11 +2456,16 @@ def test_the_seed_keeps_both_arms_of_the_disjunction_visible_in_the_demo(client)
     collapsed into a conjunction.
     """
     _seed(client)
-    views = {entry["name"]: entry for entry in client.get(f"{PREFIX}/views", params={"actor": "dana"}).json()["views"]}
+    views = {
+        entry["name"]: entry
+        for entry in client.get(f"{PREFIX}/views", params={"actor": "dana"}).json()["views"]
+    }
     body = rows_of(client, views["Team pipeline"]["id"])
     assert body["total"] == 4
 
-    templates = client.get("/api/records/workspace_template", params={"limit": 1000}).json()["records"]
+    templates = client.get("/api/records/workspace_template", params={"limit": 1000}).json()[
+        "records"
+    ]
     blank = next(record for record in templates if record["data"].get("type") is None)
     excluded = [
         record
@@ -2276,14 +2479,16 @@ def test_the_seed_keeps_both_arms_of_the_disjunction_visible_in_the_demo(client)
     # link's own `room_id` is the join key, not the record's own id.
     linked = {
         record["room_id"]
-        for record in client.get("/api/records/workspace_crm", params={"limit": 1000}).json()["records"]
+        for record in client.get("/api/records/workspace_crm", params={"limit": 1000}).json()[
+            "records"
+        ]
     }
     arm_one = [row for row in body["rows"] if row["id"] not in linked]
     assert [row["dock.type"] for row in arm_one] == ["Sales"]
 
 
 def test_the_seed_produces_a_workspace_with_no_buyer_activity(client):
-    """"Never viewed" is a state a triage table has to be able to show, and the
+    """ "Never viewed" is a state a triage table has to be able to show, and the
     demo needs one so the null column is visible without any interaction."""
     _seed(client)
     view = add_view(
@@ -2300,10 +2505,14 @@ def test_the_seed_produces_a_voided_order_form_a_completed_one_and_none_at_all(c
     _seed(client)
     statuses = sorted(
         record["data"]["status"]
-        for record in client.get("/api/records/order_form", params={"limit": 1000}).json()["records"]
+        for record in client.get("/api/records/order_form", params={"limit": 1000}).json()[
+            "records"
+        ]
     )
     assert statuses == ["completed", "sent", "voided"]
-    view = add_view(client, name="Desk check", base="deal-desk", columns=["dock.name", "order_form.status"])
+    view = add_view(
+        client, name="Desk check", base="deal-desk", columns=["dock.name", "order_form.status"]
+    )
     body = rows_of(client, view["id"])
     assert {row["order_form.status"] for row in body["rows"]} == {"completed", "sent", "voided"}
     assert body["total"] == 3, "two demo rooms and the extra one have no order form at all"
@@ -2329,39 +2538,6 @@ def test_the_seed_produces_both_a_template_inherited_type_and_a_typed_one(client
     assert sources.count(None) == 1, "on a template that categorises nothing"
 
 
-def test_the_seed_produces_a_workspace_with_no_buyer_activity(client):
-    """"Never viewed" is a state a triage table has to be able to show."""
-    _seed(client)
-    view = add_view(
-        client, name="Silent check", columns=["dock.name", "engagement.last_client_view"]
-    )
-    body = rows_of(client, view["id"])
-    silent = [row for row in body["rows"] if row["engagement.last_client_view"] is None]
-    assert len(silent) == 1, "the seed adds exactly one workspace nobody has looked at"
-    assert silent[0]["meta"]["engagement"] == {"views": 0, "actions": 0, "last_client_view": None}
-
-
-def test_the_seed_produces_a_voided_order_form_a_completed_one_and_none_at_all(client):
-    _seed(client)
-    statuses = sorted(
-        record["data"]["status"]
-        for record in client.get("/api/records/order_form", params={"limit": 100}).json()["records"]
-    )
-    assert statuses == ["completed", "sent", "voided"]
-    view = add_view(client, name="Desk check", base="deal-desk", columns=["dock.name", "order_form.status"])
-    body = rows_of(client, view["id"])
-    assert {row["order_form.status"] for row in body["rows"]} == {"completed", "sent", "voided"}
-
-
-def test_the_seed_produces_a_section_hidden_by_a_rule_that_does_not_match(client):
-    _seed(client)
-    hidden = []
-    for record in client.get("/api/records/room", params={"limit": 100}).json()["records"]:
-        body = client.get(f"{PREFIX}/rooms/{record['id']}/sections").json()
-        hidden.extend(body["hidden"])
-    assert hidden == ["order-form"]
-
-
 def test_the_seed_remembered_an_open_set_for_two_accounts(client):
     _seed(client)
     assert client.get(f"{PREFIX}/open-views", params={"actor": "dana"}).json()["remembered"] is True
@@ -2372,13 +2548,15 @@ def test_the_seed_remembered_an_open_set_for_two_accounts(client):
 
 def test_the_seed_declines_gracefully_with_no_rooms_to_attach_to(client):
     """The seeder skips a feature loudly rather than aborting; this is the case."""
+    import os
+
     from dsr.db.audited import AuditedDatabase
     from dsr.store import RecordStore
 
-    import os
-
     module = load_feature("wf022_triage_the_pipeline_with_saved_workspa")
-    db = AuditedDatabase(os.environ["DSR_DB_PATH"], mirror_dir=os.environ["DSR_AUDIT_DIR"], actor="seed")
+    db = AuditedDatabase(
+        os.environ["DSR_DB_PATH"], mirror_dir=os.environ["DSR_AUDIT_DIR"], actor="seed"
+    )
     try:
         summary = module.seed(db, {"room_ids": [], "now": NOW, "rng": None})
         assert "no rooms to attach to" in summary

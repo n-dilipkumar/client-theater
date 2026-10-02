@@ -34,19 +34,18 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
-from dsr.reassign import distribution as dist
-from dsr.reassign import webhooks
+from dsr.reassign import distribution as dist, webhooks
 from dsr.reassign.errors import ReassignError
 from dsr.reassign.vocabulary import (
     ASSIGNED,
+    AUTO_IS_ROUND_ROBIN_ONLY,
+    AUTO_MODE,
     BOUNDS_ARE_IGNORED,
     EDITABLE_AND_LOCKED,
     EXTENSION_MUST_BE_INSTALLED_AND_LOGGED_IN,
     LOCKED_FIELDS,
-    SURFACES_REQUIRING_ADDON,
-    AUTO_IS_ROUND_ROBIN_ONLY,
-    AUTO_MODE,
     SPECIFIC_MODE,
+    SURFACES_REQUIRING_ADDON,
     invite_for,
     mode_for_kind,
     require_assignment_kind,
@@ -238,7 +237,9 @@ def decide(
     surface = require_surface(request.get("surface"), field="surface")
     assign_to_raw = request.get("assign_to") or {}
     if not isinstance(assign_to_raw, Mapping):
-        raise ReassignError("assign_to must be an object with a kind of individual, team or distribution")
+        raise ReassignError(
+            "assign_to must be an object with a kind of individual, team or distribution"
+        )
     kind = require_assignment_kind(assign_to_raw.get("kind"))
     mode = mode_for_kind(kind)
     assign_to = {"kind": kind, "id": str(assign_to_raw.get("id") or "").strip() or None}
@@ -312,7 +313,12 @@ def decide(
     rows = _candidate_rows(hosts, meeting, distribution, starts_at, ends_at, kind=kind)
 
     # 3a. The Distribution context. The scheduler reopens the *same* one.
-    if kind == "distribution" and assign_to["id"] not in (None, "", distribution_id, distribution.get("name")):
+    if kind == "distribution" and assign_to["id"] not in (
+        None,
+        "",
+        distribution_id,
+        distribution.get("name"),
+    ):
         return Decision(
             **base,
             outcome=REFUSED_DISTRIBUTION_CONTEXT,
@@ -548,8 +554,16 @@ def outcome_table() -> dict[str, Any]:
             "quote": "Reassignment will take into account ... the Distribution settings of the meeting booked.",
             "means": "the request named a different Distribution; the scheduler reopens the same one",
         },
-        REFUSED_SAME_HOST: {"allowed": False, "quote": None, "means": "the named host already has the booking"},
-        REFUSED_INACTIVE_HOST: {"allowed": False, "quote": None, "means": "the named host is not taking bookings"},
+        REFUSED_SAME_HOST: {
+            "allowed": False,
+            "quote": None,
+            "means": "the named host already has the booking",
+        },
+        REFUSED_INACTIVE_HOST: {
+            "allowed": False,
+            "quote": None,
+            "means": "the named host is not taking bookings",
+        },
         REFUSED_NOT_IN_DISTRIBUTION: {
             "allowed": False,
             "quote": "Reassignment will take into account ... the Distribution settings of the meeting booked.",

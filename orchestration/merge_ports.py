@@ -24,6 +24,7 @@ regenerated and diffed, not in a literal that gets overwritten. Worse, a merge
 script should never be trusted to have been told the right thing: it now reads
 what is actually pending, and refuses to merge a feature that is already on main.
 """
+
 import json
 import os
 import re
@@ -39,7 +40,7 @@ from pathlib import Path
 MAIN = Path(__file__).resolve().parent.parent
 WORKSPACES = Path(os.environ.get("DSR_WORKSPACES") or MAIN.parent)
 PY = MAIN / ".venv" / "Scripts" / "python.exe"
-if not PY.exists():                       # a venv elsewhere on PATH, or POSIX layout
+if not PY.exists():  # a venv elsewhere on PATH, or POSIX layout
     PY = Path(sys.executable)
 PENDING = Path(os.environ.get("DSR_PENDING_PORTS") or MAIN / "data" / "pending_ports.json")
 
@@ -53,8 +54,16 @@ from tools.contract import SHARED  # noqa: E402
 
 
 def run(args, cwd=MAIN, timeout=900, env=None):
-    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout, env=env)
+    p = subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=env,
+    )
     return p.returncode, (p.stdout + p.stderr)
 
 
@@ -73,8 +82,7 @@ def features_on(ref: str = "origin/main") -> set[str]:
     no-op merge. The guard was right; the question was asked about the wrong tree.
     """
     code, out = git("ls-tree", "-r", "--name-only", ref, "backend/dsr/features")
-    return {f"WF-{m.group(1)}" for f in out.splitlines()
-            if (m := re.search(r"wf[_-]?(\d{3})", f))}
+    return {f"WF-{m.group(1)}" for f in out.splitlines() if (m := re.search(r"wf[_-]?(\d{3})", f))}
 
 
 def load_ports():
@@ -91,8 +99,10 @@ def load_ports():
     todo, not_ready = [], []
     for e in entries:
         if e["ticket"] in already:
-            print(f"  SKIP {e['ticket']}: already on main. Re-merging it would be a no-op "
-                  f"that reports success, which is the failure this file was rewritten to stop.")
+            print(
+                f"  SKIP {e['ticket']}: already on main. Re-merging it would be a no-op "
+                f"that reports success, which is the failure this file was rewritten to stop."
+            )
             continue
         # A workflow an agent is still writing is not a port yet. Offering it here
         # is how WF-001 came to be merged: it had ZERO commits, so the staging ref
@@ -108,13 +118,19 @@ def load_ports():
 
     if not_ready:
         print()
-        print(f"  {len(not_ready)} workflow(s) are still being written and are NOT "
-              f"mergeable yet - 0 commits:")
+        print(
+            f"  {len(not_ready)} workflow(s) are still being written and are NOT "
+            f"mergeable yet - 0 commits:"
+        )
         for e in not_ready:
-            print(f"    {e['ticket']:8} {e['worktree']:28} "
-                  f"{e.get('uncommitted', 0)} uncommitted file(s)")
-        print("  They are listed so it is visible they were considered and why they "
-              "were left out, rather than silently absent.")
+            print(
+                f"    {e['ticket']:8} {e['worktree']:28} "
+                f"{e.get('uncommitted', 0)} uncommitted file(s)"
+            )
+        print(
+            "  They are listed so it is visible they were considered and why they "
+            "were left out, rather than silently absent."
+        )
 
     if not todo:
         return []
@@ -129,8 +145,11 @@ def suite_and_host():
     env["DSR_DB_PATH"] = str(Path(tmp) / "merge.db")
     env["DSR_AUDIT_DIR"] = str(Path(tmp) / "audit")
 
-    code, out = run([str(PY), "-m", "pytest", "-p", "no:cacheprovider", "--tb=line",
-                     "-o", "addopts=", "-q"], MAIN / "backend", env=env)
+    code, out = run(
+        [str(PY), "-m", "pytest", "-p", "no:cacheprovider", "--tb=line", "-o", "addopts=", "-q"],
+        MAIN / "backend",
+        env=env,
+    )
     passed = failed = 0
     for line in reversed(out.splitlines()):
         if " passed" in line or " failed" in line:
@@ -158,7 +177,8 @@ def suite_and_host():
         "    d = c.get('/api/features').json()\n"
         "print(json.dumps({'loaded': [(f['id'], f['prefix'], len(f['routes'])) for f in d['features']],\n"
         "                  'failed': [(f['id'], f['error']) for f in d['failed']]}))\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     _, out2 = run([str(PY), str(probe)], MAIN / "backend", env=env)
     probe.unlink(missing_ok=True)
     shutil.rmtree(tmp, ignore_errors=True)
@@ -191,8 +211,7 @@ def main():
     # What the tree being merged into already carries, before anything is fetched.
     already_here = features_on("HEAD")
     if already_here:
-        print(f"  {target} already carries {len(already_here)} feature(s): "
-              f"{sorted(already_here)}")
+        print(f"  {target} already carries {len(already_here)} feature(s): {sorted(already_here)}")
 
     print(f"=== merging into: {target} ===")
     print(f"  ports to merge: {', '.join(t for t, _, _ in ports)}")
@@ -216,14 +235,17 @@ def main():
                 print(f"  {ticket:8} fetch FAILED: {out.strip()[:160]}")
                 return 1
             _, log_out = git("log", "--oneline", f"origin/main..{staging}")
-            incoming = [l for l in log_out.splitlines() if l.strip()]
+            incoming = [ln for ln in log_out.splitlines() if ln.strip()]
             _, diff_out = git("diff", "--name-only", f"origin/main...{staging}")
-            offenders = sorted({f.replace("\\", "/") for f in diff_out.splitlines()
-                                if f.strip()} & SHARED)
+            offenders = sorted(
+                {f.replace("\\", "/") for f in diff_out.splitlines() if f.strip()} & SHARED
+            )
             _, hb = git("rev-parse", "HEAD")
-            print(f"  {ticket:8} {len(incoming):>2} commit(s), "
-                  f"{len([f for f in diff_out.splitlines() if f.strip()]):>2} file(s), "
-                  f"shared={offenders or 'none'}, HEAD={hb.strip()[:8]}")
+            print(
+                f"  {ticket:8} {len(incoming):>2} commit(s), "
+                f"{len([f for f in diff_out.splitlines() if f.strip()]):>2} file(s), "
+                f"shared={offenders or 'none'}, HEAD={hb.strip()[:8]}"
+            )
             if not incoming:
                 print(f"  {ticket:8} WOULD REFUSE: no commits ahead of main")
             if offenders:
@@ -233,7 +255,7 @@ def main():
 
     p, f, reg = suite_and_host()
     print(f"  baseline suite : {p} passed, {f} failed")
-    for fid, prefix, n in (reg["loaded"] if reg else []):
+    for fid, prefix, n in reg["loaded"] if reg else []:
         print(f"    {fid:34} {prefix or '-':18} {n} routes")
     if f or not reg or reg["failed"]:
         print("  ABORT: the baseline is already red, so a later failure could not be attributed")
@@ -256,7 +278,7 @@ def main():
             print(f"  fetch FAILED: {out.strip()[:300]}")
             return 1
         code, out = git("log", "--oneline", f"origin/main..{staging}")
-        incoming = [l for l in out.splitlines() if l.strip()]
+        incoming = [ln for ln in out.splitlines() if ln.strip()]
         print("  incoming commits:")
         for line in incoming:
             print(f"      {line}")
@@ -265,9 +287,11 @@ def main():
             # ahead of main is main, and merging main is a no-op that exits 0 -
             # so without this the script would go on to print "merged cleanly"
             # for a merge that did not happen.
-            print(f"  REFUSING: {ticket} has no commits ahead of main. The staging ref is "
-                  f"identical to main, so merging it would report success while "
-                  f"changing nothing. The agent has not committed yet.")
+            print(
+                f"  REFUSING: {ticket} has no commits ahead of main. The staging ref is "
+                f"identical to main, so merging it would report success while "
+                f"changing nothing. The agent has not committed yet."
+            )
             return 1
 
         # The shared-file guard, run on the incoming diff rather than trusted. The
@@ -277,7 +301,9 @@ def main():
         offenders = sorted({f.replace("\\", "/") for f in out.splitlines() if f.strip()} & SHARED)
         if offenders:
             print(f"  REFUSING: {ticket} touches shared file(s): {', '.join(offenders)}")
-            print("  A port is not the instrument for changing the host. See docs/FEATURE-CONTRACT.md.")
+            print(
+                "  A port is not the instrument for changing the host. See docs/FEATURE-CONTRACT.md."
+            )
             return 1
 
         # git() returns (returncode, output) - two values, not three. Unpacking
@@ -286,12 +312,17 @@ def main():
         # the thing it was written to prevent actually happens.
         _, head_before = git("rev-parse", "HEAD")
         head_before = head_before.strip()
-        code, out = git("merge", "--no-ff", staging, "-m",
-                        f"Merge {ticket} ported onto the plugin host\n\n"
-                        f"Reviewed independently before merge: no shared file touched, full suite\n"
-                        f"passes with the feature mounted, and the host reports it loaded with\n"
-                        f"zero failed features. Merged one port at a time with the suite and the\n"
-                        f"registry check re-run after each, so a red result would name its cause.\n\n")
+        code, out = git(
+            "merge",
+            "--no-ff",
+            staging,
+            "-m",
+            f"Merge {ticket} ported onto the plugin host\n\n"
+            f"Reviewed independently before merge: no shared file touched, full suite\n"
+            f"passes with the feature mounted, and the host reports it loaded with\n"
+            f"zero failed features. Merged one port at a time with the suite and the\n"
+            f"registry check re-run after each, so a red result would name its cause.\n\n",
+        )
         if code != 0:
             print(f"  MERGE CONFLICT:\n{out[:1500]}")
             return 1
@@ -301,15 +332,19 @@ def main():
             # git merge exits 0 when there is nothing to do. That is a success
             # code for a no-op, and reporting it as "merged cleanly" is how a
             # feature that never landed gets counted as landed.
-            print(f"  REFUSING: git merge exited 0 but HEAD did not move "
-                  f"({head_before[:8]}). It had nothing to merge.")
+            print(
+                f"  REFUSING: git merge exited 0 but HEAD did not move "
+                f"({head_before[:8]}). It had nothing to merge."
+            )
             return 1
-        print(f"  merged cleanly  ({len(incoming)} commit(s), {head_before[:8]} -> {head_after[:8]})")
+        print(
+            f"  merged cleanly  ({len(incoming)} commit(s), {head_before[:8]} -> {head_after[:8]})"
+        )
 
         p, f, reg = suite_and_host()
         print(f"  suite after merge : {p} passed, {f} failed")
         new = set()
-        for fid, prefix, n in (reg["loaded"] if reg else []):
+        for fid, prefix, n in reg["loaded"] if reg else []:
             mark = "   <-- NEW" if fid not in base_features else ""
             if fid not in base_features:
                 new.add(fid)
@@ -321,9 +356,11 @@ def main():
         base_features |= new
 
         if not new:
-            print(f"  VERDICT: {ticket} moved {head_before[:8]} -> {head_after[:8]} but added "
-                  f"NO new feature the host loads. A merge that changes the tree without "
-                  f"changing what the product serves is not a landed feature.")
+            print(
+                f"  VERDICT: {ticket} moved {head_before[:8]} -> {head_after[:8]} but added "
+                f"NO new feature the host loads. A merge that changes the tree without "
+                f"changing what the product serves is not a landed feature."
+            )
             return 1
         if f or not reg or reg["failed"]:
             print(f"  VERDICT: BROKEN after merging {ticket}")
@@ -336,7 +373,7 @@ def main():
     print("=" * 78)
     p, f, reg = suite_and_host()
     print(f"  suite : {p} passed, {f} failed")
-    for fid, prefix, n in (reg["loaded"] if reg else []):
+    for fid, prefix, n in reg["loaded"] if reg else []:
         print(f"    {fid:34} {prefix or '-':18} {n} routes")
     print("\n  history:")
     for line in git("log", "--oneline", "-8")[1].splitlines():

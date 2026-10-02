@@ -314,8 +314,10 @@ class CrmOAuthConnections:
             where["vendor"] = vendor
         if tenant:
             where["tenant"] = tenant
-        records = self.store.find(CONNECTION_COLLECTION, where, limit=1000) if where else self.store.list(
-            CONNECTION_COLLECTION, limit=1000
+        records = (
+            self.store.find(CONNECTION_COLLECTION, where, limit=1000)
+            if where
+            else self.store.list(CONNECTION_COLLECTION, limit=1000)
         )
         summaries = [self.summarise(record) for record in records]
         if scope in ("room", "tenant"):
@@ -385,7 +387,9 @@ class CrmOAuthConnections:
             "has_client_secret": bool(payload.get("client_secret")),
             "notes": str(payload.get("notes") or ""),
         }
-        record = self.store.create(CONNECTION_COLLECTION, body, room_id=body["room_id"], actor=actor, source=source)
+        record = self.store.create(
+            CONNECTION_COLLECTION, body, room_id=body["room_id"], actor=actor, source=source
+        )
 
         if body["has_client_secret"]:
             self.vault.put(
@@ -399,11 +403,16 @@ class CrmOAuthConnections:
         return self.summarise(self.store.get(record["id"]) or record)
 
     def update_connection(
-        self, connection_id: str, payload: Mapping[str, Any], *, actor: str | None = None, source: str
+        self,
+        connection_id: str,
+        payload: Mapping[str, Any],
+        *,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         """Patch a connection, re-sealing the client secret when one is given."""
         record = self.require_connection(connection_id)
-        data = record["data"]
+        record["data"]
         patch: dict[str, Any] = {}
 
         if "vendor" in payload:
@@ -450,14 +459,21 @@ class CrmOAuthConnections:
             patch["has_client_secret"] = bool(secret)
             if secret:
                 self.vault.put(
-                    record["id"], APP_ORG_KEY, {"client_secret": secret}, kind="app", actor=actor, source=source
+                    record["id"],
+                    APP_ORG_KEY,
+                    {"client_secret": secret},
+                    kind="app",
+                    actor=actor,
+                    source=source,
                 )
 
         if patch:
             self.store.update(record["id"], patch, actor=actor, source=source)
         return self.summarise(self.store.get(record["id"]) or record)
 
-    def disconnect(self, connection_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def disconnect(
+        self, connection_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Soft-delete a connection and cancel its pending authorizations.
 
         The token events and the audit trail outlive it: a connection that was
@@ -592,7 +608,9 @@ class CrmOAuthConnections:
             "callback": f"{data.get('redirect_uri')}?code=…&state={state}",
         }
 
-    def cancel_grant(self, grant_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def cancel_grant(
+        self, grant_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Abandon a pending authorization.
 
         The researched flow has no "cancel" step, but a tab the admin closed
@@ -637,7 +655,7 @@ class CrmOAuthConnections:
             if where
             else self.store.list(GRANT_COLLECTION, limit=1000)
         )
-        now = self.now()
+        self.now()
         summaries = [self.grant_summary(record) for record in records]
         for entry in summaries:
             if entry["state"] == GRANT_PENDING and entry["seconds_remaining"] is not None:
@@ -646,7 +664,11 @@ class CrmOAuthConnections:
         return summaries[: max(1, min(int(limit), 1000))]
 
     def pending_grants(self, connection_id: str) -> list[dict[str, Any]]:
-        return [entry for entry in self.list_grants(connection_id=connection_id) if entry["state"] == GRANT_PENDING]
+        return [
+            entry
+            for entry in self.list_grants(connection_id=connection_id)
+            if entry["state"] == GRANT_PENDING
+        ]
 
     # -- steps 4 and 5: the callback and the exchange ---------------------- #
 
@@ -674,7 +696,9 @@ class CrmOAuthConnections:
         self.require_enabled(record)
         data = record["data"]
         if not code:
-            raise AuthorizationError("the callback carried no code; the vendor's redirect_uri is wrong")
+            raise AuthorizationError(
+                "the callback carried no code; the vendor's redirect_uri is wrong"
+            )
         grant = self._require_pending_grant(str(state or ""), record["id"])
 
         connector = self.connector(str(data.get("vendor")))
@@ -685,7 +709,9 @@ class CrmOAuthConnections:
                 TokenRequest(
                     client_id=str(data.get("client_id") or ""),
                     client_secret=secret,
-                    redirect_uri=str(grant["data"].get("redirect_uri") or data.get("redirect_uri") or ""),
+                    redirect_uri=str(
+                        grant["data"].get("redirect_uri") or data.get("redirect_uri") or ""
+                    ),
                     code=code,
                     extra={
                         "environment": data.get("environment"),
@@ -914,7 +940,9 @@ class CrmOAuthConnections:
             "refresh_token": response.refresh_token or credential.get("refresh_token", ""),
             "token_type": response.token_type,
             "issued_at": iso(now),
-            "expires_in": response.expires_in if response.expires_in is not None else credential.get("expires_in"),
+            "expires_in": response.expires_in
+            if response.expires_in is not None
+            else credential.get("expires_in"),
             "expires_at": refreshed_expires,
             "scope": response.scope or credential.get("scope", ""),
             "raw": dict(response.raw),
@@ -1017,9 +1045,7 @@ class CrmOAuthConnections:
                 "last_checked_at": iso(now),
                 "last_error": detail,
             }
-        patch["next_check_at"] = iso(
-            now + timedelta(seconds=_next_interval(data, outcome))
-        )
+        patch["next_check_at"] = iso(now + timedelta(seconds=_next_interval(data, outcome)))
         self.store.update(record["id"], patch, actor=actor, source=source)
 
         self._event(
@@ -1087,7 +1113,9 @@ class CrmOAuthConnections:
         for entry in self.list_connections(room_id=room_id, limit=500):
             record = self.store.get(entry["id"]) or {}
             if not record.get("data", {}).get("enabled", True):
-                results.append({"connection_id": entry["id"], "skipped": "disabled", "outcome": "unknown"})
+                results.append(
+                    {"connection_id": entry["id"], "skipped": "disabled", "outcome": "unknown"}
+                )
                 continue
             due_at = parse(entry.get("next_check_at"))
             if not force and due_at is not None and due_at > now:
@@ -1131,7 +1159,9 @@ class CrmOAuthConnections:
                 counts["skipped"] += 1
             else:
                 counts["checked"] += 1
-                counts[item.get("outcome", "unknown")] = counts.get(item.get("outcome", "unknown"), 0) + 1
+                counts[item.get("outcome", "unknown")] = (
+                    counts.get(item.get("outcome", "unknown"), 0) + 1
+                )
         return {
             "room_id": room_id,
             "forced": force,
@@ -1161,9 +1191,7 @@ class CrmOAuthConnections:
             if where
             else self.store.list(EVENT_COLLECTION, limit=1000)
         )
-        return [self._event_summary(record) for record in records][
-            : max(1, min(int(limit), 1000))
-        ]
+        return [self._event_summary(record) for record in records][: max(1, min(int(limit), 1000))]
 
     # -- readiness --------------------------------------------------------- #
 
@@ -1305,8 +1333,12 @@ class CrmOAuthConnections:
             "closed_at": data.get("closed_at"),
             "error": data.get("error") or "",
             "vendor_status": data.get("vendor_status"),
-            "seconds_remaining": seconds_until(data.get("expires_at"), now) if state == GRANT_PENDING else None,
-            "expired": bool(state == GRANT_PENDING and (seconds_until(data.get("expires_at"), now) or 0) <= 0),
+            "seconds_remaining": seconds_until(data.get("expires_at"), now)
+            if state == GRANT_PENDING
+            else None,
+            "expired": bool(
+                state == GRANT_PENDING and (seconds_until(data.get("expires_at"), now) or 0) <= 0
+            ),
         }
 
     def _event_summary(self, record: Mapping[str, Any]) -> dict[str, Any]:
@@ -1340,7 +1372,9 @@ class CrmOAuthConnections:
             "pending_authorizations": len(self.list_grants(state_name=GRANT_PENDING, limit=1000)),
             "refreshed": sum(1 for event in events if event.get("kind") == EVENT_REFRESHED),
             "unauthorized_probes": sum(
-                1 for event in events if event.get("kind") == EVENT_TESTED and event.get("outcome") == HEALTH_UNAUTHORIZED
+                1
+                for event in events
+                if event.get("kind") == EVENT_TESTED and event.get("outcome") == HEALTH_UNAUTHORIZED
             ),
             "vault_key_origin": self.vault.key_origin,
             "vault_key_warning": self.vault.key_warning(),
@@ -1387,7 +1421,11 @@ class CrmOAuthConnections:
                 }
             )
         info = vendor_info(str(summary.get("vendor") or "")) if summary.get("vendor") else None
-        if info and info.requires_org and not (summary.get("environment_url") or summary.get("org_id")):
+        if (
+            info
+            and info.requires_org
+            and not (summary.get("environment_url") or summary.get("org_id"))
+        ):
             found.append(
                 {
                     "code": "org_missing",
@@ -1415,8 +1453,18 @@ class CrmOAuthConnections:
 
     def _authorize_blockers(self, data: Mapping[str, Any]) -> list[dict[str, str]]:
         """The subset that stops the *authorize URL* being built at all."""
-        codes = {"client_id_missing", "client_secret_missing", "redirect_uri_missing", "scopes_missing", "org_missing"}
-        return [item for item in self.blockers(self.summarise({"id": "", "data": data})) if item["code"] in codes]
+        codes = {
+            "client_id_missing",
+            "client_secret_missing",
+            "redirect_uri_missing",
+            "scopes_missing",
+            "org_missing",
+        }
+        return [
+            item
+            for item in self.blockers(self.summarise({"id": "", "data": data}))
+            if item["code"] in codes
+        ]
 
     def needs_action(self, summary: Mapping[str, Any]) -> dict[str, str] | None:
         """The single next thing a person has to do, or ``None``.
@@ -1460,7 +1508,10 @@ class CrmOAuthConnections:
                 "why": "the vendor answered 401. A 401 is not a refresh trigger, so the remedy is the consent screen, not a refresh",
             }
         if summary.get("health") == HEALTH_ERROR:
-            return {"action": "retry_test", "why": "the last probe failed for a reason a retry can fix"}
+            return {
+                "action": "retry_test",
+                "why": "the last probe failed for a reason a retry can fix",
+            }
         if not summary.get("enabled", True):
             return {"action": "enable", "why": "the connection is switched off"}
         return None
@@ -1650,7 +1701,9 @@ class CrmOAuthConnections:
             record = self.store.get(connection_id)
             if record is not None:
                 data["vendor"] = str(record["data"].get("vendor") or "")
-        return self.store.create(EVENT_COLLECTION, data, room_id=room_id, actor=actor, source=source)
+        return self.store.create(
+            EVENT_COLLECTION, data, room_id=room_id, actor=actor, source=source
+        )
 
 
 # --------------------------------------------------------------------------- #

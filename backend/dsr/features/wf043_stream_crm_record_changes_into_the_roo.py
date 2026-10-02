@@ -59,9 +59,12 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
-from dsr.change_stream import ChangeStreamEngine, ChangeStreamError
-from dsr.change_stream import hubspot as hubspot_rules
-from dsr.change_stream import vocabulary
+from dsr.change_stream import (
+    ChangeStreamEngine,
+    ChangeStreamError,
+    hubspot as hubspot_rules,
+    vocabulary,
+)
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
 from dsr.store import RecordStore
@@ -435,13 +438,17 @@ def open_subscription(
     the enrichment rule checked against a transport the events never arrive on.
     """
     return engine.open_subscription(
-        payload, room_id=room_id, actor=actor,
+        payload,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/rooms/{{room_id}}/subscriptions",
     )
 
 
 @router.get("/subscriptions/{subscription_id}")
-def read_subscription(subscription_id: str, engine: ChangeStreamEngine = EngineDep) -> dict[str, Any]:
+def read_subscription(
+    subscription_id: str, engine: ChangeStreamEngine = EngineDep
+) -> dict[str, Any]:
     """One subscription, with what is parked under it right now."""
     subscription = engine.subscription(subscription_id)
     if subscription is None:
@@ -466,7 +473,9 @@ def fetch_more(
     as nothing.
     """
     return engine.fetch(
-        subscription_id, payload, actor=actor,
+        subscription_id,
+        payload,
+        actor=actor,
         source=f"POST {router.prefix}/subscriptions/{{subscription_id}}/fetch",
     )
 
@@ -488,7 +497,8 @@ def close_subscription(
     subscription does not have to re-read the replica to find out.
     """
     return engine.close_subscription(
-        subscription_id, actor=actor,
+        subscription_id,
+        actor=actor,
         source=f"POST {router.prefix}/subscriptions/{{subscription_id}}/close",
     )
 
@@ -501,7 +511,9 @@ def close_subscription(
 @router.get("/rooms/{room_id}/events")
 def list_events(
     room_id: str,
-    change_type: str | None = Query(default=None, description="CREATE | UPDATE | DELETE | UNDELETE"),
+    change_type: str | None = Query(
+        default=None, description="CREATE | UPDATE | DELETE | UNDELETE"
+    ),
     transaction_key: str | None = Query(default=None),
     state: str | None = Query(default=None, description="buffered | committed"),
     entity: str | None = Query(default=None),
@@ -562,7 +574,9 @@ def deliver_event(
     201 would tell the client a new change was recorded when nothing was.
     """
     result = engine.deliver_event(
-        payload, room_id=room_id, actor=actor,
+        payload,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/rooms/{{room_id}}/events",
     )
     if result["outcome"] == "duplicate" and response is not None:
@@ -694,7 +708,9 @@ def declare_table(
     Off, because turning it on is a step with an irreversible consequence and a
     table that never took that step should not be assumed to have.
     """
-    return engine.declare_table(payload, actor=actor, source=f"POST {router.prefix}/dataverse/tables")
+    return engine.declare_table(
+        payload, actor=actor, source=f"POST {router.prefix}/dataverse/tables"
+    )
 
 
 @router.post("/dataverse/tables/{table_id}/track-changes")
@@ -713,7 +729,8 @@ def enable_track_changes(
     twice.
     """
     return engine.enable_track_changes(
-        table_id, actor=actor,
+        table_id,
+        actor=actor,
         source=f"POST {router.prefix}/dataverse/tables/{{table_id}}/track-changes",
     )
 
@@ -733,7 +750,8 @@ def disable_track_changes(
     thinks it abandoned.
     """
     return engine.disable_track_changes(
-        table_id, actor=actor,
+        table_id,
+        actor=actor,
         source=f"DELETE {router.prefix}/dataverse/tables/{{table_id}}/track-changes",
     )
 
@@ -763,7 +781,9 @@ def poll_table(
     and the ``ChangeTracking`` annotation a tracked entity set has.
     """
     return engine.poll_table(
-        table_id, payload, actor=actor,
+        table_id,
+        payload,
+        actor=actor,
         source=f"POST {router.prefix}/dataverse/tables/{{table_id}}/poll",
     )
 
@@ -823,7 +843,9 @@ def register_hubspot_subscription(
     are not claimed and are not built.
     """
     return engine.register_hubspot_subscription(
-        payload, room_id=room_id, actor=actor,
+        payload,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/hubspot/subscriptions",
     )
 
@@ -836,7 +858,8 @@ def delete_hubspot_subscription(
 ) -> dict[str, Any]:
     """Cancel a webhook target, freeing its slot against the researched cap."""
     return engine.delete_hubspot_subscription(
-        subscription_id, actor=actor,
+        subscription_id,
+        actor=actor,
         source=f"DELETE {router.prefix}/hubspot/subscriptions/{{subscription_id}}",
     )
 
@@ -958,7 +981,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     """
     store = RecordStore(db)
     engine = ChangeStreamEngine(store)
-    rng: random.Random = context.get("rng") or random.Random("wf043")
+    context.get("rng") or random.Random("wf043")
     # ``backend/seed.py`` passes ``[(room_id, account), ...]``. A bare id is
     # accepted too, because a caller assembling a context by hand should not have
     # to know the tuple shape to seed a feature.
@@ -1162,24 +1185,43 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     #    what changed, and the sync key arrives enriched - which is the whole
     #    reason the channel has enrichment on it.
     send(
-        sub, room_id,
-        change_type="CREATE", transaction="txn-1001", sequence=1, minutes_ago=42,
+        sub,
+        room_id,
+        change_type="CREATE",
+        transaction="txn-1001",
+        sequence=1,
+        minutes_ago=42,
         payload={
-            "External_Id__c": external, "Account_Name__c": account, "StageName": "Qualification",
-            "Amount": 18000, "CloseDate": "2026-12-15", "Probability": 25, "Owner_Name__c": "dana",
+            "External_Id__c": external,
+            "Account_Name__c": account,
+            "StageName": "Qualification",
+            "Amount": 18000,
+            "CloseDate": "2026-12-15",
+            "Probability": 25,
+            "Owner_Name__c": "dana",
         },
-        changed=None, entity="Opportunity",
-    )
-    send(
-        sub, room_id,
-        change_type="UPDATE", transaction="txn-1001", sequence=2, minutes_ago=41,
-        payload={"StageName": stage},
-        changed=["StageName"], enriched={"External_Id__c": external, "Account_Name__c": account},
+        changed=None,
         entity="Opportunity",
     )
     send(
-        sub, room_id,
-        change_type="UPDATE", transaction="txn-1001", sequence=4, minutes_ago=40,
+        sub,
+        room_id,
+        change_type="UPDATE",
+        transaction="txn-1001",
+        sequence=2,
+        minutes_ago=41,
+        payload={"StageName": stage},
+        changed=["StageName"],
+        enriched={"External_Id__c": external, "Account_Name__c": account},
+        entity="Opportunity",
+    )
+    send(
+        sub,
+        room_id,
+        change_type="UPDATE",
+        transaction="txn-1001",
+        sequence=4,
+        minutes_ago=40,
         payload={"Amount": 48000, "CloseDate": "2026-11-30"},
         changed=["Amount", "CloseDate"],
         enriched={"External_Id__c": external, "Account_Name__c": account},
@@ -1189,8 +1231,12 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     #    being visible: two updates to one record, applied as a unit, in
     #    sequence order, with a gap in the sequence numbers reported.
     send(
-        sub, room_id,
-        change_type="UPDATE", transaction="txn-1002", sequence=5, minutes_ago=33,
+        sub,
+        room_id,
+        change_type="UPDATE",
+        transaction="txn-1002",
+        sequence=5,
+        minutes_ago=33,
         payload={"Amount": 27500},
         changed=["Amount"],
         enriched={"External_Id__c": second_external, "Account_Name__c": account_two},
@@ -1200,31 +1246,51 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # 3. A delete, then an undelete. Both fire, per the research, and the
     #    tombstone is what lets the undelete find the row again.
     send(
-        sub, room_id,
-        change_type="DELETE", transaction="txn-1003", sequence=6, minutes_ago=28,
+        sub,
+        room_id,
+        change_type="DELETE",
+        transaction="txn-1003",
+        sequence=6,
+        minutes_ago=28,
         payload={},
         changed=None,
         enriched={"External_Id__c": second_external},
         entity="Opportunity",
     )
     send(
-        sub, room_id,
-        change_type="CREATE", transaction="txn-1004", sequence=7, minutes_ago=21,
+        sub,
+        room_id,
+        change_type="CREATE",
+        transaction="txn-1004",
+        sequence=7,
+        minutes_ago=21,
         payload={
-            "External_Id__c": third_external, "Account_Name__c": account_three,
-            "StageName": "Proposal", "Amount": 9200, "CloseDate": "2027-01-31",
-            "Probability": 40, "Owner_Name__c": "sam",
+            "External_Id__c": third_external,
+            "Account_Name__c": account_three,
+            "StageName": "Proposal",
+            "Amount": 9200,
+            "CloseDate": "2027-01-31",
+            "Probability": 40,
+            "Owner_Name__c": "sam",
         },
-        changed=None, entity="Opportunity",
+        changed=None,
+        entity="Opportunity",
     )
     send(
-        sub, room_id,
-        change_type="UNDELETE", transaction="txn-1005", sequence=8, minutes_ago=14,
+        sub,
+        room_id,
+        change_type="UNDELETE",
+        transaction="txn-1005",
+        sequence=8,
+        minutes_ago=14,
         payload={
-            "External_Id__c": second_external, "Account_Name__c": account_two,
-            "StageName": "Discovery", "Amount": 27500,
+            "External_Id__c": second_external,
+            "Account_Name__c": account_two,
+            "StageName": "Discovery",
+            "Amount": 27500,
         },
-        changed=None, entity="Opportunity",
+        changed=None,
+        entity="Opportunity",
     )
 
     # 4. A duplicate sequence number in one transaction. Refused, not applied
@@ -1232,16 +1298,24 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     #    this is reported rather than treated as a redelivery. Both sends happen;
     #    the second is the one that is refused.
     send(
-        sub, room_id,
-        change_type="UPDATE", transaction="txn-1006", sequence=9, minutes_ago=9,
+        sub,
+        room_id,
+        change_type="UPDATE",
+        transaction="txn-1006",
+        sequence=9,
+        minutes_ago=9,
         payload={"Probability": 55},
         changed=["Probability"],
         enriched={"External_Id__c": external, "Account_Name__c": account},
         entity="Opportunity",
     )
-    duplicate = send(
-        sub, room_id,
-        change_type="UPDATE", transaction="txn-1006", sequence=9, minutes_ago=9,
+    send(
+        sub,
+        room_id,
+        change_type="UPDATE",
+        transaction="txn-1006",
+        sequence=9,
+        minutes_ago=9,
         payload={"Probability": 99},
         changed=["Probability"],
         enriched={"External_Id__c": external, "Account_Name__c": account},
@@ -1253,9 +1327,14 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     #    undeletion of a record" - the research promises both, and a room needs
     #    to be able to see which records the CRM has taken away.
     send(
-        sub, room_id,
-        change_type="DELETE", transaction="txn-1007", sequence=10, minutes_ago=5,
-        payload={}, changed=None,
+        sub,
+        room_id,
+        change_type="DELETE",
+        transaction="txn-1007",
+        sequence=10,
+        minutes_ago=5,
+        payload={},
+        changed=None,
         enriched={"External_Id__c": third_external, "Account_Name__c": account_three},
         entity="Opportunity",
     )
@@ -1271,14 +1350,24 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     #    being visible rather than a defect. The transaction stays parked.
     unresolvable = "not attempted"
     send(
-        standard_sub, other_room,
-        change_type="UPDATE", transaction="txn-4001", sequence=1, minutes_ago=8,
-        payload={"StageName": "Closed Won"}, changed=["StageName"], entity="Opportunity",
+        standard_sub,
+        other_room,
+        change_type="UPDATE",
+        transaction="txn-4001",
+        sequence=1,
+        minutes_ago=8,
+        payload={"StageName": "Closed Won"},
+        changed=["StageName"],
+        entity="Opportunity",
     )
     try:
         send(
-            standard_sub, other_room,
-            change_type="UPDATE", transaction="txn-4002", sequence=2, minutes_ago=7,
+            standard_sub,
+            other_room,
+            change_type="UPDATE",
+            transaction="txn-4002",
+            sequence=2,
+            minutes_ago=7,
             payload={"Amount": 51000},
             changed=["Amount"],
             enriched={"External_Id__c": second_external},
@@ -1299,32 +1388,50 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # 7. A second room over CometD, so the room scoping and the JSON wire format
     #    are rows. JSON: this is the transport the research names for CometD.
     send(
-        cometd_sub, other_room,
-        change_type="CREATE", transaction="txn-2001", sequence=1, minutes_ago=51,
+        cometd_sub,
+        other_room,
+        change_type="CREATE",
+        transaction="txn-2001",
+        sequence=1,
+        minutes_ago=51,
         payload={
-            "External_Id__c": second_external, "Account_Name__c": account_two,
-            "StageName": "Discovery", "Amount": 41000, "Owner_Name__c": "sam",
+            "External_Id__c": second_external,
+            "Account_Name__c": account_two,
+            "StageName": "Discovery",
+            "Amount": 41000,
+            "Owner_Name__c": "sam",
         },
-        changed=None, entity="Opportunity",
+        changed=None,
+        entity="Opportunity",
     )
 
     # 8. Contacts over an event relay, with no account_field on the map: the
     #    commits refresh the panel and cannot say which buyer's.
     send(
-        contact_sub, room_id,
-        change_type="CREATE", transaction="txn-3001", sequence=1, minutes_ago=37,
+        contact_sub,
+        room_id,
+        change_type="CREATE",
+        transaction="txn-3001",
+        sequence=1,
+        minutes_ago=37,
         payload={
             "Contact_External_Id__c": contact_external,
             "Title": "VP Security",
             "Email": "lead@adventure.example",
         },
-        changed=None, entity="Contact",
+        changed=None,
+        entity="Contact",
     )
     send(
-        contact_sub, room_id,
-        change_type="UPDATE", transaction="txn-3002", sequence=2, minutes_ago=30,
+        contact_sub,
+        room_id,
+        change_type="UPDATE",
+        transaction="txn-3002",
+        sequence=2,
+        minutes_ago=30,
         payload={"Title": "CISO"},
-        changed=["Title"], enriched={"Contact_External_Id__c": contact_external},
+        changed=["Title"],
+        enriched={"Contact_External_Id__c": contact_external},
         entity="Contact",
     )
 
@@ -1337,7 +1444,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     accounts_table = engine.declare_table(
         {"logical_name": "account", "entity_set": "accounts"}, actor=actor, source=source
     )
-    contacts_table = engine.declare_table(
+    engine.declare_table(
         {"logical_name": "contact", "entity_set": "contacts"}, actor=actor, source=source
     )
     engine.enable_track_changes(accounts_table["id"], actor=actor, source=source)
@@ -1398,13 +1505,16 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         # of exempt calls is reported beside the budget precisely so the
         # exemption is auditable.
         charges.append(
-            engine.charge_hubspot_call(hooks[-1]["id"], via_workflow=True, actor=actor, source=source)
+            engine.charge_hubspot_call(
+                hooks[-1]["id"], via_workflow=True, actor=actor, source=source
+            )
         )
 
     usage_report = engine.usage()
     panel = engine.deal_panel(room_id=room_id)
-    unresolved_invalidations = sum(1 for row in engine.invalidations(room_id=room_id)
-                                   if not row.get("resolved"))
+    unresolved_invalidations = sum(
+        1 for row in engine.invalidations(room_id=room_id) if not row.get("resolved")
+    )
 
     return (
         f"2 orgs (1 on an edition without Change Data Capture: "

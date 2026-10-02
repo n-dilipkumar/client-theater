@@ -123,7 +123,9 @@ class ExternalLibrarySync:
         connections = self._connections()
         by_source: dict[str, list[dict[str, Any]]] = {}
         for connection in connections:
-            by_source.setdefault(str(connection["data"].get("source", "")).strip(), []).append(connection)
+            by_source.setdefault(str(connection["data"].get("source", "")).strip(), []).append(
+                connection
+            )
 
         result = []
         for name in sorted(self._adapters):
@@ -445,7 +447,9 @@ class ExternalLibrarySync:
                         f"connection {stored.get('external_connection_id')!r} is missing or not connected",
                     )
                 adapter = self._adapter(str(stored.get("external_source") or ""))
-                described = adapter.describe(connection["data"], str(stored.get("external_content_id") or ""))
+                described = adapter.describe(
+                    connection["data"], str(stored.get("external_content_id") or "")
+                )
             except ExternalSyncError as exc:
                 self._mark_orphaned(record, stored, exc, now, actor, source_of_pass=source)
                 report["failed"].append({"content_id": record["id"], **exc.to_payload()})
@@ -510,7 +514,9 @@ class ExternalLibrarySync:
         return adapter
 
     def _connections(self) -> list[dict[str, Any]]:
-        return self.store.list(self.connection_collection, limit=1000, order_by="updated_at", descending=True)
+        return self.store.list(
+            self.connection_collection, limit=1000, order_by="updated_at", descending=True
+        )
 
     def _resolve_connection(self, external_source: str) -> dict[str, Any]:
         """Find a usable connection for the source, newest first.
@@ -613,7 +619,9 @@ class ExternalLibrarySync:
         The rest is this project's own, and carries no provider names, so a
         future source is a new value in a field rather than a new schema.
         """
-        folder_id = parent_folder_id if parent_folder_id is not None else (parent or {}).get("id", ROOT)
+        folder_id = (
+            parent_folder_id if parent_folder_id is not None else (parent or {}).get("id", ROOT)
+        )
         block: dict[str, Any] = {
             "kind": "external",
             "external_source": described.source,

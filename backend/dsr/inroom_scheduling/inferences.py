@@ -117,7 +117,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "what an instant booking does when it names no start",
         "basis": (
             "POST /v2/bookings 'supports standard, recurring (recurrenceCount, max 32), and instant "
-            "(\"instant\": true, team events only) bookings'. The research does not say what an "
+            '("instant": true, team events only) bookings\'. The research does not say what an '
             "instant booking does when start is absent."
         ),
         "value": {
@@ -196,7 +196,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "metadata-non-string-values-checked-as-strings",
         "topic": "whether the 500-character limit applies to a number in metadata",
         "basis": SOURCED_QUOTES["metadata_limits"] + " The limit is stated for string values.",
-        "value": {"check": "every value's string form", "booleans": "true / false", "nulls": "empty string"},
+        "value": {
+            "check": "every value's string form",
+            "booleans": "true / false",
+            "nulls": "empty string",
+        },
         "why": (
             "A limit stated for one type that silently did not apply to another would be a limit a "
             "caller could not rely on, and metadata is JSON so a number is as easy to send as a "
@@ -442,7 +446,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "value": {
             "calls_outbound": False,
             "the_calendar_is": "the audited store, queried the way a slot query would query Cal",
-            "headers_recorded": ["cal-api-version on slots and reservations", "cal-api-version on bookings"],
+            "headers_recorded": [
+                "cal-api-version on slots and reservations",
+                "cal-api-version on bookings",
+            ],
         },
         "why": (
             "A fake HTTP client pointed at a real vendor would be a claim the product cannot back, and "

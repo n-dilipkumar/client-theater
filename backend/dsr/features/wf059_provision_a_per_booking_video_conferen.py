@@ -229,11 +229,15 @@ def create_meeting_location(
     researched mandatory step by name rather than refusing - the option is
     real, and the connection is a second request.
     """
-    return engine.create_location(payload, actor=actor, source=f"POST {router.prefix}/meeting-locations")
+    return engine.create_location(
+        payload, actor=actor, source=f"POST {router.prefix}/meeting-locations"
+    )
 
 
 @router.get("/meeting-locations/{location_id}")
-def read_meeting_location(location_id: str, engine: ProvisioningEngine = EngineDep) -> dict[str, Any]:
+def read_meeting_location(
+    location_id: str, engine: ProvisioningEngine = EngineDep
+) -> dict[str, Any]:
     """One Location option, its wire shape, and whether it is ready to provision."""
     return engine.meeting_location(location_id)
 
@@ -254,7 +258,10 @@ def amend_meeting_location(
     somebody already used. Every offending field comes back at once.
     """
     return engine.amend_location(
-        location_id, payload, actor=actor, source=f"PATCH {router.prefix}/meeting-locations/{{location_id}}"
+        location_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/meeting-locations/{{location_id}}",
     )
 
 
@@ -292,7 +299,9 @@ def set_default_location(
     nothing.
     """
     return engine.set_default_location(
-        location_id, actor=actor, source=f"POST {router.prefix}/meeting-locations/{{location_id}}/set-default"
+        location_id,
+        actor=actor,
+        source=f"POST {router.prefix}/meeting-locations/{{location_id}}/set-default",
     )
 
 
@@ -375,7 +384,10 @@ def amend_connection(
     by name.
     """
     return engine.amend_connection(
-        connection_id, payload, actor=actor, source=f"PATCH {router.prefix}/connections/{{connection_id}}"
+        connection_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/connections/{{connection_id}}",
     )
 
 
@@ -396,7 +408,10 @@ def reauthorize_connection(
     nobody asked to change.
     """
     return engine.reauthorize(
-        connection_id, payload, actor=actor, source=f"POST {router.prefix}/connections/{{connection_id}}/reauthorize"
+        connection_id,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/connections/{{connection_id}}/reauthorize",
     )
 
 
@@ -441,7 +456,9 @@ def book(
     the response says which researched outcome it reached. What refuses is a
     caller mistake, and a provider that has not been connected.
     """
-    return engine.book(room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/bookings")
+    return engine.book(
+        room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/bookings"
+    )
 
 
 @router.get("/rooms/{room_id}/bookings")
@@ -461,7 +478,9 @@ def list_bookings(
     and rendering it as "no link" would be a thing a rep acts on - they would
     stop sending the invite.
     """
-    listed = engine.bookings(room_id, location_id=location_id, state=state, provider=provider, limit=limit)
+    listed = engine.bookings(
+        room_id, location_id=location_id, state=state, provider=provider, limit=limit
+    )
     return {
         "room_id": room_id,
         "count": len(listed),
@@ -518,7 +537,11 @@ def provision(
     makes a second one for one event wrong rather than merely redundant.
     """
     return engine.provision(
-        room_id, booking_uid, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/bookings/{booking_uid}/provision"
+        room_id,
+        booking_uid,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/bookings/{booking_uid}/provision",
     )
 
 
@@ -543,7 +566,11 @@ def swap_location(
     every attendee that nothing changed.
     """
     return engine.swap(
-        room_id, booking_uid, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/bookings/{booking_uid}/location"
+        room_id,
+        booking_uid,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/bookings/{booking_uid}/location",
     )
 
 
@@ -606,7 +633,11 @@ def report_provider_status(
     response names the researched fallback.
     """
     return engine.report_provider_status(
-        room_id, booking_uid, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/bookings/{booking_uid}/apps-status"
+        room_id,
+        booking_uid,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/bookings/{booking_uid}/apps-status",
     )
 
 
@@ -915,9 +946,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     reuse_refused = ""
     if zoom_booking and zoom_booking.get("conference_id"):
         try:
-            engine.provision(
-                room_id, zoom_booking["booking_uid"], {}, actor="dana", source=source
-            )
+            engine.provision(room_id, zoom_booking["booking_uid"], {}, actor="dana", source=source)
             reuse_refused = "NOT refused - a linked booking accepted a second conference"
         except ConferenceLinkError:
             reuse_refused = "a re-provision of a linked booking attempted and refused"
@@ -932,9 +961,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     linked = [row for row in room_rows if row.get("conference_id")]
     failed_reports = [row for row in room_rows if row.get("provision_state") == "failed"]
     retryable_reports = [row for row in room_rows if row.get("provision_state") == "retrying"]
-    fallback_named = [
-        row for row in room_rows if (row.get("fallback") or {}).get("fallback")
-    ]
+    fallback_named = [row for row in room_rows if (row.get("fallback") or {}).get("fallback")]
     one_time = ("zoom", "google-meet", "gong")
 
     parts = [

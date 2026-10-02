@@ -78,8 +78,11 @@ from dsr.deps import StoreDep
 from dsr.intent_stream import IntentStream
 from dsr.intent_stream.errors import IntentStreamError
 from dsr.intent_stream.inferences import describe as describe_inferences
-from dsr.intent_stream.segments import OPERATORS as SEGMENT_OPERATORS
-from dsr.intent_stream.segments import ORDERING_OPERATORS, UNARY_OPERATORS
+from dsr.intent_stream.segments import (
+    OPERATORS as SEGMENT_OPERATORS,
+    ORDERING_OPERATORS,
+    UNARY_OPERATORS,
+)
 from dsr.intent_stream.vocabulary import vocabulary
 from dsr.store import RecordStore, parse_where
 
@@ -298,7 +301,9 @@ def update_segment(
     Rules are re-validated in full rather than merged, so a patch cannot leave a
     Segment holding a half-valid rule set.
     """
-    return stream.update_segment(segment_id, payload, actor=actor, source=_source("PATCH", f"/segments/{segment_id}"))
+    return stream.update_segment(
+        segment_id, payload, actor=actor, source=_source("PATCH", f"/segments/{segment_id}")
+    )
 
 
 @router.delete("/segments/{segment_id}", summary="Delete a Segment")
@@ -312,7 +317,9 @@ def delete_segment(
     A 409 in that case, not a cascade: a workflow pointing at a Segment that is
     gone would stop sending while looking perfectly healthy on both lists.
     """
-    return stream.delete_segment(segment_id, actor=actor, source=_source("DELETE", f"/segments/{segment_id}"))
+    return stream.delete_segment(
+        segment_id, actor=actor, source=_source("DELETE", f"/segments/{segment_id}")
+    )
 
 
 @router.post("/segments/{segment_id}/evaluate", summary="Why did this Segment match?")
@@ -371,7 +378,9 @@ def create_lead(
     payload is the lead's own arbitrary JSON, so a team can carry firmographics
     their own systems have and put them in a Segment the same day.
     """
-    return stream.create_lead(payload, room_id=room_id, actor=actor, source=_source("POST", "/leads"))
+    return stream.create_lead(
+        payload, room_id=room_id, actor=actor, source=_source("POST", "/leads")
+    )
 
 
 @router.get("/leads/{lead_id}", summary="One company lead, with its workflow state")
@@ -397,7 +406,9 @@ def update_lead(
     for the company, and a second row for the same company is how a "send once"
     rule sends twice.
     """
-    return stream.update_lead(lead_id, payload, actor=actor, source=_source("PATCH", f"/leads/{lead_id}"))
+    return stream.update_lead(
+        lead_id, payload, actor=actor, source=_source("PATCH", f"/leads/{lead_id}")
+    )
 
 
 @router.get("/leads/{lead_id}/contacts", summary="Contacts at the identified company")
@@ -427,7 +438,9 @@ def create_contact(
     "Contacts for the company lead and contacts employed at the company" - so a
     contact belongs to a lead, and the payload names them.
     """
-    return stream.create_contact(lead_id, payload, actor=actor, source=_source("POST", f"/leads/{lead_id}/contacts"))
+    return stream.create_contact(
+        lead_id, payload, actor=actor, source=_source("POST", f"/leads/{lead_id}/contacts")
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -439,7 +452,9 @@ def create_contact(
 def list_visits(
     room_id: str | None = Query(default=None),
     lead_id: str | None = Query(default=None),
-    matched: bool | None = Query(default=None, description="false for a visit that matched no workflow"),
+    matched: bool | None = Query(
+        default=None, description="false for a visit that matched no workflow"
+    ),
     limit: int = Query(default=100, ge=1, le=1000),
     stream: IntentStream = StreamDep,
 ) -> dict[str, Any]:
@@ -470,7 +485,9 @@ def record_visit(
     Segment did not match" are the three answers an operator most needs and
     none of them can be reconstructed from a row that was never written.
     """
-    return stream.record_visit(payload, room_id=room_id, actor=actor, source=_source("POST", "/visits"))
+    return stream.record_visit(
+        payload, room_id=room_id, actor=actor, source=_source("POST", "/visits")
+    )
 
 
 @router.get("/visits/{visit_id}", summary="One visit and every outcome it caused")
@@ -518,7 +535,9 @@ def create_workflow(
     ``sendMode='updates'`` is the researched update promise: "you will receive the
     same lead with updated activity data if that lead visits your webpage again".
     """
-    return stream.create_workflow(payload, room_id=room_id, actor=actor, source=_source("POST", "/workflows"))
+    return stream.create_workflow(
+        payload, room_id=room_id, actor=actor, source=_source("POST", "/workflows")
+    )
 
 
 @router.get("/workflows/{workflow_id}", summary="One workflow, in detail")
@@ -540,7 +559,9 @@ def update_workflow(
     destination should not have to retype the workflow to stop the traffic - and
     because a paused workflow still records why it sent nothing.
     """
-    return stream.update_workflow(workflow_id, payload, actor=actor, source=_source("PATCH", f"/workflows/{workflow_id}"))
+    return stream.update_workflow(
+        workflow_id, payload, actor=actor, source=_source("PATCH", f"/workflows/{workflow_id}")
+    )
 
 
 @router.delete("/workflows/{workflow_id}", summary="Delete a workflow")
@@ -555,13 +576,15 @@ def delete_workflow(
     which is the opposite of what a hard delete would do to the audit trail this
     product is built on.
     """
-    stream.delete_workflow(workflow_id, actor=actor, source=_source("DELETE", f"/workflows/{workflow_id}"))
+    stream.delete_workflow(
+        workflow_id, actor=actor, source=_source("DELETE", f"/workflows/{workflow_id}")
+    )
     return Response(status_code=204)
 
 
 @router.post("/workflows/{workflow_id}/token", summary="Show the generated token again")
 def reveal_token(workflow_id: str, stream: IntentStream = StreamDep) -> dict[str, Any]:
-    """"you have a token to use in your service or tool".
+    """ "you have a token to use in your service or tool".
 
     Deliberately writes nothing, so there is no audit row: this product audits
     mutations, and a signing secret readable out of the audit log on every page
@@ -597,7 +620,9 @@ def list_deliveries(
     workflow_id: str | None = Query(default=None),
     lead_id: str | None = Query(default=None),
     state: str | None = Query(default=None, description="delivered | failed | skipped"),
-    skip_reason: str | None = Query(default=None, description="already_sent | workflow_inactive | segment_not_matched"),
+    skip_reason: str | None = Query(
+        default=None, description="already_sent | workflow_inactive | segment_not_matched"
+    ),
     where: str | None = Query(default=None, description='JSON object or "k=v,k2=v2"'),
     limit: int = Query(default=100, ge=1, le=1000),
     stream: IntentStream = StreamDep,
@@ -647,7 +672,9 @@ def resend_delivery(
     firing. Refuses a ``skipped`` delivery (a researched rule said not to send)
     and refuses a ``delivered`` one (resending duplicates it at the destination).
     """
-    return stream.resend(delivery_id, actor=actor, source=_source("POST", f"/deliveries/{delivery_id}/resend"))
+    return stream.resend(
+        delivery_id, actor=actor, source=_source("POST", f"/deliveries/{delivery_id}/resend")
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -737,7 +764,12 @@ def room_deliveries(
     summary: dict[str, int] = {}
     for delivery in deliveries:
         summary[str(delivery["state"])] = summary.get(str(delivery["state"]), 0) + 1
-    return {"roomId": room_id, "count": len(deliveries), "summary": summary, "deliveries": deliveries}
+    return {
+        "roomId": room_id,
+        "count": len(deliveries),
+        "summary": summary,
+        "deliveries": deliveries,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -830,10 +862,22 @@ DEMO_LEADS = (
         "pagesViewed": ["Enterprise Overview Deck", "Pricing One-Pager", "API Integration Guide"],
         "contacts": (
             ("A. Buyer", "VP Engineering", "Engineering", "a.buyer@northwind.example", "vp"),
-            ("B. Buyer", "Director of Security", "Security", "b.buyer@northwind.example", "director"),
+            (
+                "B. Buyer",
+                "Director of Security",
+                "Security",
+                "b.buyer@northwind.example",
+                "director",
+            ),
             # No keyword hit, so this one is excluded by the filter and the
             # delivery says so.
-            ("R. Researcher", "Market Analyst", "Strategy", "research@northwind.example", "analyst"),
+            (
+                "R. Researcher",
+                "Market Analyst",
+                "Strategy",
+                "research@northwind.example",
+                "analyst",
+            ),
         ),
     },
     {
@@ -846,8 +890,20 @@ DEMO_LEADS = (
         "firmographics": {"hiringSignal": "steady", "fundingStage": "private"},
         "pagesViewed": ["Security & Compliance Pack", "Implementation Roadmap"],
         "contacts": (
-            ("Procurement Desk", "Procurement Manager", "Procurement", "procurement@contoso.example", "manager"),
-            ("P. Clinician", "Clinical Operations Lead", "Operations", "clinician@contoso.example", "lead"),
+            (
+                "Procurement Desk",
+                "Procurement Manager",
+                "Procurement",
+                "procurement@contoso.example",
+                "manager",
+            ),
+            (
+                "P. Clinician",
+                "Clinical Operations Lead",
+                "Operations",
+                "clinician@contoso.example",
+                "lead",
+            ),
         ),
     },
     {
@@ -859,7 +915,9 @@ DEMO_LEADS = (
         "employees": 260,
         "firmographics": {"hiringSignal": "expanding"},
         "pagesViewed": ["Contract Draft", "Customer Reference — Northwind"],
-        "contacts": (("Ops Lead", "Head of Operations", "Operations", "ops@fabrikam.example", "head"),),
+        "contacts": (
+            ("Ops Lead", "Head of Operations", "Operations", "ops@fabrikam.example", "head"),
+        ),
     },
     {
         "name": "Adventure Works",
@@ -1074,7 +1132,9 @@ def seed(db, context: dict[str, Any]) -> str:
     if not rooms:
         # Nothing to attach a visit to. The Segments are still worth having, and
         # the seeder prints what was skipped rather than failing the whole seed.
-        return f"{len(segment_ids)} segments, 0 leads, 0 workflows (no rooms to scope the stream to)"
+        return (
+            f"{len(segment_ids)} segments, 0 leads, 0 workflows (no rooms to scope the stream to)"
+        )
 
     lead_ids: list[str] = []
     for index, spec in enumerate(DEMO_LEADS):
@@ -1118,9 +1178,7 @@ def seed(db, context: dict[str, Any]) -> str:
         }
         if "contactFilter" in spec:
             payload["contactFilter"] = spec["contactFilter"]
-        created = stream.create_workflow(
-            payload, room_id=rooms[0][0], source=source, actor="dana"
-        )
+        created = stream.create_workflow(payload, room_id=rooms[0][0], source=source, actor="dana")
         workflow_ids[spec["key"]] = created["workflow"]["id"]
 
     northwind, contoso, fabrikam, adventure, litware = lead_ids

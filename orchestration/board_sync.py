@@ -34,6 +34,7 @@ that shipped, but `completed` would say its work shipped and `in-progress` would
 say an agent is on it. `todo` is the only honest answer, with a comment saying
 what a person has to decide.
 """
+
 import json
 import re
 import subprocess
@@ -56,8 +57,15 @@ NOT_THE_FEATURES = ("orchestration/", "docs/", ".github/", "tools/")
 
 
 def git(*args, cwd=ROOT):
-    p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=120)
+    p = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
     return p.stdout
 
 
@@ -82,8 +90,9 @@ def is_agent_worktree(wt):
 
 def on_main(path):
     """Does this file path exist on origin/main?"""
-    p = subprocess.run(["git", "cat-file", "-e", f"origin/main:{path}"], cwd=ROOT,
-                       capture_output=True, timeout=60)
+    p = subprocess.run(
+        ["git", "cat-file", "-e", f"origin/main:{path}"], cwd=ROOT, capture_output=True, timeout=60
+    )
     return p.returncode == 0
 
 
@@ -97,13 +106,21 @@ def main_features():
     agents each picking their own spelling, no single one can be relied on.
     """
     out = git("ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features")
-    return {f"WF-{m.group(1)}" for line in out.splitlines()
-            if (m := re.search(r"wf[_-]?(\d{3})", line))}
+    return {
+        f"WF-{m.group(1)}" for line in out.splitlines() if (m := re.search(r"wf[_-]?(\d{3})", line))
+    }
 
 
 def orca(args, timeout=120):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         return json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -130,23 +147,32 @@ def classify(wt, path, branch, contested=False):
       duplicate as shipped.
     """
     ticket = f"WF-{TICKET_RE.search(path.name).group(1)}"
-    own = [f.strip().replace("\\", "/")
-           for f in git("diff", "--name-only", "origin/main...HEAD", cwd=path).splitlines()
-           if f.strip() and not f.strip().replace("\\", "/").startswith(NOT_THE_FEATURES)]
+    own = [
+        f.strip().replace("\\", "/")
+        for f in git("diff", "--name-only", "origin/main...HEAD", cwd=path).splitlines()
+        if f.strip() and not f.strip().replace("\\", "/").startswith(NOT_THE_FEATURES)
+    ]
     absent = [f for f in own if not on_main(f)]
     shipped = ticket in main_features()
 
     """(status, note) for one worktree, from what is actually on disk."""
     ticket = f"WF-{TICKET_RE.search(path.name).group(1)}"
-    own = [f.strip().replace("\\", "/")
-           for f in git("diff", "--name-only", f"origin/main...HEAD", cwd=path).splitlines()
-           if f.strip() and not f.strip().replace("\\", "/").startswith(NOT_THE_FEATURES)]
+    own = [
+        f.strip().replace("\\", "/")
+        for f in git("diff", "--name-only", "origin/main...HEAD", cwd=path).splitlines()
+        if f.strip() and not f.strip().replace("\\", "/").startswith(NOT_THE_FEATURES)
+    ]
     absent = [f for f in own if not on_main(f)]
 
-    dirty = len([l for l in git("status", "--porcelain", cwd=path).splitlines() if l.strip()])
+    dirty = len(
+        [line for line in git("status", "--porcelain", cwd=path).splitlines() if line.strip()]
+    )
     terms = orca(["orca", "terminal", "list", "--worktree", wt["id"], "--json"])
-    live = [t for t in terms.get("result", {}).get("terminals", [])
-            if t.get("agentIdentity") == "opencode"]
+    live = [
+        t
+        for t in terms.get("result", {}).get("terminals", [])
+        if t.get("agentIdentity") == "opencode"
+    ]
 
     if absent and (contested or not shipped):
         # Either a second implementation of the same workflow, or one that has
@@ -156,7 +182,8 @@ def classify(wt, path, branch, contested=False):
                 f"{ticket}: live OpenCode agent porting it. Brief "
                 f"orchestration/ports/{ticket}.md. {len(own) - len(absent)}/{len(own)} of "
                 f"its files already on main, {len(absent)} still to write, {dirty} "
-                f"uncommitted. Commits locally and stops; a human reviews and merges.")
+                f"uncommitted. Commits locally and stops; a human reviews and merges."
+            )
         if contested and shipped:
             return "todo", (
                 f"{ticket} is ALREADY LIVE on main from a DIFFERENT worktree. This one "
@@ -165,12 +192,14 @@ def classify(wt, path, branch, contested=False):
                 f"({', '.join(Path(a).name for a in absent[:3])}"
                 f"{', ...' if len(absent) > 3 else ''}), {dirty} uncommitted. Needs a "
                 f"human decision about which implementation is better - not to be "
-                f"merged on top of the one that shipped.")
+                f"merged on top of the one that shipped."
+            )
         return "todo", (
             f"{ticket}: not landed. {len(absent)} of its {len(own)} file(s) are absent from "
             f"main ({', '.join(Path(a).name for a in absent[:3])}"
             f"{', ...' if len(absent) > 3 else ''}), {dirty} uncommitted. No live agent. "
-            f"Needs dispatch.")
+            f"Needs dispatch."
+        )
 
     if own or shipped:
         if shipped and absent:
@@ -180,17 +209,20 @@ def classify(wt, path, branch, contested=False):
                 f"because a file was renamed or moved after the merge "
                 f"({', '.join(Path(a).name for a in absent[:2])}"
                 f"{', ...' if len(absent) > 2 else ''}). The workflow shipped; a path "
-                f"difference is not outstanding work.")
+                f"difference is not outstanding work."
+            )
         return "completed", (
             f"{ticket} is MERGED and live: all {len(own)} of its feature files are on main. "
             f"0 uncommitted. The branch itself is kept for history and is expected to read "
             f"as ahead of origin/main forever, because PRs here are squash-merged and a "
-            f"squash does not carry the branch's commits into main. Not outstanding work.")
+            f"squash does not carry the branch's commits into main. Not outstanding work."
+        )
 
     if live:
         return "in-progress", (
             f"{ticket}: live OpenCode agent, nothing committed yet. Brief "
-            f"orchestration/ports/{ticket}.md.")
+            f"orchestration/ports/{ticket}.md."
+        )
 
     return "todo", f"{ticket}: no live agent and no work. Needs dispatch or a decision."
 
@@ -226,12 +258,26 @@ def main():
             continue
 
         status, note = classify(
-            wt, path, branch,
+            wt,
+            path,
+            branch,
             contested=claims.get(f"WF-{TICKET_RE.search(path.name).group(1)}", 0) > 1,
         )
         if wt.get("workspaceStatus") != status or wt.get("comment") != note:
-            orca(["orca", "worktree", "set", "--worktree", wt["id"],
-                  "--workspace-status", status, "--comment", note, "--json"])
+            orca(
+                [
+                    "orca",
+                    "worktree",
+                    "set",
+                    "--worktree",
+                    wt["id"],
+                    "--workspace-status",
+                    status,
+                    "--comment",
+                    note,
+                    "--json",
+                ]
+            )
             changed += 1
             arrow = f"{wt.get('workspaceStatus')} -> {status}"
         else:
@@ -249,8 +295,11 @@ def main():
     print()
     print(f"  cards updated: {changed}")
     listing = orca(["orca", "worktree", "list", "--repo", REPO_ID, "--json"])
-    cards = [w for w in listing.get("result", {}).get("worktrees", [])
-             if (w.get("branch") or "").startswith(("refs/heads/feature/", "refs/heads/n-dilipkumar/"))]
+    cards = [
+        w
+        for w in listing.get("result", {}).get("worktrees", [])
+        if (w.get("branch") or "").startswith(("refs/heads/feature/", "refs/heads/n-dilipkumar/"))
+    ]
     counts = {}
     for c in cards:
         counts[c.get("workspaceStatus")] = counts.get(c.get("workspaceStatus"), 0) + 1

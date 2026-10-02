@@ -207,11 +207,7 @@ class LibrarySearch:
                 return [record for record in records if record["id"] in keep]
             return branches[0] if len(branches) == 1 else _intersect(branches)
 
-        return [
-            record
-            for record in records
-            if self._matches_condition(record, node)
-        ]
+        return [record for record in records if self._matches_condition(record, node)]
 
     @staticmethod
     def _matches_condition(record: Mapping[str, Any], node: Any) -> bool:
@@ -246,7 +242,10 @@ class LibrarySearch:
         return hits, None
 
     def _score(
-        self, records: Sequence[Mapping[str, Any]], tokens: Sequence[str], search_fields: Sequence[str]
+        self,
+        records: Sequence[Mapping[str, Any]],
+        tokens: Sequence[str],
+        search_fields: Sequence[str],
     ) -> list[LibraryHit]:
         hits: list[LibraryHit] = []
         for record in records:

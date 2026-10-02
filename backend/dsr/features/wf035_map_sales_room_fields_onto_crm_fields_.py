@@ -104,7 +104,9 @@ def _invalid_mapping(request: Request, exc: InvalidMapping) -> JSONResponse:
 
 def _unknown_connection(request: Request, exc: UnknownConnection) -> JSONResponse:
     """A connection id that is not live. 404."""
-    return JSONResponse(status_code=404, content={"error": "unknown_connection", "detail": str(exc)})
+    return JSONResponse(
+        status_code=404, content={"error": "unknown_connection", "detail": str(exc)}
+    )
 
 
 def _unknown_mapping(request: Request, exc: UnknownMapping) -> JSONResponse:
@@ -263,7 +265,9 @@ def declare_transform(
     transform a deployment is adding - and ``declared_only`` in the response says
     which state it is in.
     """
-    return mapping.declare_transform(payload, actor=actor, source=f"POST {router.prefix}/transforms")
+    return mapping.declare_transform(
+        payload, actor=actor, source=f"POST {router.prefix}/transforms"
+    )
 
 
 @router.get("/summary")
@@ -326,7 +330,10 @@ def amend_connection(
 ) -> dict[str, Any]:
     """Merge a patch into a connection. A provider change is refused, not applied."""
     return mapping.amend_connection(
-        connection_id, payload, actor=actor, source=f"PATCH {router.prefix}/connections/{connection_id}"
+        connection_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/connections/{connection_id}",
     )
 
 
@@ -360,7 +367,10 @@ def record_properties(
     a different claim from one validated today.
     """
     return mapping.record_properties(
-        connection_id, payload, actor=actor, source=f"POST {router.prefix}/connections/{connection_id}/properties"
+        connection_id,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/connections/{connection_id}/properties",
     )
 
 
@@ -396,11 +406,16 @@ def create_mapping(
     does not have.
     """
     return mapping.create_mapping(
-        connection_id, payload, actor=actor, source=f"POST {router.prefix}/connections/{connection_id}/mappings"
+        connection_id,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/connections/{connection_id}/mappings",
     )
 
 
-def _require_mapping_under(mapping: FieldMapping, connection_id: str, mapping_id: str) -> dict[str, Any]:
+def _require_mapping_under(
+    mapping: FieldMapping, connection_id: str, mapping_id: str
+) -> dict[str, Any]:
     """One connection-scoping check, called by every route that takes a mapping id.
 
     A mapping is addressed as ``/connections/{connection_id}/mappings/{mapping_id}``,
@@ -597,7 +612,10 @@ def activate_mapping(
     two different situations, and the 422 body says which by including the report.
     """
     return mapping.activate(
-        connection_id, mapping_id, actor=actor, source=f"POST {router.prefix}/connections/{connection_id}/mappings/{mapping_id}/activate"
+        connection_id,
+        mapping_id,
+        actor=actor,
+        source=f"POST {router.prefix}/connections/{connection_id}/mappings/{mapping_id}/activate",
     )
 
 
@@ -710,14 +728,18 @@ def preview_mapping(
     cycle" - so this is that evaluation, exposed, and it is deliberately a read: a
     preview an admin runs on every edit must not audit a row per keystroke.
     """
-    directions = ("out", "in") if not direction else tuple(
-        part.strip() for part in direction.split(",") if part.strip() in ("out", "in")
+    directions = (
+        ("out", "in")
+        if not direction
+        else tuple(part.strip() for part in direction.split(",") if part.strip() in ("out", "in"))
     )
     if not directions:
         raise InvalidMapping("direction must be out, in or both")
     record = payload.get("record")
     if not isinstance(record, Mapping):
-        raise InvalidMapping("record is required: the sales-room row to evaluate the mapping against")
+        raise InvalidMapping(
+            "record is required: the sales-room row to evaluate the mapping against"
+        )
     return mapping.preview(connection_id, mapping_id, record, directions=directions)
 
 
@@ -771,7 +793,13 @@ HUBSPOT_CONTACT_PROPERTIES: tuple[Mapping[str, Any], ...] = (
         "fieldType": "text",
         "groupName": "contactinformation",
     },
-    {"name": "email", "label": "Email", "type": "string", "fieldType": "text", "groupName": "contactinformation"},
+    {
+        "name": "email",
+        "label": "Email",
+        "type": "string",
+        "fieldType": "text",
+        "groupName": "contactinformation",
+    },
     {
         "name": "company",
         "label": "Company Name",
@@ -826,8 +854,20 @@ HUBSPOT_CONTACT_PROPERTIES: tuple[Mapping[str, Any], ...] = (
 #: holds lower-case internal names beside capitalised labels, which is exactly the
 #: pair a picklist table gets wrong.
 HUBSPOT_DEAL_PROPERTIES: tuple[Mapping[str, Any], ...] = (
-    {"name": "dealname", "label": "Deal Name", "type": "string", "fieldType": "text", "groupName": "dealinformation"},
-    {"name": "amount", "label": "Amount", "type": "number", "fieldType": "number", "groupName": "dealinformation"},
+    {
+        "name": "dealname",
+        "label": "Deal Name",
+        "type": "string",
+        "fieldType": "text",
+        "groupName": "dealinformation",
+    },
+    {
+        "name": "amount",
+        "label": "Amount",
+        "type": "number",
+        "fieldType": "number",
+        "groupName": "dealinformation",
+    },
     {
         "name": "dealstage",
         "label": "Deal Stage",
@@ -847,7 +887,13 @@ HUBSPOT_DEAL_PROPERTIES: tuple[Mapping[str, Any], ...] = (
         "fieldType": "date",
         "groupName": "dealinformation",
     },
-    {"name": "subject", "label": "Subject", "type": "string", "fieldType": "text", "groupName": "dealinformation"},
+    {
+        "name": "subject",
+        "label": "Subject",
+        "type": "string",
+        "fieldType": "text",
+        "groupName": "dealinformation",
+    },
 )
 
 #: A Dataverse table read in the ``EntityDefinitions`` shape, with ``AttributeType``
@@ -865,8 +911,20 @@ DATAVERSE_ACCOUNT_PROPERTIES: tuple[Mapping[str, Any], ...] = (
 
 #: Nine unique HubSpot properties, for the connection whose tenth arrives later.
 HUBSPOT_TICKET_PROPERTIES_BEFORE: tuple[Mapping[str, Any], ...] = (
-    {"name": "dsr_row_id", "label": "DSR row id", "type": "string", "fieldType": "text", "groupName": "ticketing"},
-    {"name": "subject", "label": "Subject", "type": "string", "fieldType": "text", "groupName": "ticketing"},
+    {
+        "name": "dsr_row_id",
+        "label": "DSR row id",
+        "type": "string",
+        "fieldType": "text",
+        "groupName": "ticketing",
+    },
+    {
+        "name": "subject",
+        "label": "Subject",
+        "type": "string",
+        "fieldType": "text",
+        "groupName": "ticketing",
+    },
     *(
         {
             "name": f"case_unique_{index}",
@@ -965,7 +1023,11 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         source=source,
     )
     engine.pin_sync_key(
-        hubspot_id, good["id"], {"properties": ["dsr_row_id"], "unique": True}, actor="dana", source=source
+        hubspot_id,
+        good["id"],
+        {"properties": ["dsr_row_id"], "unique": True},
+        actor="dana",
+        source=source,
     )
     engine.validate(hubspot_id, good["id"], {"record": True}, actor="dana", source=source)
     engine.activate(hubspot_id, good["id"], actor="dana", source=source)
@@ -983,7 +1045,11 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     )
     broken = engine.create_mapping(
         hubspot_id,
-        {"crm_object": "deals", "crm_object_label": "Deals", "notes": "Half-mapped. Never finished."},
+        {
+            "crm_object": "deals",
+            "crm_object_label": "Deals",
+            "notes": "Half-mapped. Never finished.",
+        },
         actor="dana",
         source=source,
     )

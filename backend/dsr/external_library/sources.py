@@ -179,12 +179,16 @@ class SimulatedDrive:
         self._files[file.file_id] = replace(file, source=self.source)
         return self._files[file.file_id]
 
-    def advance(self, file_id: str, *, version: str, modified_at: str, name: str | None = None) -> SourceFile:
+    def advance(
+        self, file_id: str, *, version: str, modified_at: str, name: str | None = None
+    ) -> SourceFile:
         """Move a file to a new version: the upstream edit that triggers a re-sync."""
         current = self._files.get(file_id)
         if current is None:
             raise KeyError(file_id)
-        moved = replace(current, version=version, modified_at=modified_at, name=name or current.name)
+        moved = replace(
+            current, version=version, modified_at=modified_at, name=name or current.name
+        )
         self._files[file_id] = moved
         return moved
 

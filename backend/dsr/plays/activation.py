@@ -71,7 +71,7 @@ def enable(record: Mapping[str, Any], *, actor: str | None, now: Any) -> dict[st
     """
     if record.get("deleted_at") is not None:
         raise ActivationError(
-            f"this Play was destroyed and cannot be enabled. A destroyed row is a "
+            "this Play was destroyed and cannot be enabled. A destroyed row is a "
             "retired template; register a new one rather than reviving it."
         )
     if record.get("enabled") is True:
@@ -120,7 +120,7 @@ def disable(record: Mapping[str, Any], *, actor: str | None, now: Any) -> dict[s
             "state": state(record),
             "detail": "This Play was already disabled, so nothing was written.",
         }
-    at = _moment(now)
+    _moment(now)
     return {
         "outcome": "disabled",
         "patch": {"enabled": False, "enabled_at": None, "enabled_by": None},

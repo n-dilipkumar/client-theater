@@ -519,9 +519,16 @@ def seed(db, context: dict[str, Any]) -> str:
         actor="dana",
         source="seed",
     )
-    db.create(POLICY_COLLECTION, {"subject_kind": "template", "subject_id": template["id"], **validate_policy(
-        {"mode": MODE_IDENTIFY, "collect_name": True, "collect_email": True}
-    )}, actor="dana", source="seed")
+    db.create(
+        POLICY_COLLECTION,
+        {
+            "subject_kind": "template",
+            "subject_id": template["id"],
+            **validate_policy({"mode": MODE_IDENTIFY, "collect_name": True, "collect_email": True}),
+        },
+        actor="dana",
+        source="seed",
+    )
 
     def room_policy(room_id: str, **policy: Any) -> None:
         db.create(

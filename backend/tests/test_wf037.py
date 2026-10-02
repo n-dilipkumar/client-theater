@@ -60,24 +60,23 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.crm_engagement import (
     BLOCK_REASONS,
     CREATE_ENDPOINTS,
+    PREFERENCES,
+    QUEUE_STATES,
+    RECORD_ID_LOCATIONS,
     EngagementSync,
     EngagementSyncError,
     InvalidConnector,
     InvalidEventType,
     InvalidFieldMap,
-    PREFERENCES,
-    QUEUE_STATES,
-    RECORD_ID_LOCATIONS,
     SyncBook,
     SyncNotConfigured,
     UnknownRoom,
     build_create,
+    delivery,
     describe_inferences,
     describe_vocabulary,
     extract_record_id,
@@ -85,10 +84,11 @@ from dsr.crm_engagement import (
     normalise_connector,
     normalise_event_type,
     normalise_field_map,
+    payloads,
     post_create,
+    queue as queue_module,
     success_codes,
 )
-from dsr.crm_engagement import delivery, payloads, queue as queue_module
 from dsr.crm_engagement.delivery import CreateResult
 from dsr.crm_engagement.engine import IDENTITY_SOURCES
 from dsr.crm_engagement.inferences import INFERENCES
@@ -114,6 +114,7 @@ from dsr.crm_engagement.vocabulary import FIELD_SYNONYMS, RETRYABLE_STATUS, SOUR
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated rather than imported so renaming the route fails
 #: here instead of following silently - which is what a test is for.
@@ -144,7 +145,12 @@ class Scripted:
 
     def post(self, url: str, body: bytes, headers: Any, timeout: float) -> CreateResult:
         self.calls.append(
-            {"url": url, "body": json.loads(body) if body else None, "headers": dict(headers), "timeout": timeout}
+            {
+                "url": url,
+                "body": json.loads(body) if body else None,
+                "headers": dict(headers),
+                "timeout": timeout,
+            }
         )
         if not self.results:
             raise AssertionError(f"transport called more than {len(self.calls)} times")
@@ -160,7 +166,9 @@ def ok(status: int, body: str = "", headers: dict[str, str] | None = None) -> Cr
 
 
 def bad(status: int | None, body: str = "", error: str | None = None) -> CreateResult:
-    return CreateResult(ok=False, status=status, body=body, error=error or f"HTTP {status}", duration_ms=1.0)
+    return CreateResult(
+        ok=False, status=status, body=body, error=error or f"HTTP {status}", duration_ms=1.0
+    )
 
 
 @pytest.fixture()
@@ -178,7 +186,9 @@ def book(store):
 @pytest.fixture()
 def room(store):
     return store.create(
-        "room", {"name": "Northwind", "account": "Northwind Traders", "owner": "dana"}, source="seed"
+        "room",
+        {"name": "Northwind", "account": "Northwind Traders", "owner": "dana"},
+        source="seed",
     )
 
 
@@ -232,9 +242,13 @@ def event_payload(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
-def configured(engine: EngagementSync, room_id: str, event_type: str = "document_viewed", **overrides: Any):
+def configured(
+    engine: EngagementSync, room_id: str, event_type: str = "document_viewed", **overrides: Any
+):
     """A connector, a catalogue row and a field map, so a create can actually be sent."""
-    engine.register_connector(connector_spec(**overrides.pop("connector", {})), room_id=room_id, source="seed")
+    engine.register_connector(
+        connector_spec(**overrides.pop("connector", {})), room_id=room_id, source="seed"
+    )
     connector_id = engine.connectors()[-1]["id"]
     engine.add_event_type({"event_type": event_type}, source="seed")
     engine.add_field_map(map_spec(event_type, connector_id, **overrides), source="seed")
@@ -504,11 +518,16 @@ def test_email_without_an_at_sign_is_a_soft_finding_and_still_ships():
 
 
 def test_iso8601_accepts_a_z_suffixed_timestamp_and_normalises_to_utc():
-    assert run_transform("date.iso8601", "2026-09-24T08:14:00Z").value == "2026-09-24T08:14:00+00:00"
+    assert (
+        run_transform("date.iso8601", "2026-09-24T08:14:00Z").value == "2026-09-24T08:14:00+00:00"
+    )
 
 
 def test_iso8601_shifts_an_offset_timestamp_to_utc():
-    assert run_transform("date.iso8601", "2026-09-24T10:14:00+02:00").value == "2026-09-24T08:14:00+00:00"
+    assert (
+        run_transform("date.iso8601", "2026-09-24T10:14:00+02:00").value
+        == "2026-09-24T08:14:00+00:00"
+    )
 
 
 def test_iso8601_flags_a_naive_timestamp_without_inventing_a_timezone():
@@ -604,9 +623,15 @@ def test_hard_and_soft_findings_are_disjoint_and_exhaustive_for_these_transforms
 def test_the_two_blocking_findings_are_hard_and_the_default_is_soft():
     """A finding whose severity says "soft" on a blocking problem is a lie in a column."""
     field_map = normalise_field_map(
-        map_spec("document_viewed", "c", fields=[{"source": "nope", "target": "wanted", "required": True}])
+        map_spec(
+            "document_viewed",
+            "c",
+            fields=[{"source": "nope", "target": "wanted", "required": True}],
+        )
     )
-    severities = {finding["code"]: finding["severity"] for finding in map_event(_event(), field_map).findings}
+    severities = {
+        finding["code"]: finding["severity"] for finding in map_event(_event(), field_map).findings
+    }
     assert severities["required_field_omitted"] == "hard"
 
     keyless = normalise_field_map(map_spec("document_viewed", "c"))
@@ -617,9 +642,13 @@ def test_the_two_blocking_findings_are_hard_and_the_default_is_soft():
     assert severities["sync_key_unresolved"] == "hard"
 
     defaulted = normalise_field_map(
-        map_spec("document_viewed", "c", fields=[{"source": "nope", "target": "filled", "default": "x"}])
+        map_spec(
+            "document_viewed", "c", fields=[{"source": "nope", "target": "filled", "default": "x"}]
+        )
     )
-    codes = {finding["code"]: finding["severity"] for finding in map_event(_event(), defaulted).findings}
+    codes = {
+        finding["code"]: finding["severity"] for finding in map_event(_event(), defaulted).findings
+    }
     assert codes["defaulted"] == "soft"
 
 
@@ -638,7 +667,16 @@ def test_as_text_is_total(value: Any, expected: str):
 
 @pytest.mark.parametrize(
     "value,expected",
-    [(3, 3.0), (3.5, 3.5), ("7", 7.0), ("1,024", 1024.0), (True, None), (False, None), ("x", None), (None, None)],
+    [
+        (3, 3.0),
+        (3.5, 3.5),
+        ("7", 7.0),
+        ("1,024", 1024.0),
+        (True, None),
+        (False, None),
+        ("x", None),
+        (None, None),
+    ],
 )
 def test_as_number_refuses_booleans_and_non_numbers(value: Any, expected: float | None):
     assert as_number(value) == expected
@@ -655,7 +693,10 @@ def test_dotted_returns_not_found_rather_than_raising():
 
 def test_dotted_prefers_a_literal_key_over_walking_it():
     """A team's own field may legitimately be called ``buyer.email`` as a single key."""
-    assert dotted({"buyer.email": "flat", "buyer": {"email": "nested"}}, "buyer.email") == (True, "flat")
+    assert dotted({"buyer.email": "flat", "buyer": {"email": "nested"}}, "buyer.email") == (
+        True,
+        "flat",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -684,7 +725,9 @@ def test_a_canonical_field_is_read_by_a_synonym_when_its_own_name_is_absent():
 
 
 def test_the_exact_path_wins_over_a_synonym():
-    found, value, located = read_source(_event(email="exact@x.test", person="synonym@x.test"), "buyer_email")
+    found, value, located = read_source(
+        _event(email="exact@x.test", person="synonym@x.test"), "buyer_email"
+    )
     assert (found, value, located) == (True, "exact@x.test", "email")
 
 
@@ -796,7 +839,11 @@ def test_one_unresolved_source_does_not_cost_the_other_fields():
 
 def test_a_default_supplies_a_missing_value_and_says_so():
     field_map = normalise_field_map(
-        map_spec("document_viewed", "conn_1", fields=[{"source": "nope", "target": "filled", "default": "x"}])
+        map_spec(
+            "document_viewed",
+            "conn_1",
+            fields=[{"source": "nope", "target": "filled", "default": "x"}],
+        )
     )
     mapped = map_event(_event(), field_map)
     assert mapped.properties["filled"] == "x"
@@ -825,7 +872,11 @@ def test_a_field_mapping_records_where_each_value_was_actually_read_from():
 
 def test_a_soft_finding_still_ships_its_value():
     field_map = normalise_field_map(
-        map_spec("document_viewed", "conn_1", fields=[{"source": "buyer_email", "target": "email", "transform": "email.normalize"}])
+        map_spec(
+            "document_viewed",
+            "conn_1",
+            fields=[{"source": "buyer_email", "target": "email", "transform": "email.normalize"}],
+        )
     )
     mapped = map_event(_event(buyer_email="procurement (contoso)"), field_map)
     assert mapped.properties["email"] == "procurement (contoso)"
@@ -858,9 +909,9 @@ def test_a_missing_sync_key_is_a_hard_finding_against_the_whole_map():
     assert mapped.sync_key == {}
     codes = [finding["code"] for finding in mapped.findings]
     assert "sync_key_unresolved" in codes
-    assert all(
-        finding["severity"] == "hard" for finding in mapped.findings
-    ), "an unusable sync key is not a soft problem"
+    assert all(finding["severity"] == "hard" for finding in mapped.findings), (
+        "an unusable sync key is not a soft problem"
+    )
 
 
 def test_the_sync_key_can_read_a_field_other_than_the_row_id():
@@ -894,14 +945,24 @@ def test_a_field_map_needs_at_least_one_field():
 
 def test_a_field_needs_a_target_property():
     with pytest.raises(InvalidFieldMap, match="no target property"):
-        normalise_field_map({"event_type": "x", "fields": [{"source": "type"}], "sync_key": {"target_property": "k"}})
+        normalise_field_map(
+            {
+                "event_type": "x",
+                "fields": [{"source": "type"}],
+                "sync_key": {"target_property": "k"},
+            }
+        )
 
 
 def test_two_fields_cannot_claim_one_target():
     """One create cannot send the same property twice, and the second would silently win."""
     with pytest.raises(InvalidFieldMap, match="mapped twice"):
         normalise_field_map(
-            map_spec("x", "c", fields=[{"source": "type", "target": "t"}, {"source": "asset", "target": "t"}])
+            map_spec(
+                "x",
+                "c",
+                fields=[{"source": "type", "target": "t"}, {"source": "asset", "target": "t"}],
+            )
         )
 
 
@@ -913,7 +974,9 @@ def test_a_field_map_needs_a_sync_key():
 
 def test_a_sync_key_needs_a_target_property():
     with pytest.raises(InvalidFieldMap, match="target_property is required"):
-        normalise_field_map({"event_type": "x", "fields": [{"source": "type", "target": "t"}], "sync_key": {}})
+        normalise_field_map(
+            {"event_type": "x", "fields": [{"source": "type", "target": "t"}], "sync_key": {}}
+        )
 
 
 def test_a_sync_key_cannot_collide_with_a_mapped_field():
@@ -933,7 +996,9 @@ def test_an_unknown_direction_is_refused():
 def test_picklist_map_without_options_is_refused_because_nothing_could_be_translated():
     with pytest.raises(InvalidFieldMap, match="no options"):
         normalise_field_map(
-            map_spec("x", "c", fields=[{"source": "type", "target": "t", "transform": "picklist.map"}])
+            map_spec(
+                "x", "c", fields=[{"source": "type", "target": "t", "transform": "picklist.map"}]
+            )
         )
 
 
@@ -971,16 +1036,23 @@ def test_a_dataverse_connector_needs_an_entity_set_not_an_object():
     """The two target fields are not interchangeable, so setting the wrong one is refused
     rather than stored and ignored."""
     with pytest.raises(InvalidConnector, match="needs 'entity_set'"):
-        normalise_connector({"vendor": "dataverse", "base_url": "https://x.test", "object": "accounts"})
+        normalise_connector(
+            {"vendor": "dataverse", "base_url": "https://x.test", "object": "accounts"}
+        )
 
 
 def test_a_connector_needs_an_absolute_base_url():
     with pytest.raises(InvalidConnector, match="absolute http"):
-        normalise_connector({"vendor": "hubspot", "base_url": "api.hubapi.com", "object": "contacts"})
+        normalise_connector(
+            {"vendor": "hubspot", "base_url": "api.hubapi.com", "object": "contacts"}
+        )
 
 
 def test_a_trailing_slash_is_stripped_from_the_base_url():
-    assert normalise_connector(connector_spec(base_url="https://x.test/"))["base_url"] == "https://x.test"
+    assert (
+        normalise_connector(connector_spec(base_url="https://x.test/"))["base_url"]
+        == "https://x.test"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -997,10 +1069,14 @@ def test_hubspot_gets_the_properties_object_body():
 
 def test_dataverse_and_salesforce_get_the_flat_field_body():
     dataverse = build_create(
-        "dataverse", {"vendor": "dataverse", "base_url": "https://c.test", "entity_set": "dsr_engagements"}, {"a": 1}
+        "dataverse",
+        {"vendor": "dataverse", "base_url": "https://c.test", "entity_set": "dsr_engagements"},
+        {"a": 1},
     )
     salesforce = build_create(
-        "salesforce", {"vendor": "salesforce", "base_url": "https://c.test", "object": "Room_Engagement__c"}, {"a": 1}
+        "salesforce",
+        {"vendor": "salesforce", "base_url": "https://c.test", "object": "Room_Engagement__c"},
+        {"a": 1},
     )
     assert dataverse.body == {"a": 1}
     assert salesforce.body == {"a": 1}
@@ -1008,14 +1084,18 @@ def test_dataverse_and_salesforce_get_the_flat_field_body():
 
 def test_the_dataverse_path_carries_the_documented_api_version():
     request = build_create(
-        "dataverse", {"vendor": "dataverse", "base_url": "https://c.test", "entity_set": "accounts"}, {}
+        "dataverse",
+        {"vendor": "dataverse", "base_url": "https://c.test", "entity_set": "accounts"},
+        {},
     )
     assert request.url == "https://c.test/api/data/v9.2/accounts"
 
 
 def test_the_salesforce_path_carries_the_sobjects_segment():
     request = build_create(
-        "salesforce", {"vendor": "salesforce", "base_url": "https://c.test", "object": "Room_Engagement__c"}, {}
+        "salesforce",
+        {"vendor": "salesforce", "base_url": "https://c.test", "object": "Room_Engagement__c"},
+        {},
     )
     assert request.url == "https://c.test/services/data/vXX.X/sobjects/Room_Engagement__c"
 
@@ -1131,7 +1211,9 @@ def test_the_dataverse_id_is_read_out_of_the_entity_uri_header():
 
 
 def test_the_entity_uri_header_is_matched_case_insensitively():
-    headers = {"odata-entityid": "https://c.test/api/data/v9.2/accounts(00aa00aa-1111-2222-3333-444444444444)"}
+    headers = {
+        "odata-entityid": "https://c.test/api/data/v9.2/accounts(00aa00aa-1111-2222-3333-444444444444)"
+    }
     assert extract_record_id("dataverse", 204, headers, "")["id"].startswith("00aa00aa")
 
 
@@ -1143,7 +1225,9 @@ def test_a_204_with_no_id_anywhere_returns_nothing_rather_than_guessing():
 
 
 def test_the_dataverse_body_is_tried_only_after_the_header():
-    headers = {"OData-EntityId": "https://c.test/api/data/v9.2/accounts(00aa00aa-1111-2222-3333-444444444444)"}
+    headers = {
+        "OData-EntityId": "https://c.test/api/data/v9.2/accounts(00aa00aa-1111-2222-3333-444444444444)"
+    }
     body = json.dumps({"accountid": "body-guid"})
     assert extract_record_id("dataverse", 201, headers, body)["where"] == "header:OData-EntityId"
 
@@ -1200,13 +1284,17 @@ def test_odata_annotations_are_read_into_the_error_detail():
 
 
 def test_a_hubspot_error_list_is_read():
-    detail = error_detail(json.dumps({"errors": [{"message": "nope", "category": "VALIDATION_ERROR"}]}))
+    detail = error_detail(
+        json.dumps({"errors": [{"message": "nope", "category": "VALIDATION_ERROR"}]})
+    )
     assert detail["message"] == "nope"
     assert detail["code"] == "VALIDATION_ERROR"
 
 
 def test_a_salesforce_error_is_read():
-    detail = error_detail(json.dumps({"message": "Insufficient access", "errorCode": "INSUFFICIENT_ACCESS"}))
+    detail = error_detail(
+        json.dumps({"message": "Insufficient access", "errorCode": "INSUFFICIENT_ACCESS"})
+    )
     assert detail["message"] == "Insufficient access"
     assert detail["code"] == "INSUFFICIENT_ACCESS"
 
@@ -1288,7 +1376,10 @@ def test_a_2xx_outside_the_vendors_documented_set_is_not_treated_as_a_success():
     """Salesforce's own reference puts 204 among the success codes for DELETE, not POST."""
     transport = Scripted(ok(204, ""))
     report = post_create(
-        transport, build_create("salesforce", {"vendor": "salesforce", "base_url": "https://c.test", "object": "O"}, {}),
+        transport,
+        build_create(
+            "salesforce", {"vendor": "salesforce", "base_url": "https://c.test", "object": "O"}, {}
+        ),
         backoff=0,
     )
     assert report.ok is False
@@ -1299,7 +1390,11 @@ def test_a_dataverse_204_is_a_success():
     transport = Scripted(ok(204, ""))
     report = post_create(
         transport,
-        build_create("dataverse", {"vendor": "dataverse", "base_url": "https://c.test", "entity_set": "a"}, {}),
+        build_create(
+            "dataverse",
+            {"vendor": "dataverse", "base_url": "https://c.test", "entity_set": "a"},
+            {},
+        ),
         backoff=0,
     )
     assert report.ok is True
@@ -1326,7 +1421,9 @@ def test_a_successful_create_with_no_id_needs_a_human():
     transport = Scripted(ok(201, ""))
     report = post_create(
         transport,
-        build_create("salesforce", {"vendor": "salesforce", "base_url": "https://c.test", "object": "O"}, {}),
+        build_create(
+            "salesforce", {"vendor": "salesforce", "base_url": "https://c.test", "object": "O"}, {}
+        ),
         backoff=0,
     )
     assert report.ok is True
@@ -1370,9 +1467,7 @@ def test_recording_an_event_writes_the_row_before_anything_is_sent(book, room):
     assert row["data"]["sync_state"] == "pending"
 
 
-def test_the_engagement_payload_is_stored_verbatim_so_a_new_field_needs_no_coordination(
-    book, room
-):
+def test_the_engagement_payload_is_stored_verbatim_so_a_new_field_needs_no_coordination(book, room):
     row = book.record_engagement(
         event_payload(acme_new_field={"nested": [1, 2]}), room_id=room["id"], source=SOURCE
     )
@@ -1470,10 +1565,18 @@ def test_the_sync_log_is_appended_per_write_rather_than_updated(book, room):
     engagement = book.record_engagement(event_payload(), room_id=room["id"], source=SOURCE)
     row = book.enqueue(engagement, source=SOURCE)
     first = book.log_attempt(
-        queue_row=row, report={"attempts": 1, "attempt_statuses": [429]}, outcome="failed", trigger="drain", source=SOURCE
+        queue_row=row,
+        report={"attempts": 1, "attempt_statuses": [429]},
+        outcome="failed",
+        trigger="drain",
+        source=SOURCE,
     )
     second = book.log_attempt(
-        queue_row=row, report={"attempts": 2, "attempt_statuses": [429, 403]}, outcome="failed", trigger="retry", source=SOURCE
+        queue_row=row,
+        report={"attempts": 2, "attempt_statuses": [429, 403]},
+        outcome="failed",
+        trigger="retry",
+        source=SOURCE,
     )
     assert first["id"] != second["id"]
     assert len(book.sync_log(room["id"], limit=10)) == 2
@@ -1483,10 +1586,18 @@ def test_the_sync_log_filters_on_needs_a_human_through_the_dynamic_index(book, r
     engagement = book.record_engagement(event_payload(), room_id=room["id"], source=SOURCE)
     row = book.enqueue(engagement, source=SOURCE)
     book.log_attempt(
-        queue_row=row, report={"needs_manual_update": True}, outcome="failed", trigger="drain", source=SOURCE
+        queue_row=row,
+        report={"needs_manual_update": True},
+        outcome="failed",
+        trigger="drain",
+        source=SOURCE,
     )
     book.log_attempt(
-        queue_row=row, report={"needs_manual_update": False}, outcome="synced", trigger="drain", source=SOURCE
+        queue_row=row,
+        report={"needs_manual_update": False},
+        outcome="synced",
+        trigger="drain",
+        source=SOURCE,
     )
     assert len(book.sync_log(room["id"], needs_manual_update=True, limit=10)) == 1
 
@@ -1555,7 +1666,8 @@ def test_a_map_with_no_buyer_field_needs_no_resolution(engine, room):
     engine.register_connector(connector_spec(), room_id=room["id"], source="seed")
     connector_id = engine.connectors()[-1]["id"]
     engine.add_field_map(
-        map_spec("room_opened", connector_id, fields=[{"source": "type", "target": "t"}]), source="seed"
+        map_spec("room_opened", connector_id, fields=[{"source": "type", "target": "t"}]),
+        source="seed",
     )
     engine.transport = Scripted(ok(201, json.dumps({"id": "1"})))
     body = engine.record_event(room["id"], {"type": "room_opened"}, source=SOURCE)
@@ -1565,7 +1677,9 @@ def test_a_map_with_no_buyer_field_needs_no_resolution(engine, room):
 def test_a_map_that_sends_a_buyer_field_blocks_an_event_with_no_buyer(engine, room):
     configured(engine, room["id"])
     engine.transport = Scripted(ok(201, json.dumps({"id": "1"})))
-    body = engine.record_event(room["id"], {"type": "document_viewed", "asset": "Deck"}, source=SOURCE)
+    body = engine.record_event(
+        room["id"], {"type": "document_viewed", "asset": "Deck"}, source=SOURCE
+    )
     assert body["result"]["state"] == "blocked"
     assert body["result"]["reason"] == "buyer_unresolved"
     assert engine.transport.count == 0
@@ -1641,7 +1755,9 @@ def test_adding_the_mapping_row_and_draining_again_sends_what_was_waiting(engine
     assert engine.transport.count == 1
 
 
-def test_two_enabled_connectors_with_no_map_to_choose_between_them_is_blocked(engine, room, other_room):
+def test_two_enabled_connectors_with_no_map_to_choose_between_them_is_blocked(
+    engine, room, other_room
+):
     engine.register_connector(connector_spec(), room_id=room["id"], source="seed")
     engine.register_connector(
         connector_spec(vendor="salesforce", object="O"), room_id=room["id"], source="seed"
@@ -1674,7 +1790,9 @@ def test_a_room_scoped_connector_is_not_read_as_unscoped(engine, room, other_roo
     assert body["result"]["reason"] == "no_connector"
 
 
-def test_an_unscoped_connector_is_the_fallback_for_a_room_with_none_of_its_own(engine, room, other_room):
+def test_an_unscoped_connector_is_the_fallback_for_a_room_with_none_of_its_own(
+    engine, room, other_room
+):
     engine.register_connector(connector_spec(), source="seed")
     engine.add_field_map(map_spec("document_viewed", engine.connectors()[-1]["id"]), source="seed")
     engine.transport = Scripted(ok(201, json.dumps({"id": "1"})))
@@ -1724,9 +1842,19 @@ def test_a_successful_create_writes_the_id_and_marks_the_event_synced(engine, ro
 
 def test_a_dataverse_204_is_synced_with_the_id_from_the_header(engine, room):
     """The researched Dataverse case: 204, no body, id in a header."""
-    configured(engine, room["id"], connector={"vendor": "dataverse", "entity_set": "dsr_engagements", "object": ""})
+    configured(
+        engine,
+        room["id"],
+        connector={"vendor": "dataverse", "entity_set": "dsr_engagements", "object": ""},
+    )
     engine.transport = Scripted(
-        ok(204, "", {"OData-EntityId": "https://c.test/api/data/v9.2/dsr_engagements(00aa00aa-1111-2222-3333-444444444444)"})
+        ok(
+            204,
+            "",
+            {
+                "OData-EntityId": "https://c.test/api/data/v9.2/dsr_engagements(00aa00aa-1111-2222-3333-444444444444)"
+            },
+        )
     )
     body = engine.record_event(room["id"], event_payload(), source=SOURCE)
     assert body["result"]["state"] == "synced"
@@ -1735,7 +1863,9 @@ def test_a_dataverse_204_is_synced_with_the_id_from_the_header(engine, room):
 
 def test_a_429_then_a_403_is_failed_with_both_attempts_recorded(engine, room):
     configured(engine, room["id"])
-    engine.transport = Scripted(bad(429), bad(403, json.dumps([{"message": "no", "errorCode": "X"}])))
+    engine.transport = Scripted(
+        bad(429), bad(403, json.dumps([{"message": "no", "errorCode": "X"}]))
+    )
     body = engine.record_event(room["id"], event_payload(), source=SOURCE)
     assert body["result"]["state"] == "failed"
     assert body["result"]["attempts"] == 2
@@ -1756,7 +1886,9 @@ def test_a_409_is_reported_as_the_sync_key_working_and_is_not_retried(engine, ro
 
 def test_a_create_accepted_with_no_id_is_failed_rather_than_synced(engine, room):
     """The researched gap, on the vendor the research admits it about."""
-    configured(engine, room["id"], connector={"vendor": "salesforce", "object": "Room_Engagement__c"})
+    configured(
+        engine, room["id"], connector={"vendor": "salesforce", "object": "Room_Engagement__c"}
+    )
     engine.transport = Scripted(ok(201, ""))
     body = engine.record_event(room["id"], event_payload(), source=SOURCE)
     assert body["result"]["state"] == "failed"
@@ -1778,7 +1910,11 @@ def test_a_transport_failure_is_reported_as_such(engine, room):
 
 
 def test_an_annotated_error_reaches_the_sync_log(engine, room):
-    configured(engine, room["id"], connector={"vendor": "dataverse", "entity_set": "dsr_engagements", "object": ""})
+    configured(
+        engine,
+        room["id"],
+        connector={"vendor": "dataverse", "entity_set": "dsr_engagements", "object": ""},
+    )
     engine.transport = Scripted(
         bad(
             400,
@@ -1793,7 +1929,7 @@ def test_an_annotated_error_reaches_the_sync_log(engine, room):
             ),
         )
     )
-    body = engine.record_event(room["id"], event_payload(), source=SOURCE)
+    engine.record_event(room["id"], event_payload(), source=SOURCE)
     log = engine.sync_log(room["id"], limit=10)["entries"]
     assert log[0]["data"]["vendor_error"]["annotations"][0]["message"] == "field: bad"
 
@@ -1849,7 +1985,9 @@ def test_a_drain_takes_pending_rows_oldest_first(engine, room):
     configured(engine, room["id"])
     engine.transport = Scripted(ok(201, json.dumps({"id": "1"})), ok(201, json.dumps({"id": "2"})))
     for index in range(2):
-        engine.record_event(room["id"], event_payload(asset=f"A{index}"), source=SOURCE, fire_queue=False)
+        engine.record_event(
+            room["id"], event_payload(asset=f"A{index}"), source=SOURCE, fire_queue=False
+        )
     summary = engine.drain(room["id"], source=SOURCE)
     assert summary["counts"]["considered"] == 2
     assert summary["counts"]["synced"] == 2
@@ -1877,7 +2015,9 @@ def test_a_drain_does_not_retry_a_failed_row_on_its_own(engine, room):
 def test_a_drain_can_be_narrowed_to_specific_rows(engine, room):
     configured(engine, room["id"])
     engine.transport = Scripted(ok(201, json.dumps({"id": "1"})), ok(201, json.dumps({"id": "2"})))
-    first = engine.record_event(room["id"], event_payload(asset="A"), source=SOURCE, fire_queue=False)
+    first = engine.record_event(
+        room["id"], event_payload(asset="A"), source=SOURCE, fire_queue=False
+    )
     engine.record_event(room["id"], event_payload(asset="B"), source=SOURCE, fire_queue=False)
     summary = engine.drain(room["id"], source=SOURCE, only=[first["queue"]["id"]])
     assert summary["counts"]["synced"] == 1
@@ -1894,6 +2034,7 @@ def test_a_preview_writes_nothing_at_all(engine, room, store):
     assert preview["plans"][0]["request"]["url"].endswith("/crm/v3/objects/contacts")
     assert len(store.audit(limit=1000)) == before
     assert engine.transport.count == 0
+
 
 def test_a_preview_shows_the_block_reason_without_sending(engine, room):
     engine.transport = Scripted(ok(201))
@@ -1997,7 +2138,13 @@ def test_the_feed_resolves_fields_the_way_the_field_map_does(engine, room):
     engine.transport = Scripted(ok(201, json.dumps({"id": "1"})))
     engine.record_event(
         room["id"],
-        {"type": "opened", "timestamp": "2026-09-24T08:14:00Z", "target": "Deck", "dwell": 240, "person": "a@b.test"},
+        {
+            "type": "opened",
+            "timestamp": "2026-09-24T08:14:00Z",
+            "target": "Deck",
+            "dwell": 240,
+            "person": "a@b.test",
+        },
         source=SOURCE,
     )
     item = engine.feed(room["id"])["events"][0]
@@ -2029,7 +2176,9 @@ def test_the_feed_can_be_filtered_by_sync_state_and_type(engine, room):
     configured(engine, room["id"])
     engine.transport = Scripted(bad(403), ok(201, json.dumps({"id": "1"})))
     engine.record_event(room["id"], event_payload(), source=SOURCE)
-    engine.record_event(room["id"], event_payload(type="cta_click"), source=SOURCE, fire_queue=False)
+    engine.record_event(
+        room["id"], event_payload(type="cta_click"), source=SOURCE, fire_queue=False
+    )
     assert engine.feed(room["id"], sync_state="failed")["count"] == 1
     assert engine.feed(room["id"], sync_state="pending")["count"] == 1
     assert engine.feed(room["id"], type="cta_click")["count"] == 1
@@ -2038,7 +2187,9 @@ def test_the_feed_can_be_filtered_by_sync_state_and_type(engine, room):
 def test_the_feed_counts_dwell_only_where_it_is_a_number(engine, room):
     configured(engine, room["id"])
     engine.transport = Scripted(ok(201, json.dumps({"id": "1"})))
-    engine.record_event(room["id"], event_payload(dwell_seconds="about four minutes"), source=SOURCE)
+    engine.record_event(
+        room["id"], event_payload(dwell_seconds="about four minutes"), source=SOURCE
+    )
     assert engine.feed(room["id"])["summary"]["dwell_seconds"] == 0
 
 
@@ -2094,7 +2245,9 @@ def test_the_readiness_view_names_a_type_mapped_on_another_connector(engine, roo
 
 def test_the_readiness_view_uses_the_same_connector_the_worker_would(engine, room, other_room):
     """Otherwise it could report a room ready while the worker blocks every row on it."""
-    engine.register_connector(connector_spec(enabled=False), room_id=other_room["id"], source="seed")
+    engine.register_connector(
+        connector_spec(enabled=False), room_id=other_room["id"], source="seed"
+    )
     assert engine.configuration(other_room["id"])["ready"] is False
 
 
@@ -2148,7 +2301,9 @@ def test_a_connector_read_never_carries_its_token(engine, room):
 
 def test_a_connector_read_explains_each_preference(engine, room):
     engine.register_connector(
-        connector_spec(preferences=["return=representation", "acme.magic"]), room_id=room["id"], source="seed"
+        connector_spec(preferences=["return=representation", "acme.magic"]),
+        room_id=room["id"],
+        source="seed",
     )
     detail = engine.connectors()[0]["preference_detail"]
     assert detail[0]["known"] is True
@@ -2158,8 +2313,13 @@ def test_a_connector_read_explains_each_preference(engine, room):
 def test_a_connector_can_be_switched_off_by_a_patch(engine, room):
     engine.register_connector(connector_spec(), room_id=room["id"], source="seed")
     connector_id = engine.connectors()[-1]["id"]
-    assert engine.patch_connector(connector_id, {"enabled": False}, source=SOURCE)["enabled"] is False
-    assert engine.record_event(room["id"], event_payload(), source=SOURCE)["result"]["reason"] == "connector_disabled"
+    assert (
+        engine.patch_connector(connector_id, {"enabled": False}, source=SOURCE)["enabled"] is False
+    )
+    assert (
+        engine.record_event(room["id"], event_payload(), source=SOURCE)["result"]["reason"]
+        == "connector_disabled"
+    )
 
 
 def test_adding_a_second_row_for_one_event_type_is_refused(engine, room):
@@ -2173,9 +2333,7 @@ def test_a_field_map_needs_the_connector_it_writes_to(engine):
         engine.add_field_map(map_spec("x", ""), source=SOURCE)
 
 
-def test_a_field_map_naming_its_own_connector_wins_over_another_for_the_same_type(
-    engine, room
-):
+def test_a_field_map_naming_its_own_connector_wins_over_another_for_the_same_type(engine, room):
     """With two connectors on a room, the map is what says which CRM a type belongs to."""
     engine.register_connector(connector_spec(), room_id=room["id"], source="seed")
     hubspot = engine.connectors()[-1]["id"]
@@ -2197,7 +2355,10 @@ def test_a_disabled_field_map_is_not_chosen(engine, room):
     engine.add_field_map(map_spec("document_viewed", connector_id), source="seed")
     engine.patch_field_map(engine.field_maps()[0]["id"], {"enabled": False}, source=SOURCE)
     assert engine.effective_field_map("document_viewed", connector_id) is None
-    assert engine.record_event(room["id"], event_payload(), source=SOURCE)["result"]["reason"] == "event_type_unmapped"
+    assert (
+        engine.record_event(room["id"], event_payload(), source=SOURCE)["result"]["reason"]
+        == "event_type_unmapped"
+    )
 
 
 def test_reading_an_unknown_configuration_row_is_a_400_domain_error(engine):
@@ -2290,9 +2451,13 @@ def http(monkeypatch, tmp_path):
 
 def _configure(http, room_id: str, **overrides: Any) -> dict[str, Any]:
     connector = http.post(
-        f"{PREFIX}/connectors", params={"room_id": room_id, "actor": "dana"}, json=connector_spec(**overrides)
+        f"{PREFIX}/connectors",
+        params={"room_id": room_id, "actor": "dana"},
+        json=connector_spec(**overrides),
     ).json()
-    http.post(f"{PREFIX}/event-types", params={"actor": "dana"}, json={"event_type": "document_viewed"})
+    http.post(
+        f"{PREFIX}/event-types", params={"actor": "dana"}, json={"event_type": "document_viewed"}
+    )
     field_map = http.post(
         f"{PREFIX}/field-maps",
         params={"actor": "dana"},
@@ -2302,7 +2467,9 @@ def _configure(http, room_id: str, **overrides: Any) -> dict[str, Any]:
 
 
 def _room(http) -> str:
-    return http.post("/api/records/room", json={"name": "HTTP room", "account": "Acme"}).json()["id"]
+    return http.post("/api/records/room", json={"name": "HTTP room", "account": "Acme"}).json()[
+        "id"
+    ]
 
 
 def _with_transport(http, results: list[CreateResult]) -> EngagementSync:
@@ -2351,7 +2518,9 @@ def test_the_inferences_route_serves_the_registry(http):
 def test_registering_a_connector_is_a_201_and_hides_its_token(http):
     room_id = _room(http)
     response = http.post(
-        f"{PREFIX}/connectors", params={"room_id": room_id, "actor": "dana"}, json=connector_spec(token="secret")
+        f"{PREFIX}/connectors",
+        params={"room_id": room_id, "actor": "dana"},
+        json=connector_spec(token="secret"),
     )
     assert response.status_code == 201
     assert "token" not in response.json()
@@ -2359,20 +2528,26 @@ def test_registering_a_connector_is_a_201_and_hides_its_token(http):
 
 
 def test_a_connector_with_an_unknown_vendor_is_a_422(http):
-    response = http.post(f"{PREFIX}/connectors", json={"vendor": "pipedrive", "base_url": "https://x.test"})
+    response = http.post(
+        f"{PREFIX}/connectors", json={"vendor": "pipedrive", "base_url": "https://x.test"}
+    )
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_connector"
 
 
 def test_a_connector_without_its_target_is_a_422(http):
-    response = http.post(f"{PREFIX}/connectors", json={"vendor": "hubspot", "base_url": "https://x.test"})
+    response = http.post(
+        f"{PREFIX}/connectors", json={"vendor": "hubspot", "base_url": "https://x.test"}
+    )
     assert response.status_code == 422
     assert "object" in response.json()["detail"]
 
 
 def test_a_connector_can_be_read_patched_and_deleted(http):
     room_id = _room(http)
-    created = http.post(f"{PREFIX}/connectors", params={"room_id": room_id}, json=connector_spec()).json()
+    created = http.post(
+        f"{PREFIX}/connectors", params={"room_id": room_id}, json=connector_spec()
+    ).json()
     assert http.get(f"{PREFIX}/connectors/{created['id']}").status_code == 200
     patched = http.patch(f"{PREFIX}/connectors/{created['id']}", json={"label": "Renamed"})
     assert patched.json()["label"] == "Renamed"
@@ -2415,7 +2590,12 @@ def test_a_duplicate_event_type_is_a_422(http):
 def test_an_event_type_can_be_read_patched_and_deleted(http):
     created = http.post(f"{PREFIX}/event-types", json={"event_type": "cta_click"}).json()
     assert http.get(f"{PREFIX}/event-types/{created['id']}").json()["event_type"] == "cta_click"
-    assert http.patch(f"{PREFIX}/event-types/{created['id']}", json={"enabled": False}).json()["enabled"] is False
+    assert (
+        http.patch(f"{PREFIX}/event-types/{created['id']}", json={"enabled": False}).json()[
+            "enabled"
+        ]
+        is False
+    )
     assert http.delete(f"{PREFIX}/event-types/{created['id']}").status_code == 204
     assert http.get(f"{PREFIX}/event-types/nope").status_code == 400
 
@@ -2434,7 +2614,11 @@ def test_adding_a_field_map_is_a_201(http):
 def test_a_field_map_with_no_sync_key_is_a_422(http):
     response = http.post(
         f"{PREFIX}/field-maps",
-        json={"event_type": "x", "connector_id": "c", "fields": [{"source": "type", "target": "t"}]},
+        json={
+            "event_type": "x",
+            "connector_id": "c",
+            "fields": [{"source": "type", "target": "t"}],
+        },
     )
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_field_map"
@@ -2451,10 +2635,16 @@ def test_a_field_map_with_no_connector_is_a_422(http):
 def test_field_maps_can_be_filtered_by_event_type_and_connector(http):
     room_id = _room(http)
     config = _configure(http, room_id)
-    assert http.get(f"{PREFIX}/field-maps", params={"event_type": "document_viewed"}).json()["count"] == 1
+    assert (
+        http.get(f"{PREFIX}/field-maps", params={"event_type": "document_viewed"}).json()["count"]
+        == 1
+    )
     assert http.get(f"{PREFIX}/field-maps", params={"event_type": "other"}).json()["count"] == 0
     assert (
-        http.get(f"{PREFIX}/field-maps", params={"connector_id": config["connector"]["id"]}).json()["count"] == 1
+        http.get(f"{PREFIX}/field-maps", params={"connector_id": config["connector"]["id"]}).json()[
+            "count"
+        ]
+        == 1
     )
 
 
@@ -2463,7 +2653,10 @@ def test_a_field_map_can_be_read_patched_and_deleted(http):
     config = _configure(http, room_id)
     field_map_id = config["field_map"]["id"]
     assert http.get(f"{PREFIX}/field-maps/{field_map_id}").status_code == 200
-    assert http.patch(f"{PREFIX}/field-maps/{field_map_id}", json={"enabled": False}).json()["enabled"] is False
+    assert (
+        http.patch(f"{PREFIX}/field-maps/{field_map_id}", json={"enabled": False}).json()["enabled"]
+        is False
+    )
     assert http.delete(f"{PREFIX}/field-maps/{field_map_id}").status_code == 204
     assert http.get(f"{PREFIX}/field-maps/{field_map_id}").status_code == 400
 
@@ -2507,7 +2700,10 @@ def test_recording_with_firing_deferred_leaves_the_row_pending(http):
 
 def test_recording_an_event_with_no_type_is_a_422(http):
     room_id = _room(http)
-    assert http.post(f"{PREFIX}/rooms/{room_id}/engagements", json={"asset": "Deck"}).status_code == 422
+    assert (
+        http.post(f"{PREFIX}/rooms/{room_id}/engagements", json={"asset": "Deck"}).status_code
+        == 422
+    )
 
 
 def test_recording_into_a_room_that_does_not_exist_is_a_404(http):
@@ -2519,7 +2715,9 @@ def test_recording_into_a_room_that_does_not_exist_is_a_404(http):
 def test_recording_on_an_unconfigured_room_still_stores_the_event_and_blocks_the_queue(http):
     """The buyer's action happened and the room is the system of record for it."""
     room_id = _room(http)
-    response = http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload())
+    response = http.post(
+        f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload()
+    )
     assert response.status_code == 201
     assert response.json()["result"]["reason"] == "no_connector"
     assert response.json()["engagement"]["data"]["sync_state"] == "blocked"
@@ -2528,9 +2726,19 @@ def test_recording_on_an_unconfigured_room_still_stores_the_event_and_blocks_the
 def test_the_feed_says_where_the_crm_record_id_came_from(engine, room):
     """Three vendors answer that question differently, and a Dataverse id arrives in a
     header - so a rep cannot be told "is that really the row the CRM made" without it."""
-    configured(engine, room["id"], connector={"vendor": "dataverse", "entity_set": "dsr_engagements", "object": ""})
+    configured(
+        engine,
+        room["id"],
+        connector={"vendor": "dataverse", "entity_set": "dsr_engagements", "object": ""},
+    )
     engine.transport = Scripted(
-        ok(204, "", {"OData-EntityId": "https://c.test/api/data/v9.2/dsr_engagements(00aa00aa-1111-2222-3333-444444444444)"})
+        ok(
+            204,
+            "",
+            {
+                "OData-EntityId": "https://c.test/api/data/v9.2/dsr_engagements(00aa00aa-1111-2222-3333-444444444444)"
+            },
+        )
     )
     engine.record_event(room["id"], event_payload(), source=SOURCE)
     item = engine.feed(room["id"])["events"][0]
@@ -2540,7 +2748,9 @@ def test_the_feed_says_where_the_crm_record_id_came_from(engine, room):
 
 def test_the_feed_marks_an_unsourced_id_as_such(engine, room):
     """Salesforce's id location is not sourced, so the feed says so rather than implying it."""
-    configured(engine, room["id"], connector={"vendor": "salesforce", "object": "Room_Engagement__c"})
+    configured(
+        engine, room["id"], connector={"vendor": "salesforce", "object": "Room_Engagement__c"}
+    )
     engine.transport = Scripted(ok(201, json.dumps({"id": "001XX000001"})))
     engine.record_event(room["id"], event_payload(), source=SOURCE)
     item = engine.feed(room["id"])["events"][0]
@@ -2553,7 +2763,9 @@ def test_the_feed_route_shows_the_event_and_its_sync_state(http):
     _configure(http, room_id)
     _with_transport(http, [ok(201, json.dumps({"id": "501"}))])
     try:
-        http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload())
+        http.post(
+            f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload()
+        )
     finally:
         _drop_transport()
     body = http.get(f"{PREFIX}/rooms/{room_id}/engagements").json()
@@ -2566,10 +2778,20 @@ def test_the_feed_route_accepts_filters(http):
     room_id = _room(http)
     _configure(http, room_id)
     http.post(
-        f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload()
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(),
     )
-    assert http.get(f"{PREFIX}/rooms/{room_id}/engagements", params={"sync_state": "pending"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/rooms/{room_id}/engagements", params={"type": "other"}).json()["count"] == 0
+    assert (
+        http.get(f"{PREFIX}/rooms/{room_id}/engagements", params={"sync_state": "pending"}).json()[
+            "count"
+        ]
+        == 1
+    )
+    assert (
+        http.get(f"{PREFIX}/rooms/{room_id}/engagements", params={"type": "other"}).json()["count"]
+        == 0
+    )
 
 
 def test_the_event_detail_route_carries_the_request_and_the_attempts(http):
@@ -2584,7 +2806,11 @@ def test_the_event_detail_route_carries_the_request_and_the_attempts(http):
         _drop_transport()
     body = http.get(f"{PREFIX}/rooms/{room_id}/engagements/{created['engagement']['id']}").json()
     assert body["sync_state"] == "failed"
-    assert [entry["status"] for entry in body["sync_log"][0]["data"]["attempt_log"]] == [429, 429, 429]
+    assert [entry["status"] for entry in body["sync_log"][0]["data"]["attempt_log"]] == [
+        429,
+        429,
+        429,
+    ]
 
 
 def test_the_event_detail_route_is_a_404_for_an_unknown_event(http):
@@ -2609,7 +2835,11 @@ def test_the_readiness_route_is_a_404_for_an_unknown_room(http):
 def test_the_queue_route_summarises_by_state(http):
     room_id = _room(http)
     _configure(http, room_id)
-    http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload())
+    http.post(
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(),
+    )
     body = http.get(f"{PREFIX}/rooms/{room_id}/queue").json()
     assert body["summary"]["pending"] == 1
 
@@ -2617,8 +2847,14 @@ def test_the_queue_route_summarises_by_state(http):
 def test_the_queue_route_can_be_filtered_by_state(http):
     room_id = _room(http)
     _configure(http, room_id)
-    http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload())
-    assert http.get(f"{PREFIX}/rooms/{room_id}/queue", params={"state": "synced"}).json()["count"] == 0
+    http.post(
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(),
+    )
+    assert (
+        http.get(f"{PREFIX}/rooms/{room_id}/queue", params={"state": "synced"}).json()["count"] == 0
+    )
 
 
 def test_the_queue_route_is_a_404_for_an_unknown_room(http):
@@ -2628,7 +2864,11 @@ def test_the_queue_route_is_a_404_for_an_unknown_room(http):
 def test_the_preview_route_writes_nothing_and_shows_the_request(http):
     room_id = _room(http)
     _configure(http, room_id)
-    http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload())
+    http.post(
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(),
+    )
     before = http.get("/api/audit", params={"limit": 1000}).json()["count"]
     body = http.post(f"{PREFIX}/rooms/{room_id}/queue/preview").json()
     assert body["counts"]["sendable"] == 1
@@ -2639,7 +2879,11 @@ def test_the_preview_route_writes_nothing_and_shows_the_request(http):
 def test_the_drain_route_fires_the_queue_and_reports_what_happened(http):
     room_id = _room(http)
     _configure(http, room_id)
-    http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload())
+    http.post(
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(),
+    )
     _with_transport(http, [ok(201, json.dumps({"id": "501"}))])
     try:
         body = http.post(f"{PREFIX}/rooms/{room_id}/queue/drain", params={"actor": "dana"}).json()
@@ -2649,7 +2893,7 @@ def test_the_drain_route_fires_the_queue_and_reports_what_happened(http):
     assert body["results"][0]["crm_record_id"] == "501"
 
 
-def test_draining_an_unconfigured_room_is_the_distinct_428(http):
+def test_the_endpoint_draining_an_unconfigured_room_is_the_distinct_428(http):
     room_id = _room(http)
     response = http.post(f"{PREFIX}/rooms/{room_id}/queue/drain")
     assert response.status_code == 428
@@ -2660,10 +2904,14 @@ def test_draining_accepts_a_list_of_row_ids(http):
     room_id = _room(http)
     _configure(http, room_id)
     first = http.post(
-        f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload(asset="A")
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(asset="A"),
     ).json()
     http.post(
-        f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload(asset="B")
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(asset="B"),
     )
     _with_transport(http, [ok(201, json.dumps({"id": "1"}))])
     try:
@@ -2688,7 +2936,8 @@ def test_the_retry_route_fires_one_blocked_row_again(http):
     _with_transport(http, [ok(201, json.dumps({"id": "9"}))])
     try:
         body = http.post(
-            f"{PREFIX}/rooms/{room_id}/queue/{created['queue']['id']}/retry", params={"actor": "dana"}
+            f"{PREFIX}/rooms/{room_id}/queue/{created['queue']['id']}/retry",
+            params={"actor": "dana"},
         ).json()
     finally:
         _drop_transport()
@@ -2725,7 +2974,9 @@ def test_the_sync_log_route_lists_the_writes_the_worker_made(http):
     _configure(http, room_id)
     _with_transport(http, [ok(201, json.dumps({"id": "501"}))])
     try:
-        http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload())
+        http.post(
+            f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload()
+        )
     finally:
         _drop_transport()
     body = http.get(f"{PREFIX}/sync-log", params={"room_id": room_id}).json()
@@ -2739,9 +2990,13 @@ def test_the_sync_log_route_filters_and_summarises_only_what_it_returned(http):
     _configure(http, room_id)
     _with_transport(http, [bad(403), ok(201, json.dumps({"id": "1"}))])
     try:
-        http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload())
         http.post(
-            f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload(asset="B")
+            f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload()
+        )
+        http.post(
+            f"{PREFIX}/rooms/{room_id}/engagements",
+            params={"actor": "dana"},
+            json=event_payload(asset="B"),
         )
     finally:
         _drop_transport()
@@ -2755,7 +3010,9 @@ def test_a_sync_log_entry_can_be_read_on_its_own(http):
     _configure(http, room_id, token="demo-token")
     _with_transport(http, [ok(201, json.dumps({"id": "501"}))])
     try:
-        http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload())
+        http.post(
+            f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload()
+        )
     finally:
         _drop_transport()
     entry = http.get(f"{PREFIX}/sync-log", params={"room_id": room_id}).json()["entries"][0]
@@ -2774,7 +3031,11 @@ def test_an_unknown_sync_log_entry_is_a_400(http):
 def test_no_read_route_writes_a_row(http):
     room_id = _room(http)
     _configure(http, room_id)
-    http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"fire_queue": "false"}, json=event_payload())
+    http.post(
+        f"{PREFIX}/rooms/{room_id}/engagements",
+        params={"fire_queue": "false"},
+        json=event_payload(),
+    )
     before = len(http.get("/api/audit", params={"limit": 1000}).json()["entries"])
     for path in (
         f"{PREFIX}/vocabulary",
@@ -2815,7 +3076,7 @@ def _matches_registered_route(source: str, routes: list[dict[str, Any]]) -> bool
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -2832,7 +3093,11 @@ def test_every_write_is_audited_with_the_route_that_served_it(http):
         ).json()
     finally:
         _drop_transport()
-    http.patch(f"{PREFIX}/connectors/{config['connector']['id']}", params={"actor": "dana"}, json={"label": "New"})
+    http.patch(
+        f"{PREFIX}/connectors/{config['connector']['id']}",
+        params={"actor": "dana"},
+        json={"label": "New"},
+    )
     http.patch(f"{PREFIX}/field-maps/{config['field_map']['id']}", json={"label": "New"})
     http.patch(f"{PREFIX}/event-types/{event_type_id}", json={"label": "New"})
     http.delete(f"{PREFIX}/connectors/{config['connector']['id']}", params={"actor": "dana"})
@@ -2879,7 +3144,9 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http):
     # One write per route: the synchronous record, the deferred one, the drain, the retry.
     _with_transport(http, [ok(201, json.dumps({"id": "1"}))])
     try:
-        http.post(f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload())
+        http.post(
+            f"{PREFIX}/rooms/{room_id}/engagements", params={"actor": "dana"}, json=event_payload()
+        )
         blocked = http.post(
             f"{PREFIX}/rooms/{room_id}/engagements",
             params={"actor": "dana"},
@@ -2900,7 +3167,8 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http):
     _with_transport(http, [ok(201, json.dumps({"id": "3"}))])
     try:
         http.post(
-            f"{PREFIX}/rooms/{room_id}/queue/{blocked['queue']['id']}/retry", params={"actor": "dana"}
+            f"{PREFIX}/rooms/{room_id}/queue/{blocked['queue']['id']}/retry",
+            params={"actor": "dana"},
         )
     finally:
         _drop_transport()
@@ -2957,7 +3225,7 @@ def test_the_source_is_built_from_the_prefix_not_typed_out():
 
 
 def test_the_actor_reaches_the_audit_row(http):
-    room_id = _room(http)
+    _room(http)
     http.post(f"{PREFIX}/event-types", params={"actor": "sam"}, json={"event_type": "cta_click"})
     entries = http.get("/api/audit", params={"actor": "sam", "limit": 1000}).json()["entries"]
     assert any(entry["source"] == f"POST {PREFIX}/event-types" for entry in entries)
@@ -2983,7 +3251,9 @@ def test_source_is_required_rather_than_defaulted():
         "log_attempt",
     ):
         parameter = inspect.signature(getattr(SyncBook, name)).parameters["source"]
-        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, f"{name}: source must be keyword-only"
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (
+            f"{name}: source must be keyword-only"
+        )
         assert parameter.default is inspect.Parameter.empty, f"{name}: source must be required"
 
 
@@ -3016,7 +3286,13 @@ def test_no_module_here_adds_a_table_or_a_column():
     package = Path(__file__).resolve().parents[1] / "dsr" / "crm_engagement"
     for module in list(package.glob("*.py")) + [Path(load_feature(MODULE_NAME).__file__)]:
         text = module.read_text(encoding="utf-8").upper()
-        for statement in ("CREATE TABLE", "ALTER TABLE", "ADD COLUMN", "DROP TABLE", "SCHEMA_VERSION"):
+        for statement in (
+            "CREATE TABLE",
+            "ALTER TABLE",
+            "ADD COLUMN",
+            "DROP TABLE",
+            "SCHEMA_VERSION",
+        ):
             assert statement not in text, f"{module.name} mentions {statement}"
 
 
@@ -3063,7 +3339,9 @@ def test_no_claim_is_made_on_a_type_the_core_already_handles():
 
 
 def test_the_feature_id_matches_the_brief():
-    assert load_feature(MODULE_NAME).FEATURE["id"] == "wf-037-log-a-single-buyer-engagement-event-in"
+    assert (
+        load_feature(MODULE_NAME).FEATURE["id"] == "wf-037-log-a-single-buyer-engagement-event-in"
+    )
     assert load_feature(MODULE_NAME).FEATURE["ticket"] == "WF-037"
 
 
@@ -3094,7 +3372,9 @@ def _seed(tmp_path):
     db = AuditedDatabase(tmp_path / "seed.db")
     rooms = [
         (
-            db.create("room", {"name": name, "account": account, "owner": owner}, source="seed")["id"],
+            db.create("room", {"name": name, "account": account, "owner": owner}, source="seed")[
+                "id"
+            ],
             account,
         )
         for name, account, owner in (
@@ -3119,7 +3399,9 @@ def test_the_seeder_returns_a_description_of_the_interesting_states(tmp_path):
 
 def test_the_seeder_produces_a_synced_row_with_its_id_from_the_response_body(tmp_path):
     _db, book, rooms, _summary = _seed(tmp_path)
-    rows = [row for row in book.queue_rows(rooms[0][0], limit=50) if row["data"]["state"] == "synced"]
+    rows = [
+        row for row in book.queue_rows(rooms[0][0], limit=50) if row["data"]["state"] == "synced"
+    ]
     assert rows
     assert rows[0]["data"]["crm_record_id_from"] == "body:id"
 

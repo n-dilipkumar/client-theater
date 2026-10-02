@@ -78,11 +78,17 @@ def normalise_attendee(
     language = body.get("language") or body.get("locale")
 
     if not name:
-        raise SchedulingError(f"{field}.name is required; a calendar invite with no attendee name is unusable")
+        raise SchedulingError(
+            f"{field}.name is required; a calendar invite with no attendee name is unusable"
+        )
     if not _looks_like_email(email):
-        raise SchedulingError(f"{field}.email is required and must be an email address, got {email!r}")
+        raise SchedulingError(
+            f"{field}.email is required and must be an email address, got {email!r}"
+        )
     if not time_zone:
-        raise SchedulingError(f"{field}.timeZone is required when it cannot be inherited from the room")
+        raise SchedulingError(
+            f"{field}.timeZone is required when it cannot be inherited from the room"
+        )
 
     resolved: dict[str, Any] = {"name": name, "email": email, "timeZone": time_zone}
     if language:

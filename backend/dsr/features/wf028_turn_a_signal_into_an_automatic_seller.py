@@ -332,7 +332,9 @@ def subscribe_webhook(
     accepted rather than demanded, and a subscription without one is warned about
     rather than refused.
     """
-    return engine.subscribe(payload, actor=actor, source=f"POST {router.prefix}/webhook-subscriptions")
+    return engine.subscribe(
+        payload, actor=actor, source=f"POST {router.prefix}/webhook-subscriptions"
+    )
 
 
 @router.delete("/webhook-subscriptions/{subscription_id}")
@@ -426,7 +428,10 @@ def dispatch(
     one-off action.
     """
     return engine.dispatch(
-        payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/rooms/{{room_id}}/dispatch"
+        payload,
+        room_id=room_id,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{{room_id}}/dispatch",
     )
 
 
@@ -446,7 +451,10 @@ def complete_task(
     is already true and writes nothing.
     """
     return engine.complete_task(
-        task_id, payload, room_id=room_id, actor=actor,
+        task_id,
+        payload,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/rooms/{{room_id}}/tasks/{{task_id}}/complete",
     )
 
@@ -501,7 +509,10 @@ def record_delivery(
     ``failed`` takes no further attempts at all.
     """
     return engine.record_attempt(
-        event_id, payload, room_id=room_id, actor=actor,
+        event_id,
+        payload,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/rooms/{{room_id}}/events/{{event_id}}/deliveries",
     )
 
@@ -584,9 +595,7 @@ DEMO_PLAYS: tuple[dict[str, Any], ...] = (
     {
         "name": {"en": "Email the engaged buyer"},
         "label": {"en": "Email engaged buyer"},
-        "description": {
-            "en": "Send the implementation notes to a buyer who is deep in the pack."
-        },
+        "description": {"en": "Send the implementation notes to a buyer who is deep in the pack."},
         "indicators": ["spent_more_than_30s_on_site"],
         "attributes": {
             "task_type": "email",
@@ -777,7 +786,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         except PlayError as exc:
             refused.append(str(exc))
 
-    call_play, email_play, cadence_play = registered[0], registered[1], registered[2]
+    call_play, _email_play, cadence_play = registered[0], registered[1], registered[2]
 
     # The switch. Exactly one of the two signal-shaped Plays is enabled, and the
     # cadence Play is enabled too so its unroutable task exists.
@@ -786,10 +795,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # email_play is deliberately left registered and not enabled.
 
     # 1. User precedence: the signal names a user, so the task is that user's.
-    user_run = fire(214, minutes_ago=4)
+    fire(214, minutes_ago=4)
 
     # 2. Account's most-engaged-person fallback, the second researched branch.
-    account_run = fire(
+    fire(
         188,
         minutes_ago=26,
         attribution={"account_id": f"acc_{account}"},
@@ -798,7 +807,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     # 3. No object at all: the task exists and says it is unassigned. Dropping it
     #    would lose the evidence that the Play fired.
-    unassigned_run = fire(121, minutes_ago=41, attribution={})
+    fire(121, minutes_ago=41, attribution={})
 
     # 4. The one-off guard, made visible: one signal, dispatched twice.
     repeated_key = _uuid4(rng)
@@ -807,14 +816,14 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     # 5. A signal that matches nothing the Play triggers on, so the dispatch reports
     #    a Play that is live and did not fire.
-    unmatched = fire(
+    fire(
         240,
         minutes_ago=63,
         indicators=[{"key": "watched_more_than_75_percent", "metadata": {"watched_percent": 88}}],
     )
 
     # 6. A second room, so the room scoping is a row rather than a claim.
-    other_run = fire(160, minutes_ago=14, room_id=other_room, attribution={"person_id": "per_000077"})
+    fire(160, minutes_ago=14, room_id=other_room, attribution={"person_id": "per_000077"})
 
     generated = engine.generated_tasks(limit=200)
     created = len(generated)
@@ -941,6 +950,5 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         f"seller), "
         f"{len(recorded)} outcome events "
         f"({retried} retried after a failure, {failed} marked failed after all four attempts), "
-        f"1 webhook subscription"
-        + (f", 1 Play labelled in French ({french})" if french else "")
+        f"1 webhook subscription" + (f", 1 Play labelled in French ({french})" if french else "")
     )

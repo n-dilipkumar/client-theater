@@ -81,9 +81,7 @@ class SavedSearches:
             raise KeyError(record_id)
         return record
 
-    def delete(
-        self, record_id: str, *, source: str, actor: str | None = None
-    ) -> dict[str, Any]:
+    def delete(self, record_id: str, *, source: str, actor: str | None = None) -> dict[str, Any]:
         """Remove a saved search. Soft delete, so the trail keeps the history.
 
         ``source`` is required for the same reason as :meth:`save`: the branch

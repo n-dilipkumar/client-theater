@@ -100,7 +100,9 @@ def _looks_like_epoch(text: str) -> float:
         return 0.0
 
 
-def timestamp_of(payload: Mapping[str, Any], *, default: datetime | None = None) -> tuple[datetime, bool]:
+def timestamp_of(
+    payload: Mapping[str, Any], *, default: datetime | None = None
+) -> tuple[datetime, bool]:
     """The event's own time, or the moment it arrived, and which one was used.
 
     Returns ``(when, defaulted)``. A payload with no timestamp is not refused -
@@ -118,7 +120,9 @@ def timestamp_of(payload: Mapping[str, Any], *, default: datetime | None = None)
     return default, True
 
 
-def check_not_ahead(when: datetime, *, now: datetime, tolerance: int = CLOCK_SKEW_TOLERANCE_SECONDS) -> None:
+def check_not_ahead(
+    when: datetime, *, now: datetime, tolerance: int = CLOCK_SKEW_TOLERANCE_SECONDS
+) -> None:
     """Refuse an event stamped further into the future than the tolerance allows."""
     ahead = (when - now).total_seconds()
     if ahead > tolerance:

@@ -169,9 +169,7 @@ def mint(
     if not booking_uid:
         raise LocationError("a conference needs a booking")
 
-    identity = str(conference_id_hint or "").strip() or conference_id(
-        provider, booking_uid, scope
-    )
+    identity = str(conference_id_hint or "").strip() or conference_id(provider, booking_uid, scope)
     link = link_for(provider, identity, host=host)
 
     return {
@@ -323,7 +321,9 @@ def apply_to_booking(
         raise LocationError("a provisioned conference must carry a join URL")
 
     patch: dict[str, Any] = {
-        vocab.BOOKING_LOCATION_FIELD: dict(wire) if wire else {"type": "integration", "integration": provider},
+        vocab.BOOKING_LOCATION_FIELD: dict(wire)
+        if wire
+        else {"type": "integration", "integration": provider},
         vocab.MEETING_LOCATION_FIELD: url,
         "location_provider": provider,
         "conference_id": conference.get("conference_id"),

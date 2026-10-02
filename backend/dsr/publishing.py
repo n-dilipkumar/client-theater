@@ -155,7 +155,9 @@ def _http_post(url: str, body: bytes, headers: Mapping[str, str], timeout: float
         return int(response.status)
 
 
-def hash_password(password: str, *, salt: str | None = None, iterations: int = _PBKDF2_ITERATIONS) -> str:
+def hash_password(
+    password: str, *, salt: str | None = None, iterations: int = _PBKDF2_ITERATIONS
+) -> str:
     """Hash a link password for storage. The cleartext is never persisted.
 
     The format is self-describing so a future iteration count can be raised
@@ -209,7 +211,9 @@ def _parse_moment(value: Any, *, end_of_day: bool = False) -> datetime | None:
             parsed = datetime.fromisoformat(text)
         except ValueError:
             try:
-                parsed = datetime.combine(date.fromisoformat(text[:10]), time.max if end_of_day else time.min)
+                parsed = datetime.combine(
+                    date.fromisoformat(text[:10]), time.max if end_of_day else time.min
+                )
             except ValueError:
                 return None
     if parsed.tzinfo is None:
@@ -334,7 +338,8 @@ class PublishingService:
         return {
             "expires_at": expires_at,
             "max_views": _as_positive_int(access.get("max_views")),
-            "require_password": bool(access.get("require_password")) or bool(access.get("password_hash")),
+            "require_password": bool(access.get("require_password"))
+            or bool(access.get("password_hash")),
             "password_protected": bool(access.get("password_hash")),
             "require_identity_verification": bool(access.get("require_identity_verification")),
             "expired": expiry_state(expires_at)[0],
@@ -357,7 +362,9 @@ class PublishingService:
         if status == DRAFT:
             notes.append("Draft. The public link is disabled until the room goes live.")
         if self.is_public(data) and template:
-            notes.append("This room is marked as a template, so its link will not resolve for a buyer.")
+            notes.append(
+                "This room is marked as a template, so its link will not resolve for a buyer."
+            )
         if ARCHIVED_TAG in _tags(data):
             notes.append("Archived rooms are hidden from the board unless archived is selected.")
         access = self.access_of(data)
@@ -397,7 +404,9 @@ class PublishingService:
                 "is_template": template,
                 "tags": _tags(data),
                 "archived": ARCHIVED_TAG in _tags(data),
-                "metadata": data.get("metadata") if isinstance(data.get("metadata"), (dict, str)) else None,
+                "metadata": data.get("metadata")
+                if isinstance(data.get("metadata"), (dict, str))
+                else None,
                 "access": self.access_of(data),
                 "ever_published": bool(data.get("published_at")),
                 "published_at": data.get("published_at"),
@@ -416,7 +425,12 @@ class PublishingService:
         data = record.get("data") or {}
         view = self.view(record)
         view["status_options"] = [
-            {"value": value, "label": value, "description": STATUS_DESCRIPTIONS[value], "is_public": value in PUBLIC_STATUSES}
+            {
+                "value": value,
+                "label": value,
+                "description": STATUS_DESCRIPTIONS[value],
+                "is_public": value in PUBLIC_STATUSES,
+            }
             for value in STATUSES
         ]
         view["can_publish"] = not is_template(data)
@@ -424,7 +438,9 @@ class PublishingService:
             "This app hands over a link. It never sends the message for you, so the send "
             "and the tracking of it stay in your hands."
         )
-        view["event_types"] = [{"event": name, "description": EVENT_DESCRIPTIONS[name]} for name in EVENT_TYPES]
+        view["event_types"] = [
+            {"event": name, "description": EVENT_DESCRIPTIONS[name]} for name in EVENT_TYPES
+        ]
         return view
 
     # -- board -------------------------------------------------------------- #
@@ -472,14 +488,21 @@ class PublishingService:
                 or needle in view["id"].lower()
             ]
 
-        counts = {status: sum(1 for view in views if view["status"] == status) for status in STATUSES}
+        counts = {
+            status: sum(1 for view in views if view["status"] == status) for status in STATUSES
+        }
         return {
             "rooms": views,
             "count": len(views),
             "counts": counts,
             "statuses": list(STATUSES),
             "status_options": [
-                {"value": value, "label": value, "description": STATUS_DESCRIPTIONS[value], "is_public": value in PUBLIC_STATUSES}
+                {
+                    "value": value,
+                    "label": value,
+                    "description": STATUS_DESCRIPTIONS[value],
+                    "is_public": value in PUBLIC_STATUSES,
+                }
                 for value in STATUSES
             ],
             "filters": {
@@ -700,7 +723,9 @@ class PublishingService:
         chosen = [event for event in dict.fromkeys(events or ()) if event]
         unknown = [event for event in chosen if event not in EVENT_TYPES]
         if unknown:
-            raise ValueError(f"unknown event(s) {', '.join(sorted(unknown))}; expected {', '.join(EVENT_TYPES)}")
+            raise ValueError(
+                f"unknown event(s) {', '.join(sorted(unknown))}; expected {', '.join(EVENT_TYPES)}"
+            )
         if not chosen:
             raise ValueError("at least one event is required")
 
@@ -732,7 +757,9 @@ class PublishingService:
         )
         return [self.subscription_view(record) for record in records]
 
-    def cancel(self, subscription_id: str, *, source: str, actor: str | None = None) -> dict[str, Any]:
+    def cancel(
+        self, subscription_id: str, *, source: str, actor: str | None = None
+    ) -> dict[str, Any]:
         """Cancel a subscription. A soft delete, so the history survives.
 
         ``source`` is required; see :meth:`set_status` for why.
@@ -835,7 +862,9 @@ class PublishingService:
             "status": status,
             "previous_status": previous,
             "public_url": self.public_url(data, room_id) if self.is_public(data) else None,
-            "metadata": data.get("metadata") if isinstance(data.get("metadata"), (dict, str)) else {},
+            "metadata": data.get("metadata")
+            if isinstance(data.get("metadata"), (dict, str))
+            else {},
             "occurred_at": utcnow(),
         }
         event = self.store.create(

@@ -89,7 +89,9 @@ class PostResult:
 class Transport(Protocol):
     """Anything that can POST a JSON body to the event endpoint."""
 
-    def post(self, url: str, body: bytes, headers: Mapping[str, str], timeout: float) -> PostResult: ...
+    def post(
+        self, url: str, body: bytes, headers: Mapping[str, str], timeout: float
+    ) -> PostResult: ...
 
 
 class UrllibTransport:
@@ -253,7 +255,11 @@ def post_json(
             break
         if attempt < max_attempts:
             # A rate limiter told us when to come back; believe it.
-            wait = result.retry_after if result.retry_after is not None else backoff * (2 ** (attempt - 1))
+            wait = (
+                result.retry_after
+                if result.retry_after is not None
+                else backoff * (2 ** (attempt - 1))
+            )
             if wait > 0:
                 sleep(min(wait, 30.0))
 

@@ -173,7 +173,9 @@ class ProvisioningEngine:
         except Exception:
             return None
 
-    def meeting_locations(self, *, kind: str | None = None, include_defaulted: bool = True) -> list[dict[str, Any]]:
+    def meeting_locations(
+        self, *, kind: str | None = None, include_defaulted: bool = True
+    ) -> list[dict[str, Any]]:
         """Every configured Location, newest first, optionally filtered by kind."""
         records = self.store.list(MEETING_LOCATIONS, limit=500)
         listed = [self.present_location(record) for record in records]
@@ -207,7 +209,9 @@ class ProvisioningEngine:
             return None
         return record
 
-    def create_location(self, payload: Mapping[str, Any], *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def create_location(
+        self, payload: Mapping[str, Any], *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Add one option to a Meeting Type's Location picker.
 
         A Location with ``is_default`` when none exists becomes the default, so
@@ -262,9 +266,7 @@ class ProvisioningEngine:
             raise LocationNotFound(str(exc)) from exc
 
         provisioned = bool(current.get("provisions_conferences")) or bool(
-            self.store.count_where(
-                BOOKINGS, {"location_id": location_id}, include_deleted=False
-            )
+            self.store.count_where(BOOKINGS, {"location_id": location_id}, include_deleted=False)
         )
         blockers: list[str] = []
         if provisioned and kind != current.get("kind"):
@@ -272,10 +274,14 @@ class ProvisioningEngine:
                 f"kind: {current.get('kind')} has already provisioned conferences, so it cannot "
                 f"become {kind}; add a second Location option and swap bookings onto it instead"
             )
-        if provisioned and locations.needs_conference(kind) and not str(
-            proposed.get("connection_id") or ""
-        ).strip():
-            blockers.append("connection_id: a provisioned one-time Location cannot drop its connection")
+        if (
+            provisioned
+            and locations.needs_conference(kind)
+            and not str(proposed.get("connection_id") or "").strip()
+        ):
+            blockers.append(
+                "connection_id: a provisioned one-time Location cannot drop its connection"
+            )
 
         if blockers:
             raise DefaultLocationRequired("; ".join(blockers))
@@ -293,7 +299,9 @@ class ProvisioningEngine:
         record = self.store.update(location_id, patch, actor=actor, source=source)
         return self.present_location(record)
 
-    def remove_location(self, location_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def remove_location(
+        self, location_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Remove a Location option. The default one has to move first.
 
         Removing the default would leave a Meeting Type whose picker has no
@@ -522,7 +530,7 @@ class ProvisioningEngine:
         moment a prospect is waiting. So a connection that is still named is
         refused, and the message names how many Locations would be stranded.
         """
-        current = self.provider_connection(connection_id)
+        self.provider_connection(connection_id)
         naming = self.store.count_where(MEETING_LOCATIONS, {"connection_id": connection_id})
         if naming:
             raise ProviderNotConnected(
@@ -626,8 +634,10 @@ class ProvisioningEngine:
             "location_id": location.get("id"),
             "location_kind": kind,
             "location_name": location.get("name"),
-            "attendee_email": str(body.get("attendee_email") or body.get("email") or "").strip() or None,
-            "attendee_name": str(body.get("attendee_name") or body.get("name") or "").strip() or None,
+            "attendee_email": str(body.get("attendee_email") or body.get("email") or "").strip()
+            or None,
+            "attendee_name": str(body.get("attendee_name") or body.get("name") or "").strip()
+            or None,
             "starts_at": body.get("starts_at") or body.get("start") or None,
             "provisions_conferences": False,
             "invite_template": str(body.get("invite_template") or swapping.DEFAULT_TEMPLATE),
@@ -663,7 +673,9 @@ class ProvisioningEngine:
             data.update(
                 {
                     "location_provider": "in-person",
-                    vocab.MEETING_LOCATION_FIELD: str(location.get("custom_text") or location.get("name") or ""),
+                    vocab.MEETING_LOCATION_FIELD: str(
+                        location.get("custom_text") or location.get("name") or ""
+                    ),
                     vocab.BOOKING_LOCATION_FIELD: locations.wire_location(kind, location),
                     "provision_outcome": outcome,
                     "location_state": "in-person",
@@ -731,9 +743,7 @@ class ProvisioningEngine:
             minting.apply_to_booking(
                 minted,
                 data,
-                wire=locations.wire_location(
-                    kind, location, request_id=minted["conference_id"]
-                ),
+                wire=locations.wire_location(kind, location, request_id=minted["conference_id"]),
             )
         )
         return patch
@@ -895,7 +905,9 @@ class ProvisioningEngine:
         # Location test below, because an Ask the Guest Location is a Location
         # that mints no conference and the whole point of this branch is that the
         # guest supplied the location instead.
-        if str(record.get("location_state") or "") == "awaiting-guest" and supplied.get("guest_location"):
+        if str(record.get("location_state") or "") == "awaiting-guest" and supplied.get(
+            "guest_location"
+        ):
             # The guest's own location is recorded as `attendeeAddress`-shaped,
             # which is one of the eight researched location types and is exactly
             # what Cal names for a location an attendee supplied.
@@ -921,7 +933,11 @@ class ProvisioningEngine:
             )
 
         patch = self._provision(
-            {**record, "booking_uid": record.get("booking_uid"), "starts_at": record.get("starts_at")},
+            {
+                **record,
+                "booking_uid": record.get("booking_uid"),
+                "starts_at": record.get("starts_at"),
+            },
             location,
             room_id=room_id,
             actor=actor,
@@ -929,7 +945,10 @@ class ProvisioningEngine:
         )
         updated = self.store.update(record["id"], patch, actor=actor, source=source)
         result = self.present_booking(updated)
-        result["provision"] = {"retried": True, "reason": supplied.get("reason") or "explicit re-provision"}
+        result["provision"] = {
+            "retried": True,
+            "reason": supplied.get("reason") or "explicit re-provision",
+        }
         return result
 
     def swap(
@@ -976,7 +995,11 @@ class ProvisioningEngine:
         if plan["reprovisions"]:
             patch.update(
                 self._provision(
-                    {**record, "booking_uid": record.get("booking_uid"), "starts_at": record.get("starts_at")},
+                    {
+                        **record,
+                        "booking_uid": record.get("booking_uid"),
+                        "starts_at": record.get("starts_at"),
+                    },
                     target,
                     room_id=room_id,
                     actor=actor,
@@ -1045,20 +1068,19 @@ class ProvisioningEngine:
         """
         kind = str(target.get("kind") or "")
         if not locations.needs_conference(kind):
-            return str(
-                target.get("url")
-                or target.get("conference_details")
-                or target.get("custom_text")
-                or ""
-            ) or None
+            return (
+                str(
+                    target.get("url")
+                    or target.get("conference_details")
+                    or target.get("custom_text")
+                    or ""
+                )
+                or None
+            )
 
         provider = locations.provider_for(kind) or kind
         connection_id = str(target.get("connection_id") or "").strip()
-        connection = (
-            self.store.get(connection_id)
-            if connection_id
-            else None
-        )
+        connection = self.store.get(connection_id) if connection_id else None
         host = None
         if connection and connection.get("collection") == CONNECTIONS:
             host = (connection.get("data") or {}).get("link_host")
@@ -1070,9 +1092,7 @@ class ProvisioningEngine:
             host=host,
         )["url"]
 
-    def _swap_target(
-        self, record: Mapping[str, Any], payload: Mapping[str, Any]
-    ) -> dict[str, Any]:
+    def _swap_target(self, record: Mapping[str, Any], payload: Mapping[str, Any]) -> dict[str, Any]:
         """Where the booking is being moved to, as a Location-shaped dict.
 
         A swap may name a configured Location - the researched "the meeting
@@ -1205,15 +1225,11 @@ class ProvisioningEngine:
         if judged["state"] in ("failed", "retrying") and not record.get("conference_id"):
             patch["location_state"] = "provision-failed"
             if judged["state"] == "failed":
-                patch["fallback"] = provider_status.fallback_for(
-                    statuses, fallback_location=static
-                )
+                patch["fallback"] = provider_status.fallback_for(statuses, fallback_location=static)
             else:
                 patch["retryable"] = True
         elif judged["state"] in ("failed", "retrying"):
-            patch["fallback"] = provider_status.fallback_for(
-                statuses, fallback_location=static
-            )
+            patch["fallback"] = provider_status.fallback_for(statuses, fallback_location=static)
             patch["retryable"] = judged["retryable"]
 
         updated = self.store.update(record["id"], patch, actor=actor, source=source)
@@ -1284,9 +1300,7 @@ class ProvisioningEngine:
         # two mean different things to a seller: one is a meeting whose guests
         # cannot get in, the other is a meeting whose link is fine while some
         # app in the provisioning chain is not happy.
-        unhealthy = [
-            row for row in rows if row.get("provision_state") in ("failed", "retrying")
-        ]
+        unhealthy = [row for row in rows if row.get("provision_state") in ("failed", "retrying")]
         retryable = [row for row in unhealthy if row.get("retryable") is True]
         connected = {
             str(row.get("provider"))

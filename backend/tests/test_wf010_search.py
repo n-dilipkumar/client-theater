@@ -22,7 +22,6 @@ changed, and none of them is the workflow's behaviour:
 from __future__ import annotations
 
 import pytest
-
 from dsr.db.audited import AuditedDatabase
 from dsr.search import (
     CursorCodec,
@@ -228,9 +227,12 @@ def test_repository_is_synthesised_from_the_query(library):
     result = run(library, {"term": "security", "options": {"returnFields": ["repository", "name"]}})
 
     assert result["documents"][0]["repository"] == "library"
-    assert run(library, {"repository": "WorkSpace", "options": {"returnFields": ["repository"]}})[
-        "documents"
-    ][0]["repository"] == "WorkSpace"
+    assert (
+        run(library, {"repository": "WorkSpace", "options": {"returnFields": ["repository"]}})[
+            "documents"
+        ][0]["repository"]
+        == "WorkSpace"
+    )
 
 
 def test_missing_optional_fields_come_back_as_null(library):
@@ -240,7 +242,10 @@ def test_missing_optional_fields_come_back_as_null(library):
 
     result = run(
         library,
-        {"term": "slide", "options": {"returnFields": ["id", "name", "downloadUrl", "publishDate"]}},
+        {
+            "term": "slide",
+            "options": {"returnFields": ["id", "name", "downloadUrl", "publishDate"]},
+        },
     )
 
     assert result["documents"][0]["downloadUrl"] is None
@@ -289,7 +294,11 @@ def test_date_range_filter_compares_rfc3339_style_text(library):
         {
             "filter": {
                 "and": [
-                    {"field": "publishDate", "operator": "greaterThanOrEqual", "value": "2026-03-01"}
+                    {
+                        "field": "publishDate",
+                        "operator": "greaterThanOrEqual",
+                        "value": "2026-03-01",
+                    }
                 ]
             }
         },
@@ -395,8 +404,13 @@ def test_sort_by_an_unmapped_field_a_team_added(store, library):
     store.create("document", {"title": "Alpha", "priority": 1})
     store.create("document", {"title": "Beta", "priority": 9})
 
-    result = run(library, {"filter": {"field": "priority", "operator": "greaterThan", "value": 0},
-                           "sort": [{"field": "priority", "direction": "asc"}]})
+    result = run(
+        library,
+        {
+            "filter": {"field": "priority", "operator": "greaterThan", "value": 0},
+            "sort": [{"field": "priority", "direction": "asc"}],
+        },
+    )
 
     assert titles(result) == ["Alpha", "Beta"]
 
@@ -507,9 +521,7 @@ def test_broadening_is_off_by_default(library):
 
 
 def test_broadening_finds_a_near_miss_and_reports_the_term_it_used(library):
-    result = run(
-        library, {"term": "securty", "options": {"enableSuggestedQueryResults": True}}
-    )
+    result = run(library, {"term": "securty", "options": {"enableSuggestedQueryResults": True}})
 
     assert result["actualSearchTerm"] == "security"
     assert "Security and Compliance Pack" in titles(result)
@@ -517,9 +529,7 @@ def test_broadening_finds_a_near_miss_and_reports_the_term_it_used(library):
 
 def test_broadening_is_skipped_when_the_term_already_matched(library):
     """Broadening only fires on zero hits; it must not rewrite a real answer."""
-    result = run(
-        library, {"term": "security", "options": {"enableSuggestedQueryResults": True}}
-    )
+    result = run(library, {"term": "security", "options": {"enableSuggestedQueryResults": True}})
 
     assert result["actualSearchTerm"] is None
 
@@ -587,7 +597,9 @@ def room(store):
 
 
 def test_assemble_attaches_documents_to_the_room(store, assembler, room):
-    deck = next(d for d in scan(store, "document") if d["data"]["title"] == "Enterprise Overview Deck")
+    deck = next(
+        d for d in scan(store, "document") if d["data"]["title"] == "Enterprise Overview Deck"
+    )
 
     result = assembler.assemble(
         room, [{"id": deck["id"], "name": deck["data"]["title"]}], source=SOURCE, actor="dana"
@@ -650,9 +662,7 @@ def test_assembly_records_where_it_came_from(store, assembler, room):
     assert data["client_application"] == "sales-room-ui"
 
 
-def test_assembly_carries_arbitrary_extra_fields_without_a_schema_change(
-    store, assembler, room
-):
+def test_assembly_carries_arbitrary_extra_fields_without_a_schema_change(store, assembler, room):
     document = scan(store, "document")[0]
 
     assembler.assemble(
@@ -734,9 +744,7 @@ def test_a_saved_search_carries_extra_fields(store):
     from dsr.search import SavedSearches
 
     saved = SavedSearches(store, schema=SCHEMA)
-    record = saved.save(
-        "Owned", {"term": "deck", "ticket": "JIRA-42"}, source=SEARCH_SOURCE
-    )
+    record = saved.save("Owned", {"term": "deck", "ticket": "JIRA-42"}, source=SEARCH_SOURCE)
 
     assert record["data"]["ticket"] == "JIRA-42"
 
@@ -788,9 +796,7 @@ def test_scan_pages_past_the_store_per_call_ceiling(tmp_path):
         total = 1_050
         items = [{"title": f"Bulk Deck {number}"} for number in range(total)]
         for start in range(0, total, 500):
-            big.bulk_create(
-                "document", items[start : start + 500], actor="seed", source="test"
-            )
+            big.bulk_create("document", items[start : start + 500], actor="seed", source="test")
 
         assert count(big, "document") == total
         assert len(scan(big, "document")) == total
@@ -813,7 +819,9 @@ def test_scan_hides_soft_deleted_records_unless_asked(store):
 def test_scan_scopes_to_one_room(store):
     first = store.create("room", {"name": "Northwind"})["id"]
     second = store.create("room", {"name": "Contoso"})["id"]
-    store.bulk_create("room_content", [{"content_id": "a"}, {"content_id": "b"}], room_id=first, source="test")
+    store.bulk_create(
+        "room_content", [{"content_id": "a"}, {"content_id": "b"}], room_id=first, source="test"
+    )
     store.bulk_create("room_content", [{"content_id": "c"}], room_id=second, source="test")
 
     assert count(store, "room_content", room_id=first) == 2

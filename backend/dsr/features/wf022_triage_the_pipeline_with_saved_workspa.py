@@ -78,9 +78,13 @@ from fastapi.responses import JSONResponse
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
 from dsr.store import RecordStore
-from dsr.triage import TriageBoard, TriageError, parse_properties
-from dsr.triage import inferences as inference_registry
-from dsr.triage import vocabulary as vocab
+from dsr.triage import (
+    TriageBoard,
+    TriageError,
+    inferences as inference_registry,
+    parse_properties,
+    vocabulary as vocab,
+)
 from dsr.triage.rows import (
     CRM_LINK_COLLECTION,
     ORDER_FORM_COLLECTION,
@@ -195,7 +199,9 @@ def inferences() -> dict[str, Any]:
 
 
 @router.get("/dashboard", summary="Step one: what this account sees on opening")
-def dashboard(actor: str | None = Query(default=None), board: TriageBoard = BoardDep) -> dict[str, Any]:
+def dashboard(
+    actor: str | None = Query(default=None), board: TriageBoard = BoardDep
+) -> dict[str, Any]:
     """The remembered open views, the defaults to add from, and the views you own.
 
     "The views you had open are unique to your user account. We'll remember which
@@ -247,7 +253,9 @@ def create_view(
 
 
 @router.get("/views/{view_id}", summary="One view")
-def read_view(view_id: str, actor: str | None = Query(default=None), board: TriageBoard = BoardDep) -> dict[str, Any]:
+def read_view(
+    view_id: str, actor: str | None = Query(default=None), board: TriageBoard = BoardDep
+) -> dict[str, Any]:
     """The view's full definition, plus any problem its own filters would report."""
     return board.get_view(view_id, actor)
 
@@ -265,7 +273,9 @@ def update_view(
     rearrange columns" is a statement about the whole list rather than an
     insertion at a position.
     """
-    return board.update_view(view_id, payload, actor=actor, source=_source("PATCH", f"/views/{view_id}"))
+    return board.update_view(
+        view_id, payload, actor=actor, source=_source("PATCH", f"/views/{view_id}")
+    )
 
 
 @router.delete("/views/{view_id}", status_code=204, summary="Remove a view")
@@ -296,7 +306,9 @@ def clone_view(
     views to make your own customized copy", and a custom copy is one of the
     "private views for yourself".
     """
-    return board.clone_view(view_id, payload, actor=actor, source=_source("POST", f"/views/{view_id}/clone"))
+    return board.clone_view(
+        view_id, payload, actor=actor, source=_source("POST", f"/views/{view_id}/clone")
+    )
 
 
 @router.get("/views/{view_id}/rows", summary="The joined, filtered, sorted slice")
@@ -415,7 +427,7 @@ def set_template_type(
 
 @router.get("/rooms/{room_id}/sections", summary="Which sections are shown, and why")
 def room_sections(room_id: str, board: TriageBoard = BoardDep) -> dict[str, Any]:
-    """"**Dynamic workspaces:** Show or hide specific workspace sections based on
+    """ "**Dynamic workspaces:** Show or hide specific workspace sections based on
     what a customer has done in your product."
 
     A section with no rule is visible. One whose rule does not match is hidden,
@@ -450,8 +462,10 @@ def set_room_sections(
 
 
 @router.get("/open-views", summary="The views this account had open")
-def open_views(actor: str | None = Query(default=None), board: TriageBoard = BoardDep) -> dict[str, Any]:
-    """"We'll remember which views you had open the next time you open the
+def open_views(
+    actor: str | None = Query(default=None), board: TriageBoard = BoardDep
+) -> dict[str, Any]:
+    """ "We'll remember which views you had open the next time you open the
     Workspaces dashboard."
 
     An account that has never opened the dashboard gets an empty set and
@@ -489,7 +503,11 @@ def remember_open_views(
 #: inheritance is visible on a fresh database rather than only in a test.
 DEMO_TEMPLATES: tuple[dict[str, Any], ...] = (
     {"id_key": "sales-template", "name": "Sales room", "type": vocab.SOURCED_TYPE},
-    {"id_key": "onboarding-template", "name": "Customer onboarding", "type": vocab.INFERRED_IMPLEMENTATION_TYPE},
+    {
+        "id_key": "onboarding-template",
+        "name": "Customer onboarding",
+        "type": vocab.INFERRED_IMPLEMENTATION_TYPE,
+    },
     # A third template with no type at all, so "inherits nothing" is a state the
     # demo shows rather than a case only the tests cover.
     {"id_key": "blank-template", "name": "Uncategorised room", "type": None},
@@ -712,7 +730,9 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # A private clone of the public view, made by somebody else and then
     # rearranged. The clone is the researched "your own customized copy", and its
     # being private is what puts both visibilities on screen at once.
-    sam_copy = board.clone_view(team["id"], {"name": "Renewals I am chasing"}, actor="sam", source=source)
+    sam_copy = board.clone_view(
+        team["id"], {"name": "Renewals I am chasing"}, actor="sam", source=source
+    )
     views.append(sam_copy["id"])
     board.update_view(
         sam_copy["id"],
@@ -764,7 +784,9 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
                     "section": "order-form",
                     "visible_when": {
                         "join": "and",
-                        "conditions": [{"field": "order_form.status", "op": "is", "value": "completed"}],
+                        "conditions": [
+                            {"field": "order_form.status", "op": "is", "value": "completed"}
+                        ],
                     },
                 }
             ]

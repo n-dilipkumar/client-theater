@@ -85,13 +85,13 @@ for path, key in [
 
 print("\n=== 5. write -> read -> audit round trip (what a click does) ===")
 try:
-    status, room = post("/api/records/room", {"name": "Verify Bot Room", "stage": "discovery", "smoke": True})
+    status, room = post(
+        "/api/records/room", {"name": "Verify Bot Room", "stage": "discovery", "smoke": True}
+    )
     room_id = room["id"]
     check("POST /api/records/room", status == 201 and room_id.startswith("room_"), room_id)
 
-    status, updated = post(
-        f"/api/records/room/{room_id}", {"stage": "evaluation"}, method="PATCH"
-    )
+    status, updated = post(f"/api/records/room/{room_id}", {"stage": "evaluation"}, method="PATCH")
     check("PATCH advances the stage", status == 200 and updated["data"]["stage"] == "evaluation")
     check("revision incremented", updated["revision"] == 2, f"revision={updated['revision']}")
 

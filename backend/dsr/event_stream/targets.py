@@ -114,7 +114,9 @@ def validate_target_url(url: Any, *, allow_private: bool = False) -> str:
             ),
         )
     if not parts.netloc:
-        raise TargetError("targetUrl must include a host", remediation="Send a full URL including the host.")
+        raise TargetError(
+            "targetUrl must include a host", remediation="Send a full URL including the host."
+        )
     # `hostname` is None for a netloc urlsplit cannot read - `https://::1/x` is the
     # example, and it is exactly the shape an unvalidated value takes. Treated as
     # "no host" rather than skipped, because a host we cannot determine is not a
@@ -189,7 +191,9 @@ def same_origin(first: str, second: str) -> bool:
     return (a.scheme, a.hostname, a.port) == (b.scheme, b.hostname, b.port)
 
 
-def verification_failure(url: str, status: int | None, error: str | None, body: str = "") -> TargetError:
+def verification_failure(
+    url: str, status: int | None, error: str | None, body: str = ""
+) -> TargetError:
     """The refusal for a target that would not accept the verification POST.
 
     Carries the endpoint's own answer because "Dock verifies the URL with a

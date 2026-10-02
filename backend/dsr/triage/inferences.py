@@ -253,7 +253,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "The default is a template, and a template cannot know who is creating from it, so "
             "it needs a way to say 'the current user'. Resolving once at creation means the "
             "stored filter is a plain equality - readable, and queryable through the dynamic "
-            "index with ?where={\"workspace_filters.conditions.0.value\": \"dana\"}. A stored "
+            'index with ?where={"workspace_filters.conditions.0.value": "dana"}. A stored '
             "sentinel that resolved per request would be re-interpreted every time the view "
             "were read, and an unresolvable one would have to match everything to be useful, "
             "which is the one answer that cannot be defended."

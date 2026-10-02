@@ -67,7 +67,7 @@ demo data containing only success teaches a reviewer nothing.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -200,7 +200,9 @@ def _filters(
 def report(
     date_from: str | None = Query(default=None, alias="from", description="ISO-8601, inclusive"),
     date_to: str | None = Query(default=None, alias="to", description="ISO-8601, inclusive"),
-    stage: str | None = Query(default=None, description="A stage string, a class, or a comma-separated list"),
+    stage: str | None = Query(
+        default=None, description="A stage string, a class, or a comma-separated list"
+    ),
     owner: str | None = Query(default=None, description="Comma-separated list"),
     team: str | None = Query(default=None, description="Comma-separated list"),
     bucket: str | None = Query(default=None, description="day | week | month"),
@@ -317,7 +319,9 @@ def update_deal(
     and close date - all go through this one route, so a CRM push and a person correcting
     a typo produce the same audit row shape.
     """
-    return impact.patch_deal(deal_id, payload, actor=actor, source=f"PATCH {router.prefix}/deals/{deal_id}")
+    return impact.patch_deal(
+        deal_id, payload, actor=actor, source=f"PATCH {router.prefix}/deals/{deal_id}"
+    )
 
 
 @router.delete("/deals/{deal_id}", summary="Detach a deal")
@@ -332,7 +336,9 @@ def delete_deal(
     report about pipeline completeness has to be able to answer, and a hard delete would
     erase the question along with the answer.
     """
-    return impact.detach_deal(deal_id, actor=actor, source=f"DELETE {router.prefix}/deals/{deal_id}")
+    return impact.detach_deal(
+        deal_id, actor=actor, source=f"DELETE {router.prefix}/deals/{deal_id}"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -743,9 +749,7 @@ def _type_room(db: AuditedDatabase, room_id: str, workspace_type: str, *, source
     db.update(room_id, {"type": workspace_type}, actor="dana", source=source)
 
 
-def _seed_engagement(
-    db: AuditedDatabase, sales_rooms: Sequence[str], *, now: Any, rng: Any
-) -> int:
+def _seed_engagement(db: AuditedDatabase, sales_rooms: Sequence[str], *, now: Any, rng: Any) -> int:
     """Add buyer activity to the Sales-typed rooms, in the product's own shape.
 
     Written into the collection the core seeder already fills, in the same record shape, so
@@ -779,7 +783,9 @@ def _seed_engagement(
                     "person": person,
                     "action": action,
                     "target": "Enterprise Overview Deck",
-                    "seconds_on_page": 30 + (step * 11) if rng is None else 30 + rng.randint(5, 240),
+                    "seconds_on_page": 30 + (step * 11)
+                    if rng is None
+                    else 30 + rng.randint(5, 240),
                     "device": "desktop",
                     "occurred_at": _shift(now, day_offset),
                     "source_note": "seeded for the Sales Impact report's engagement half",

@@ -48,8 +48,8 @@ SOURCED_AUTOMATION = (
 
 SOURCED_EXTENSIBILITY = (
     "The room's error model is the extension point - a connector maps vendor codes into "
-    "{retryable, field, code, message, docLink}. A deployment can add a rule (\"route records "
-    "missing `email` to a manual-review queue instead of retrying\") without changing the "
+    '{retryable, field, code, message, docLink}. A deployment can add a rule ("route records '
+    'missing `email` to a manual-review queue instead of retrying") without changing the '
     "transport."
 )
 
@@ -87,9 +87,9 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "rate-limit-is-http-429",
-        "topic": "which transport signal counts as the researched \"rate limit\" class",
+        "topic": 'which transport signal counts as the researched "rate limit" class',
         "basis": (
-            "Sourced: \"rate limit\" is named as a retryable class, and Salesforce's "
+            'Sourced: "rate limit" is named as a retryable class, and Salesforce\'s '
             "REQUEST_LIMIT_EXCEEDED is quoted as the one vendor-specific code. Not sourced: any "
             "statement that 429 is the signal HubSpot or Dataverse use for it."
         ),
@@ -108,11 +108,14 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "lock-versus-precondition",
         "topic": "the research's \"locked\" against Dataverse's 412 conditions",
         "basis": (
-            "Sourced on both sides, and in tension. The automation names \"locked\" as a retryable "
+            'Sourced on both sides, and in tension. The automation names "locked" as a retryable '
             "class. Dataverse documents 412 Precondition Failed for ConcurrencyVersionMismatch and "
             "DuplicateRecord. The source set names no code for a lock."
         ),
-        "value": {"retryable_412": ["LockMismatch"], "terminal_412": ["ConcurrencyVersionMismatch", "DuplicateRecord"]},
+        "value": {
+            "retryable_412": ["LockMismatch"],
+            "terminal_412": ["ConcurrencyVersionMismatch", "DuplicateRecord"],
+        },
         "why": (
             "Taken literally, the two statements contradict each other: 412 is terminal, and locked "
             "is retryable. Read as one, they are consistent. A duplicate record never clears on its "
@@ -140,7 +143,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "which is the property the automatic drain relies on. It is bounded by max_attempts, so "
             "a vendor that answers 503 forever produces a row that becomes a person's problem "
             "after five sends rather than a loop. If a reviewer disagrees, one routing rule with "
-            "when: {\"http_status\": 503} and then: {\"retryable\": false} reverses it."
+            'when: {"http_status": 503} and then: {"retryable": false} reverses it.'
         ),
         "change_it": "The classification table entry `server-fault`, or a routing rule on http_status.",
         "effect_on_default": "a 503 is queued for the automatic drain, up to max_attempts.",
@@ -153,7 +156,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "sourced: any correlation key. The research says individual response errors are "
             "included in the batch response body and names nothing that ties one back to a request."
         ),
-        "value": {"basis": "request_order", "prefers": "a returned id matching a row's trace_id", "row_records_basis": True},
+        "value": {
+            "basis": "request_order",
+            "prefers": "a returned id matching a row's trace_id",
+            "row_records_basis": True,
+        },
         "why": (
             "Position is the only option the documented contract leaves. It is correct for a batch "
             "the connector built and sent in one go, and wrong the moment a vendor reorders, drops "
@@ -170,12 +177,16 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "the-property-falls-back-to-the-rooms-own-rules",
         "topic": "which property the Sync log names when the vendor names none",
         "basis": (
-            "Sourced: the log must show \"a human-readable reason and the offending property\", and "
-            "the detail view shows \"which property, what was sent, what was expected\". Not "
+            'Sourced: the log must show "a human-readable reason and the offending property", and '
+            'the detail view shows "which property, what was sent, what was expected". Not '
             "sourced: any vendor key for the property. Salesforce's per-item error is quoted with "
             "fields; HubSpot's and Dataverse's are not."
         ),
-        "value": {"vendor_first": True, "fallback": "the room's own pre-flight rule for that field", "recorded_as": "field_basis"},
+        "value": {
+            "vendor_first": True,
+            "fallback": "the room's own pre-flight rule for that field",
+            "recorded_as": "field_basis",
+        },
         "why": (
             "A detail view with no property in it is the thing this workflow exists to prevent, and "
             "reading the property out of the room's validation metadata is honest - it is a real "
@@ -224,7 +235,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "that they can be retrieved with the property validation API, so rule kinds beyond the "
             "three here exist in the world; it does not enumerate them."
         ),
-        "value": {"unknown_kind": "400", "unknown_key": "400", "message": "names the accepted kinds"},
+        "value": {
+            "unknown_kind": "400",
+            "unknown_key": "400",
+            "message": "names the accepted kinds",
+        },
         "why": (
             "A stored rule that is silently unenforced looks exactly like a rule that passes, and "
             "the failure it hides is the expensive one: a mapping the team believes is checked, and "
@@ -243,12 +258,16 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "sourced: any attempt bound, any backoff, or what happens when a retryable class "
             "stops being retryable."
         ),
-        "value": {"max_attempts": 5, "backoff": "exponential from 30s, doubling, capped at 30m", "on_expiry": "needs_action"},
+        "value": {
+            "max_attempts": 5,
+            "backoff": "exponential from 30s, doubling, capped at 30m",
+            "on_expiry": "needs_action",
+        },
         "why": (
             "A queue that retries forever is not draining, and a row in a queue forever is a row "
             "nobody ever looks at. The bound is what makes the researched automation terminate: a "
             "row that survives five sends is not a throttle, so it moves to the researched "
-            "\"waits for admin action\" state instead of cycling. The counter does not reset on a "
+            '"waits for admin action" state instead of cycling. The counter does not reset on a '
             "further failure, because a row that has been refused six times has a mapping problem "
             "and forgetting that would put it back in the queue as though it were new. A manual "
             "retry is deliberately not capped: an admin who has just fixed the mapping is "
@@ -265,7 +284,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "visible per row. Not sourced: the case where the response is shorter than the request, "
             "which none of the three documents describes."
         ),
-        "value": {"code": "NO_PER_RECORD_OUTCOME", "status": "failed", "disposition": "needs_action"},
+        "value": {
+            "code": "NO_PER_RECORD_OUTCOME",
+            "status": "failed",
+            "disposition": "needs_action",
+        },
         "why": (
             "Three readings were available - treat it as a success, treat it as a failure, or drop "
             "it. A success is the one that does damage: the log would show a row as written when "
@@ -282,15 +305,19 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "preflight-refuses-and-writes-nothing",
         "topic": "whether a locally-refused row appears in the Sync log",
         "basis": (
-            "Sourced: the title's \"reject invalid writes before commit\", and the flow's \"Admin "
-            "fixes the mapping or the data, and clicks Retry failed rows only\". Not sourced: "
+            'Sourced: the title\'s "reject invalid writes before commit", and the flow\'s "Admin '
+            'fixes the mapping or the data, and clicks Retry failed rows only". Not sourced: '
             "whether a pre-flight refusal is itself a loggable event."
         ),
-        "value": {"writes_rows": False, "writes_audit_rows": False, "endpoint": "POST /api/wf-040/validate"},
+        "value": {
+            "writes_rows": False,
+            "writes_audit_rows": False,
+            "endpoint": "POST /api/wf-040/validate",
+        },
         "why": (
             "It cannot be a row. A row in the Sync log means a result came back, and no request was "
             "sent - so a row there would claim a vendor interaction that never happened, and "
-            "\"Retry failed rows only\" would then offer to re-send a row that was never refused by "
+            '"Retry failed rows only" would then offer to re-send a row that was never refused by '
             "anyone. The refusal is returned to the caller in full, which is where the admin is "
             "standing when they need it, and the batch that may be sent is returned alongside. "
             "POST /validate therefore leaves no audit rows, which the suite asserts."
@@ -327,10 +354,14 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "numErrors-is-hubspots-to-reconcile",
         "topic": "which vendor's error count the room checks itself against",
         "basis": (
-            "Sourced: the HubSpot response contains \"numErrors\": 1 and an errors array. Not "
+            'Sourced: the HubSpot response contains "numErrors": 1 and an errors array. Not '
             "sourced: any count from Dataverse or Salesforce."
         ),
-        "value": {"reconciled_for": ["hubspot"], "mismatch_is": "a note on the run, not a refusal", "silent_when": "absent"},
+        "value": {
+            "reconciled_for": ["hubspot"],
+            "mismatch_is": "a note on the run, not a refusal",
+            "silent_when": "absent",
+        },
         "why": (
             "Only HubSpot is documented to state a count, so only HubSpot is reconciled. A mismatch "
             "is reported rather than treated as a failure: the vendor's count may include something "

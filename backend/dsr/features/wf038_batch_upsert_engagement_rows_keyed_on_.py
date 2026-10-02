@@ -447,7 +447,9 @@ def read_connection(connection_id: str, store: RecordStore = StoreDep) -> dict[s
     }
 
 
-@router.patch("/connections/{connection_id}", summary="Change a connection's key, batch size, or policy")
+@router.patch(
+    "/connections/{connection_id}", summary="Change a connection's key, batch size, or policy"
+)
 def update_connection(
     connection_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -462,9 +464,17 @@ def update_connection(
     """
     config = _config(store)
     existing = _connection(store, connection_id)
-    spec = {**(existing.to_dict() | {"room_id": existing.room_id}), **dict(payload), "id": connection_id}
+    spec = {
+        **(existing.to_dict() | {"room_id": existing.room_id}),
+        **dict(payload),
+        "id": connection_id,
+    }
     record = domain.save_connection(
-        store, spec, config, actor=actor, source=f"PATCH {router.prefix}/connections/{connection_id}"
+        store,
+        spec,
+        config,
+        actor=actor,
+        source=f"PATCH {router.prefix}/connections/{connection_id}",
     )
     connection = Connection.from_record(record, config=config)
     return {
@@ -489,7 +499,10 @@ def delete_connection(
     """
     _connection(store, connection_id)
     result = domain.delete_connection(
-        store, connection_id, actor=actor, source=f"DELETE {router.prefix}/connections/{connection_id}"
+        store,
+        connection_id,
+        actor=actor,
+        source=f"DELETE {router.prefix}/connections/{connection_id}",
     )
     return {"deleted": True, **result}
 
@@ -584,7 +597,9 @@ def record_engagement(
 def run_upsert(
     room_id: str,
     connection_id: str = Query(description="The connection to run"),
-    limit: int | None = Query(default=None, ge=1, description="Rows to take; omit for the whole queue"),
+    limit: int | None = Query(
+        default=None, ge=1, description="Rows to take; omit for the whole queue"
+    ),
     actor: str | None = Query(default=None),
     store: RecordStore = StoreDep,
     transport: domain.Transport = TransportDep,
@@ -686,9 +701,7 @@ def runs(
     detail is on each run, and ``GET /runs/{run_id}`` is where a client reads it
     rather than carrying every request body in the list view.
     """
-    records = domain.list_runs(
-        store, room_id=room_id, connection_id=connection_id, limit=limit
-    )
+    records = domain.list_runs(store, room_id=room_id, connection_id=connection_id, limit=limit)
     entries = [
         {
             "id": record["id"],
@@ -841,8 +854,7 @@ DEMO_CONNECTIONS: tuple[Mapping[str, Any], ...] = (
         "key_field": "eng_key",
         "key_source": "engagement_id",
         "fields": {"event_type": "event_type", "person": "buyer_email"},
-        "notes": "A table that cannot take a batch, so every run falls back to one PATCH "
-        "per row.",
+        "notes": "A table that cannot take a batch, so every run falls back to one PATCH per row.",
     },
 )
 
@@ -995,6 +1007,7 @@ def _demo_transport(connection: Mapping[str, Any]):
         return domain.ScriptedTransport(send_salesforce, note="demo")
 
     if vendor == "hubspot":
+
         def send_hubspot(request):
             # Alternates created/updated, so the run shows both halves of the
             # researched "key found" / "key not found" split.
@@ -1059,7 +1072,9 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     for spec in DEMO_ROWS:
         data = {k: v for k, v in spec.items() if k not in ("minutes_ago", "duplicate_of", "note")}
         data["occurred_at"] = (
-            (now - timedelta(minutes=int(spec.get("minutes_ago") or 0))).isoformat(timespec="seconds")
+            (now - timedelta(minutes=int(spec.get("minutes_ago") or 0))).isoformat(
+                timespec="seconds"
+            )
             if now
             else None
         )
@@ -1079,7 +1094,14 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     # -- one real run each ------------------------------------------------- #
     summaries: list[str] = []
-    counts = {"created": 0, "updated": 0, "failed": 0, "rolled_back": 0, "rejected": 0, "submitted": 0}
+    counts = {
+        "created": 0,
+        "updated": 0,
+        "failed": 0,
+        "rolled_back": 0,
+        "rejected": 0,
+        "submitted": 0,
+    }
     for connection in connections:
         run = domain.run_upsert(
             store,

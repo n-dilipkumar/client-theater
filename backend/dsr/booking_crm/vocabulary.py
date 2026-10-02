@@ -112,9 +112,7 @@ ORDERING_QUOTE = (
 #: record node. Salesforce names it "Create or Update Record", HubSpot names it
 #: "Create or Update Contact"; the constraint is on the *role*, not the label, so
 #: both names are accepted as the anchor.
-ANCHOR_NODES: frozenset[str] = frozenset(
-    {"create_or_update_record", "create_or_update_contact"}
-)
+ANCHOR_NODES: frozenset[str] = frozenset({"create_or_update_record", "create_or_update_contact"})
 
 #: [sourced] The nodes the sentence names as needing to come after it, plus the
 #: two HubSpot spellings of the same two Salesforce nodes.
@@ -168,18 +166,15 @@ NODE_PURPOSE: dict[str, str] = {
     ),
     "update_field": (
         "[sourced] Update Field (Salesforce). 'selected fields updated (e.g. "
-        "Contact.Status = \"Sales Qualified\")'."
+        'Contact.Status = "Sales Qualified")\'.'
     ),
     "update_property": (
         "[sourced] Update Property (HubSpot). The HubSpot spelling of Update Field."
     ),
     "add_to_campaign": (
-        "[sourced] Add to Campaign. 'CampaignMember created/updated with status "
-        "Booked'."
+        "[sourced] Add to Campaign. 'CampaignMember created/updated with status Booked'."
     ),
-    "update_ownership": (
-        "[sourced] Update Ownership. 'record Owner reassigned to the assignee.'"
-    ),
+    "update_ownership": ("[sourced] Update Ownership. 'record Owner reassigned to the assignee.'"),
 }
 
 # --------------------------------------------------------------------------- #
@@ -246,8 +241,7 @@ CREATE_MEANING: dict[str, str] = {
         "is one setting with two values instead of two settings."
     ),
     CREATE_LEAD: (
-        "[sourced] 'Create Lead'. A Lead, and only a Lead, and only when nothing "
-        "matched."
+        "[sourced] 'Create Lead'. A Lead, and only a Lead, and only when nothing matched."
     ),
     CREATE_ALWAYS_LEAD: (
         "[sourced] 'Always create Lead'. A Lead is created *even when* something "
@@ -489,8 +483,7 @@ HISTORY_SHOWS_WHEN_QUOTE = (
 #: [sourced] "Admin later retries any failed CRM Event from Meetings Activity →
 #: Events History."
 HISTORY_RETRY_QUOTE = (
-    "Admin later retries any failed CRM Event from Meetings Activity → Events "
-    "History."
+    "Admin later retries any failed CRM Event from Meetings Activity → Events History."
 )
 
 #: [sourced] Cal's error surface, quoted: "``GET /v2/event-types/{id}/crm-sync-

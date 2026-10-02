@@ -9,11 +9,10 @@ the sourced behaviour can be pinned exhaustively.
 from __future__ import annotations
 
 import pytest
-
 from dsr.domains import (
+    _SECRET_ALPHABET,
     DomainError,
     StaticResolver,
-    _SECRET_ALPHABET,
     build_collaborator_url,
     build_share_url,
     generate_collaborator_token,
@@ -27,7 +26,6 @@ from dsr.domains import (
     room_slug,
     slugify,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Domain normalisation
@@ -198,7 +196,7 @@ def test_our_secret_has_the_shape_of_the_researched_example():
     assert any(char.islower() for char in _SECRET_ALPHABET)
 
     # And across real draws both cases and digits do appear.
-    joined = ''.join(draws)
+    joined = "".join(draws)
     assert any(char.isupper() for char in joined)
     assert any(char.isdigit() for char in joined)
     assert any(char.islower() for char in joined)
@@ -246,27 +244,35 @@ def test_share_url_uses_the_default_host_before_a_domain_is_configured():
 
 
 def test_share_url_switches_host_once_the_domain_verifies():
-    url = build_share_url(_room(domain="proposals.acme.com", domain_status="verified"), base_url=BASE)
+    url = build_share_url(
+        _room(domain="proposals.acme.com", domain_status="verified"), base_url=BASE
+    )
     assert url == "https://proposals.acme.com/r/Proposal-Name-aB3xY9zK1q"
 
 
 def test_share_url_ignores_an_unverified_domain():
     """A domain that has not passed verification must not appear in a share link."""
     for status in ("unverified", "failed", None):
-        url = build_share_url(_room(domain="proposals.acme.com", domain_status=status), base_url=BASE)
+        url = build_share_url(
+            _room(domain="proposals.acme.com", domain_status=status), base_url=BASE
+        )
         assert url.startswith(BASE)
 
 
 def test_share_url_keeps_the_slug_and_secret_when_the_host_changes():
     """Sourced: the slug is preserved and the secret is mandatory on every host."""
     default = build_share_url(_room(), base_url=BASE)
-    custom = build_share_url(_room(domain="proposals.acme.com", domain_status="verified"), base_url=BASE)
+    custom = build_share_url(
+        _room(domain="proposals.acme.com", domain_status="verified"), base_url=BASE
+    )
     assert default.split("/", 3)[3:] == custom.split("/", 3)[3:]
 
 
 def test_share_url_never_omits_the_secret():
     """Sourced: the secret is non-removable and applies even with a custom domain."""
-    custom = build_share_url(_room(domain="proposals.acme.com", domain_status="verified"), base_url=BASE)
+    custom = build_share_url(
+        _room(domain="proposals.acme.com", domain_status="verified"), base_url=BASE
+    )
     assert custom.endswith("aB3xY9zK1q")
 
 
@@ -298,16 +304,22 @@ def test_default_host_is_recognised():
 
 
 def test_claimed_domains_are_recognised():
-    assert recognised_host("proposals.acme.com", claimed_domains=["proposals.acme.com"], base_url=BASE)
+    assert recognised_host(
+        "proposals.acme.com", claimed_domains=["proposals.acme.com"], base_url=BASE
+    )
 
 
 def test_an_unknown_host_is_not_recognised():
     """Routing, not identity: a host we do not serve is not our traffic."""
-    assert not recognised_host("evil.example.net", claimed_domains=["proposals.acme.com"], base_url=BASE)
+    assert not recognised_host(
+        "evil.example.net", claimed_domains=["proposals.acme.com"], base_url=BASE
+    )
 
 
 def test_recognition_is_case_and_port_insensitive():
-    assert recognised_host("Proposals.Acme.com:443", claimed_domains=["proposals.acme.com"], base_url=BASE)
+    assert recognised_host(
+        "Proposals.Acme.com:443", claimed_domains=["proposals.acme.com"], base_url=BASE
+    )
 
 
 def test_an_unusable_stored_domain_is_skipped_not_fatal():
@@ -454,7 +466,10 @@ def test_font_stacks_that_could_escape_the_property_are_rejected(value):
 
 def test_static_resolver_reports_a_match():
     resolver = StaticResolver({"proposals.acme.com": ["cname.dsr.test"]})
-    assert resolver.resolves_to("proposals.acme.com", "cname.dsr.test") == (True, ["cname.dsr.test"])
+    assert resolver.resolves_to("proposals.acme.com", "cname.dsr.test") == (
+        True,
+        ["cname.dsr.test"],
+    )
 
 
 def test_static_resolver_reports_a_mismatch_with_what_it_saw():

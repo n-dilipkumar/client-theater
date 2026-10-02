@@ -42,9 +42,9 @@ from dsr.atomic_bundle.vocabulary import (
     DV_BATCH_MAX_REQUESTS,
     HUBSPOT_ASSOCIATIONS,
     LIMITS,
+    POLICIES,
     POLICY_PARTIAL,
     POLICY_STRICT,
-    POLICIES,
     SALESFORCE_COMPOSITE,
     SALESFORCE_TREE,
     SF_COMPOSITE_MAX_COLLECTIONS,
@@ -286,7 +286,7 @@ def plan_bundle(
     if not ATOMICITY[chosen_dialect]["honours_partial"] and chosen_policy == POLICY_PARTIAL:
         raise PolicyError(
             f"{chosen_dialect} has no partial mode. {ATOMICITY[chosen_dialect]['basis']} "
-            f"[sourced] \"{ATOMICITY[chosen_dialect]['quote']}\""
+            f'[sourced] "{ATOMICITY[chosen_dialect]["quote"]}"'
         )
 
     collate = (
@@ -385,7 +385,9 @@ def _steps(bundle: Mapping[str, Any], dialect: str) -> tuple[Step, ...]:
                     f"{step.reference_id!r} depends on {reference!r}, which is not in the bundle"
                 )
             if seen[reference] >= step.position:
-                where = "itself" if seen[reference] == step.position else f"record {seen[reference]}"
+                where = (
+                    "itself" if seen[reference] == step.position else f"record {seen[reference]}"
+                )
                 raise ReferenceError(
                     f"{step.reference_id!r} depends on {reference!r}, declared at {where} - "
                     "subrequests must be in dependency order, so a step may only reference "
@@ -394,9 +396,7 @@ def _steps(bundle: Mapping[str, Any], dialect: str) -> tuple[Step, ...]:
 
     _check_declared_parent_fields(steps)
     _check_field_references(steps, seen)
-    return tuple(
-        replace(step, fields=_collection_field_map(step)) for step in steps
-    )
+    return tuple(replace(step, fields=_collection_field_map(step)) for step in steps)
 
 
 def _collection_field_map(step: Step) -> dict[str, Any]:
@@ -456,7 +456,9 @@ def _check_field_references(steps: Sequence[Step], seen: Mapping[str, int]) -> N
                     "subrequest in this bundle has that referenceId"
                 )
             if seen[reference] >= step.position:
-                where = "itself" if seen[reference] == step.position else f"record {seen[reference]}"
+                where = (
+                    "itself" if seen[reference] == step.position else f"record {seen[reference]}"
+                )
                 raise ReferenceError(
                     f"{step.reference_id!r} has the placeholder @{{{reference}.{path}}}, which "
                     f"names {where} - subrequests must be in dependency order, so a body may "
@@ -464,9 +466,7 @@ def _check_field_references(steps: Sequence[Step], seen: Mapping[str, int]) -> N
                 )
 
 
-def _parent(
-    entry: Mapping[str, Any], position: int, reference_id: str
-) -> dict[str, str] | None:
+def _parent(entry: Mapping[str, Any], position: int, reference_id: str) -> dict[str, str] | None:
     parent = entry.get("parent")
     if parent is None:
         return None
@@ -490,9 +490,7 @@ def _implicit(entry: Mapping[str, Any], position: int) -> tuple[str, ...]:
     if isinstance(declared, str):
         declared = (declared,)
     if not isinstance(declared, (list, tuple)):
-        raise BundleShapeError(
-            f"record {position} has a non-list implicit_depends_on"
-        )
+        raise BundleShapeError(f"record {position} has a non-list implicit_depends_on")
     seen: list[str] = []
     for reference in declared:
         if not isinstance(reference, str) or not reference.strip():
@@ -601,8 +599,7 @@ def _check_limits(steps: Sequence[Step], dialect: str) -> None:
         if value > maximum:
             quoted = LIMITS[key]["quote"]
             raise LimitExceeded(
-                f"{value} {noun} exceeds the documented maximum of {maximum}. "
-                f"[sourced] \"{quoted}\""
+                f'{value} {noun} exceeds the documented maximum of {maximum}. [sourced] "{quoted}"'
             )
 
 

@@ -143,7 +143,9 @@ def parse_duration(text: object, *, field: str = "duration") -> timedelta:
         raise ConstraintError(
             f"{field} is not an ISO 8601 duration: {text!r}; expected something like 'PT1H' or 'PT30M'"
         )
-    parts = {key: float(value) for key, value in match.groupdict().items() if key != "sign" and value}
+    parts = {
+        key: float(value) for key, value in match.groupdict().items() if key != "sign" and value
+    }
     if not parts:
         raise ConstraintError(f"{field} is an empty duration: {text!r}")
     span = (
@@ -204,9 +206,7 @@ def parse_instant(value: object, *, field: str = "instant") -> datetime:
         try:
             moment = datetime.fromisoformat(text)
         except ValueError as exc:
-            raise ConstraintError(
-                f"{field} is not an RFC 3339 instant: {value!r} ({exc})"
-            ) from exc
+            raise ConstraintError(f"{field} is not an RFC 3339 instant: {value!r} ({exc})") from exc
     else:
         raise ConstraintError(f"{field} must be an RFC 3339 instant such as '2026-10-05T09:00:00Z'")
     if moment.tzinfo is None:
@@ -216,12 +216,7 @@ def parse_instant(value: object, *, field: str = "instant") -> datetime:
 
 def format_instant(moment: datetime) -> str:
     """The canonical ``...Z`` spelling, at second precision."""
-    return (
-        moment.astimezone(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    return moment.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def parse_clock_time(value: object, *, field: str = "local time") -> tuple[int, int]:
@@ -242,9 +237,7 @@ def parse_clock_time(value: object, *, field: str = "local time") -> tuple[int, 
     return hour, minute
 
 
-def overlaps(
-    start: datetime, end: datetime, other_start: datetime, other_end: datetime
-) -> bool:
+def overlaps(start: datetime, end: datetime, other_start: datetime, other_end: datetime) -> bool:
     """Whether two half-open intervals ``[start, end)`` and ``[other_start,
     other_end)`` share any instant.
 

@@ -282,7 +282,7 @@ SOURCED_QUOTES: dict[str, dict[str, str]] = {
             "Salesforce Setup → External Client Apps (or legacy Connected App) "
             "policy screen; HubSpot Developer Platform → app Auth page (client "
             "ID / client secret) and the app-install consent screen; sales-room "
-            "Integrations settings surface; a \"Test connection\" button."
+            'Integrations settings surface; a "Test connection" button.'
         ),
         "where": "WF-034 research evidence → features_tools",
         "means": (
@@ -350,10 +350,8 @@ def describe_vocabulary() -> dict[str, Any]:
             "Admin opens Integrations → Add CRM connection and picks a vendor.",
             "Admin clicks Authorize; the browser goes to the vendor's "
             "authorization URL with client_id, scope and redirect_uri.",
-            "The vendor consent screen asks the admin to choose the org/account "
-            "and grant scopes.",
-            "The vendor redirects back to the sales room's redirect_uri with a "
-            "code.",
+            "The vendor consent screen asks the admin to choose the org/account and grant scopes.",
+            "The vendor redirects back to the sales room's redirect_uri with a code.",
             "The room exchanges the code server-side for an access token and a "
             "refresh token, and seals the refresh token in the credential vault "
             "keyed by the org/account id.",

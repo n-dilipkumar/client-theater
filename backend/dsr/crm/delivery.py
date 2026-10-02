@@ -231,7 +231,9 @@ def deliver(
     if signature:
         headers["X-DSR-Signature"] = signature
 
-    report = DeliveryReport(result=DeliveryResult(ok=False, error="not attempted"), body=body, headers=headers)
+    report = DeliveryReport(
+        result=DeliveryResult(ok=False, error="not attempted"), body=body, headers=headers
+    )
 
     for attempt in range(1, max(1, int(max_attempts)) + 1):
         result = transport.post(url, body, headers, timeout)
@@ -242,7 +244,11 @@ def deliver(
             break
         if attempt < max_attempts:
             # A rate limiter told us when to come back; believe it.
-            wait = result.retry_after if result.retry_after is not None else backoff * (2 ** (attempt - 1))
+            wait = (
+                result.retry_after
+                if result.retry_after is not None
+                else backoff * (2 ** (attempt - 1))
+            )
             if wait > 0:
                 sleep(min(wait, 30.0))
 

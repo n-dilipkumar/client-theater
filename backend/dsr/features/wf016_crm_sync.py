@@ -76,7 +76,7 @@ from typing import Any, Mapping
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
-from dsr.crm import CRMSync, CrmError
+from dsr.crm import CrmError, CRMSync
 from dsr.crm.automations import from_preset
 from dsr.crm.delivery import DeliveryResult
 from dsr.crm.inferences import describe as describe_inferences
@@ -187,7 +187,10 @@ def list_fields(crm: CRMSync = CrmDep) -> dict[str, Any]:
     envelope is one call away through the generic records API.
     """
     records = crm.fields()
-    return {"fields": [record["data"] | {"id": record["id"]} for record in records], "count": len(records)}
+    return {
+        "fields": [record["data"] | {"id": record["id"]} for record in records],
+        "count": len(records),
+    }
 
 
 @router.post("/fields", status_code=201)
@@ -262,7 +265,11 @@ def delete_subscription(
     A soft delete, so the cancellation is audited and the record of what was sent
     where outlives the unsubscribe.
     """
-    crm.unsubscribe(subscription_id, actor=actor, source=f"DELETE {router.prefix}/subscriptions/{subscription_id}")
+    crm.unsubscribe(
+        subscription_id,
+        actor=actor,
+        source=f"DELETE {router.prefix}/subscriptions/{subscription_id}",
+    )
     return Response(status_code=204)
 
 
@@ -325,7 +332,10 @@ def update_automation(
     if crm.get_automation(automation_id) is None:
         raise HTTPException(status_code=404, detail=f"automation {automation_id} not found")
     return crm.update_automation(
-        automation_id, payload, actor=actor, source=f"PATCH {router.prefix}/automations/{automation_id}"
+        automation_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/automations/{automation_id}",
     )
 
 
@@ -484,7 +494,9 @@ class DemoTransport:
     def __init__(self) -> None:
         self.calls: dict[str, int] = {}
 
-    def post(self, url: str, body: bytes, headers: Mapping[str, str], timeout: float) -> DeliveryResult:
+    def post(
+        self, url: str, body: bytes, headers: Mapping[str, str], timeout: float
+    ) -> DeliveryResult:
         self.calls[url] = self.calls.get(url, 0) + 1
         if url.endswith(RATE_LIMITED_SUFFIX):
             if self.calls[url] == 1:

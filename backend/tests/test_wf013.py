@@ -27,13 +27,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr import rules as rules_module
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.rules import RuleError
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-013"
 
@@ -123,7 +122,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
     module = load_feature("wf013_rules")
 
     assert module.FEATURE["id"] in text
-    assert f'id: {module.FEATURE["id"]!r}' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
 
 
 def test_feature_module_does_not_import_the_shared_app():
@@ -142,9 +141,7 @@ def test_the_domain_error_becomes_a_422_through_the_host_handler(client):
     room = make_room(client)
     block = make_block(client, room, type="accept")
 
-    response = client.put(
-        f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text())
-    )
+    response = client.put(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text()))
 
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_rule"
@@ -210,10 +207,18 @@ def test_variables_endpoint_is_empty_before_any_are_defined(client):
 
 def test_variables_merge_account_and_crm_sources(client):
     """S12: CRM variables appear in the conditions list the same as account ones."""
-    client.post("/api/records/variable", json={"name": "region", "label": "Region", "category": "text"})
+    client.post(
+        "/api/records/variable", json={"name": "region", "label": "Region", "category": "text"}
+    )
     client.post(
         "/api/records/variable",
-        json={"name": "segment", "label": "Segment", "category": "text", "source": "crm", "crm": "salesforce"},
+        json={
+            "name": "segment",
+            "label": "Segment",
+            "category": "text",
+            "source": "crm",
+            "crm": "salesforce",
+        },
     )
 
     body = client.get(f"{PREFIX}/variables").json()
@@ -273,7 +278,9 @@ def test_attaching_a_rule_stores_it_on_the_block_and_audits_the_change(client):
     block = make_block(client, room)
 
     response = client.put(
-        f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text()), params={"actor": "dana"}
+        f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule",
+        json=rule(text()),
+        params={"actor": "dana"},
     )
 
     assert response.status_code == 200
@@ -290,7 +297,10 @@ def test_attaching_a_rule_normalises_it(client):
 
     response = client.put(
         f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule",
-        json={"join": "OR", "conditions": [{"variable": "seats", "modifier": "IS_MORE_THAN", "value": 10}]},
+        json={
+            "join": "OR",
+            "conditions": [{"variable": "seats", "modifier": "IS_MORE_THAN", "value": 10}],
+        },
     )
 
     assert response.status_code == 200
@@ -334,16 +344,20 @@ def test_removing_a_rule_that_does_not_exist_is_404(client):
 def test_a_block_from_another_room_is_404(client):
     room_a, room_b = make_room(client, "A"), make_room(client, "B")
     block = make_block(client, room_a)
-    assert client.put(
-        f"{PREFIX}/rooms/{room_b}/blocks/{block['id']}/rule", json=rule(text())
-    ).status_code == 404
+    assert (
+        client.put(
+            f"{PREFIX}/rooms/{room_b}/blocks/{block['id']}/rule", json=rule(text())
+        ).status_code
+        == 404
+    )
 
 
 def test_an_unknown_block_is_404(client):
     room = make_room(client)
-    assert client.put(
-        f"{PREFIX}/rooms/{room}/blocks/block_nope/rule", json=rule(text())
-    ).status_code == 404
+    assert (
+        client.put(f"{PREFIX}/rooms/{room}/blocks/block_nope/rule", json=rule(text())).status_code
+        == 404
+    )
 
 
 # -- S10: the Accept Block, over HTTP ---------------------------------------------- #
@@ -371,7 +385,8 @@ def test_a_rejected_rule_is_not_stored(client):
 def test_a_block_created_with_an_invalid_rule_is_rejected(client):
     room = make_room(client)
     response = client.post(
-        f"{PREFIX}/rooms/{room}/blocks", json={"title": "Bad", "rule": rule(text(modifier="sounds_like"))}
+        f"{PREFIX}/rooms/{room}/blocks",
+        json={"title": "Bad", "rule": rule(text(modifier="sounds_like"))},
     )
     assert response.status_code == 422
     assert client.get(f"{PREFIX}/rooms/{room}/blocks").json()["count"] == 0
@@ -461,7 +476,9 @@ def test_preview_splits_blocks_by_their_rules(client):
     intro = make_block(client, room, title="Intro")
     nz = make_block(client, room, title="NZ pricing")
     client.put(f"{PREFIX}/rooms/{room}/blocks/{au['id']}/rule", json=rule(text(value="Australia")))
-    client.put(f"{PREFIX}/rooms/{room}/blocks/{nz['id']}/rule", json=rule(text(value="New Zealand")))
+    client.put(
+        f"{PREFIX}/rooms/{room}/blocks/{nz['id']}/rule", json=rule(text(value="New Zealand"))
+    )
 
     body = client.post(f"{PREFIX}/rooms/{room}/preview", json={"region": "Australia"}).json()
 
@@ -475,7 +492,9 @@ def test_preview_splits_blocks_by_their_rules(client):
 def test_preview_returns_the_condition_trace(client):
     room = make_room(client)
     block = make_block(client, room)
-    client.put(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text(value="Australia")))
+    client.put(
+        f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text(value="Australia"))
+    )
 
     body = client.post(f"{PREFIX}/rooms/{room}/preview", json={"region": "New Zealand"}).json()
 
@@ -544,7 +563,12 @@ def write_an_unvalidated_rule(client, block_id):
     """The no-bypass gap, used deliberately: PATCH the generic record route."""
     return client.patch(
         f"/api/records/block/{block_id}",
-        json={"rule": {"join": "sideways", "conditions": [{"variable": "region", "modifier": "sounds_like"}]}},
+        json={
+            "rule": {
+                "join": "sideways",
+                "conditions": [{"variable": "region", "modifier": "sounds_like"}],
+            }
+        },
     )
 
 
@@ -641,7 +665,9 @@ def test_personalise_returns_the_same_shape_as_preview(client):
     client.put(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text()))
 
     preview = client.post(f"{PREFIX}/rooms/{room}/preview", json={"region": "Australia"}).json()
-    personalise = client.post(f"{PREFIX}/rooms/{room}/personalise", json={"region": "Australia"}).json()
+    personalise = client.post(
+        f"{PREFIX}/rooms/{room}/personalise", json={"region": "Australia"}
+    ).json()
 
     assert personalise["persisted"] is True
     assert personalise["shown"] == preview["shown"]
@@ -653,7 +679,9 @@ def test_personalise_records_the_values_and_the_decision(client):
     """S13: a generation-time decision stays replayable."""
     room = make_room(client)
     block = make_block(client, room, title="AU pricing")
-    client.put(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text(value="Australia")))
+    client.put(
+        f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text(value="Australia"))
+    )
 
     client.post(
         f"{PREFIX}/rooms/{room}/personalise", json={"region": "Australia"}, params={"actor": "dana"}
@@ -718,9 +746,9 @@ def test_the_saved_block_record_documents_the_loss(client):
     block = make_block(client, room, title="AU pricing")
     client.put(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text()))
 
-    saved = client.post(
-        f"{PREFIX}/rooms/{room}/blocks/{block['id']}/save-to-library"
-    ).json()["saved_block"]
+    saved = client.post(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/save-to-library").json()[
+        "saved_block"
+    ]
 
     assert "rule" not in saved["data"]
     assert saved["data"]["rules_dropped"] is True
@@ -733,9 +761,9 @@ def test_a_saved_block_keeps_the_content_it_was_copied_from(client):
     block = make_block(client, room, title="AU pricing", body="Our pricing", position=1)
     client.put(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/rule", json=rule(text()))
 
-    saved = client.post(
-        f"{PREFIX}/rooms/{room}/blocks/{block['id']}/save-to-library"
-    ).json()["saved_block"]
+    saved = client.post(f"{PREFIX}/rooms/{room}/blocks/{block['id']}/save-to-library").json()[
+        "saved_block"
+    ]
 
     assert saved["data"]["title"] == "AU pricing"
     assert saved["data"]["body"] == "Our pricing"
@@ -777,7 +805,9 @@ def test_saving_to_the_library_is_audited(client):
 
 def test_saving_an_unknown_block_to_the_library_is_404(client):
     room = make_room(client)
-    assert client.post(f"{PREFIX}/rooms/{room}/blocks/block_nope/save-to-library").status_code == 404
+    assert (
+        client.post(f"{PREFIX}/rooms/{room}/blocks/block_nope/save-to-library").status_code == 404
+    )
 
 
 # -- demo data ------------------------------------------------------------------------- #
@@ -871,7 +901,9 @@ def test_seed_reports_when_there_is_nothing_to_attach_to():
     try:
         db = AuditedDatabase(str(Path(tmp.name) / "empty.db"), actor="seed")
         try:
-            assert module.seed(db, {"room_ids": [], "now": datetime.now(timezone.utc), "rng": random.Random("x")})
+            assert module.seed(
+                db, {"room_ids": [], "now": datetime.now(timezone.utc), "rng": random.Random("x")}
+            )
         finally:
             db.close()
     finally:

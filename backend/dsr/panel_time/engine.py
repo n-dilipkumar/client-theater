@@ -32,8 +32,6 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping, Sequence
 
 from dsr.panel_time.calendar import (
-    KIND_GROUP,
-    KIND_ROOM,
     BusyMap,
     Expansion,
     LocalDirectory,
@@ -53,8 +51,8 @@ from dsr.panel_time.errors import (
 )
 from dsr.panel_time.reasons import (
     ADJUSTMENT_MEANING,
-    RETUNE_ADJUSTMENTS,
     RETUNABLE_KEYS,
+    RETUNE_ADJUSTMENTS,
     apply_adjustment,
     derive_empty_reason,
     describe_search,
@@ -78,13 +76,11 @@ from dsr.panel_time.timeutils import (
     parse_instant,
 )
 from dsr.panel_time.vocabulary import (
-    ACTIVITY_DOMAINS,
     CALENDAR_EXPANSION_MAX_LIMIT,
     CALENDAR_EXPANSION_MAX_QUOTE,
     CREATE_CONFERENCE_DEFAULT,
     DEFAULT_MEETING_DURATION,
     DEFAULT_SLOT_INTERVAL,
-    EMPTY_REASONS,
     GROUP_EXPANSION_MAX_LIMIT,
     LOCATION_TYPES,
     MAX_SUGGESTIONS_LIMIT,
@@ -223,9 +219,7 @@ class SlotFinder:
         patch = _calendar_payload(payload, partial=True)
         if not patch:
             return _calendar_summary(record)
-        return _calendar_summary(
-            self.store.update(record["id"], patch, actor=actor, source=source)
-        )
+        return _calendar_summary(self.store.update(record["id"], patch, actor=actor, source=source))
 
     def delete_calendar(
         self, calendar_id: str, *, actor: str | None, source: str
@@ -295,9 +289,7 @@ class SlotFinder:
         patch = _panel_payload(payload, partial=True)
         if not patch:
             return _panel_summary(record)
-        return _panel_summary(
-            self.store.update(record["id"], patch, actor=actor, source=source)
-        )
+        return _panel_summary(self.store.update(record["id"], patch, actor=actor, source=source))
 
     def delete_panel(
         self, room_id: str, panel_id: str, *, actor: str | None, source: str
@@ -420,10 +412,7 @@ class SlotFinder:
             ),
         )
         invited = expansion.invited
-        by_id = {
-            str(record["id"]): record
-            for record in (*calendars, *registry.values())
-        }
+        by_id = {str(record["id"]): record for record in (*calendars, *registry.values())}
 
         # -- step 3: the free/busy read -------------------------------------- #
         time_min, time_max = window(constraint)
@@ -445,9 +434,7 @@ class SlotFinder:
         allowed, house_refusals = apply_house_rules(
             candidates, rules, availability, invited, clock=clock
         )
-        scored = evaluate(
-            allowed, availability, invited, min_attendee_percentage=threshold
-        )
+        scored = evaluate(allowed, availability, invited, min_attendee_percentage=threshold)
         ordered = rank(scored, ranker=ranker, unknown_penalty=unknown_penalty)
         passing = [row for row in ordered if row.meets_threshold]
         limit = int(data.get("max_suggestions") or MAX_SUGGESTIONS_LIMIT)
@@ -523,7 +510,10 @@ class SlotFinder:
                 for calendar_id in invited
             ],
             "time_constraint": constraint,
-            "time_window": {"time_min": format_instant(time_min), "time_max": format_instant(time_max)},
+            "time_window": {
+                "time_min": format_instant(time_min),
+                "time_max": format_instant(time_max),
+            },
             "meeting_duration": format_duration(duration),
             "slot_interval": interval_text,
             "min_attendee_percentage": threshold,
@@ -599,7 +589,12 @@ class SlotFinder:
         record = self.store.create(
             SEARCH_COLLECTION, data, room_id=str(room_id), actor=actor, source=source
         )
-        return {**data, "id": record["id"], "room_id": record["room_id"], "created_at": record["created_at"]}
+        return {
+            **data,
+            "id": record["id"],
+            "room_id": record["room_id"],
+            "created_at": record["created_at"],
+        }
 
     # -- the run log --------------------------------------------------------- #
 
@@ -709,9 +704,7 @@ class SlotFinder:
             "house_rules": previous.get("house_rules"),
             "calendars": panel_record["data"].get("calendars"),
         }
-        adjusted = apply_adjustment(
-            parameters, chosen, days=int(days) if days is not None else 7
-        )
+        adjusted = apply_adjustment(parameters, chosen, days=int(days) if days is not None else 7)
         if adjusted.pop("invite_organizer", False):
             adjusted["calendars"] = _with_organizer(panel_record["data"])
         data = {**panel_record["data"], **adjusted}
@@ -767,9 +760,7 @@ class SlotFinder:
         chosen = parse_instant(wanted, field="start")
 
         known = [entry for entry in search.get("suggestions") or [] if entry.get("start")]
-        match = next(
-            (entry for entry in known if parse_instant(entry["start"]) == chosen), None
-        )
+        match = next((entry for entry in known if parse_instant(entry["start"]) == chosen), None)
         if match is None:
             raise SlotUnavailable(
                 f"{format_instant(chosen)} is not one of the {len(known)} slot(s) this search "
@@ -886,9 +877,7 @@ class SlotFinder:
         )
         return _booking_summary(record)
 
-    def list_bookings(
-        self, room_id: str, *, panel_id: str | None = None
-    ) -> list[dict[str, Any]]:
+    def list_bookings(self, room_id: str, *, panel_id: str | None = None) -> list[dict[str, Any]]:
         """Every panel booked for this room, newest first."""
         self.require_room(room_id)
         where: dict[str, Any] = {}
@@ -1008,13 +997,17 @@ class SlotFinder:
 
 def _calendar_payload(payload: Mapping[str, Any], *, partial: bool = False) -> dict[str, Any]:
     if not isinstance(payload, Mapping):
-        raise CalendarShapeError(f"a calendar payload must be an object; got {type(payload).__name__}")
+        raise CalendarShapeError(
+            f"a calendar payload must be an object; got {type(payload).__name__}"
+        )
     data: dict[str, Any] = {}
 
     if payload.get("email") is not None or payload.get("name") is not None or not partial:
         email = str(payload.get("email") or "").strip()
         if not partial and not email:
-            raise CalendarShapeError("a calendar needs an email; it is what a free/busy read is asked about")
+            raise CalendarShapeError(
+                "a calendar needs an email; it is what a free/busy read is asked about"
+            )
         if email:
             if "@" not in email or email.startswith("@") or email.endswith("@"):
                 raise CalendarShapeError(f"email must be an address; got {email!r}")
@@ -1024,7 +1017,9 @@ def _calendar_payload(payload: Mapping[str, Any], *, partial: bool = False) -> d
     if payload.get("kind") is not None:
         kind = str(payload["kind"])
         if kind not in ("person", "room", "group"):
-            raise CalendarShapeError(f"kind must be one of ['person', 'room', 'group']; got {kind!r}")
+            raise CalendarShapeError(
+                f"kind must be one of ['person', 'room', 'group']; got {kind!r}"
+            )
         data["kind"] = kind
     if payload.get("provider") is not None:
         provider = str(payload["provider"])
@@ -1044,16 +1039,28 @@ def _calendar_payload(payload: Mapping[str, Any], *, partial: bool = False) -> d
         from dsr.panel_time.calendar import _busy_blocks
 
         _busy_blocks(payload["busy"])  # raises CalendarShapeError on a bad interval
-        data["busy"] = [dict(entry) if isinstance(entry, Mapping) else entry for entry in payload["busy"]]
+        data["busy"] = [
+            dict(entry) if isinstance(entry, Mapping) else entry for entry in payload["busy"]
+        ]
     if payload.get("time_zone") is not None:
         data["time_zone"] = str(payload["time_zone"])
     if not partial and "kind" not in data:
         data["kind"] = "person"
 
-    extra = sorted(set(payload) - {
-        "email", "name", "kind", "provider", "members", "readable",
-        "unavailable_reason", "busy", "time_zone",
-    })
+    extra = sorted(
+        set(payload)
+        - {
+            "email",
+            "name",
+            "kind",
+            "provider",
+            "members",
+            "readable",
+            "unavailable_reason",
+            "busy",
+            "time_zone",
+        }
+    )
     for key in extra:
         data[key] = payload[key]
     if not data and partial:
@@ -1069,24 +1076,32 @@ def _panel_payload(payload: Mapping[str, Any], *, partial: bool = False) -> dict
     if payload.get("name") is not None or not partial:
         name = str(payload.get("name") or "").strip()
         if not partial and not name:
-            raise PanelShapeError("a panel needs a name; the researched flow starts by picking a set of participants")
+            raise PanelShapeError(
+                "a panel needs a name; the researched flow starts by picking a set of participants"
+            )
         if name:
             data["name"] = name
     if payload.get("provider") is not None:
         provider = str(payload["provider"])
         if provider not in PROVIDER_NAMES:
-            raise PanelShapeError(f"provider must be one of {list(PROVIDER_NAMES)}; got {provider!r}")
+            raise PanelShapeError(
+                f"provider must be one of {list(PROVIDER_NAMES)}; got {provider!r}"
+            )
         data["provider"] = provider
     if payload.get("calendar_provider") is not None:
         provider = str(payload["calendar_provider"])
         if provider not in PROVIDERS:
-            raise PanelShapeError(f"calendar_provider must be one of {list(PROVIDERS)}; got {provider!r}")
+            raise PanelShapeError(
+                f"calendar_provider must be one of {list(PROVIDERS)}; got {provider!r}"
+            )
         data["calendar_provider"] = provider
     if payload.get("organizer") is not None:
         data["organizer"] = str(payload["organizer"])
     if payload.get("calendars") is not None:
         if not isinstance(payload["calendars"], (list, tuple, Mapping)):
-            raise PanelShapeError("calendars must be a list of addresses or an object of per-calendar settings")
+            raise PanelShapeError(
+                "calendars must be a list of addresses or an object of per-calendar settings"
+            )
         data["calendars"] = payload["calendars"]
     if payload.get("time_constraint") is not None:
         data["time_constraint"] = normalise_time_constraint(payload["time_constraint"])
@@ -1138,7 +1153,7 @@ def _panel_payload(payload: Mapping[str, Any], *, partial: bool = False) -> dict
         if data.get(key) is not None and data[key] > limit:
             raise LimitExceeded(
                 f"{key} is {data[key]}; the documented maximum is {limit} "
-                f"(\"{CALENDAR_EXPANSION_MAX_QUOTE}\")"
+                f'("{CALENDAR_EXPANSION_MAX_QUOTE}")'
                 if key == "calendar_expansion_max"
                 else f"{key} is {data[key]}; the documented maximum is {limit}"
             )
@@ -1159,13 +1174,33 @@ def _panel_payload(payload: Mapping[str, Any], *, partial: bool = False) -> dict
             "a panel needs a time_constraint. The researched flow step 1 is 'picks a set of "
             "participants + a date range', and the date range is what the search enumerates."
         )
-    extra = sorted(set(payload) - {
-        "name", "provider", "calendar_provider", "organizer", "calendars", "time_constraint",
-        "meeting_duration", "slot_interval", "min_attendee_percentage", "return_suggestion_reasons",
-        "ranker", "unknown_penalty", "house_rules", "location_constraint", "time_zone",
-        "max_suggestions", "group_expansion_max", "calendar_expansion_max", "widen_days",
-        "graph_user", "room_only", "access_token",
-    })
+    extra = sorted(
+        set(payload)
+        - {
+            "name",
+            "provider",
+            "calendar_provider",
+            "organizer",
+            "calendars",
+            "time_constraint",
+            "meeting_duration",
+            "slot_interval",
+            "min_attendee_percentage",
+            "return_suggestion_reasons",
+            "ranker",
+            "unknown_penalty",
+            "house_rules",
+            "location_constraint",
+            "time_zone",
+            "max_suggestions",
+            "group_expansion_max",
+            "calendar_expansion_max",
+            "widen_days",
+            "graph_user",
+            "room_only",
+            "access_token",
+        }
+    )
     for key in extra:
         data[key] = payload[key]
     return data
@@ -1175,7 +1210,7 @@ def _location_constraint(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, Mapping):
         raise PanelShapeError(
             f"location_constraint must be an object; got {type(raw).__name__}. The research's "
-            'step 2 is "location constraints (room / \"suggest a location\")".'
+            'step 2 is "location constraints (room / "suggest a location")".'
         )
     kind = str(raw.get("type") or "suggest")
     if kind not in LOCATION_TYPES:
@@ -1235,7 +1270,9 @@ def _attendees(
         record = by_id.get(calendar_id) or {}
         address = str((record.get("data") or {}).get("email") or "")
         if address:
-            entries.append({"email": address, "name": str((record.get("data") or {}).get("name") or "")})
+            entries.append(
+                {"email": address, "name": str((record.get("data") or {}).get("name") or "")}
+            )
     if not entries:
         organizer = data.get("organizer")
         if isinstance(organizer, str) and "@" in organizer:
@@ -1252,7 +1289,11 @@ def _address_of(by_id: Mapping[str, Any], calendar_id: str) -> str | None:
 
 def _statuses(evaluation: Any) -> list[str]:
     """One status per invited calendar, so the graph-shaped result is legible."""
-    statuses = ["free"] * len(evaluation.free) + ["tentative"] * len(evaluation.unknown) + ["none"] * len(evaluation.busy)
+    statuses = (
+        ["free"] * len(evaluation.free)
+        + ["tentative"] * len(evaluation.unknown)
+        + ["none"] * len(evaluation.busy)
+    )
     return statuses
 
 
@@ -1260,7 +1301,9 @@ def _candidate_of(entry: Mapping[str, Any]) -> Any:
     from dsr.panel_time.slots import Candidate
 
     return Candidate(
-        parse_instant(entry["start"]), parse_instant(entry["end"]), int(entry.get("slot_index") or 0)
+        parse_instant(entry["start"]),
+        parse_instant(entry["end"]),
+        int(entry.get("slot_index") or 0),
     )
 
 
@@ -1276,10 +1319,18 @@ def _warnings(
 ) -> list[dict[str, str]]:
     warnings: list[dict[str, str]] = []
     organizer = data.get("organizer")
-    resolved = next(
-        (calendar_id for calendar_id in invited if _address_of(by_id, calendar_id) == organizer),
-        None,
-    ) if organizer else None
+    resolved = (
+        next(
+            (
+                calendar_id
+                for calendar_id in invited
+                if _address_of(by_id, calendar_id) == organizer
+            ),
+            None,
+        )
+        if organizer
+        else None
+    )
     if not organizer or resolved is None:
         # The researched step 5 creates the event *on the organizer's calendar*, so
         # a shortlist nobody can book is worth a shortlist. Warned on every search
@@ -1293,9 +1344,9 @@ def _warnings(
                     if not organizer
                     else f"this panel's organizer ({organizer}) is not among the invited calendars"
                 )
-                    + ", so the researched step 5 has no calendar to create the event on. "
-                    "The shortlist below is still what the calendars say, but booking it "
-                    "will be refused until the panel names an organizer that is invited.",
+                + ", so the researched step 5 has no calendar to create the event on. "
+                "The shortlist below is still what the calendars say, but booking it "
+                "will be refused until the panel names an organizer that is invited.",
             }
         )
     if not clock.exact:
