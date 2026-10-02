@@ -59,22 +59,20 @@ see a refusal before causing one.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from dsr.db.audited import AuditedDatabase, RecordNotFound
 from dsr.deps import StoreDep
-from dsr.scheduling import MeetingChangeEngine
-from dsr.scheduling import inferences as scheduling_inferences
-from dsr.scheduling import propagation
+from dsr.scheduling import MeetingChangeEngine, inferences as scheduling_inferences, propagation
 from dsr.scheduling.availability import MAX_RANGE_DAYS
 from dsr.scheduling.errors import MeetingChangeError
 from dsr.scheduling.meeting_types import MAX_RESCHEDULE_HORIZON_DAYS
 from dsr.scheduling.vocabulary import (
-    CHANGE_RESCHEDULED,
     CHANGE_RESCHEDULE_REQUESTED,
+    CHANGE_RESCHEDULED,
     published_vocabulary,
 )
 from dsr.store import RecordStore
@@ -274,7 +272,9 @@ def delete_meeting_type(
     if engine.get_meeting_type(meeting_type_id) is None:
         raise HTTPException(status_code=404, detail=f"meeting type {meeting_type_id} not found")
     engine.delete_meeting_type(
-        meeting_type_id, actor=actor, source=f"DELETE {router.prefix}/meeting-types/{meeting_type_id}"
+        meeting_type_id,
+        actor=actor,
+        source=f"DELETE {router.prefix}/meeting-types/{meeting_type_id}",
     )
     return Response(status_code=204)
 
@@ -599,7 +599,11 @@ def read_reschedule_request(
     return record
 
 
-@router.post("/reschedule-requests/{request_id}/complete", status_code=201, summary="Complete a reschedule request")
+@router.post(
+    "/reschedule-requests/{request_id}/complete",
+    status_code=201,
+    summary="Complete a reschedule request",
+)
 def complete_reschedule_request(
     request_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -613,7 +617,10 @@ def complete_reschedule_request(
     the reason the request was raised.
     """
     return engine.complete_request(
-        request_id, payload, actor=actor, source=f"POST {router.prefix}/reschedule-requests/{request_id}/complete"
+        request_id,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/reschedule-requests/{request_id}/complete",
     )
 
 
@@ -673,7 +680,9 @@ def plan_change(
     return engine.plan(room_id, uid, payload)
 
 
-@router.post("/rooms/{room_id}/bookings/{uid}/reschedule", status_code=201, summary="Reschedule a meeting")
+@router.post(
+    "/rooms/{room_id}/bookings/{uid}/reschedule", status_code=201, summary="Reschedule a meeting"
+)
 def reschedule(
     room_id: str,
     uid: str,
@@ -694,11 +703,19 @@ def reschedule(
     produce and the one a rep reads afterwards.
     """
     return engine.reschedule(
-        room_id, uid, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/bookings/{uid}/reschedule"
+        room_id,
+        uid,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/bookings/{uid}/reschedule",
     )
 
 
-@router.post("/rooms/{room_id}/bookings/{uid}/request-reschedule", status_code=201, summary="Ask the attendee to pick a new time")
+@router.post(
+    "/rooms/{room_id}/bookings/{uid}/request-reschedule",
+    status_code=201,
+    summary="Ask the attendee to pick a new time",
+)
 def request_reschedule(
     room_id: str,
     uid: str,
@@ -742,7 +759,11 @@ def cancel(
     rest from the caller.
     """
     return engine.cancel(
-        room_id, uid, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/bookings/{uid}/cancel"
+        room_id,
+        uid,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/bookings/{uid}/cancel",
     )
 
 
@@ -1135,8 +1156,10 @@ def _at(spec: Mapping[str, Any], base: Any) -> str:
         working_day = False
         text = text[1:]
     hour, _, minute = text.partition(":")
-    target = (moment + timedelta(days=days)).astimezone(timezone.utc).replace(
-        hour=int(hour), minute=int(minute or 0), second=0, microsecond=0
+    target = (
+        (moment + timedelta(days=days))
+        .astimezone(timezone.utc)
+        .replace(hour=int(hour), minute=int(minute or 0), second=0, microsecond=0)
     )
     if working_day:
         while target.weekday() > 4:
@@ -1144,9 +1167,7 @@ def _at(spec: Mapping[str, Any], base: Any) -> str:
     return target.isoformat(timespec="seconds")
 
 
-def _next_slot(
-    engine: MeetingChangeEngine, meeting_type_id: str | None, now: Any
-) -> str:
+def _next_slot(engine: MeetingChangeEngine, meeting_type_id: str | None, now: Any) -> str:
     """The first open slot on a Meeting Type, read off the recomputed availability.
 
     Used by the one demo case that has to name a new time it did not choose -
@@ -1202,8 +1223,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         return f"demo-token-{counter['n']:04d}"
 
     engine = MeetingChangeEngine(
-        store, clock=(lambda: now) if now is not None else None,
-        uid_factory=lambda: f"bk_demo_{counter['n']:04d}", token_factory=next_token,
+        store,
+        clock=(lambda: now) if now is not None else None,
+        uid_factory=lambda: f"bk_demo_{counter['n']:04d}",
+        token_factory=next_token,
     )
 
     meeting_types = [
@@ -1262,13 +1285,17 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         meeting_type = booking["data"].get("meeting_type_id")
         try:
             if case["intent"] == "reschedule":
-                change = engine.reschedule(room_id, data["uid"], payload, actor="dana", source=source)
+                change = engine.reschedule(
+                    room_id, data["uid"], payload, actor="dana", source=source
+                )
             elif case["intent"] == "reschedule_then_cancel":
                 # Move it and then release it, so the CRM Event exists and the
                 # Delete Event toggle is consulted on a row it can act on. Two
                 # history rows, which is also what really happens to a meeting
                 # that was moved and then called off.
-                moved = engine.reschedule(room_id, data["uid"], payload, actor="dana", source=source)
+                moved = engine.reschedule(
+                    room_id, data["uid"], payload, actor="dana", source=source
+                )
                 landed.append(CHANGE_RESCHEDULED)
                 # The reason is the cancellation's, not the reschedule's - it ships
                 # in BOOKING_CANCELLED and is what a rep reads afterwards.

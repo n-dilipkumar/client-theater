@@ -233,7 +233,7 @@ def build_create_request(
 
     resolved = [metadata.property(name) for name in names]
     if any(prop is None for prop in resolved):
-        missing = [name for name, prop in zip(names, resolved) if prop is None]
+        missing = [name for name, prop in zip(names, resolved, strict=True) if prop is None]
         raise InvalidSyncKey(
             f"the pinned sync key names {', '.join(missing)}, which the object does not carry; "
             "re-read the property metadata and re-pin"
@@ -330,9 +330,9 @@ def _hubspot_plan(
         "crm_object": metadata.crm_object,
         "already_enforced": first.unique,
         "note": (
-            "\"To create a property requiring unique values via API: 1. Make a POST request to "
+            '"To create a property requiring unique values via API: 1. Make a POST request to '
             "/crm/properties/2026-09/{objectType}. 2. In your request body, for the hasUniqueValue "
-            "field, set the value to true.\""
+            'field, set the value to true."'
         ),
         "steps": [
             {

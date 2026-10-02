@@ -169,11 +169,14 @@ def read_booking_request(
             count = int(raw_count)
         except (TypeError, ValueError) as exc:
             raise RecurrenceOutOfRange(
-                f"recurrenceCount must be a whole number, got {raw_count!r}", limit="recurrenceCount"
+                f"recurrenceCount must be a whole number, got {raw_count!r}",
+                limit="recurrenceCount",
             ) from exc
         if count < 1:
             raise RecurrenceOutOfRange(
-                f"recurrenceCount must be at least 1, got {count}", limit="recurrenceCount", value=count
+                f"recurrenceCount must be at least 1, got {count}",
+                limit="recurrenceCount",
+                value=count,
             )
         if count > MAX_RECURRENCE_COUNT:
             raise RecurrenceOutOfRange(
@@ -231,9 +234,7 @@ def require_team_event_for_instant(request: BookingRequest, event_type: Mapping[
         )
 
 
-def resolve_instant_start(
-    request: BookingRequest, slots: Sequence[Mapping[str, Any]]
-) -> str:
+def resolve_instant_start(request: BookingRequest, slots: Sequence[Mapping[str, Any]]) -> str:
     """The start an instant booking takes when the caller named none.
 
     The soonest bookable slot on the grid, or a refusal naming the state of the
@@ -253,9 +254,7 @@ def resolve_instant_start(
     return str(slot["start"])
 
 
-def describe_window(
-    start: str, *, count: int, interval_days: int = 7
-) -> list[str]:
+def describe_window(start: str, *, count: int, interval_days: int = 7) -> list[str]:
     """The starts of a recurring series.
 
     Weekly, because the research says ``recurrenceCount`` and nothing else: there
@@ -327,9 +326,7 @@ def booking_payload(
     }
 
 
-def _conference_link(
-    event_type: Mapping[str, Any], location: str, uid: str
-) -> str | None:
+def _conference_link(event_type: Mapping[str, Any], location: str, uid: str) -> str | None:
     """The conference link for a booking, or ``None`` when there is none.
 
     Zoom, Google Meet, Teams and Webex are the four the data_sources line names, and
@@ -348,9 +345,7 @@ def _conference_link(
     }[provider]
 
 
-def booking_created_event(
-    booking: Mapping[str, Any], *, booking_record_id: str
-) -> dict[str, Any]:
+def booking_created_event(booking: Mapping[str, Any], *, booking_record_id: str) -> dict[str, Any]:
     """The ``BOOKING_CREATED`` payload, shaped the way a webhook consumer reads it.
 
     The research names the event and says downstream automations chain off it. The

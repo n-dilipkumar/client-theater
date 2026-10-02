@@ -77,7 +77,7 @@ DEFAULT_PREFLIGHT_RULES: tuple[dict[str, Any], ...] = (
         "message": "A contact cannot be created without an email address.",
         "basis": (
             "The research's own extensibility example: \"route records missing `email` to a "
-            "manual-review queue instead of retrying\". It names email as a field a record can be "
+            'manual-review queue instead of retrying". It names email as a field a record can be '
             "missing, which is a presence rule the room can check before it sends anything."
         ),
     },
@@ -90,7 +90,7 @@ DEFAULT_PREFLIGHT_RULES: tuple[dict[str, Any], ...] = (
         "value": 200,
         "message": None,
         "basis": (
-            "The quoted Dataverse refusal, in full: \"A validation error occurred. The length of the "
+            'The quoted Dataverse refusal, in full: "A validation error occurred. The length of the '
             "'subject' attribute of the 'task' entity exceeded the maximum allowed length of "
             "'200'.\" Entity, field and limit are all in the sentence."
         ),
@@ -147,7 +147,9 @@ def validate_rule(rule: Any) -> dict[str, Any]:
 
     field = str(rule.get("field") or "").strip()
     if not field:
-        raise InvalidRule(f"rule {identifier}: field is required; a rule that names no property checks nothing")
+        raise InvalidRule(
+            f"rule {identifier}: field is required; a rule that names no property checks nothing"
+        )
 
     kind = str(rule.get("kind") or "").strip()
     if kind not in PREFLIGHT_KINDS:
@@ -171,9 +173,13 @@ def validate_rule(rule: Any) -> dict[str, Any]:
                 f"rule {identifier}: a {kind} rule needs a whole-number limit; got {value!r}"
             )
         if float(value) != int(value):
-            raise InvalidRule(f"rule {identifier}: a {kind} limit must be a whole number; got {value!r}")
+            raise InvalidRule(
+                f"rule {identifier}: a {kind} limit must be a whole number; got {value!r}"
+            )
         if int(value) < 0:
-            raise InvalidRule(f"rule {identifier}: a {kind} limit cannot be negative; got {value!r}")
+            raise InvalidRule(
+                f"rule {identifier}: a {kind} limit cannot be negative; got {value!r}"
+            )
         value = int(value)
 
     checked: dict[str, Any] = {
@@ -299,9 +305,13 @@ def check_row(
         limit = int(rule["value"] or 0)
         length = len(sent)
         if rule["kind"] == "max_length" and length > limit:
-            violations.append(_violation(rule, sent=sent, present=True, note=f"{length} characters"))
+            violations.append(
+                _violation(rule, sent=sent, present=True, note=f"{length} characters")
+            )
         elif rule["kind"] == "min_length" and length < limit:
-            violations.append(_violation(rule, sent=sent, present=True, note=f"{length} characters"))
+            violations.append(
+                _violation(rule, sent=sent, present=True, note=f"{length} characters")
+            )
 
     return violations
 
@@ -383,7 +393,9 @@ def expectations_for(
     return found
 
 
-def covers(rules: Sequence[Mapping[str, Any]], *, connector: str, entity: str, field: str | None) -> bool:
+def covers(
+    rules: Sequence[Mapping[str, Any]], *, connector: str, entity: str, field: str | None
+) -> bool:
     """Does any rule speak about this property at all?
 
     A validation-class failure the room has no rule for is the visible symptom of
@@ -396,6 +408,7 @@ def covers(rules: Sequence[Mapping[str, Any]], *, connector: str, entity: str, f
 # --------------------------------------------------------------------------- #
 # Internals
 # --------------------------------------------------------------------------- #
+
 
 #: Distinguishes "the property was not in the payload" from "the property was
 #: present and its value was null". The detail view states which, because the fix
@@ -425,8 +438,7 @@ def _violation(rule: Mapping[str, Any], *, sent: Any, present: bool, note: str) 
             message = f"{rule['field']} is required and was {note}."
         elif kind == "max_length":
             message = (
-                f"{rule['field']} exceeded the maximum allowed length of '{limit}' "
-                f"({note} sent)."
+                f"{rule['field']} exceeded the maximum allowed length of '{limit}' ({note} sent)."
             )
         else:
             message = f"{rule['field']} is shorter than the minimum of '{limit}' characters ({note} sent)."

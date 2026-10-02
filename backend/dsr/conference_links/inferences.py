@@ -147,7 +147,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "those who don't want to use one-time links.' The research does not say a blank one is "
             "refused."
         ),
-        "value": {"conference_details": "reported", "connection_id": "enforced", "name": "enforced"},
+        "value": {
+            "conference_details": "reported",
+            "connection_id": "enforced",
+            "name": "enforced",
+        },
         "why": (
             "An admin saving an empty Conference Details and filling it in later is a real "
             "workflow and a hard refusal would block it, so the gap is reported on the record and "

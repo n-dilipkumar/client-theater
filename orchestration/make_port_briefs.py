@@ -8,6 +8,7 @@ asked and compare it against what was delivered.
 
 Run from the repo root:  .venv/Scripts/python.exe orchestration/port_prompt.py
 """
+
 import sys
 from pathlib import Path
 

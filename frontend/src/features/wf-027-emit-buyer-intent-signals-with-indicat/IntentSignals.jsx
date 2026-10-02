@@ -96,7 +96,9 @@ function Composer({ room, registrations, onSent }) {
       try {
         observations = JSON.parse(form.observations || '{}')
       } catch (caught) {
-        throw new Error(`observations must be a JSON object: ${caught.message}`)
+        // `cause` keeps the JSON parser's own message attached, so the refusal
+        // names both what was wrong and why, rather than dropping the original.
+        throw new Error(`observations must be a JSON object: ${caught.message}`, { cause: caught })
       }
       const body = {
         type: form.type,
@@ -604,19 +606,13 @@ function Registry({ registrations, flagged, vocabulary, onRegister, onAmend, onW
 
   async function register(event) {
     event.preventDefault()
-    let dataShape
-    let indicators
-    try {
-      dataShape = JSON.parse(form.data_shape || '{}')
-    } catch (caught) {
-      throw caught
-    }
+    const dataShape = JSON.parse(form.data_shape || '{}')
     // Indicators are typed as one JSON object per key here rather than as the
     // researched array, because a form field holding a JSON array of objects with
     // nested schemas is unreadable and unmaintainable. The server still receives
     // the researched shape.
     const declared = JSON.parse(form.indicators || '{}')
-    indicators = Object.entries(declared).map(([key, shape]) => ({
+    const indicators = Object.entries(declared).map(([key, shape]) => ({
       key,
       metadata_shape: { type: 'object', properties: { [key]: shape }, required: [key] },
       description: { en: `${key.replace(/_/g, ' ')}.` },

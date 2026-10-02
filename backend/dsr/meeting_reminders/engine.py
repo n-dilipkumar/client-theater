@@ -34,9 +34,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Sequence
 
 from dsr.db.audited import RecordNotFound
-from dsr.meeting_reminders import conditions as cond
-from dsr.meeting_reminders import tags as tagmod
-from dsr.meeting_reminders import vocabulary as vocab
+from dsr.meeting_reminders import conditions as cond, tags as tagmod, vocabulary as vocab
 from dsr.meeting_reminders.errors import ConfigurationRefused, ReminderError
 from dsr.store import RecordStore
 
@@ -115,7 +113,9 @@ class ReminderEngine:
         """The setup as a plain mapping, which is what the rules read."""
         return dict(self.org().get("data") or {})
 
-    def save_org(self, payload: Mapping[str, Any], *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def save_org(
+        self, payload: Mapping[str, Any], *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Write the organisation's messaging setup.
 
         Upsert by the fixed marker rather than by a client-supplied id, so
@@ -123,13 +123,17 @@ class ReminderEngine:
         """
         body = dict(payload or {})
         existing = self.org()
-        record = self.store.update(
-            existing["id"],
-            {**body, "key": ORG_KEY},
-            actor=actor,
-            source=source,
-        ) if existing.get("id") else self.store.create(
-            ORG_COLLECTION, {**body, "key": ORG_KEY}, actor=actor, source=source
+        record = (
+            self.store.update(
+                existing["id"],
+                {**body, "key": ORG_KEY},
+                actor=actor,
+                source=source,
+            )
+            if existing.get("id")
+            else self.store.create(
+                ORG_COLLECTION, {**body, "key": ORG_KEY}, actor=actor, source=source
+            )
         )
         return record
 
@@ -175,7 +179,9 @@ class ReminderEngine:
         channel = vocab.require_channel(merged.get("channel"))
         condition = vocab.require_condition(merged.get("condition"))
         offset = vocab.require_offset(
-            (merged.get("offset") or {}).get("value", merged.get("offsetValue", vocab.DEFAULT_OFFSET)),
+            (merged.get("offset") or {}).get(
+                "value", merged.get("offsetValue", vocab.DEFAULT_OFFSET)
+            ),
             (merged.get("offset") or {}).get("unit", merged.get("offsetUnit", vocab.DEFAULT_UNIT)),
         )
 
@@ -200,7 +206,9 @@ class ReminderEngine:
         else:
             email_to = vocab.require_email_to(merged.get("emailTo"))
             email_from = vocab.require_email_from(merged.get("emailFrom"))
-            if email_from in vocab.EMAIL_FROM_REQUIRES and not self.org_settings().get("noreply_domain"):
+            if email_from in vocab.EMAIL_FROM_REQUIRES and not self.org_settings().get(
+                "noreply_domain"
+            ):
                 raise ConfigurationRefused(
                     f"a {email_from} sender needs the organisation's own sending domain configured "
                     "first; the research calls it a 'No-reply address on a custom domain'"
@@ -228,9 +236,15 @@ class ReminderEngine:
             "rules": [verdict["rule"] for verdict in group["rules"]],
         }
         payload[vocab.SOURCE_LOCALE] = vocab.require_source_locale(merged.get(vocab.SOURCE_LOCALE))
-        payload["includeCalendarEvent"] = vocab.include_calendar_event(merged.get("includeCalendarEvent"))
-        payload["skipNoShowAttendees"] = vocab.skip_no_show_attendees(merged.get("skipNoShowAttendees"))
-        payload["autoTranslateEnabled"] = vocab.auto_translate_enabled(merged.get("autoTranslateEnabled"))
+        payload["includeCalendarEvent"] = vocab.include_calendar_event(
+            merged.get("includeCalendarEvent")
+        )
+        payload["skipNoShowAttendees"] = vocab.skip_no_show_attendees(
+            merged.get("skipNoShowAttendees")
+        )
+        payload["autoTranslateEnabled"] = vocab.auto_translate_enabled(
+            merged.get("autoTranslateEnabled")
+        )
         payload.setdefault("enabled", True)
         if not str(payload.get("name") or "").strip():
             raise ReminderError("a reminder needs a name; the research's own list is a named asset")
@@ -285,10 +299,15 @@ class ReminderEngine:
         """
         current = self.require_reminder(reminder_id)
         return self.store.update(
-            reminder_id, self.validate_reminder(patch, existing=current["data"]), actor=actor, source=source
+            reminder_id,
+            self.validate_reminder(patch, existing=current["data"]),
+            actor=actor,
+            source=source,
         )
 
-    def delete_reminder(self, reminder_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def delete_reminder(
+        self, reminder_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """**Delete** the asset. Soft.
 
         The researched counterpart to :meth:`detach_reminder`, and the two are
@@ -302,7 +321,12 @@ class ReminderEngine:
     # -- meeting types ------------------------------------------------------- #
 
     def create_meeting_type(
-        self, spec: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None, source: str
+        self,
+        spec: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         """Declare a Meeting Type, which reminders attach to and bookings are made against.
 
@@ -324,7 +348,9 @@ class ReminderEngine:
             return None
         return record
 
-    def list_meeting_types(self, *, room_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def list_meeting_types(
+        self, *, room_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
         records = self.store.list(MEETING_TYPE_COLLECTION, limit=limit)
         if room_id is not None:
             records = [record for record in records if record.get("room_id") in (None, room_id)]
@@ -389,7 +415,9 @@ class ReminderEngine:
         )
 
     def attachments(self, meeting_type_id: str) -> list[dict[str, Any]]:
-        return self.store.find(ATTACHMENT_COLLECTION, {"meeting_type_id": meeting_type_id}, limit=500)
+        return self.store.find(
+            ATTACHMENT_COLLECTION, {"meeting_type_id": meeting_type_id}, limit=500
+        )
 
     def require_meeting_type(self, meeting_type_id: str) -> dict[str, Any]:
         record = self.get_meeting_type(meeting_type_id)
@@ -426,7 +454,9 @@ class ReminderEngine:
         for attachment in self.attachments(meeting_type_id):
             if str(attachment["data"].get("reminder_id")) == reminder_id:
                 return self.store.delete(attachment["id"], actor=actor, source=source)
-        raise ReminderError(f"reminder {reminder_id} is not attached to meeting type {meeting_type_id}")
+        raise ReminderError(
+            f"reminder {reminder_id} is not attached to meeting type {meeting_type_id}"
+        )
 
     def attachment_ids_for(self, reminder_id: str) -> list[str]:
         """The meeting types one reminder is attached to.
@@ -437,7 +467,9 @@ class ReminderEngine:
         """
         return sorted(
             str(record["data"].get("meeting_type_id"))
-            for record in self.store.find(ATTACHMENT_COLLECTION, {"reminder_id": reminder_id}, limit=500)
+            for record in self.store.find(
+                ATTACHMENT_COLLECTION, {"reminder_id": reminder_id}, limit=500
+            )
         )
 
     # -- bookings ------------------------------------------------------------ #
@@ -488,7 +520,9 @@ class ReminderEngine:
         }
         if not enforce_phone:
             payload["phoneRequiredAtBooking"] = False
-        return self.store.create(BOOKING_COLLECTION, payload, room_id=room_id, actor=actor, source=source)
+        return self.store.create(
+            BOOKING_COLLECTION, payload, room_id=room_id, actor=actor, source=source
+        )
 
     @staticmethod
     def _guest_phone(spec: Mapping[str, Any]) -> str:
@@ -519,7 +553,9 @@ class ReminderEngine:
             raise ReminderError(f"booking {booking_id} not found")
         return record
 
-    def list_bookings(self, *, room_id: str | None = None, meeting_type_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def list_bookings(
+        self, *, room_id: str | None = None, meeting_type_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
         """Bookings, newest first.
 
         ``room_id`` is filtered here rather than in the query: the dynamic index
@@ -619,7 +655,9 @@ class ReminderEngine:
 
     # -- delivery ------------------------------------------------------------ #
 
-    def plan(self, booking_record: Mapping[str, Any], *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def plan(
+        self, booking_record: Mapping[str, Any], *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """Plan every attached reminder for a booking. Writes the scheduled rows.
 
         This is the *planning* half of the researched automation, and it is where
@@ -638,7 +676,9 @@ class ReminderEngine:
                 continue
             decision = cond.plan(reminder, booking, now=now)
             planned.append(
-                self._record(reminder_record, booking_record, decision, now=now, actor=actor, source=source)
+                self._record(
+                    reminder_record, booking_record, decision, now=now, actor=actor, source=source
+                )
             )
         return {
             "booking_id": booking_record["id"],
@@ -685,24 +725,34 @@ class ReminderEngine:
                     continue
                 existing = self._existing(booking_record["id"], reminder_record["id"])
                 already_settled = (
-                    existing is not None and str((existing["data"] or {}).get("status")) != vocab.SCHEDULED
+                    existing is not None
+                    and str((existing["data"] or {}).get("status")) != vocab.SCHEDULED
                 )
                 if already_settled:
                     continue
                 when_planned = cond.planned_at(booking) or moment
-                decision = self._decide_from(reminder, booking, when_planned=when_planned, now=moment)
+                decision = self._decide_from(
+                    reminder, booking, when_planned=when_planned, now=moment
+                )
                 if existing is not None:
                     fired.append(self._update(existing, decision, now=moment, source=source))
                 else:
                     fired.append(
                         self._record(
-                            reminder_record, booking_record, decision, now=moment, actor=None, source=source
+                            reminder_record,
+                            booking_record,
+                            decision,
+                            now=moment,
+                            actor=None,
+                            source=source,
                         )
                     )
         return {
             "fired": len(fired),
             "sent": sum(1 for row in fired if (row["data"] or {}).get("status") == vocab.SENT),
-            "skipped": sum(1 for row in fired if (row["data"] or {}).get("status") == vocab.SKIPPED),
+            "skipped": sum(
+                1 for row in fired if (row["data"] or {}).get("status") == vocab.SKIPPED
+            ),
             "deliveries": fired,
         }
 
@@ -745,7 +795,14 @@ class ReminderEngine:
                 continue
             decision = self._decide_from(reminder, booking, when_planned=when_planned, now=moment)
             out.append(
-                self._record(reminder_record, booking_record, decision, now=moment, actor=actor, source=source)
+                self._record(
+                    reminder_record,
+                    booking_record,
+                    decision,
+                    now=moment,
+                    actor=actor,
+                    source=source,
+                )
             )
         return {"booking_id": booking_id, "room_id": room_id, "count": len(out), "deliveries": out}
 
@@ -945,7 +1002,9 @@ class ReminderEngine:
                 f"delivery {delivery_id} is an {data.get('channel')} delivery; only an SMS reminder "
                 "has replies forwarded by email"
             )
-        forwarded_to = [str(value) for value in (data.get("replies_to") or []) if str(value).strip()]
+        forwarded_to = [
+            str(value) for value in (data.get("replies_to") or []) if str(value).strip()
+        ]
         if not forwarded_to:
             raise ReminderError(
                 "this reminder has no reply-forwarding address; the booking resolved no host, "
@@ -980,7 +1039,9 @@ class ReminderEngine:
         )
         return record
 
-    def replies(self, *, room_id: str | None = None, delivery_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def replies(
+        self, *, room_id: str | None = None, delivery_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
         where: dict[str, Any] = {}
         if delivery_id is not None:
             where["deliveryId"] = delivery_id

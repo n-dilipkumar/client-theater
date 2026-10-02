@@ -228,13 +228,13 @@ def create_connector(
     with no base URL can still declare bundles and preview the real request; it
     just cannot commit over HTTP until one is set, and the refusal says so.
     """
-    return committer.create_connector(payload, actor=actor, source=f"POST {router.prefix}/connectors")
+    return committer.create_connector(
+        payload, actor=actor, source=f"POST {router.prefix}/connectors"
+    )
 
 
 @router.get("/connectors/{connector_id}")
-def read_connector(
-    connector_id: str, committer: BundleCommitter = CommitterDep
-) -> dict[str, Any]:
+def read_connector(connector_id: str, committer: BundleCommitter = CommitterDep) -> dict[str, Any]:
     return committer.get_connector(connector_id)
 
 
@@ -254,7 +254,10 @@ def update_connector(
     make it is one fact, not two.
     """
     return committer.update_connector(
-        connector_id, payload, actor=actor, source=f"PATCH {router.prefix}/connectors/{connector_id}"
+        connector_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/connectors/{connector_id}",
     )
 
 
@@ -494,9 +497,7 @@ def read_run(
 
 
 @router.get("/rooms/{room_id}/targets")
-def list_targets(
-    room_id: str, committer: BundleCommitter = CommitterDep
-) -> dict[str, Any]:
+def list_targets(room_id: str, committer: BundleCommitter = CommitterDep) -> dict[str, Any]:
     """The records the CRM created for this room.
 
     [sourced] "The CRM executes subrequests in order, capturing each created record
@@ -946,9 +947,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # value the research says fixes it. This is the whole point of the toggle: the
     # same bundle, the same CRM, one setting different, and the run that failed
     # now commits. A toggle nobody can see working is a toggle nobody trusts.
-    implicit = next(
-        (spec for spec in DEMO_BUNDLES if spec["name"].startswith("Proseware")), None
-    )
+    implicit = next((spec for spec in DEMO_BUNDLES if spec["name"].startswith("Proseware")), None)
     if implicit is not None:
         room_id = rooms[int(implicit["room"]) % len(rooms)][0]
         payload = {

@@ -381,7 +381,9 @@ def read_signal(
 @router.get("/rooms/{room_id}/live-feed")
 def live_feed(
     room_id: str,
-    seller: str | None = Query(default=None, description="the receiving seller; omit for every seller"),
+    seller: str | None = Query(
+        default=None, description="the receiving seller; omit for every seller"
+    ),
     locale: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
     engine: SignalEngine = EngineDep,
@@ -507,7 +509,9 @@ DEMO_REGISTRATIONS: tuple[dict[str, Any], ...] = (
                 "key": "watched_more_than_75_percent",
                 "metadata_shape": {
                     "type": "object",
-                    "properties": {"watched_percent": {"type": "integer", "minimum": 0, "maximum": 100}},
+                    "properties": {
+                        "watched_percent": {"type": "integer", "minimum": 0, "maximum": 100}
+                    },
                     "required": ["watched_percent"],
                 },
                 "description": {

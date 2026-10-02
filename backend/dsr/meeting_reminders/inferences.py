@@ -159,7 +159,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "data_flow lists the booking's fields as 'start time, duration, ...' - the duration is "
             "there for something, and this is the only researched rule that needs it."
         ),
-        "value": {"anchor": "start + durationMinutes", "fallback": "0 when the booking has no duration"},
+        "value": {
+            "anchor": "start + durationMinutes",
+            "fallback": "0 when the booking has no duration",
+        },
         "why": (
             "A follow-up follows the meeting. Anchoring on the start would put a 'one hour after' "
             "reminder into the middle of a forty-five minute call, and the research calls the rule "
@@ -246,8 +249,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "phone-required-when-sms-is-enabled",
         "topic": "what 'attendee.phoneNumber becomes required' means for a booking",
         "basis": (
-            "Cal booking field `attendee.phoneNumber` - \"becomes required when SMS reminders are "
-            "enabled for the event type\"."
+            'Cal booking field `attendee.phoneNumber` - "becomes required when SMS reminders are '
+            'enabled for the event type".'
         ),
         "value": {
             "meeting_type_reports": "phone_required, true when any attached reminder is an enabled SMS one",
@@ -362,7 +365,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "'for SMS Send SMS From (any number or a local area number)'. There is no 'Send SMS To' "
             "at all. The guest form has a single Phone field."
         ),
-        "value": {"sms_recipients": "the primary guest only", "all_guests_applies_to": "email only"},
+        "value": {
+            "sms_recipients": "the primary guest only",
+            "all_guests_applies_to": "email only",
+        },
         "why": (
             "The email recipient choice is named and the SMS one is not, and adding an "
             "'all guests' SMS option would be inventing a control the research does not describe. "
@@ -399,7 +405,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "evidence: 'While enabled, this setting determines whether the reminder should be sent "
             "only within a specific timeframe.' The word is *only*."
         ),
-        "value": {"no_bookedAt": "the gate fails", "the_reminder_is": "skipped: Violated restriction"},
+        "value": {
+            "no_bookedAt": "the gate fails",
+            "the_reminder_is": "skipped: Violated restriction",
+        },
         "why": (
             "A gate that passes when it cannot be checked is not a gate. The option says send *only* "
             "if, and a booking with no booking date cannot be shown to satisfy it, so the honest "
@@ -421,9 +430,7 @@ def by_id(inference_id: str) -> dict[str, Any] | None:
 
 def describe() -> dict[str, Any]:
     """The whole registry, beside the half of the workflow that is sourced."""
-    from dsr.meeting_reminders import conditions as cond
-    from dsr.meeting_reminders import tags
-    from dsr.meeting_reminders import vocabulary as vocab
+    from dsr.meeting_reminders import conditions as cond, tags, vocabulary as vocab
 
     return {
         "count": len(INFERENCES),

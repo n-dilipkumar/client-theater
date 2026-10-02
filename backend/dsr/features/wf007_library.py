@@ -182,7 +182,9 @@ def _source(verb: str, suffix: str) -> str:
 
 def _library_error(request: Request, exc: LibraryError) -> JSONResponse:
     """Library failures carry their own status: 400, 404, 409, 413 or 500."""
-    return JSONResponse(status_code=exc.status_code, content={"error": exc.code, "detail": str(exc)})
+    return JSONResponse(
+        status_code=exc.status_code, content={"error": exc.code, "detail": str(exc)}
+    )
 
 
 EXCEPTION_HANDLERS = {LibraryError: _library_error}
@@ -252,7 +254,9 @@ def list_folders(room_id: str, library: ContentLibrary = LibraryDep) -> dict[str
 async def ingest_document(
     room_id: str,
     content: UploadFile = File(..., description="The binary. Rejected if empty or over the limit."),
-    metadata: str = Form(..., description="JSON object: name, format, parentFolderId, and any extra fields."),
+    metadata: str = Form(
+        ..., description="JSON object: name, format, parentFolderId, and any extra fields."
+    ),
     resolveNameCollision: bool = Form(default=True),
     rollbackOnError: bool = Form(default=True),
     actor: str | None = Query(default=None),
@@ -290,7 +294,9 @@ async def ingest_document(
 def list_documents(
     room_id: str,
     parentFolderId: str | None = Query(default=None, description="'root' or a folder id"),
-    where: str | None = Query(default=None, description='JSON object or "k=v,k2=v2" over arbitrary fields'),
+    where: str | None = Query(
+        default=None, description='JSON object or "k=v,k2=v2" over arbitrary fields'
+    ),
     limit: int = Query(default=100, ge=1, le=1000),
     library: ContentLibrary = LibraryDep,
 ) -> dict[str, Any]:
@@ -482,9 +488,7 @@ def seed(db, context: dict[str, Any]) -> str:
         if spec["folder"]:
             cache_key = (room_id, spec["folder"])
             if cache_key not in folders:
-                folder = library.create_folder(
-                    room_id, spec["folder"], actor="dana", source="seed"
-                )
+                folder = library.create_folder(room_id, spec["folder"], actor="dana", source="seed")
                 folders[cache_key] = folder["id"]
             parent = folders[cache_key]
 
@@ -506,9 +510,7 @@ def seed(db, context: dict[str, Any]) -> str:
             source="seed",
         )
         if spec["thumbnail"]:
-            library.derive_thumbnail(
-                record["id"], actor="dana", source="seed"
-            )
+            library.derive_thumbnail(record["id"], actor="dana", source="seed")
             derived += 1
         ingested += 1
 

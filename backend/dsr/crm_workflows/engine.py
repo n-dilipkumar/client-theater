@@ -43,10 +43,9 @@ first if the store ever gains one.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
-from dsr.crm_workflows import actions as actions_module
-from dsr.crm_workflows import criteria as criteria_module
+from dsr.crm_workflows import actions as actions_module, criteria as criteria_module
 from dsr.crm_workflows.activity import normalise_activity, parse_timestamp
 from dsr.crm_workflows.definition import (
     DRAFT,
@@ -265,7 +264,11 @@ class WorkflowEngine:
     # ----------------------------------------------------------------- #
 
     def workflows(
-        self, *, status: str | None = None, integration: str | None = None, include_withdrawn: bool = False
+        self,
+        *,
+        status: str | None = None,
+        integration: str | None = None,
+        include_withdrawn: bool = False,
     ) -> list[dict[str, Any]]:
         """The workflow library, newest first.
 
@@ -335,7 +338,9 @@ class WorkflowEngine:
             )
         raise WorkflowError(f"workflow {workflow_id} not found")
 
-    def create(self, payload: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def create(
+        self, payload: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Define a workflow. It does not fire until it is published.
 
         Steps 2 to 7. The definition is validated in the order the flow describes
@@ -349,7 +354,9 @@ class WorkflowEngine:
         self._bind(created["id"], definition, actor=actor, source=source)
         return self.decorate(self.present(self.store.get(created["id"]) or created))
 
-    def _bind(self, workflow_id: str, definition: Mapping[str, Any], *, actor: str | None, source: str) -> None:
+    def _bind(
+        self, workflow_id: str, definition: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> None:
         """Record the workflow on the integration it depends on.
 
         So "which workflows would stop if I turn this off" is a stored fact rather
@@ -361,9 +368,7 @@ class WorkflowEngine:
         if integration is None:
             return
         bound = sorted({*(integration.get("workflow_ids") or []), workflow_id})
-        self.store.update(
-            integration["id"], {"workflow_ids": bound}, actor=actor, source=source
-        )
+        self.store.update(integration["id"], {"workflow_ids": bound}, actor=actor, source=source)
 
     def amend(
         self, workflow_id: str, patch: Mapping[str, Any], *, actor: str | None, source: str
@@ -386,9 +391,7 @@ class WorkflowEngine:
         updated = self.store.update(workflow_id, merged, actor=actor, source=source)
         return self.decorate(self.present(updated))
 
-    def withdraw(
-        self, workflow_id: str, *, actor: str | None, source: str
-    ) -> dict[str, Any]:
+    def withdraw(self, workflow_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
         """Withdraw a workflow, published or not.
 
         A soft delete, always. A published workflow's enrollments name it, and
@@ -414,9 +417,7 @@ class WorkflowEngine:
             "enrollments": int(definition.get("enrollments") or 0),
         }
 
-    def publish(
-        self, workflow_id: str, *, actor: str | None, source: str
-    ) -> dict[str, Any]:
+    def publish(self, workflow_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
         """Step 8: publish, so DSR activity drives the workflow with no further setup.
 
         The integration must be registered and on. This is the moment step 1's check
@@ -428,10 +429,25 @@ class WorkflowEngine:
         if current.get("status") == PUBLISHED:
             raise AlreadyPublished(f"workflow {workflow_id} is already published")
 
-        definition = normalise_workflow({k: v for k, v in current.items() if k not in (
-            "id", "created_at", "updated_at", "revision", "status", "published_at",
-            "enrollments", "last_enrolled_at", "warnings", "flagged"
-        )})
+        definition = normalise_workflow(
+            {
+                k: v
+                for k, v in current.items()
+                if k
+                not in (
+                    "id",
+                    "created_at",
+                    "updated_at",
+                    "revision",
+                    "status",
+                    "published_at",
+                    "enrollments",
+                    "last_enrolled_at",
+                    "warnings",
+                    "flagged",
+                )
+            }
+        )
         integration = self._require_integration(definition["trigger"]["integration"])
         if not integration.get("enabled"):
             raise IntegrationDisabled(
@@ -451,9 +467,7 @@ class WorkflowEngine:
         self._bind(workflow_id, published, actor=actor, source=source)
         return self.decorate(self.present(self.store.get(workflow_id) or updated))
 
-    def unpublish(
-        self, workflow_id: str, *, actor: str | None, source: str
-    ) -> dict[str, Any]:
+    def unpublish(self, workflow_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
         """Stop a published workflow firing, without withdrawing it.
 
         Unpublishing and withdrawing are different acts on purpose. Unpublishing is
@@ -750,7 +764,9 @@ class WorkflowEngine:
                 for event in considered
                 if str(event.get("id")) in set(verdict["hit_activity_ids"])
             ] or considered
-            record = self._enroll(definition, room, room_id, contact_key, hits, actor=actor, source=source)
+            record = self._enroll(
+                definition, room, room_id, contact_key, hits, actor=actor, source=source
+            )
             enrolled.append(record)
 
         return {
@@ -886,7 +902,7 @@ class WorkflowEngine:
                 "enrollment": self.present_enrollment(self.store.get(kept["id"]) or kept),
             }
 
-        contact_id = str(hits[0].get("contact") or contact)
+        str(hits[0].get("contact") or contact)
         data = {
             "workflow_id": workflow_id,
             "workflow_name": str(definition.get("name") or ""),
@@ -909,9 +925,7 @@ class WorkflowEngine:
             "seller_visible": False,
             "actionability_note": ACTIONABILITY_NOTE,
         }
-        record = self.store.create(
-            ENROLLMENTS, data, room_id=room_id, actor=actor, source=source
-        )
+        record = self.store.create(ENROLLMENTS, data, room_id=room_id, actor=actor, source=source)
         self._count_enrollment(workflow_id, actor=actor, source=source)
         return {
             "outcome": "enrolled",
@@ -987,7 +1001,9 @@ class WorkflowEngine:
             records = self.store.list(ENROLLMENTS, room_id=room_id, limit=1000)
         else:
             records = self.store.list(ENROLLMENTS, limit=1000)
-        return [self.present_enrollment(record) for record in records[: max(1, min(int(limit), 1000))]]
+        return [
+            self.present_enrollment(record) for record in records[: max(1, min(int(limit), 1000))]
+        ]
 
     def enrollment(self, room_id: str, enrollment_id: str) -> dict[str, Any] | None:
         record = self.store.get(enrollment_id)
@@ -1127,9 +1143,7 @@ def _normalise_connections(payload: Any, *, keep_nulls: bool = False) -> dict[st
             if not room_id:
                 continue
             result[str(room_id)] = {
-                key: value
-                for key, value in entry.items()
-                if key not in ("room_id", "workspace_id")
+                key: value for key, value in entry.items() if key not in ("room_id", "workspace_id")
             }
         return result
     return {}
@@ -1182,9 +1196,11 @@ def _sample_misses(
                 }
             )
     collected.sort(
-        key=lambda row: _MISS_PRIORITY.index(str(row["reason"]))
-        if str(row["reason"]) in _MISS_PRIORITY
-        else len(_MISS_PRIORITY)
+        key=lambda row: (
+            _MISS_PRIORITY.index(str(row["reason"]))
+            if str(row["reason"]) in _MISS_PRIORITY
+            else len(_MISS_PRIORITY)
+        )
     )
     return collected[:REASON_SAMPLE]
 

@@ -103,7 +103,9 @@ def parse_time(value: Any) -> datetime | None:
     malformed string. Callers treat ``None`` as "no time", never as "epoch".
     """
     if isinstance(value, datetime):
-        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return (
+            value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        )
     if isinstance(value, date):
         return datetime(value.year, value.month, value.day, tzinfo=timezone.utc)
     text = as_text(value)

@@ -60,17 +60,19 @@ request.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from dsr import meeting_reminders
 from dsr.deps import StoreDep
-from dsr.meeting_reminders import ReminderEngine
-from dsr.meeting_reminders import cal as cal_mod
-from dsr.meeting_reminders import tags as tag_mod
-from dsr.meeting_reminders import vocabulary as vocab
+from dsr.meeting_reminders import (
+    ReminderEngine,
+    cal as cal_mod,
+    tags as tag_mod,
+    vocabulary as vocab,
+)
 from dsr.meeting_reminders.errors import ConfigurationRefused, ReminderError
 from dsr.store import RecordStore
 
@@ -360,14 +362,18 @@ def delete_reminder(
     """
     if reminders.get_reminder(reminder_id) is None:
         raise HTTPException(status_code=404, detail=f"reminder {reminder_id} not found")
-    reminders.delete_reminder(reminder_id, actor=actor, source=_source("DELETE", f"/reminders/{reminder_id}"))
+    reminders.delete_reminder(
+        reminder_id, actor=actor, source=_source("DELETE", f"/reminders/{reminder_id}")
+    )
     return Response(status_code=204)
 
 
 @router.get("/reminders/{reminder_id}/cal-workflow", summary="This reminder as a Cal.com workflow")
 def cal_workflow(
     reminder_id: str,
-    booking_id: str | None = Query(default=None, description="Fold the meeting duration into an after-meeting offset"),
+    booking_id: str | None = Query(
+        default=None, description="Fold the meeting duration into an after-meeting offset"
+    ),
     reminders: ReminderEngine = ReminderDep,
 ) -> dict[str, Any]:
     """``user_flow`` step 8: the same logic as a Cal.com Workflow.
@@ -427,7 +433,10 @@ def list_meeting_types(
 ) -> dict[str, Any]:
     """Meeting types, with the reminder count and whether the form needs a phone."""
     records = reminders.list_meeting_types(room_id=room_id, limit=limit)
-    return {"count": len(records), "meeting_types": [reminders.meeting_type_view(record) for record in records]}
+    return {
+        "count": len(records),
+        "meeting_types": [reminders.meeting_type_view(record) for record in records],
+    }
 
 
 @router.post("/meeting-types", status_code=201, summary="Declare a meeting type")
@@ -444,7 +453,9 @@ def create_meeting_type(
 
 
 @router.get("/meeting-types/{meeting_type_id}", summary="Read one meeting type")
-def read_meeting_type(meeting_type_id: str, reminders: ReminderEngine = ReminderDep) -> dict[str, Any]:
+def read_meeting_type(
+    meeting_type_id: str, reminders: ReminderEngine = ReminderDep
+) -> dict[str, Any]:
     """One meeting type, its attachments, and the phone requirement it implies."""
     record = reminders.require_meeting_type(meeting_type_id)
     return {
@@ -453,7 +464,9 @@ def read_meeting_type(meeting_type_id: str, reminders: ReminderEngine = Reminder
     }
 
 
-@router.post("/meeting-types/{meeting_type_id}/reminders", status_code=201, summary="Attach a reminder")
+@router.post(
+    "/meeting-types/{meeting_type_id}/reminders", status_code=201, summary="Attach a reminder"
+)
 def attach_reminder(
     meeting_type_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -541,7 +554,9 @@ def create_booking(
 
 
 @router.get("/rooms/{room_id}/bookings/{booking_id}", summary="One booking")
-def read_booking(room_id: str, booking_id: str, reminders: ReminderEngine = ReminderDep) -> dict[str, Any]:
+def read_booking(
+    room_id: str, booking_id: str, reminders: ReminderEngine = ReminderDep
+) -> dict[str, Any]:
     """One booking, with its per-reminder delivery rows.
 
     That is ``user_flow`` step 7 read as a single response: *Meetings Activity*,
@@ -550,14 +565,18 @@ def read_booking(room_id: str, booking_id: str, reminders: ReminderEngine = Remi
     _room_or_404(reminders, room_id)
     record = reminders.require_booking(booking_id)
     if record.get("room_id") != room_id:
-        raise HTTPException(status_code=404, detail=f"booking {booking_id} is not in room {room_id}")
+        raise HTTPException(
+            status_code=404, detail=f"booking {booking_id} is not in room {room_id}"
+        )
     return {
         **record,
         "deliveries": reminders.deliveries(booking_id=booking_id, limit=500),
     }
 
 
-@router.post("/rooms/{room_id}/bookings/{booking_id}/plan", summary="Plan the reminders onto a booking")
+@router.post(
+    "/rooms/{room_id}/bookings/{booking_id}/plan", summary="Plan the reminders onto a booking"
+)
 def plan_booking(
     room_id: str,
     booking_id: str,
@@ -574,13 +593,17 @@ def plan_booking(
     _room_or_404(reminders, room_id)
     record = reminders.require_booking(booking_id)
     if record.get("room_id") != room_id:
-        raise HTTPException(status_code=404, detail=f"booking {booking_id} is not in room {room_id}")
+        raise HTTPException(
+            status_code=404, detail=f"booking {booking_id} is not in room {room_id}"
+        )
     return reminders.plan(
         record, actor=actor, source=_source("POST", f"/rooms/{room_id}/bookings/{booking_id}/plan")
     )
 
 
-@router.post("/rooms/{room_id}/bookings/{booking_id}/deliver", status_code=201, summary="Run the workflow")
+@router.post(
+    "/rooms/{room_id}/bookings/{booking_id}/deliver", status_code=201, summary="Run the workflow"
+)
 def deliver_booking(
     room_id: str,
     booking_id: str,
@@ -619,14 +642,18 @@ def preview_booking(
     _room_or_404(reminders, room_id)
     record = reminders.require_booking(booking_id)
     if record.get("room_id") != room_id:
-        raise HTTPException(status_code=404, detail=f"booking {booking_id} is not in room {room_id}")
+        raise HTTPException(
+            status_code=404, detail=f"booking {booking_id} is not in room {room_id}"
+        )
     reminder_id = str(payload.get("reminder_id") or payload.get("reminderId") or "")
     reminder = reminders.require_reminder(reminder_id).get("data") if reminder_id else None
     if reminder is None:
         meeting_type_id = str((record["data"] or {}).get("meetingTypeId") or "")
         attached = reminders.attached_reminders(meeting_type_id)
         if not attached:
-            raise HTTPException(status_code=404, detail=f"booking {booking_id} has no reminders attached")
+            raise HTTPException(
+                status_code=404, detail=f"booking {booking_id} has no reminders attached"
+            )
         reminder = attached[0]["data"]
     return {
         "booking_id": booking_id,
@@ -683,14 +710,16 @@ def read_delivery(delivery_id: str, reminders: ReminderEngine = ReminderDep) -> 
     return {**record, "replies": reminders.replies(delivery_id=delivery_id, limit=200)}
 
 
-@router.post("/deliveries/{delivery_id}/sms-replies", status_code=201, summary="Record an inbound SMS reply")
+@router.post(
+    "/deliveries/{delivery_id}/sms-replies", status_code=201, summary="Record an inbound SMS reply"
+)
 def record_sms_reply(
     delivery_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
     actor: str | None = Query(default=None),
     reminders: ReminderEngine = ReminderDep,
 ) -> dict[str, Any]:
-    """"When a guest replies to an SMS reminder, Chili Piper forwards the text to
+    """ "When a guest replies to an SMS reminder, Chili Piper forwards the text to
     your team by email."
 
     Records the reply and the addresses ``Send Replies To`` resolved to. Refused
@@ -730,7 +759,6 @@ def fire(
     pass.
     """
     return reminders.fire(room_id=room_id, source=_source("POST", "/fire"))
-
 
 
 # --------------------------------------------------------------------------- #
@@ -885,7 +913,9 @@ def _guest(
     return body
 
 
-def _host(first: str = "Dana", last: str = "Okoro", email: str = "dana@contoso.example") -> dict[str, Any]:
+def _host(
+    first: str = "Dana", last: str = "Okoro", email: str = "dana@contoso.example"
+) -> dict[str, Any]:
     return {"firstName": first, "name": f"{first} {last}", "email": email}
 
 
@@ -904,8 +934,10 @@ def _next_weekday(now, days_ahead: int, weekday: int, hour: int = 14, minute: in
     """
     from datetime import timedelta, timezone as _tz
 
-    start = (now + timedelta(days=days_ahead)).astimezone(_tz.utc).replace(
-        hour=hour, minute=minute, second=0, microsecond=0
+    start = (
+        (now + timedelta(days=days_ahead))
+        .astimezone(_tz.utc)
+        .replace(hour=hour, minute=minute, second=0, microsecond=0)
     )
     # date.weekday() is Monday-zero, which is the same order as vocab.WEEKDAYS.
     shift = (weekday - start.weekday()) % 7
@@ -936,7 +968,9 @@ DEMO_BOOKINGS: tuple[dict[str, Any], ...] = (
             "meetingUrl": "https://meet.example/northwind-eval",
             "rescheduleUrl": "https://meet.example/northwind-eval/reschedule",
             "cancelUrl": "https://meet.example/northwind-eval/cancel",
-            "primaryGuest": _guest("Priya", "Raman", "priya.raman@northwind.example", "+15550100", "accepted"),
+            "primaryGuest": _guest(
+                "Priya", "Raman", "priya.raman@northwind.example", "+15550100", "accepted"
+            ),
             "guests": [
                 _guest("Priya", "Raman", "priya.raman@northwind.example", "+15550100", "accepted"),
                 _guest("Marcus", "Webb", "marcus.webb@northwind.example", "+15550101", "accepted"),
@@ -963,8 +997,22 @@ DEMO_BOOKINGS: tuple[dict[str, Any], ...] = (
             "meetingUrl": "https://meet.example/contoso-security",
             "rescheduleUrl": "https://meet.example/contoso-security/reschedule",
             "cancelUrl": "https://meet.example/contoso-security/cancel",
-            "primaryGuest": _guest("Rui", "Silva", "rui.silva@contoso.example", "+15550104", vocab.RESPONSE_NEEDS_ACTION),
-            "guests": [_guest("Rui", "Silva", "rui.silva@contoso.example", "+15550104", vocab.RESPONSE_NEEDS_ACTION)],
+            "primaryGuest": _guest(
+                "Rui",
+                "Silva",
+                "rui.silva@contoso.example",
+                "+15550104",
+                vocab.RESPONSE_NEEDS_ACTION,
+            ),
+            "guests": [
+                _guest(
+                    "Rui",
+                    "Silva",
+                    "rui.silva@contoso.example",
+                    "+15550104",
+                    vocab.RESPONSE_NEEDS_ACTION,
+                )
+            ],
             "host": _host("Sam", "Adeyemi", "sam@contoso.example"),
             "booker": _booker("Dana", "Okoro", "dana@contoso.example"),
         },
@@ -986,10 +1034,20 @@ DEMO_BOOKINGS: tuple[dict[str, Any], ...] = (
             "rescheduleUrl": "https://meet.example/fabrikam-procurement/reschedule",
             "cancelUrl": "https://meet.example/fabrikam-procurement/cancel",
             "primaryGuest": _guest(
-                "Marcus", "Webb", "marcus.webb@solowebb.example", "+15550101", vocab.RESPONSE_DECLINED
+                "Marcus",
+                "Webb",
+                "marcus.webb@solowebb.example",
+                "+15550101",
+                vocab.RESPONSE_DECLINED,
             ),
             "guests": [
-                _guest("Marcus", "Webb", "marcus.webb@solowebb.example", "+15550101", vocab.RESPONSE_DECLINED)
+                _guest(
+                    "Marcus",
+                    "Webb",
+                    "marcus.webb@solowebb.example",
+                    "+15550101",
+                    vocab.RESPONSE_DECLINED,
+                )
             ],
             "host": _host("Sam", "Adeyemi", "sam@contoso.example"),
             "booker": _booker("Dana", "Okoro", "dana@contoso.example"),
@@ -1014,8 +1072,12 @@ DEMO_BOOKINGS: tuple[dict[str, Any], ...] = (
             "meetingUrl": "https://meet.example/ries-commercial",
             "rescheduleUrl": "https://meet.example/ries-commercial/reschedule",
             "cancelUrl": "https://meet.example/ries-commercial/cancel",
-            "primaryGuest": _guest("Alba", "Ries", "alba.ries@fabrikam.example", "+15550102", "accepted"),
-            "guests": [_guest("Alba", "Ries", "alba.ries@fabrikam.example", "+15550102", "accepted")],
+            "primaryGuest": _guest(
+                "Alba", "Ries", "alba.ries@fabrikam.example", "+15550102", "accepted"
+            ),
+            "guests": [
+                _guest("Alba", "Ries", "alba.ries@fabrikam.example", "+15550102", "accepted")
+            ],
             "host": _host(),
             "booker": _booker("Wen", "Li", "wen.li@contoso.example"),
         },
@@ -1037,9 +1099,13 @@ DEMO_BOOKINGS: tuple[dict[str, Any], ...] = (
             "meetingUrl": "https://meet.example/silva-platform",
             "rescheduleUrl": "https://meet.example/silva-platform/reschedule",
             "cancelUrl": "https://meet.example/silva-platform/cancel",
-            "primaryGuest": _guest("Rui", "Silva", "rui.silva@silva-consulting.example", "+15550105", "accepted"),
+            "primaryGuest": _guest(
+                "Rui", "Silva", "rui.silva@silva-consulting.example", "+15550105", "accepted"
+            ),
             "guests": [
-                _guest("Rui", "Silva", "rui.silva@silva-consulting.example", "+15550105", "accepted")
+                _guest(
+                    "Rui", "Silva", "rui.silva@silva-consulting.example", "+15550105", "accepted"
+                )
             ],
             "host": _host(),
             "booker": _booker("Wen", "Li", "wen.li@contoso.example"),
@@ -1108,8 +1174,12 @@ DEMO_BOOKINGS: tuple[dict[str, Any], ...] = (
             "meetingUrl": "https://meet.example/northwind-deep-dive",
             "rescheduleUrl": "https://meet.example/northwind-deep-dive/reschedule",
             "cancelUrl": "https://meet.example/northwind-deep-dive/cancel",
-            "primaryGuest": _guest("Priya", "Raman", "priya.raman@northwind.example", "+15550100", "accepted"),
-            "guests": [_guest("Priya", "Raman", "priya.raman@northwind.example", "+15550100", "accepted")],
+            "primaryGuest": _guest(
+                "Priya", "Raman", "priya.raman@northwind.example", "+15550100", "accepted"
+            ),
+            "guests": [
+                _guest("Priya", "Raman", "priya.raman@northwind.example", "+15550100", "accepted")
+            ],
             "host": _host(),
             "booker": _booker("Wen", "Li", "wen.li@contoso.example"),
         },
@@ -1131,9 +1201,21 @@ DEMO_BOOKINGS: tuple[dict[str, Any], ...] = (
             "meetingUrl": "https://meet.example/fabrikam-annual",
             "rescheduleUrl": "https://meet.example/fabrikam-annual/reschedule",
             "cancelUrl": "https://meet.example/fabrikam-annual/cancel",
-            "primaryGuest": _guest("Alba", "Ries", "alba.ries@fabrikam.example", "+15550102", vocab.RESPONSE_NEEDS_ACTION),
+            "primaryGuest": _guest(
+                "Alba",
+                "Ries",
+                "alba.ries@fabrikam.example",
+                "+15550102",
+                vocab.RESPONSE_NEEDS_ACTION,
+            ),
             "guests": [
-                _guest("Alba", "Ries", "alba.ries@fabrikam.example", "+15550102", vocab.RESPONSE_NEEDS_ACTION)
+                _guest(
+                    "Alba",
+                    "Ries",
+                    "alba.ries@fabrikam.example",
+                    "+15550102",
+                    vocab.RESPONSE_NEEDS_ACTION,
+                )
             ],
             "host": _host(),
             "booker": _booker("Wen", "Li", "wen.li@contoso.example"),
@@ -1281,7 +1363,9 @@ def seed(db, context: dict[str, Any]) -> str:
         f"statuses: " + ", ".join(f"{count} {name}" for name, count in sorted(by_status.items()))
     )
     if by_reason:
-        summary += ", reasons: " + ", ".join(f"{count} {name}" for name, count in sorted(by_reason.items()))
+        summary += ", reasons: " + ", ".join(
+            f"{count} {name}" for name, count in sorted(by_reason.items())
+        )
     if missing:
         # Said out loud rather than left for a reviewer to notice. A demo that
         # cannot reach a documented reason is a demo that is hiding a rule.

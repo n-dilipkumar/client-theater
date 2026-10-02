@@ -26,12 +26,11 @@ import re
 import tempfile
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
-
 import dsr.features as host
+import pytest
 from dsr.api import app
 from dsr.features import load_feature
+from fastapi.testclient import TestClient
 
 #: The host's own loader is the supported way to reach a feature module, and
 #: using it here is also what proves discovery works: this module is never named
@@ -82,7 +81,9 @@ def client(monkeypatch):
 
 @pytest.fixture()
 def room(client):
-    return client.post("/api/records/room", json={"name": "Proposal Name", "account": "Acme"}).json()
+    return client.post(
+        "/api/records/room", json={"name": "Proposal Name", "account": "Acme"}
+    ).json()
 
 
 def _propagate(monkeypatch, host_name, values):
@@ -175,11 +176,7 @@ def test_the_feature_is_registered_under_its_own_id_and_prefix():
 
 def test_the_feature_owns_all_ten_of_its_routes():
     record = host.REGISTRY.by_id("wf-017-white-label")
-    served = {
-        (method, route["path"])
-        for route in record.routes
-        for method in route["methods"]
-    }
+    served = {(method, route["path"]) for route in record.routes for method in route["methods"]}
 
     assert served == {
         ("GET", f"{PREFIX}/config"),
@@ -282,7 +279,9 @@ def test_share_url_is_stable_when_the_domain_changes(room, client):
     client.post(_wl(f"/rooms/{room['id']}/white-label/link-secret"))
     before = client.get(_wl(f"/rooms/{room['id']}/white-label")).json()
 
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
     after = client.get(_wl(f"/rooms/{room['id']}/white-label")).json()
 
     assert after["slug"] == before["slug"]
@@ -297,7 +296,12 @@ def test_guard_room_payload_drops_the_product_owned_fields():
     generic record route means editing a shared file and that is a report, not a
     change.
     """
-    patch = {"name": "Renamed", "domain": "evil.acme.com", "link_secret": None, "collaborator_token": "x"}
+    patch = {
+        "name": "Renamed",
+        "domain": "evil.acme.com",
+        "link_secret": None,
+        "collaborator_token": "x",
+    }
 
     assert feature.guard_room_payload(patch) == {"name": "Renamed"}
 
@@ -449,7 +453,9 @@ def test_force_saves_a_domain_that_has_not_propagated_yet(room, client):
 
 def test_force_cannot_hand_one_customers_domain_to_another(client, room):
     other = client.post("/api/records/room", json={"name": "Second"}).json()
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
     response = client.post(
         _wl(f"/rooms/{other['id']}/white-label/domain"),
@@ -463,7 +469,9 @@ def test_force_cannot_hand_one_customers_domain_to_another(client, room):
 
 def test_a_domain_already_used_by_another_room_is_refused(client, room):
     other = client.post("/api/records/room", json={"name": "Second"}).json()
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
     response = client.post(
         _wl(f"/rooms/{other['id']}/white-label/domain"),
@@ -476,7 +484,9 @@ def test_a_domain_already_used_by_another_room_is_refused(client, room):
 
 
 def test_verification_reports_a_domain_that_is_already_taken(client, room):
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
     body = client.post(_wl("/verify"), json={"domain": "proposals.acme.com"}).json()
 
@@ -486,7 +496,9 @@ def test_verification_reports_a_domain_that_is_already_taken(client, room):
 
 
 def test_a_room_can_reclaim_its_own_domain(client, room):
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
     response = client.post(
         _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
@@ -514,8 +526,12 @@ def test_claiming_requires_a_domain(client, room):
 
 
 def test_changing_the_domain_records_history_and_keeps_the_secret(room, client):
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "northwind.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "northwind.acme.com"}
+    )
 
     data = client.get(f"/api/records/room/{room['id']}").json()["data"]
     assert data["domain"] == "northwind.acme.com"
@@ -523,7 +539,9 @@ def test_changing_the_domain_records_history_and_keeps_the_secret(room, client):
 
 
 def test_releasing_the_domain_returns_to_the_default_host_without_breaking_links(room, client):
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
     before = client.get(_wl(f"/rooms/{room['id']}/white-label")).json()
 
     after = client.delete(_wl(f"/rooms/{room['id']}/white-label/domain")).json()
@@ -536,7 +554,9 @@ def test_releasing_the_domain_returns_to_the_default_host_without_breaking_links
 
 def test_a_released_domain_can_be_claimed_by_another_room(client, room):
     other = client.post("/api/records/room", json={"name": "Second"}).json()
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
     client.delete(_wl(f"/rooms/{room['id']}/white-label/domain"))
 
     response = client.post(
@@ -559,7 +579,9 @@ def test_recheck_promotes_an_unverified_domain_once_it_propagates(client, room, 
         json={"domain": "notpropagated.acme.com"},
         params={"force": True},
     )
-    assert client.get(_wl(f"/rooms/{room['id']}/white-label")).json()["domain_status"] == "unverified"
+    assert (
+        client.get(_wl(f"/rooms/{room['id']}/white-label")).json()["domain_status"] == "unverified"
+    )
 
     _propagate(monkeypatch, "notpropagated.acme.com", [CNAME_TARGET])
     rechecked = client.post(_wl(f"/rooms/{room['id']}/white-label/recheck")).json()
@@ -715,7 +737,9 @@ def test_a_font_stack_that_could_escape_its_property_is_refused(room, client):
 def test_a_rejected_brand_token_changes_nothing(room, client):
     client.patch(_wl(f"/rooms/{room['id']}/white-label/branding"), json={"accent": "#22c55e"})
 
-    client.patch(_wl(f"/rooms/{room['id']}/white-label/branding"), json={"accent": "url(https://x.test)"})
+    client.patch(
+        _wl(f"/rooms/{room['id']}/white-label/branding"), json={"accent": "url(https://x.test)"}
+    )
     client.patch(_wl(f"/rooms/{room['id']}/white-label/branding"), json={"primary": "#0ea5e9"})
 
     branding = client.get(_wl(f"/rooms/{room['id']}/white-label")).json()["branding"]
@@ -729,7 +753,9 @@ def test_a_rejected_brand_token_changes_nothing(room, client):
 
 
 def test_domain_state_lives_in_data_with_no_migration(client, room):
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
     stored = client.get(f"/api/records/room/{room['id']}").json()
     assert stored["collection"] == "room"
@@ -739,7 +765,9 @@ def test_domain_state_lives_in_data_with_no_migration(client, room):
 
 def test_rooms_can_be_grouped_by_domain_through_the_dynamic_index(client, room):
     """`domain` is not a declared column anywhere; `find` still resolves it."""
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
     found = client.get(
         "/api/records/room", params={"where": json.dumps({"domain": "proposals.acme.com"})}
@@ -749,12 +777,19 @@ def test_rooms_can_be_grouped_by_domain_through_the_dynamic_index(client, room):
 
 
 def test_domains_appear_in_the_schema_discovery_endpoint(client, room):
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
     # A second, different domain so the change history exists to discover too.
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "northwind.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "northwind.acme.com"}
+    )
 
     body = client.get("/api/collections").json()
-    room_fields = {f["path"] for f in next(c for c in body["collections"] if c["collection"] == "room")["fields"]}
+    room_fields = {
+        f["path"]
+        for f in next(c for c in body["collections"] if c["collection"] == "room")["fields"]
+    }
 
     assert {
         "domain",
@@ -774,12 +809,16 @@ def test_domains_appear_in_the_schema_discovery_endpoint(client, room):
 
 def test_every_white_label_mutation_is_audited(client, room):
     client.post(_wl(f"/rooms/{room['id']}/white-label/link-secret"))
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
     client.patch(_wl(f"/rooms/{room['id']}/white-label/branding"), json={"accent": "#22c55e"})
     client.post(_wl(f"/rooms/{room['id']}/white-label/recheck"))
     client.delete(_wl(f"/rooms/{room['id']}/white-label/domain"))
 
-    sources = [e["source"] for e in client.get("/api/audit", params={"limit": 50}).json()["entries"]]
+    sources = [
+        e["source"] for e in client.get("/api/audit", params={"limit": 50}).json()["entries"]
+    ]
     room_id = room["id"]
     assert f"POST {PREFIX}/rooms/{room_id}/white-label/link-secret" in sources
     assert f"POST {PREFIX}/rooms/{room_id}/white-label/domain" in sources
@@ -800,7 +839,9 @@ def test_an_audit_source_names_a_route_the_app_actually_serves(client, room):
     the promise without breaking this.
     """
     client.post(_wl(f"/rooms/{room['id']}/white-label/link-secret"))
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
     client.patch(_wl(f"/rooms/{room['id']}/white-label/branding"), json={"accent": "#22c55e"})
     client.post(_wl(f"/rooms/{room['id']}/white-label/recheck"))
     client.delete(_wl(f"/rooms/{room['id']}/white-label/domain"))
@@ -808,7 +849,9 @@ def test_an_audit_source_names_a_route_the_app_actually_serves(client, room):
     mounted = _mounted_sources(room_id=room["id"])
     written = [
         e["source"]
-        for e in client.get("/api/audit", params={"record_id": room["id"], "limit": 50}).json()["entries"]
+        for e in client.get("/api/audit", params={"record_id": room["id"], "limit": 50}).json()[
+            "entries"
+        ]
     ]
 
     assert written, "expected audit rows for the room"
@@ -824,17 +867,30 @@ def test_no_audit_row_records_a_path_from_the_branch_we_did_not_merge(client, ro
     here, so neither string may appear in an audit row.
     """
     client.post(_wl(f"/rooms/{room['id']}/white-label/link-secret"))
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
-    sources = [e["source"] for e in client.get("/api/audit", params={"limit": 50}).json()["entries"]]
+    sources = [
+        e["source"] for e in client.get("/api/audit", params={"limit": 50}).json()["entries"]
+    ]
 
-    for banned in ("mint link secret", "claim custom domain", "update branding for", "/api/white-label"):
+    for banned in (
+        "mint link secret",
+        "claim custom domain",
+        "update branding for",
+        "/api/white-label",
+    ):
         assert not any(banned in source for source in sources), banned
-    assert not any(source.startswith(f"POST /api/rooms/{room['id']}/white-label") for source in sources)
+    assert not any(
+        source.startswith(f"POST /api/rooms/{room['id']}/white-label") for source in sources
+    )
 
 
 def test_the_claim_is_audited_with_before_and_after_state(client, room):
-    client.post(_wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"})
+    client.post(
+        _wl(f"/rooms/{room['id']}/white-label/domain"), json={"domain": "proposals.acme.com"}
+    )
 
     entry = client.get(
         "/api/audit", params={"record_id": room["id"], "action": "update", "limit": 50}
@@ -850,7 +906,9 @@ def test_reads_and_verification_do_not_appear_in_the_audit_log(client, room):
     client.get(_wl(f"/rooms/{room['id']}/white-label"))
     client.get(_wl("/config"))
 
-    sources = [e["source"] for e in client.get("/api/audit", params={"limit": 50}).json()["entries"]]
+    sources = [
+        e["source"] for e in client.get("/api/audit", params={"limit": 50}).json()["entries"]
+    ]
     # Only the room creation from the fixture. A verification is a read: it
     # looks at DNS and reports, and must not manufacture an audit row.
     assert sources == ["POST /api/records/room"]
@@ -889,7 +947,9 @@ def test_seed_gives_every_room_a_readable_white_label_state(tmp_path, monkeypatc
             for i in range(4)
         ]
 
-        summary = feature.seed(db, {"room_ids": room_ids, "now": datetime.now(timezone.utc), "rng": None})
+        summary = feature.seed(
+            db, {"room_ids": room_ids, "now": datetime.now(timezone.utc), "rng": None}
+        )
 
         assert "4 rooms white-labelled" in summary
         service = feature.DomainService(feature.RecordStore(db))
@@ -946,8 +1006,12 @@ def test_the_seed_never_invents_a_route_in_the_audit_log(tmp_path, monkeypatch):
         feature.seed(db, {"room_ids": room_ids, "now": datetime.now(timezone.utc), "rng": None})
 
         mounted = _mounted_sources(room_id=room_ids[0][0])
+        # The placeholder pattern is substituted before the f-string is built,
+        # not inside it: a backslash inside an f-string expression is a 3.12
+        # syntax, and this package still supports 3.11.
+        placeholder = re.compile(r"\{[^}]+\}")
         templated = {
-            f"{head} {re.sub(r'\{[^}]+\}', '*', tail)}"
+            f"{head} {placeholder.sub('*', tail)}"
             for head, _, tail in (source.partition(" ") for source in mounted)
         }
 
@@ -987,7 +1051,7 @@ def test_every_seeded_secret_is_recoverable_from_its_own_path(tmp_path, monkeypa
         feature.seed(db, {"room_ids": room_ids, "now": datetime.now(timezone.utc), "rng": None})
 
         service = feature.DomainService(feature.RecordStore(db))
-        for (room_id, _), expected in zip(room_ids, feature.SEED_SECRETS):
+        for (room_id, _), expected in zip(room_ids, feature.SEED_SECRETS, strict=False):
             described = service.describe(service.get_room(room_id))
 
             assert len(expected) == 10, f"{expected} is not a ten-character secret"
@@ -1025,7 +1089,9 @@ def test_seed_never_claims_more_rooms_than_the_demo_has(tmp_path, monkeypatch):
             for i in range(2)
         ]
 
-        summary = feature.seed(db, {"room_ids": room_ids, "now": datetime.now(timezone.utc), "rng": None})
+        summary = feature.seed(
+            db, {"room_ids": room_ids, "now": datetime.now(timezone.utc), "rng": None}
+        )
 
         assert summary.startswith("2 rooms white-labelled")
         # And the two states written are the first two, not the last two.

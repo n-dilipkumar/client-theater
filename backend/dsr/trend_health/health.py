@@ -25,7 +25,6 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
 from dsr.store import RecordStore
-
 from dsr.trend_health import rules as rules_module
 from dsr.trend_health.errors import InvalidSort, TrendError, UnknownRoom
 from dsr.trend_health.timestamps import check_not_ahead, parse_timestamp, timestamp_of
@@ -34,9 +33,9 @@ from dsr.trend_health.vocabulary import (
     ENGAGEMENT_COLLECTION,
     ENGAGEMENT_EVENT_TYPES,
     ORDER_FORM_PREFIX,
+    ROOM_COLLECTION,
     RULES_COLLECTION,
     RULES_RECORD_ID,
-    ROOM_COLLECTION,
     TREND_LABELS,
     TREND_RULES,
     TREND_VALUES,
@@ -45,7 +44,13 @@ from dsr.trend_health.vocabulary import (
     require_audience,
     require_event_type,
 )
-from dsr.trend_health.windows import EngagementEvent, classify, events_from_records, rank_of, sort_key
+from dsr.trend_health.windows import (
+    EngagementEvent,
+    classify,
+    events_from_records,
+    rank_of,
+    sort_key,
+)
 
 #: Where the event's room may be named, in order of preference. ``workspaceId`` is
 #: the researched camelCase; the snake_case spelling is here for a client that
@@ -157,7 +162,9 @@ class TrendHealth:
     def rules(self) -> tuple[dict[str, Any], str]:
         """The rules in force, and whether they came from the defaults."""
         record = self.store.get(RULES_RECORD_ID)
-        data = record.get("data") if record and record.get("collection") == RULES_COLLECTION else None
+        data = (
+            record.get("data") if record and record.get("collection") == RULES_COLLECTION else None
+        )
         return rules_module.effective(data if isinstance(data, Mapping) else None)
 
     def rules_view(self) -> dict[str, Any]:
@@ -211,7 +218,9 @@ class TrendHealth:
         migration.
         """
         if not isinstance(payload, Mapping):
-            raise TrendError(f"the event payload must be a JSON object; got {type(payload).__name__}")
+            raise TrendError(
+                f"the event payload must be a JSON object; got {type(payload).__name__}"
+            )
 
         moment = now or datetime.now(timezone.utc)
         scope = self._room_id_of(payload, room_id)
@@ -288,9 +297,15 @@ class TrendHealth:
             data = record.get("data") or {}
             if wanted_type is not None and str(data.get("type") or "") != wanted_type:
                 continue
-            if wanted_audience is not None and require_audience(data.get("audience")) != wanted_audience:
+            if (
+                wanted_audience is not None
+                and require_audience(data.get("audience")) != wanted_audience
+            ):
                 continue
-            if client_view is not None and is_client_view(str(data.get("type") or "")) != client_view:
+            if (
+                client_view is not None
+                and is_client_view(str(data.get("type") or "")) != client_view
+            ):
                 continue
             at = parse_timestamp(data.get("occurred_at"), required=False)
             if start is not None and (at is None or at < start):
@@ -300,11 +315,14 @@ class TrendHealth:
             selected.append(record)
 
         selected.sort(
-            key=lambda record: str((record.get("data") or {}).get("occurred_at") or ""), reverse=True
+            key=lambda record: str((record.get("data") or {}).get("occurred_at") or ""),
+            reverse=True,
         )
         return selected[: max(1, min(int(limit), _PAGE))]
 
-    def _scan(self, room_id: str | None = None) -> tuple[list[dict[str, Any]], list[EngagementEvent], int, bool]:
+    def _scan(
+        self, room_id: str | None = None
+    ) -> tuple[list[dict[str, Any]], list[EngagementEvent], int, bool]:
         """Every event on one room - or on every room: the rows, the ladder input,
         and what was skipped.
 
@@ -343,7 +361,9 @@ class TrendHealth:
 
     # -- classification ----------------------------------------------------- #
 
-    def classify_room(self, room_id: str, *, as_of: str | None = None, with_decay: bool = True) -> dict[str, Any]:
+    def classify_room(
+        self, room_id: str, *, as_of: str | None = None, with_decay: bool = True
+    ) -> dict[str, Any]:
         """One room's Trend value, its arithmetic, and what it decays to.
 
         Writes nothing. See the ``nothing-stored-per-workspace`` entry in
@@ -369,7 +389,9 @@ class TrendHealth:
             "label": reading["label"],
             "rule": reading["rule"],
             "reasons": reading["reasons"],
-            "events": self._event_counts(events, rules, moment, skipped=skipped, truncated=truncated),
+            "events": self._event_counts(
+                events, rules, moment, skipped=skipped, truncated=truncated
+            ),
             "last_engagement_at": reading["last_engagement_at"],
             "last_engagement_days_ago": reading["last_engagement_days_ago"],
             "last_client_view": self._last_client_view(events),

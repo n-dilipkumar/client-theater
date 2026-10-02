@@ -55,7 +55,12 @@ def arguments_for(signal: Mapping[str, Any]) -> dict[str, Any]:
         ("signal_name", signal.get("signal_name")),
         ("type", signal.get("type")),
         ("occurred_at", signal.get("occurred_at")),
-        ("account", (signal.get("room") or {}).get("account") if isinstance(signal.get("room"), Mapping) else None),
+        (
+            "account",
+            (signal.get("room") or {}).get("account")
+            if isinstance(signal.get("room"), Mapping)
+            else None,
+        ),
     ):
         if value is not None:
             arguments.setdefault(key, value)
@@ -88,7 +93,9 @@ def render_signal(
     text = ""
     text_warnings: list[str] = []
     if resolved is None:
-        warnings.append("the registration declares no description, so no sentence could be rendered")
+        warnings.append(
+            "the registration declares no description, so no sentence could be rendered"
+        )
     else:
         rendered = icume.render(templates[resolved], arguments)
         text = rendered["text"]
@@ -162,15 +169,19 @@ def feed_entry(
     the same answer, and it means an amendment that adds a locale shows up in
     signals that were emitted before it existed.
     """
-    rendered = render_signal(registration or {}, signal, locale) if registration else {
-        "locale_requested": locale or "en",
-        "locale_resolved": None,
-        "locale_fallback": False,
-        "locales_available": [],
-        "text": "",
-        "indicators": [],
-        "warnings": ["this signal's registration has been withdrawn, so it cannot be rendered"],
-    }
+    rendered = (
+        render_signal(registration or {}, signal, locale)
+        if registration
+        else {
+            "locale_requested": locale or "en",
+            "locale_resolved": None,
+            "locale_fallback": False,
+            "locales_available": [],
+            "text": "",
+            "indicators": [],
+            "warnings": ["this signal's registration has been withdrawn, so it cannot be rendered"],
+        }
+    )
     return {
         "id": signal.get("id"),
         "room_id": signal.get("room_id"),
@@ -212,7 +223,9 @@ def build(
             receiver = signal.get("receiver") or {}
             if str(receiver.get("seller") or "") != seller:
                 continue
-        rows.append(feed_entry(signal, registrations.get(str(signal.get("registration_id"))), locale))
+        rows.append(
+            feed_entry(signal, registrations.get(str(signal.get("registration_id"))), locale)
+        )
     # Most recent first, then highest urgency first. Two passes rather than one
     # composite key because a stable sort preserves the first pass's order inside
     # each urgency band, and an ISO 8601 timestamp cannot be negated the way a

@@ -19,6 +19,7 @@ WF-009 and WF-011 were unaffected and are working, so they are left alone.
 The prompt is rewritten with no backticks and no characters cmd treats specially.
 It is also a single line, so there is no wrapping for cmd to mis-split.
 """
+
 import json
 import subprocess
 import sys
@@ -53,8 +54,15 @@ REPAIRS = [
 
 
 def orca(args, timeout=120):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         d = json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -67,7 +75,7 @@ def main():
     wts = {Path(w["path"]).name: w for w in listing.get("result", {}).get("worktrees", [])}
 
     handles = {}
-    for ticket, dirname, title, has_term in REPAIRS:
+    for ticket, dirname, title, _has_term in REPAIRS:
         print(f"=== {ticket} ===")
         wt = wts.get(dirname)
         if not wt:
@@ -85,23 +93,62 @@ def main():
         if handle is None:
             # No agent tab survived. Create one rather than reusing the worktree.
             print("  no opencode terminal; creating a fresh agent tab")
-            res = orca(["orca", "terminal", "create", "--worktree", wt_id,
-                        "--title", title, "--command", "opencode", "--json"])
+            res = orca(
+                [
+                    "orca",
+                    "terminal",
+                    "create",
+                    "--worktree",
+                    wt_id,
+                    "--title",
+                    title,
+                    "--command",
+                    "opencode",
+                    "--json",
+                ]
+            )
             if not res.get("ok"):
                 print(f"  terminal create failed: {res}")
                 continue
             handle = res["result"]["terminal"]["handle"]
             time.sleep(10)
-            orca(["orca", "terminal", "wait", "--terminal", handle,
-                  "--for", "tui-idle", "--timeout-ms", "45000", "--json"], timeout=70)
+            orca(
+                [
+                    "orca",
+                    "terminal",
+                    "wait",
+                    "--terminal",
+                    handle,
+                    "--for",
+                    "tui-idle",
+                    "--timeout-ms",
+                    "45000",
+                    "--json",
+                ],
+                timeout=70,
+            )
         else:
             print(f"  reusing existing agent tab {handle}")
 
         # The safe prompt: no backticks or any other cmd metacharacter.
         text = POINTER.format(ticket=ticket)
         assert "`" not in text and "$" not in text and "%" not in text, "unsafe prompt"
-        res = orca(["orca", "terminal", "send", "--terminal", handle,
-                    "--text", text, "--enter", "--wait-submit", "25", "--json"], timeout=100)
+        res = orca(
+            [
+                "orca",
+                "terminal",
+                "send",
+                "--terminal",
+                handle,
+                "--text",
+                text,
+                "--enter",
+                "--wait-submit",
+                "25",
+                "--json",
+            ],
+            timeout=100,
+        )
         if res.get("ok"):
             print(f"  brief delivered (accepted={res['result'].get('accepted')})")
         else:
@@ -111,8 +158,9 @@ def main():
     # Persist, merging with any set-2 records so agent_status.py keeps working.
     out = ROOT / "data" / "dispatched.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps(
-        [{"ticket": t, **v} for t, v in handles.items()], indent=2), encoding="utf-8")
+    out.write_text(
+        json.dumps([{"ticket": t, **v} for t, v in handles.items()], indent=2), encoding="utf-8"
+    )
 
     print()
     print("=== repaired ===")

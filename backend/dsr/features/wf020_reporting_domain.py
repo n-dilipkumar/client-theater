@@ -490,9 +490,7 @@ def format_instant(moment: datetime | None) -> str | None:
     return None if moment is None else moment.astimezone(timezone.utc).isoformat()
 
 
-def _row_instant(
-    raw: Mapping[str, Any], camel: str, snake: str
-) -> tuple[datetime | None, bool]:
+def _row_instant(raw: Mapping[str, Any], camel: str, snake: str) -> tuple[datetime | None, bool]:
     """Read one row timestamp, and report whether an offset had to be assumed.
 
     The naive case is not an error here. The instruction is to land the rows, and
@@ -877,7 +875,9 @@ def normalise_session(
     payload["geolocation_latitude"] = latitude
     payload["geo_location_longitude"] = longitude
 
-    present_geo = [value for value in (payload["city"], payload["state"], payload["country"]) if value]
+    present_geo = [
+        value for value in (payload["city"], payload["state"], payload["country"]) if value
+    ]
     if not present_geo and latitude is None and longitude is None:
         flags.append("geography_missing")
     elif len(present_geo) != 3 or latitude is None or longitude is None:
@@ -926,9 +926,7 @@ def normalise_session(
         "window_verdict",
     }
     extra = {
-        key: value
-        for key, value in raw.items()
-        if key not in known and not key.startswith("_")
+        key: value for key, value in raw.items() if key not in known and not key.startswith("_")
     }
     if extra:
         payload["extra"] = extra
@@ -966,7 +964,9 @@ def normalise_room(
         raise PayloadError(f"a room inventory row must be an object, got {type(raw).__name__}")
 
     flags: list[str] = []
-    room_id = _text(raw.get("id") or raw.get("digitalSalesRoomId") or raw.get("digital_sales_room_id"))
+    room_id = _text(
+        raw.get("id") or raw.get("digitalSalesRoomId") or raw.get("digital_sales_room_id")
+    )
     if room_id is None:
         raise PayloadError("a room inventory row needs an id: it is the join key for sessions")
 
@@ -981,18 +981,29 @@ def normalise_room(
             or raw.get("digital_sales_room_template_version_id")
         ),
         "created_by": _text(raw.get("createdBy") or raw.get("created_by")),
-        "created_by_username": _text(raw.get("createdByUsername") or raw.get("created_by_username")),
+        "created_by_username": _text(
+            raw.get("createdByUsername") or raw.get("created_by_username")
+        ),
         "created_at": format_instant(
-            parse_instant(raw.get("createdAt") or raw.get("created_at"), field="createdAt",
-                          require_offset=False)
+            parse_instant(
+                raw.get("createdAt") or raw.get("created_at"),
+                field="createdAt",
+                require_offset=False,
+            )
         ),
         "modified_at": format_instant(
-            parse_instant(raw.get("modifiedAt") or raw.get("modified_at"), field="modifiedAt",
-                          require_offset=False)
+            parse_instant(
+                raw.get("modifiedAt") or raw.get("modified_at"),
+                field="modifiedAt",
+                require_offset=False,
+            )
         ),
         "user_modified_at": format_instant(
-            parse_instant(raw.get("userModifiedAt") or raw.get("user_modified_at"),
-                          field="userModifiedAt", require_offset=False)
+            parse_instant(
+                raw.get("userModifiedAt") or raw.get("user_modified_at"),
+                field="userModifiedAt",
+                require_offset=False,
+            )
         ),
     }
     payload["room_key"] = room_id
@@ -1000,8 +1011,10 @@ def normalise_room(
         payload["bound_room_id"] = bound_room_id
     if payload["name"] is None:
         flags.append("name_missing")
-    if payload["modified_at"] and payload["user_modified_at"] and (
-        payload["user_modified_at"] != payload["modified_at"]
+    if (
+        payload["modified_at"]
+        and payload["user_modified_at"]
+        and (payload["user_modified_at"] != payload["modified_at"])
     ):
         # Not an error: the API reports a data-modified time and a user-modified
         # time separately. Recorded so a BI consumer can tell a template refresh
@@ -1020,7 +1033,9 @@ def normalise_room(
         "bound_room_id",
         "window_verdict",
     }
-    extra = {key: value for key, value in raw.items() if key not in known and not key.startswith("_")}
+    extra = {
+        key: value for key, value in raw.items() if key not in known and not key.startswith("_")
+    }
     if extra:
         payload["extra"] = extra
         flags.append("undocumented_fields")
@@ -1061,7 +1076,9 @@ def require_rows(rows: Any, *, what: str) -> Sequence[Any]:
     return rows
 
 
-def _existing(store: RecordStore, collection: str, key_field: str, key: str) -> dict[str, Any] | None:
+def _existing(
+    store: RecordStore, collection: str, key_field: str, key: str
+) -> dict[str, Any] | None:
     found = store.find(collection, {key_field: key}, limit=1, include_deleted=True)
     return found[0] if found else None
 
@@ -1196,7 +1213,11 @@ def land_rooms(
     seen: dict[str, int] = {}
 
     for index, raw in enumerate(rows):
-        bound = _text(raw.get("bound_room_id") or raw.get("boundRoomId")) if isinstance(raw, Mapping) else None
+        bound = (
+            _text(raw.get("bound_room_id") or raw.get("boundRoomId"))
+            if isinstance(raw, Mapping)
+            else None
+        )
         try:
             payload = normalise_room(raw, window=window, bound_room_id=bound)
         except (PayloadError, WindowError) as exc:
@@ -1247,7 +1268,9 @@ RUN_KINDS = ("sweep", "extract")
 def list_runs(
     store: RecordStore, *, resource: str | None = None, limit: int = 50
 ) -> list[dict[str, Any]]:
-    runs = store.list(RUNS, limit=min(max(1, int(limit)), 1000), order_by="created_at", descending=True)
+    runs = store.list(
+        RUNS, limit=min(max(1, int(limit)), 1000), order_by="created_at", descending=True
+    )
     if resource:
         runs = [run for run in runs if (run.get("data") or {}).get("resource") == resource]
     return runs
@@ -1558,7 +1581,9 @@ def sessions_for(
         rows: list[dict[str, Any]] = []
         for room_id in room_ids:
             rows.extend(store.find(SESSIONS, {"digital_sales_room_id": room_id}, limit=capped))
-        rows.sort(key=lambda record: str(_data(record).get("session_started_at") or ""), reverse=True)
+        rows.sort(
+            key=lambda record: str(_data(record).get("session_started_at") or ""), reverse=True
+        )
     else:
         rows = store.list(SESSIONS, limit=capped, order_by="created_at", descending=True)
 
@@ -1601,7 +1626,9 @@ def _first_last(rows: Sequence[Mapping[str, Any]]) -> tuple[str | None, str | No
     return (stamps[0], stamps[-1]) if stamps else (None, None)
 
 
-def summarise(rows: Sequence[Mapping[str, Any]], *, sla_hours: int = REFRESH_SLA_HOURS) -> dict[str, Any]:
+def summarise(
+    rows: Sequence[Mapping[str, Any]], *, sla_hours: int = REFRESH_SLA_HOURS
+) -> dict[str, Any]:
     """The headline numbers, with sessions and visitors kept apart.
 
     "Each row represents a single session in a DSR link from a single user in a
@@ -1614,7 +1641,9 @@ def summarise(rows: Sequence[Mapping[str, Any]], *, sla_hours: int = REFRESH_SLA
     external = [row for row in rows if row.get("is_engagement_user_internal") is False]
     unknown = [row for row in rows if row.get("is_engagement_user_internal") is None]
     viewers = {str(row.get("viewer_key")) for row in rows}
-    rooms = {str(row.get("digital_sales_room_id")) for row in rows if row.get("digital_sales_room_id")}
+    rooms = {
+        str(row.get("digital_sales_room_id")) for row in rows if row.get("digital_sales_room_id")
+    }
     countries = {str(row.get("country")) for row in rows if row.get("country")}
     cities = {
         (str(row.get("country") or ""), str(row.get("state") or ""), str(row.get("city") or ""))
@@ -1655,9 +1684,13 @@ def summarise(rows: Sequence[Mapping[str, Any]], *, sla_hours: int = REFRESH_SLA
             "dwell_seconds": _dwell_total(external),
         },
         "internal_unknown": len(unknown),
-        "unattributed_sessions": sum(1 for row in rows if "unattributed" in (row.get("quality_flags") or [])),
+        "unattributed_sessions": sum(
+            1 for row in rows if "unattributed" in (row.get("quality_flags") or [])
+        ),
         "unresolved_room_sessions": sum(
-            1 for row in rows if row.get("room_unresolved") or "room_unresolved" in (row.get("quality_flags") or [])
+            1
+            for row in rows
+            if row.get("room_unresolved") or "room_unresolved" in (row.get("quality_flags") or [])
         ),
         "flagged_sessions": sum(1 for row in rows if row.get("has_quality_flags")),
         "quality_flags": dict(sorted(flags.items())),
@@ -1668,7 +1701,9 @@ def summarise(rows: Sequence[Mapping[str, Any]], *, sla_hours: int = REFRESH_SLA
     }
 
 
-def dwell_rollup(rows: Sequence[Mapping[str, Any]], *, group_by: str = "room") -> list[dict[str, Any]]:
+def dwell_rollup(
+    rows: Sequence[Mapping[str, Any]], *, group_by: str = "room"
+) -> list[dict[str, Any]]:
     """Dwell per room, or per viewer.
 
     A total is tab-seconds, because that is what a row is; the label is carried in
@@ -1873,11 +1908,15 @@ def negotiate_format(accept: str | None, requested: str | None = None) -> str:
     header = (accept or "").casefold()
     if "text/csv" in header:
         return ACCEPT_CSV
-    if header and "application/json" not in header and "*/*" not in header and "text/*" not in header:
+    if (
+        header
+        and "application/json" not in header
+        and "*/*" not in header
+        and "text/*" not in header
+    ):
         # Something asked for a representation this workflow does not produce.
         raise PayloadError(
-            f"unsupported Accept {accept!r}; this extraction produces "
-            f"{ACCEPT_JSON} or {ACCEPT_CSV}"
+            f"unsupported Accept {accept!r}; this extraction produces {ACCEPT_JSON} or {ACCEPT_CSV}"
         )
     return ACCEPT_JSON
 
@@ -1899,20 +1938,45 @@ STAR_SCHEMA: dict[str, Any] = {
         "time": ["session_started_at", "session_ended_at", "modified_at"],
     },
     "dimensions": [
-        {"table": ROOMS, "key": ["digital_sales_room_id"], "attributes": [
-            "name", "digital_sales_room_template_id",
-            "digital_sales_room_template_version_id", "created_by_username",
-        ]},
-        {"name": "viewer", "derived_from": ["viewer_key", "engagement_user_email", "user_id",
-                                            "is_engagement_user_internal"],
-         "note": "internal-versus-external is a dimension, not a filter: a seller "
-                 "previewing a room and a buyer reading it share a shape."},
-        {"name": "geography", "derived_from": ["country", "state", "city",
-                                               "geolocation_latitude", "geo_location_longitude"],
-         "note": "ip_address is stored but withheld from read surfaces unless asked for."},
-        {"name": "extraction_run", "table": RUNS, "key": ["window.kind", "window.start", "window.end"],
-         "attributes": ["state", "counters", "watermark_after", "format"],
-         "note": "the incremental lineage: which window produced which rows"},
+        {
+            "table": ROOMS,
+            "key": ["digital_sales_room_id"],
+            "attributes": [
+                "name",
+                "digital_sales_room_template_id",
+                "digital_sales_room_template_version_id",
+                "created_by_username",
+            ],
+        },
+        {
+            "name": "viewer",
+            "derived_from": [
+                "viewer_key",
+                "engagement_user_email",
+                "user_id",
+                "is_engagement_user_internal",
+            ],
+            "note": "internal-versus-external is a dimension, not a filter: a seller "
+            "previewing a room and a buyer reading it share a shape.",
+        },
+        {
+            "name": "geography",
+            "derived_from": [
+                "country",
+                "state",
+                "city",
+                "geolocation_latitude",
+                "geo_location_longitude",
+            ],
+            "note": "ip_address is stored but withheld from read surfaces unless asked for.",
+        },
+        {
+            "name": "extraction_run",
+            "table": RUNS,
+            "key": ["window.kind", "window.start", "window.end"],
+            "attributes": ["state", "counters", "watermark_after", "format"],
+            "note": "the incremental lineage: which window produced which rows",
+        },
     ],
 }
 
@@ -1993,19 +2057,37 @@ def contract() -> dict[str, Any]:
                 "path": "/reporting/v2/digitalSalesRoomViewingSessions",
                 "summary": EVIDENCE["viewing_sessions_summary"],
                 "query": {
-                    LIMIT_PARAM: {"required": False, "type": "integer",
-                                  "note": "Page size. Omit it to take the server default; no "
-                                          "default is invented here."},
-                    "modifiedAtStartTime": {"required": False, "type": "timestamp",
-                                            "preferred": True, "semantics": EVIDENCE["modified_at_semantics"]},
-                    "modifiedAtEndTime": {"required": False, "type": "timestamp",
-                                          "preferred": True, "bound": "exclusive in this feature"},
-                    "sessionStartedAtTime": {"required": False, "type": "timestamp",
-                                             "preferred": False,
-                                             "note": "The documented alternative to the modifiedAt "
-                                                     "pair. Alternatives are not combined: the API "
-                                                     "publishes no semantics for that."},
-                    "sessionEndedAtTime": {"required": False, "type": "timestamp", "preferred": False},
+                    LIMIT_PARAM: {
+                        "required": False,
+                        "type": "integer",
+                        "note": "Page size. Omit it to take the server default; no "
+                        "default is invented here.",
+                    },
+                    "modifiedAtStartTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": True,
+                        "semantics": EVIDENCE["modified_at_semantics"],
+                    },
+                    "modifiedAtEndTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": True,
+                        "bound": "exclusive in this feature",
+                    },
+                    "sessionStartedAtTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": False,
+                        "note": "The documented alternative to the modifiedAt "
+                        "pair. Alternatives are not combined: the API "
+                        "publishes no semantics for that.",
+                    },
+                    "sessionEndedAtTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": False,
+                    },
                 },
                 "fields": [dict(field) for field in VIEWING_SESSION_FIELDS],
             },
@@ -2016,11 +2098,27 @@ def contract() -> dict[str, Any]:
                 "summary": "Room inventory, joined onto every session row by digitalSalesRoomId.",
                 "query": {
                     LIMIT_PARAM: {"required": False, "type": "integer"},
-                    "modifiedAtStartTime": {"required": False, "type": "timestamp", "preferred": True,
-                                            "semantics": EVIDENCE["modified_at_semantics"]},
-                    "modifiedAtEndTime": {"required": False, "type": "timestamp", "preferred": True},
-                    "createdAtStartTime": {"required": False, "type": "timestamp", "preferred": False},
-                    "createdAtEndTime": {"required": False, "type": "timestamp", "preferred": False},
+                    "modifiedAtStartTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": True,
+                        "semantics": EVIDENCE["modified_at_semantics"],
+                    },
+                    "modifiedAtEndTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": True,
+                    },
+                    "createdAtStartTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": False,
+                    },
+                    "createdAtEndTime": {
+                        "required": False,
+                        "type": "timestamp",
+                        "preferred": False,
+                    },
                 },
                 "fields": [dict(field) for field in ROOM_FIELDS],
             },
@@ -2043,7 +2141,7 @@ def contract() -> dict[str, Any]:
             "on": "digitalSalesRoomId",
             "to": "/reporting/v2/digitalSalesRooms",
             "resolved": "on read, from the landed inventory, so a renamed room never "
-                        "leaves a stale label inside a session row",
+            "leaves a stale label inside a session row",
             "unresolved_rows": "landed and flagged room_unresolved; the row is never dropped",
         },
         "merge": {
@@ -2051,9 +2149,9 @@ def contract() -> dict[str, Any]:
             "behaviour": "a re-landed row updates the row already stored",
             "why": EVIDENCE["modified_at_semantics"],
             "limitation": "the documented field list carries no session identifier, so the "
-                          "key is derived; two sessions sharing a user, a room and a start "
-                          "second would collide. An explicit id is preferred the moment one "
-                          "arrives.",
+            "key is derived; two sessions sharing a user, a room and a start "
+            "second would collide. An explicit id is preferred the moment one "
+            "arrives.",
         },
         "refresh": {
             "sla_hours": REFRESH_SLA_HOURS,
@@ -2061,7 +2159,7 @@ def contract() -> dict[str, Any]:
             "emphasis": EVIDENCE["refresh_sla_emphasis"],
             "warning": EVIDENCE["high_frequency_warning"],
             "consequence": "the sweep pages by the SLA, and a window narrower than it is "
-                           "annotated as not fresher rather than refused",
+            "annotated as not fresher rather than refused",
         },
         "fields": {
             "digitalSalesRoomViewingSessions": [dict(field) for field in VIEWING_SESSION_FIELDS],

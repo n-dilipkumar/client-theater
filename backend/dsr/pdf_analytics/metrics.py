@@ -44,6 +44,7 @@ def floor(moment: datetime, grain: str) -> str:
         return (moment.date() - timedelta(days=moment.date().weekday())).isoformat()
     return moment.date().isoformat()
 
+
 # --------------------------------------------------------------------------- #
 # Timestamps
 # --------------------------------------------------------------------------- #
@@ -125,7 +126,8 @@ def group_sessions(
         # same millisecond still read in document order, and `sort` being stable
         # keeps the caller's order for anything else.
         ordered = sorted(
-            group, key=lambda r: (_fallback_ts(r.get("occurredAt"), earliest), int(r.get("page") or 0))
+            group,
+            key=lambda r: (_fallback_ts(r.get("occurredAt"), earliest), int(r.get("page") or 0)),
         )
         run: list[Mapping[str, Any]] = []
         for row in ordered:
@@ -203,9 +205,7 @@ def dwell_per_page(
     return result
 
 
-def drop_off_per_page(
-    sessions: Sequence[Mapping[str, Any]], *, page_count: int
-) -> dict[str, Any]:
+def drop_off_per_page(sessions: Sequence[Mapping[str, Any]], *, page_count: int) -> dict[str, Any]:
     """**Drop off per page**: where readers stop.
 
     A reader who reached page 7 read pages 1 to 6, so the reach count is
@@ -378,7 +378,9 @@ def _advance(bucket: str, grain: str) -> str:
     return (start + timedelta(days=7 if grain == "week" else 1)).isoformat()
 
 
-def bucket_series(events: Sequence[Mapping[str, Any]], *, grain: str = "day") -> list[dict[str, Any]]:
+def bucket_series(
+    events: Sequence[Mapping[str, Any]], *, grain: str = "day"
+) -> list[dict[str, Any]]:
     """The same three counts over time, for the bar chart's axis.
 
     The research names "Core Analytics bar charts" without saying what the

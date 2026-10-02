@@ -123,7 +123,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "The research describes the setting as a decision an administrator makes and never "
             "names a default."
         ),
-        "value": {"default": False, "in": "dsr.scheduling.meeting_types.DEFAULT_EXPIRE_RESCHEDULE_LINK"},
+        "value": {
+            "default": False,
+            "in": "dsr.scheduling.meeting_types.DEFAULT_EXPIRE_RESCHEDULE_LINK",
+        },
         "why": (
             "Off is the setting that changes nothing about the researched flow, so a meeting type "
             "that never mentions it behaves the way the flow describes before the setting is "
@@ -322,7 +325,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             ":bookingUid can be ... of an usual booking, individual recurrence or recurring "
             "booking to cancel all recurrences."
         ),
-        "value": {"values": ["this", "all"], "default": "this", "all_on_a_non_series": "cancels just that booking"},
+        "value": {
+            "values": ["this", "all"],
+            "default": "this",
+            "all_on_a_non_series": "cancels just that booking",
+        },
         "why": (
             "The research names the two cases in prose and never names a parameter, so the "
             "parameter is this build's. 'this' and 'all' are the shortest pair that cannot be "
@@ -566,7 +573,12 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "The research says the tags are injected into the Description and never says what "
             "the URL contains."
         ),
-        "value": {"bytes": 18, "scheme": "url-safe random", "minted_when": "the booking is created", "travels_on_reschedule": False},
+        "value": {
+            "bytes": 18,
+            "scheme": "url-safe random",
+            "minted_when": "the booking is created",
+            "travels_on_reschedule": False,
+        },
         "why": (
             "A token derived from the booking uid would let anybody who could guess or enumerate "
             "a uid move somebody else's meeting, and the research's step 1 opens this door to "
@@ -585,7 +597,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "copied onto the room, and this product's own research for other workflows is where "
             "that instruction appears when it is meant."
         ),
-        "value": {"room_annotation": False, "history_rows": "room-scoped records", "room_filtered_routes": "present"},
+        "value": {
+            "room_annotation": False,
+            "history_rows": "room-scoped records",
+            "room_filtered_routes": "present",
+        },
         "why": (
             "A duplicate array on a room is a poor place for match detail and a capped one "
             "cannot answer a question about the eleventh change. The history rows are already "
@@ -664,10 +680,6 @@ def describe() -> dict[str, Any]:
         },
         "inferences": [dict(entry) for entry in INFERENCES],
         "vocabulary_count": len(
-            [
-                key
-                for key in published_vocabulary()
-                if isinstance(published_vocabulary()[key], list)
-            ]
+            [key for key in published_vocabulary() if isinstance(published_vocabulary()[key], list)]
         ),
     }

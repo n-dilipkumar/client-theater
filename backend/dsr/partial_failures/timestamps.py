@@ -69,7 +69,9 @@ def parse_instant(value: Any, *, required: bool = True) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def check_not_ahead(when: datetime, *, now: datetime, tolerance: int = FUTURE_TOLERANCE_SECONDS) -> None:
+def check_not_ahead(
+    when: datetime, *, now: datetime, tolerance: int = FUTURE_TOLERANCE_SECONDS
+) -> None:
     """Refuse an instant further ahead than the forward tolerance allows."""
     ahead = (when - now).total_seconds()
     if ahead > tolerance:

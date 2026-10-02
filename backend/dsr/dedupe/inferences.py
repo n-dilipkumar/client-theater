@@ -159,7 +159,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "one for companies. Salesforce and Dataverse let an administrator choose. The research "
             "does not publish a default set."
         ),
-        "value": {"default_unique_keys": ["email"], "reason": "email is the only one documented as primary"},
+        "value": {
+            "default_unique_keys": ["email"],
+            "reason": "email is the only one documented as primary",
+        },
         "why": (
             "Defaulting to email matches the one vendor statement that exists. Marking domain "
             "unique as well would be defensible for a company-shaped connection, and the "
@@ -215,7 +218,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "'The default value for all fields is false'. So with the researched default, a "
             "duplicate alert carries the matching record id and nothing more."
         ),
-        "value": {"stores_payloads_only_when": "includeRecordDetails was requested", "stores_ids": "always"},
+        "value": {
+            "stores_payloads_only_when": "includeRecordDetails was requested",
+            "stores_ids": "always",
+        },
         "why": (
             "Recording payloads the request did not ask for would be inventing evidence about what "
             "the CRM sent back. The decision keeps ids either way, because step 3 and step 5 of the "

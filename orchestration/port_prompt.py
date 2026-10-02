@@ -218,8 +218,9 @@ Report, in this order:
 """
 
 
-def build(ticket, source_branch, feature_module, feature_id, prefix,
-          additive, shared, name, description):
+def build(
+    ticket, source_branch, feature_module, feature_id, prefix, additive, shared, name, description
+):
     # No leading indent on the first item: the template supplies it, and adding
     # one here would leave the first bullet hanging one space out from the rest.
     shared_list = "\n".join(f"- `{s}`" for s in shared)

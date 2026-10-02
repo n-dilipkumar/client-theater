@@ -162,6 +162,7 @@ def inferences() -> dict[str, Any]:
     """
     return describe_inferences()
 
+
 # --------------------------------------------------------------------------- #
 # Connections
 # --------------------------------------------------------------------------- #
@@ -202,7 +203,9 @@ def create_connection(
     researched pair is *accepted* and reported as unsupported, so the account can
     be recorded; the refusal comes from the install a human actually runs.
     """
-    return engine.register_connection(payload, actor=actor, source=f"POST {router.prefix}/connections")
+    return engine.register_connection(
+        payload, actor=actor, source=f"POST {router.prefix}/connections"
+    )
 
 
 @router.get("/connections/{connection_id}")
@@ -260,7 +263,9 @@ def create_manifest(
     team learns that a manifest skips a property on HubSpot before it installs
     anything rather than after.
     """
-    result = engine.register_manifest(payload, actor=actor, source=f"POST {router.prefix}/manifests")
+    result = engine.register_manifest(
+        payload, actor=actor, source=f"POST {router.prefix}/manifests"
+    )
     if result.get("outcome") == "unchanged" and response is not None:
         response.status_code = 200
     report = engine.manifest_report(str(result.get("manifest_id")), str(result.get("version")))
@@ -292,7 +297,9 @@ def diff(
     connection_id: str = Query(...),
     manifest_id: str = Query(...),
     version: str | None = Query(default=None, description="omit for the highest declared version"),
-    vendor: str | None = Query(default=None, description="diff against this vendor instead of the connection's"),
+    vendor: str | None = Query(
+        default=None, description="diff against this vendor instead of the connection's"
+    ),
     engine: ProvisioningEngine = EngineDep,
 ) -> dict[str, Any]:
     """The dry-run diff view: exactly what an install would do, writing nothing.
@@ -381,17 +388,27 @@ def read_object(object_id: str, engine: ProvisioningEngine = EngineDep) -> dict[
     """One object: its mapping, its properties, and its key if it has one."""
     record = engine.object(object_id)
     connection = engine.connection(str(record.get("connection_id")))
-    keys = [key for key in engine.keys() if str(key.get("crm_object_id")) == str(record.get("crm_object_id"))]
+    keys = [
+        key
+        for key in engine.keys()
+        if str(key.get("crm_object_id")) == str(record.get("crm_object_id"))
+    ]
     return {
         "object": record,
-        "connection": {"id": connection["id"], "name": connection.get("name"), "vendor": connection.get("vendor")},
+        "connection": {
+            "id": connection["id"],
+            "name": connection.get("name"),
+            "vendor": connection.get("vendor"),
+        },
         "properties": engine.properties(object_id),
         "keys": keys,
     }
 
 
 @router.get("/objects/{object_id}/properties")
-def list_object_properties(object_id: str, engine: ProvisioningEngine = EngineDep) -> dict[str, Any]:
+def list_object_properties(
+    object_id: str, engine: ProvisioningEngine = EngineDep
+) -> dict[str, Any]:
     """The properties this workflow created on one object.
 
     Only this workflow's own creations. A property a tenant added in HubSpot's UI
@@ -418,7 +435,12 @@ def add_object_property(
     than changed, because "never destructively renaming or dropping existing
     fields" is a property of the workflow and not of the entry point.
     """
-    return engine.add_property(object_id, payload, actor=actor, source=f"POST {router.prefix}/objects/{{object_id}}/properties")
+    return engine.add_property(
+        object_id,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/objects/{{object_id}}/properties",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -517,7 +539,9 @@ def list_installations(
         "created": sum(int((run.get("counts") or {}).get("created") or 0) for run in listed),
         "conflicts": sum(int((run.get("counts") or {}).get("conflicts") or 0) for run in listed),
         "skipped": sum(int((run.get("counts") or {}).get("skipped") or 0) for run in listed),
-        "left_in_place": sum(int((run.get("counts") or {}).get("left_in_place") or 0) for run in listed),
+        "left_in_place": sum(
+            int((run.get("counts") or {}).get("left_in_place") or 0) for run in listed
+        ),
         "dry_runs": sum(1 for run in listed if run.get("dry_run")),
     }
     return {"count": len(listed), "totals": totals, "installations": listed}
@@ -687,7 +711,9 @@ def _version_three() -> dict[str, Any]:
         **body,
         "description": "Renames room_name to room_label. The old column is left in place.",
         "properties": [
-            {**prop, "name": "room_label", "label": "Room label"} if prop["name"] == "room_name" else prop
+            {**prop, "name": "room_label", "label": "Room label"}
+            if prop["name"] == "room_name"
+            else prop
             for prop in ENGAGEMENT_MANIFEST_V1["properties"]
         ],
     }
@@ -745,15 +771,23 @@ def _wide_key_manifest() -> dict[str, Any]:
 #: refusal instead of wondering whether the gap was noticed.
 DEMO_CONNECTIONS: tuple[dict[str, Any], ...] = (
     {"vendor": "hubspot", "name": "Northwind Traders — HubSpot", "environment": "production"},
-    {"vendor": "dataverse", "name": "Contoso Health — Dataverse", "environment": "production",
-     "simulate": {"key_index": "failed"}},
+    {
+        "vendor": "dataverse",
+        "name": "Contoso Health — Dataverse",
+        "environment": "production",
+        "simulate": {"key_index": "failed"},
+    },
     {"vendor": "salesforce", "name": "Fabrikam Logistics — Salesforce", "environment": "sandbox"},
 )
 
 #: Which room each demo connection belongs to. ``backend/seed.py`` hands over
 #: ``[(room_id, account), ...]``, and the rooms in the core dataset are already the
 #: three accounts above.
-DEMO_CONNECTION_ROOMS: tuple[str, ...] = ("Northwind Traders", "Contoso Health", "Fabrikam Logistics")
+DEMO_CONNECTION_ROOMS: tuple[str, ...] = (
+    "Northwind Traders",
+    "Contoso Health",
+    "Fabrikam Logistics",
+)
 
 
 def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
@@ -797,11 +831,13 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     for position, spec in enumerate(DEMO_CONNECTIONS):
         account = DEMO_CONNECTION_ROOMS[position] if position < len(DEMO_CONNECTION_ROOMS) else ""
         payload = {**spec, "room_id": rooms.get(account)}
-        connections[spec["vendor"]] = engine.register_connection(payload, actor="dana", source=source)
+        connections[spec["vendor"]] = engine.register_connection(
+            payload, actor="dana", source=source
+        )
 
     manifest = engine.register_manifest(ENGAGEMENT_MANIFEST_V1, actor="dana", source=source)
-    version_two = engine.register_manifest(_version_two(), actor="dana", source=source)
-    version_three = engine.register_manifest(_version_three(), actor="dana", source=source)
+    engine.register_manifest(_version_two(), actor="dana", source=source)
+    engine.register_manifest(_version_three(), actor="dana", source=source)
     over_wide = engine.register_manifest(_wide_key_manifest(), actor="dana", source=source)
 
     def run(vendor: str, version: str | None, **flags: Any) -> dict[str, Any]:

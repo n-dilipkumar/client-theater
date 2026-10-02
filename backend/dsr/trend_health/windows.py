@@ -217,7 +217,9 @@ def _reasons(
 
     def counts_in(window: Mapping[str, Any]) -> str:
         prefix = f"{scope} " if scope else ""
-        return f"{prefix}{window['qualifying']} engagement event(s) in the last {window['days']} days"
+        return (
+            f"{prefix}{window['qualifying']} engagement event(s) in the last {window['days']} days"
+        )
 
     if trend == "hot":
         reasons.append(f"{counts_in(hot)} (Hot floor {int(floors['hot'])})")

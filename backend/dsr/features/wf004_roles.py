@@ -67,8 +67,10 @@ from datetime import timedelta
 from typing import Any
 
 from dsr import roles
-from dsr.roles_api import router
-from dsr.roles_api import EXCEPTION_HANDLERS  # noqa: F401  (the host reads this)
+from dsr.roles_api import (
+    EXCEPTION_HANDLERS,  # noqa: F401  (the host reads this)
+    router,
+)
 
 __all__ = ["FEATURE", "router", "EXCEPTION_HANDLERS", "seed"]
 
@@ -120,12 +122,8 @@ SEED_GRANTS: dict[str, tuple[tuple[str, str, Any], ...]] = {
         ("procurement@contoso.example", "viewer", "soon"),
         ("ciso@contoso.example", "content_contributor", None),
     ),
-    "Fabrikam Logistics": (
-        ("ops@fabrikam.example", "content_contributor", "far"),
-    ),
-    "Adventure Works": (
-        ("lead@adventure.example", "viewer", "far"),
-    ),
+    "Fabrikam Logistics": (("ops@fabrikam.example", "content_contributor", "far"),),
+    "Adventure Works": (("lead@adventure.example", "viewer", "far"),),
 }
 
 #: One invitation still in flight, so the 48-hour window is visible on load

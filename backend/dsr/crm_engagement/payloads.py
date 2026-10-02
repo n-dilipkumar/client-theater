@@ -41,9 +41,7 @@ from dsr.crm_engagement.vocabulary import (
 #: The Dataverse entity id as it appears inside the returned entity URI. Dataverse
 #: primary keys are GUIDs, so this is checked rather than assumed: a header carrying
 #: something else is reported verbatim rather than mangled into a GUID shape.
-_GUID = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
+_GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 _PARENTHESISED = re.compile(r"\(([^()]+)\)\s*$")
 
 
@@ -303,7 +301,12 @@ def error_detail(body_text: str) -> dict[str, Any]:
     sample rather than dropped, because a body this build cannot parse is still the
     evidence.
     """
-    detail: dict[str, Any] = {"code": None, "message": None, "annotations": [], "raw": (body_text or "")[:512]}
+    detail: dict[str, Any] = {
+        "code": None,
+        "message": None,
+        "annotations": [],
+        "raw": (body_text or "")[:512],
+    }
     if not body_text:
         return detail
     try:
@@ -323,7 +326,11 @@ def error_detail(body_text: str) -> dict[str, Any]:
         for annotation in error.get("annotations") or []:
             if isinstance(annotation, Mapping):
                 detail["annotations"].append(
-                    {str(key): value for key, value in annotation.items() if key in ("message", "target", "code")}
+                    {
+                        str(key): value
+                        for key, value in annotation.items()
+                        if key in ("message", "target", "code")
+                    }
                 )
         if not detail["message"]:
             inner = error.get("innererror")

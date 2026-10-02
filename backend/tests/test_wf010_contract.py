@@ -10,7 +10,6 @@ they are asserted on their exact message as well as their type.
 from __future__ import annotations
 
 import pytest
-
 from dsr.search.contract import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_RETURN_FIELDS,
@@ -224,7 +223,12 @@ def test_filter_depth_of_two_is_accepted():
             "filter": {
                 "and": [
                     {"field": "profile", "value": "deck"},
-                    {"or": [{"field": "format", "value": "pdf"}, {"field": "format", "value": "pptx"}]},
+                    {
+                        "or": [
+                            {"field": "format", "value": "pdf"},
+                            {"field": "format", "value": "pptx"},
+                        ]
+                    },
                 ]
             }
         }
@@ -245,7 +249,11 @@ def test_filter_depth_of_three_is_rejected_with_the_documented_message():
                         {
                             "or": [
                                 {"field": "format", "value": "pdf"},
-                                {"and": [{"field": "pages", "operator": "greaterThan", "value": 3}]},
+                                {
+                                    "and": [
+                                        {"field": "pages", "operator": "greaterThan", "value": 3}
+                                    ]
+                                },
                             ]
                         },
                     ]
@@ -358,7 +366,9 @@ def test_fingerprint_changes_with_the_term_filter_and_sort():
     base = parse({"term": "deck"}).fingerprint()
 
     assert parse({"term": "other"}).fingerprint() != base
-    assert parse({"term": "deck", "filter": {"field": "profile", "value": "x"}}).fingerprint() != base
+    assert (
+        parse({"term": "deck", "filter": {"field": "profile", "value": "x"}}).fingerprint() != base
+    )
     assert parse({"term": "deck", "sort": [{"field": "pages"}]}).fingerprint() != base
     assert parse({"term": "deck", "repository": "WorkSpace"}).fingerprint() != base
 

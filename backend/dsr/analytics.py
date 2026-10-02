@@ -370,7 +370,9 @@ def save_config(
     if is_connected(merged) and not is_connected(load_config(store)):
         merged.setdefault("connection", {})
         if not merged["connection"].get("connected_at"):
-            merged["connection"]["connected_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            merged["connection"]["connected_at"] = datetime.now(timezone.utc).isoformat(
+                timespec="seconds"
+            )
 
     if existing is None:
         return store.create(
@@ -393,7 +395,9 @@ def _scan(store: RecordStore, collection: str, room_id: str | None = None) -> li
     records: list[dict[str, Any]] = []
     offset = 0
     while True:
-        page = store.list(collection, room_id=room_id, limit=_PAGE, offset=offset, order_by="id", descending=False)
+        page = store.list(
+            collection, room_id=room_id, limit=_PAGE, offset=offset, order_by="id", descending=False
+        )
         records.extend(page)
         if len(page) < _PAGE:
             return records
@@ -424,7 +428,9 @@ def _kind_of(action: str, taxonomy: Mapping[str, Any]) -> str:
     return "other"
 
 
-def collect_events(store: RecordStore, room_id: str | None, config: Mapping[str, Any]) -> list[dict[str, Any]]:
+def collect_events(
+    store: RecordStore, room_id: str | None, config: Mapping[str, Any]
+) -> list[dict[str, Any]]:
     """Normalise activity records into one event shape, whatever they call fields."""
     event_config = config.get("event") or {}
     taxonomy = config.get("taxonomy") or {}
@@ -456,7 +462,9 @@ def collect_events(store: RecordStore, room_id: str | None, config: Mapping[str,
     return events
 
 
-def count_visits(events: Sequence[Mapping[str, Any]], gap_minutes: Any) -> list[list[Mapping[str, Any]]]:
+def count_visits(
+    events: Sequence[Mapping[str, Any]], gap_minutes: Any
+) -> list[list[Mapping[str, Any]]]:
     """Group events into sessions: one visit per visitor per gap window.
 
     Sourced only as "how often the room is visited by day or week"; the session
@@ -469,7 +477,13 @@ def count_visits(events: Sequence[Mapping[str, Any]], gap_minutes: Any) -> list[
 
     visits: list[list[Mapping[str, Any]]] = []
     for items in by_visitor.values():
-        ordered = sorted(items, key=lambda e: (e.get("at") is None, e.get("at") or datetime.min.replace(tzinfo=timezone.utc)))
+        ordered = sorted(
+            items,
+            key=lambda e: (
+                e.get("at") is None,
+                e.get("at") or datetime.min.replace(tzinfo=timezone.utc),
+            ),
+        )
         current: list[Mapping[str, Any]] = []
         previous: datetime | None = None
         for event in ordered:
@@ -596,7 +610,9 @@ def _group_by_bucket(
 # --------------------------------------------------------------------------- #
 
 
-def room_stats(events: Sequence[Mapping[str, Any]], visits: Sequence[Any], now: datetime) -> dict[str, Any]:
+def room_stats(
+    events: Sequence[Mapping[str, Any]], visits: Sequence[Any], now: datetime
+) -> dict[str, Any]:
     """Sourced widget: "View Time Viewed, Total Visits, Visitors, and Actions"."""
     seconds = sum(_as_number(event.get("seconds")) for event in events)
     stamps = [event["at"] for event in events if event.get("at") is not None]
@@ -638,7 +654,11 @@ def most_active_visitors(
 
     ranked = sorted(
         grouped.values(),
-        key=lambda row: (-row["actions"], -(row["last_seen"].timestamp() if row["last_seen"] else 0.0), row["person"]),
+        key=lambda row: (
+            -row["actions"],
+            -(row["last_seen"].timestamp() if row["last_seen"] else 0.0),
+            row["person"],
+        ),
     )[: max(1, limit)]
     return [
         {
@@ -653,7 +673,9 @@ def most_active_visitors(
     ]
 
 
-def most_engaged_documents(events: Sequence[Mapping[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+def most_engaged_documents(
+    events: Sequence[Mapping[str, Any]], limit: int = 10
+) -> list[dict[str, Any]]:
     """Sourced widget: "Total Views, Last Viewed date, Downloads, Average Time,
     and Users Involved" for each shared asset.
 
@@ -707,8 +729,12 @@ def most_engaged_documents(events: Sequence[Mapping[str, Any]], limit: int = 10)
             "downloads": row["downloads"],
             "comments": row["comments"],
             "actions": row["actions"],
-            "average_seconds": round(row["seconds"] / row["timed_events"], 3) if row["timed_events"] else 0.0,
-            "average_time": format_duration(row["seconds"] / row["timed_events"]) if row["timed_events"] else "—",
+            "average_seconds": round(row["seconds"] / row["timed_events"], 3)
+            if row["timed_events"]
+            else 0.0,
+            "average_time": format_duration(row["seconds"] / row["timed_events"])
+            if row["timed_events"]
+            else "—",
             "users_involved": len(row["users"]),
             "last_viewed_at": _iso(row["last_viewed"]),
         }
@@ -798,7 +824,9 @@ def classify_trend(stats: Mapping[str, Any], thresholds: Mapping[str, Any]) -> d
     }
 
 
-def _engagement_score(stats: Mapping[str, Any], trend: Mapping[str, Any], thresholds: Mapping[str, Any]) -> float:
+def _engagement_score(
+    stats: Mapping[str, Any], trend: Mapping[str, Any], thresholds: Mapping[str, Any]
+) -> float:
     hot = max(1, _as_int(thresholds.get("hot_actions"), 40, minimum=1))
     volume = min(1.0, int(stats.get("actions") or 0) / hot)
     inactive = max(1, _as_int(thresholds.get("inactive_after_days"), 14, minimum=1))
@@ -883,7 +911,11 @@ def build_alerts(
                     "room_id": room_id,
                     "room_name": name,
                     "message": f"{name}: {deadline['field']} in {remaining} day(s)",
-                    "detail": {"field": deadline["field"], "at": deadline["at"], "days_remaining": remaining},
+                    "detail": {
+                        "field": deadline["field"],
+                        "at": deadline["at"],
+                        "days_remaining": remaining,
+                    },
                 }
             )
     return alerts
@@ -924,7 +956,9 @@ def prioritise(
 
     kinds = {alert["kind"] for alert in alerts}
     if kinds:
-        urgency = "high" if "low_engagement" in kinds or "deadline_approaching" in kinds else urgency
+        urgency = (
+            "high" if "low_engagement" in kinds or "deadline_approaching" in kinds else urgency
+        )
         score += 10 * len(kinds)
 
     if trend.get("classification") == "hot":
@@ -960,8 +994,12 @@ def _deal_summary(store: RecordStore, config: Mapping[str, Any]) -> dict[str, di
         data = record.get("data") or {}
         name = _pick_text(data, list(deal_config.get("name_fields") or [])) or record.get("id")
         stage = _pick_text(data, list(deal_config.get("stage_fields") or [])).lower()
-        archived = any(_as_bool(data.get(field)) for field in (deal_config.get("archived_fields") or []))
-        terminal = stage in {str(item).strip().lower() for item in (deal_config.get("terminal_stages") or [])}
+        archived = any(
+            _as_bool(data.get(field)) for field in (deal_config.get("archived_fields") or [])
+        )
+        terminal = stage in {
+            str(item).strip().lower() for item in (deal_config.get("terminal_stages") or [])
+        }
         deadline = deadline_of(data, deal_config)
         if deadline:
             deadline["_parsed"] = _parse_dt(deadline.get("at"))
@@ -996,7 +1034,8 @@ def room_card(
         event
         for event in events
         if event.get("at")
-        and event["at"] >= now - timedelta(days=_as_int(thresholds.get("window_days"), 30, minimum=1))
+        and event["at"]
+        >= now - timedelta(days=_as_int(thresholds.get("window_days"), 30, minimum=1))
     ]
     window_stats = room_stats(windowed, count_visits(windowed, gap), now)
     trend = classify_trend(window_stats, thresholds)
@@ -1117,7 +1156,7 @@ def timeline(
         )
 
     epoch = datetime.min.replace(tzinfo=timezone.utc)
-    entries.sort(key=lambda entry: (entry.get("_at") or epoch), reverse=True)
+    entries.sort(key=lambda entry: entry.get("_at") or epoch, reverse=True)
     for entry in entries:
         entry.pop("_at", None)
     return entries[: max(1, limit)]
@@ -1158,7 +1197,9 @@ def overview(
 
     thresholds = config.get("thresholds") or {}
     summaries = _deal_summary(store, config)
-    scoped = [summary for summary in summaries.values() if room_id in (None, summary["record"]["id"])]
+    scoped = [
+        summary for summary in summaries.values() if room_id in (None, summary["record"]["id"])
+    ]
 
     events = collect_events(store, room_id, config)
     cards: list[dict[str, Any]] = []
@@ -1203,7 +1244,9 @@ def overview(
         "latest_activity": latest_activity(events, limit=15, room_names=room_names),
         "most_engaged_documents": most_engaged_documents(events, limit=10),
         "most_active_visitors": most_active_visitors(events, now, limit=10),
-        "recent_engagement": recent_engagement(events, now=now, days=_as_int(thresholds.get("chart_days"), 14, minimum=1), grain=grain),
+        "recent_engagement": recent_engagement(
+            events, now=now, days=_as_int(thresholds.get("chart_days"), 14, minimum=1), grain=grain
+        ),
         "visit_frequency": visit_frequency(
             events,
             now=now,
@@ -1260,7 +1303,9 @@ def room_engagement(
         "most_engaged_documents": most_engaged_documents(events),
         "latest_activity": latest_activity(events, limit=15),
         "recent_engagement": recent_engagement(events, now=now, days=chart_days, grain=grain),
-        "visit_frequency": visit_frequency(events, now=now, days=chart_days, grain=grain, gap_minutes=gap),
+        "visit_frequency": visit_frequency(
+            events, now=now, days=chart_days, grain=grain, gap_minutes=gap
+        ),
         "timeline": timeline(store, config, room_id=room_id, now=now, limit=timeline_limit),
     }
 

@@ -68,6 +68,7 @@ class InvalidFieldMapMissing(InvalidFieldMap):
     I cannot use" are the same class of answer.
     """
 
+
 #: Every collection this workflow owns. Prefixed ``crm_`` so two features cannot claim
 #: one path, and so ``/api/collections`` reads as one feature's rows.
 CONNECTOR_COLLECTION = "crm_connector"
@@ -162,8 +163,7 @@ def normalise_event_type(payload: Mapping[str, Any]) -> dict[str, Any]:
     name = as_text(payload.get("event_type") or payload.get("name"))
     if not name:
         raise InvalidEventType(
-            "event_type is required: this is the row that lets a new type ship without a "
-            "code path"
+            "event_type is required: this is the row that lets a new type ship without a code path"
         )
     return {
         "event_type": name,
@@ -225,7 +225,9 @@ class SyncBook:
         result = [_with_room(row) for row in rows]
         if enabled is not None:
             result = [row for row in result if bool(row.get("enabled")) is enabled]
-        return sorted(result, key=lambda row: (str(row.get("vendor")), str(row.get("label")), str(row["id"])))
+        return sorted(
+            result, key=lambda row: (str(row.get("vendor")), str(row.get("label")), str(row["id"]))
+        )
 
     def connector(self, connector_id: str) -> dict[str, Any] | None:
         record = self.store.get(str(connector_id))
@@ -234,10 +236,17 @@ class SyncBook:
         return _with_room(record)
 
     def save_connector(
-        self, payload: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None, source: str
+        self,
+        payload: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         spec = normalise_connector(payload)
-        record = self.store.create(CONNECTOR_COLLECTION, spec, room_id=room_id, actor=actor, source=source)
+        record = self.store.create(
+            CONNECTOR_COLLECTION, spec, room_id=room_id, actor=actor, source=source
+        )
         return _with_room(record)
 
     def update_connector(
@@ -251,7 +260,9 @@ class SyncBook:
         record = self.store.update(str(connector_id), spec, actor=actor, source=source)
         return _with_room(record)
 
-    def delete_connector(self, connector_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def delete_connector(
+        self, connector_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         existing = self.store.get(str(connector_id))
         if existing is None or existing.get("collection") != CONNECTOR_COLLECTION:
             raise InvalidConnector(f"connector {connector_id} not found")
@@ -294,7 +305,12 @@ class SyncBook:
         return None
 
     def save_event_type(
-        self, payload: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None, source: str
+        self,
+        payload: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         spec = normalise_event_type(payload)
         if self.event_type_by_name(spec["event_type"]) is not None:
@@ -302,7 +318,9 @@ class SyncBook:
                 f"event type {spec['event_type']!r} is already in the catalogue; patch that row "
                 "instead of adding a second one for the same type"
             )
-        record = self.store.create(EVENT_TYPE_COLLECTION, spec, room_id=room_id, actor=actor, source=source)
+        record = self.store.create(
+            EVENT_TYPE_COLLECTION, spec, room_id=room_id, actor=actor, source=source
+        )
         return _with_room(record)
 
     def update_event_type(
@@ -327,13 +345,17 @@ class SyncBook:
 
     # -- field maps --------------------------------------------------------- #
 
-    def field_maps(self, *, event_type: str | None = None, connector_id: str | None = None) -> list[dict[str, Any]]:
+    def field_maps(
+        self, *, event_type: str | None = None, connector_id: str | None = None
+    ) -> list[dict[str, Any]]:
         rows = self.store.list(FIELD_MAP_COLLECTION, limit=1000)
         result = [_with_room(row) for row in rows]
         if event_type is not None:
             result = [row for row in result if str(row.get("event_type")) == str(event_type)]
         if connector_id is not None:
-            result = [row for row in result if str(row.get("connector_id") or "") == str(connector_id)]
+            result = [
+                row for row in result if str(row.get("connector_id") or "") == str(connector_id)
+            ]
         return sorted(result, key=lambda row: (str(row.get("event_type")), str(row["id"])))
 
     def field_map(self, field_map_id: str) -> dict[str, Any] | None:
@@ -343,14 +365,23 @@ class SyncBook:
         return _with_room(record)
 
     def save_field_map(
-        self, payload: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None, source: str
+        self,
+        payload: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         spec = normalise_field_map(payload)
         if not spec["connector_id"]:
             # A map with no connector would be ambiguous with more than one CRM attached,
             # and the researched create target comes from the connection.
-            raise InvalidFieldMapConnector("connector_id is required: a field map says which CRM it writes to")
-        record = self.store.create(FIELD_MAP_COLLECTION, spec, room_id=room_id, actor=actor, source=source)
+            raise InvalidFieldMapConnector(
+                "connector_id is required: a field map says which CRM it writes to"
+            )
+        record = self.store.create(
+            FIELD_MAP_COLLECTION, spec, room_id=room_id, actor=actor, source=source
+        )
         return _with_room(record)
 
     def update_field_map(
@@ -384,7 +415,8 @@ class SyncBook:
         candidates = [
             row
             for row in self.field_maps(event_type=event_type)
-            if row.get("enabled", True) and str(row.get("connector_id") or "") in (str(connector_id), "")
+            if row.get("enabled", True)
+            and str(row.get("connector_id") or "") in (str(connector_id), "")
         ]
         if not candidates:
             return None
@@ -417,7 +449,9 @@ class SyncBook:
         data["type"] = event_type
         data.setdefault("sync_state", "pending")
         data[CRM_RECORD_ID_FIELD] = None
-        record = self.store.create(ENGAGEMENT_COLLECTION, data, room_id=str(room_id), actor=actor, source=source)
+        record = self.store.create(
+            ENGAGEMENT_COLLECTION, data, room_id=str(room_id), actor=actor, source=source
+        )
         return record
 
     def engagement(self, engagement_id: str) -> dict[str, Any] | None:
@@ -493,7 +527,9 @@ class SyncBook:
             "last_attempt_at": None,
             "last_source": source,
         }
-        record = self.store.create(QUEUE_COLLECTION, payload, room_id=engagement.get("room_id"), actor=actor, source=source)
+        record = self.store.create(
+            QUEUE_COLLECTION, payload, room_id=engagement.get("room_id"), actor=actor, source=source
+        )
         return record
 
     def queue_row(self, queue_id: str) -> dict[str, Any] | None:
@@ -522,8 +558,10 @@ class SyncBook:
             where["state"] = state
         if engagement_id is not None:
             where["engagement_id"] = str(engagement_id)
-        rows = self.store.find(QUEUE_COLLECTION, where, limit=max(limit, 1)) if where else self.store.list(
-            QUEUE_COLLECTION, room_id=room_id, limit=limit
+        rows = (
+            self.store.find(QUEUE_COLLECTION, where, limit=max(limit, 1))
+            if where
+            else self.store.list(QUEUE_COLLECTION, room_id=room_id, limit=limit)
         )
         if room_id is not None:
             rows = [row for row in rows if str(row.get("room_id")) == str(room_id)]
@@ -555,7 +593,12 @@ class SyncBook:
         existing = self.store.get(str(queue_id))
         if existing is None or existing.get("collection") != QUEUE_COLLECTION:
             raise InvalidFieldMapMissing(f"queue row {queue_id} not found")
-        merged = {**(existing.get("data") or {}), "state": state, "last_source": source, **dict(patch)}
+        merged = {
+            **(existing.get("data") or {}),
+            "state": state,
+            "last_source": source,
+            **dict(patch),
+        }
         record = self.store.update(str(queue_id), merged, actor=actor, source=source)
         if engagement_patch is not None:
             engagement_id = str((existing.get("data") or {}).get("engagement_id") or "")
@@ -564,7 +607,10 @@ class SyncBook:
         return record
 
     def _append_attempts(
-        self, queue_id: str, attempt_log: Sequence[Mapping[str, Any]], attempt_statuses: Sequence[Any]
+        self,
+        queue_id: str,
+        attempt_log: Sequence[Mapping[str, Any]],
+        attempt_statuses: Sequence[Any],
     ) -> tuple[list[dict[str, Any]], list[Any], int]:
         """The whole attempt history for a row: what came before, then this run.
 
@@ -576,7 +622,9 @@ class SyncBook:
         """
         existing = self.store.get(str(queue_id))
         previous = list((existing.get("data") or {}).get("attempt_log") or []) if existing else []
-        statuses = list((existing.get("data") or {}).get("attempt_statuses") or []) if existing else []
+        statuses = (
+            list((existing.get("data") or {}).get("attempt_statuses") or []) if existing else []
+        )
         combined = previous + [dict(entry) for entry in attempt_log]
         renumbered = [
             {**entry, "attempt": number} for number, entry in enumerate(combined, start=1)
@@ -631,7 +679,8 @@ class SyncBook:
                 SYNC_STATE_FIELD: "synced",
                 "crm_record_id_from": crm_record_id_from,
                 "synced_at": now,
-            },            actor=actor,
+            },
+            actor=actor,
             source=source,
         )
 

@@ -23,6 +23,7 @@ Plus one more, because a port can satisfy all three and still be wrong:
      be otherwise perfect and still ship a file another live feature owns, and no
      other check here would see it.
 """
+
 import json
 import os
 import re
@@ -52,8 +53,16 @@ from tools.contract import SHARED  # noqa: E402
 
 
 def run(args, cwd, timeout=1800, env=None):
-    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout, env=env)
+    p = subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=env,
+    )
     return p.returncode, (p.stdout + p.stderr)
 
 
@@ -72,7 +81,8 @@ def host_report(wt, env):
         "print(json.dumps({\n"
         "  'loaded': [(f['id'], f['prefix'], len(f['routes'])) for f in d['features']],\n"
         "  'failed': [(f['id'], f['error']) for f in d['failed']]}))\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     _, out = run([str(PY), str(probe)], wt / "backend", env=env)
     probe.unlink(missing_ok=True)
     for line in out.splitlines():
@@ -102,7 +112,7 @@ def main():
         _, diff = run(["git", "diff", "--name-only", "origin/main...HEAD"], wt)
         files = [f.strip().replace("\\", "/") for f in diff.splitlines() if f.strip()]
         _, st = run(["git", "status", "--porcelain"], wt)
-        dirty = len([l for l in st.splitlines() if l.strip()])
+        dirty = len([ln for ln in st.splitlines() if ln.strip()])
 
         offenders = sorted(set(files) & SHARED)
         print(f"  commits      : {entry['commits_ahead']} ahead")
@@ -110,13 +120,24 @@ def main():
         print(f"  shared files : {offenders if offenders else 'NONE'}")
 
         # 4. the filename collision the Jev decision depends on
-        claims = [f for f in files if f.endswith(("access.py", "access_api.py",
-                                                 "roles.py", "roles_api.py",
-                                                 "test_access.py", "test_access_api.py",
-                                                 "test_roles.py", "test_roles_api.py"))]
+        claims = [
+            f
+            for f in files
+            if f.endswith(
+                (
+                    "access.py",
+                    "access_api.py",
+                    "roles.py",
+                    "roles_api.py",
+                    "test_access.py",
+                    "test_access_api.py",
+                    "test_roles.py",
+                    "test_roles_api.py",
+                )
+            )
+        ]
         if claims:
             print(f"  access/roles : {claims}")
-            both = [c for c in claims if "roles" in c]
             anyacc = [c for c in claims if "access" in c]
             if anyacc and ticket == "WF-004":
                 print("      !! WF-004 must NOT ship an access.py - WF-015 keeps that name")
@@ -126,8 +147,21 @@ def main():
         env["DSR_DB_PATH"] = str(Path(tmp) / "v.db")
         env["DSR_AUDIT_DIR"] = str(Path(tmp) / "audit")
 
-        _, out = run([str(PY), "-m", "pytest", "-p", "no:cacheprovider", "--tb=line",
-                      "-o", "addopts=", "-q"], wt / "backend", env=env)
+        _, out = run(
+            [
+                str(PY),
+                "-m",
+                "pytest",
+                "-p",
+                "no:cacheprovider",
+                "--tb=line",
+                "-o",
+                "addopts=",
+                "-q",
+            ],
+            wt / "backend",
+            env=env,
+        )
         passed = failed = 0
         for line in reversed(out.splitlines()):
             m = re.search(r"(\d+) passed", line)
@@ -158,12 +192,25 @@ def main():
                 print("  failed       : none")
 
         added = [fid for fid, _, _ in (reg["loaded"] if reg else [])]
-        ok = (not offenders and failed == 0 and reg is not None
-              and not reg["failed"] and dirty == 0
-              and any(ticket[3:].replace("-", "") in fid for fid in added))
-        results.append({"ticket": ticket, "ok": ok, "passed": passed,
-                        "failed": failed, "offenders": offenders, "dirty": dirty,
-                        "files": len(files)})
+        ok = (
+            not offenders
+            and failed == 0
+            and reg is not None
+            and not reg["failed"]
+            and dirty == 0
+            and any(ticket[3:].replace("-", "") in fid for fid in added)
+        )
+        results.append(
+            {
+                "ticket": ticket,
+                "ok": ok,
+                "passed": passed,
+                "failed": failed,
+                "offenders": offenders,
+                "dirty": dirty,
+                "files": len(files),
+            }
+        )
         print(f"  VERDICT      : {'PASS' if ok else 'NEEDS WORK'}")
         print()
 
@@ -171,8 +218,10 @@ def main():
     print("  SUMMARY")
     print("=" * 80)
     for r in results:
-        print(f"  {r['ticket']}  {r['passed']:>5} passed  {r['failed']} failed  "
-              f"shared={r['offenders'] or 'none'}  -> {'PASS' if r['ok'] else 'NEEDS WORK'}")
+        print(
+            f"  {r['ticket']}  {r['passed']:>5} passed  {r['failed']} failed  "
+            f"shared={r['offenders'] or 'none'}  -> {'PASS' if r['ok'] else 'NEEDS WORK'}"
+        )
     return 0 if all(r["ok"] for r in results) else 1
 
 

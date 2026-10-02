@@ -136,7 +136,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "The evidence says the platform 'should update the invite accordingly with the new assignee's "
             "name, links, and other details that possibly changed from one assignee to another'."
         ),
-        "value": {"strategy": "rebuild from the new host", "carried_over": False, "missing_becomes": None},
+        "value": {
+            "strategy": "rebuild from the new host",
+            "carried_over": False,
+            "missing_becomes": None,
+        },
         "why": (
             "The fields are per-assignee by construction - a dial-in belongs to whoever holds the phone. "
             "Carrying an unset field over would leave the previous host's number on the new host's "

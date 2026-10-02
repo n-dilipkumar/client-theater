@@ -243,10 +243,7 @@ def normalise(payload: Mapping[str, Any]) -> dict[str, Any]:
     attributes = attributes if isinstance(attributes, Mapping) else {}
 
     occurred_at = str(
-        payload.get("createdAt")
-        or payload.get("created_at")
-        or attributes.get("createdAt")
-        or ""
+        payload.get("createdAt") or payload.get("created_at") or attributes.get("createdAt") or ""
     ).strip()
 
     mailing_id = str(
@@ -272,7 +269,9 @@ def normalise(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def signal_key(resource: str, event_type: str, mailing_id: str, sequence: Any, prospect_id: str) -> str:
+def signal_key(
+    resource: str, event_type: str, mailing_id: str, sequence: Any, prospect_id: str
+) -> str:
     """A stable identity for one delivery, so a repeat is visibly a repeat.
 
     Not strictly necessary - [sourced] Outreach does not retry, so the same event

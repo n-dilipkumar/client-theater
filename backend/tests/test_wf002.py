@@ -26,13 +26,12 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import REGISTRY
 from dsr.pages import PageService
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's prefix, spelled once. Everything below is relative to it, so a
 #: prefix change is a one-line change rather than a find-and-replace across
@@ -74,9 +73,7 @@ def make_room(client, **overrides):
 def make_document(client, room_id, title="Security Pack", **overrides):
     payload = {"title": title, "kind": "pdf", "status": "published"}
     payload.update(overrides)
-    return client.post(
-        "/api/records/document", params={"room_id": room_id}, json=payload
-    ).json()
+    return client.post("/api/records/document", params={"room_id": room_id}, json=payload).json()
 
 
 def make_page(client, room_id, title="Welcome", *, actor=None, **overrides):
@@ -140,7 +137,8 @@ def test_the_registry_advertises_the_routes(client):
 def test_the_feature_did_not_squat_on_a_core_route(client):
     """`/api/rooms/...` is core-shaped. Claiming it would shadow another feature."""
     core_shaped = {
-        route["path"] for route in REGISTRY.by_id("wf-002-buyer-pages").routes
+        route["path"]
+        for route in REGISTRY.by_id("wf-002-buyer-pages").routes
         if not route["path"].startswith(PREFIX)
     }
     assert core_shaped == set()
@@ -160,9 +158,7 @@ def test_a_write_records_the_route_that_served_it(client):
 
     sources = {
         entry["source"]
-        for entry in client.get(
-            "/api/audit", params={"limit": 100}
-        ).json()["entries"]
+        for entry in client.get("/api/audit", params={"limit": 100}).json()["entries"]
         if entry["collection"] in ("page", "page_revision")
     }
 
@@ -251,9 +247,7 @@ def test_documented_fragment_names_are_all_present(client):
 
 
 def test_timeline_declares_the_documented_fields_and_default(client):
-    body = client.get(
-        f"{PREFIX}/fragment-sets", params={"set": "digital-sales-room"}
-    ).json()
+    body = client.get(f"{PREFIX}/fragment-sets", params={"set": "digital-sales-room"}).json()
     timeline = next(f for f in body["fragments"] if f["key"] == "timeline")
 
     fields = {field["key"]: field for field in timeline["fields"]}
@@ -263,9 +257,7 @@ def test_timeline_declares_the_documented_fields_and_default(client):
 
 
 def test_video_declares_url_dimensions_and_autoplay_off_by_default(client):
-    body = client.get(
-        f"{PREFIX}/fragment-sets", params={"set": "digital-sales-room"}
-    ).json()
+    body = client.get(f"{PREFIX}/fragment-sets", params={"set": "digital-sales-room"}).json()
     video = next(f for f in body["fragments"] if f["key"] == "video")
 
     fields = {field["key"]: field for field in video["fields"]}
@@ -276,9 +268,7 @@ def test_video_declares_url_dimensions_and_autoplay_off_by_default(client):
 def test_console_fragments_declare_their_documented_aria_hooks(client):
     body = client.get(f"{PREFIX}/fragment-sets", params={"set": "dsr-fragments"}).json()
     aria = {
-        fragment["key"]: {
-            field["key"] for field in fragment["fields"] if field.get("aria")
-        }
+        fragment["key"]: {field["key"] for field in fragment["fields"] if field.get("aria")}
         for fragment in body["fragments"]
     }
 
@@ -290,9 +280,7 @@ def test_console_fragments_declare_their_documented_aria_hooks(client):
 def test_fragments_with_no_documented_fields_say_so(client):
     # The research names these fragments but documents no field list for them.
     # Inventing one would be a design inference presented as a specification.
-    body = client.get(
-        f"{PREFIX}/fragment-sets", params={"set": "digital-sales-room"}
-    ).json()
+    body = client.get(f"{PREFIX}/fragment-sets", params={"set": "digital-sales-room"}).json()
     undocumented = {
         fragment["key"] for fragment in body["fragments"] if not fragment["documented_fields"]
     }
@@ -412,9 +400,7 @@ def test_removing_a_fragment_takes_it_off_the_page(client):
     page = make_page(client, room["id"])
     block = blocks_of(place(client, room["id"], page["id"], "welcome").json())[0]
 
-    response = client.delete(
-        f"{PREFIX}/rooms/{room['id']}/pages/{page['id']}/blocks/{block['id']}"
-    )
+    response = client.delete(f"{PREFIX}/rooms/{room['id']}/pages/{page['id']}/blocks/{block['id']}")
 
     assert response.status_code == 200
     assert blocks_of(response.json()) == []
@@ -501,9 +487,7 @@ def test_a_fifth_document_selector_is_refused_with_the_documented_remedy(client)
     room = make_room(client)
     page = make_page(client, room["id"])
 
-    response = place(
-        client, room["id"], page["id"], "document-gallery", {"document_5": "whatever"}
-    )
+    response = place(client, room["id"], page["id"], "document-gallery", {"document_5": "whatever"})
 
     assert response.status_code == 400
     detail = response.json()["detail"]
@@ -527,9 +511,7 @@ def test_a_second_document_gallery_block_allows_more_than_four_documents(client)
         "document-gallery",
         {f"document_{n}": documents[n - 1] for n in range(1, 5)},
     )
-    second = place(
-        client, room["id"], page["id"], "document-gallery", {"document_1": documents[4]}
-    )
+    second = place(client, room["id"], page["id"], "document-gallery", {"document_1": documents[4]})
 
     assert first.status_code == 201
     assert second.status_code == 201
@@ -632,8 +614,7 @@ def test_unpublishing_withdraws_the_page_and_keeps_the_draft(client):
     assert editor["status"] == "draft"
     assert len(editor["blocks"]) == 1
     assert (
-        client.get(f"{PREFIX}/rooms/{room['id']}/pages/{page['id']}/revisions").json()["count"]
-        == 1
+        client.get(f"{PREFIX}/rooms/{room['id']}/pages/{page['id']}/revisions").json()["count"] == 1
     )
 
 
@@ -664,9 +645,7 @@ def test_the_buyer_view_resolves_a_pages_document_selections(client):
     room = make_room(client)
     document = make_document(client, room["id"], "Security Pack", pages=48)
     page = make_page(client, room["id"], "Docs")
-    place(
-        client, room["id"], page["id"], "document-gallery", {"document_1": document["id"]}
-    )
+    place(client, room["id"], page["id"], "document-gallery", {"document_1": document["id"]})
     publish(client, room["id"], page["id"])
 
     view = client.get(f"{PREFIX}/rooms/{room['id']}/view/docs").json()
@@ -765,10 +744,7 @@ def test_the_pages_listing_reports_where_the_grant_comes_from(client):
     gated = make_room(client, collaborators=["dana"])
     open_room = make_room(client, name="Contoso")
 
-    assert (
-        client.get(f"{PREFIX}/rooms/{gated['id']}/pages").json()["permission_source"]
-        == "room"
-    )
+    assert client.get(f"{PREFIX}/rooms/{gated['id']}/pages").json()["permission_source"] == "room"
     assert (
         client.get(f"{PREFIX}/rooms/{open_room['id']}/pages").json()["permission_source"]
         == "unconfigured"
@@ -851,7 +827,10 @@ def test_a_custom_fragments_declared_field_is_validated(client):
 def test_a_custom_fragment_cannot_shadow_a_shipped_one(client):
     for path, payload in (
         (f"{PREFIX}/fragment-sets", {"key": "digital-sales-room", "name": "Impostor"}),
-        (f"{PREFIX}/fragments", {"key": "timeline", "name": "Impostor", "set": "digital-sales-room"}),
+        (
+            f"{PREFIX}/fragments",
+            {"key": "timeline", "name": "Impostor", "set": "digital-sales-room"},
+        ),
     ):
         assert client.post(path, json=payload).status_code == 409
 
@@ -961,9 +940,9 @@ def test_building_and_publishing_a_page_is_fully_audited(client):
     publish(client, room["id"], page["id"], actor="dana")
 
     page_entries = client.get("/api/audit", params={"collection": "page"}).json()["entries"]
-    revision_entries = client.get(
-        "/api/audit", params={"collection": "page_revision"}
-    ).json()["entries"]
+    revision_entries = client.get("/api/audit", params={"collection": "page_revision"}).json()[
+        "entries"
+    ]
 
     # create page, add block, publish pointer update.
     assert [e["action"] for e in page_entries] == ["update", "update", "insert"]
@@ -997,10 +976,7 @@ def test_a_rejected_edit_changes_nothing_and_audits_nothing(client):
 
     assert bad.status_code == 400
     assert client.get("/api/audit").json()["count"] == before
-    assert (
-        len(blocks_of(client.get(f"{PREFIX}/rooms/{room['id']}/pages/{page['id']}").json()))
-        == 1
-    )
+    assert len(blocks_of(client.get(f"{PREFIX}/rooms/{room['id']}/pages/{page['id']}").json())) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -1015,9 +991,7 @@ def test_the_feature_seeds_a_reviewable_page(client):
     feature = load_feature("wf002_pages")
 
     tmp = tempfile.TemporaryDirectory()
-    db = AuditedDatabase(
-        Path(tmp.name) / "seeded.db", mirror_dir=str(Path(tmp.name) / "audit")
-    )
+    db = AuditedDatabase(Path(tmp.name) / "seeded.db", mirror_dir=str(Path(tmp.name) / "audit"))
     try:
         room = db.create("room", {"name": "Seeded"}, actor="dana", source="seed")
         db.create(
@@ -1027,9 +1001,7 @@ def test_the_feature_seeds_a_reviewable_page(client):
             actor="dana",
             source="seed",
         )
-        summary = feature.seed(
-            db, {"room_ids": [(room["id"], "Seeded")], "now": None, "rng": None}
-        )
+        summary = feature.seed(db, {"room_ids": [(room["id"], "Seeded")], "now": None, "rng": None})
         assert summary, "seed() must describe what it added"
 
         store = RecordStore(db)

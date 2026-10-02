@@ -78,7 +78,9 @@ def normalise_booking_fields(raw: Any, *, field: str = "booking_fields") -> list
             raise SchedulingError(f"{field}[{index}] must be an object")
         name = str(entry.get("name") or "").strip()
         if not name:
-            raise BookingFieldRejected(f"{field}[{index}].name is required; a booking field with no name cannot be answered")
+            raise BookingFieldRejected(
+                f"{field}[{index}].name is required; a booking field with no name cannot be answered"
+            )
         if name in seen:
             raise BookingFieldRejected(
                 f"{field} has two fields called {name!r}; bookingFieldsResponses is keyed by name, "
@@ -184,9 +186,12 @@ def apply_booking_fields(
             if entry.get("prefilled") in (None, "") and not entry.get("hidden"):
                 resolved[name] = ""
             continue
-        if entry.get("options") and str(submitted) not in {str(option) for option in entry["options"]}:
+        if entry.get("options") and str(submitted) not in {
+            str(option) for option in entry["options"]
+        }:
             raise BookingFieldRejected(
-                f"booking field {name!r} takes one of " + ", ".join(entry["options"])
+                f"booking field {name!r} takes one of "
+                + ", ".join(entry["options"])
                 + f"; got {submitted!r}"
             )
         resolved[name] = submitted
@@ -216,7 +221,9 @@ def normalise_event_type(spec: Mapping[str, Any], *, field: str = "event_type") 
 
     event_type_id = str(body.get("eventTypeId") or body.get("event_type_id") or "").strip()
     if not event_type_id:
-        raise SchedulingError(f"{field}.eventTypeId is required; it is what eventTypeId= queries resolve to")
+        raise SchedulingError(
+            f"{field}.eventTypeId is required; it is what eventTypeId= queries resolve to"
+        )
     slug = str(body.get("slug") or "").strip()
     if not slug:
         raise SchedulingError(
@@ -227,9 +234,13 @@ def normalise_event_type(spec: Mapping[str, Any], *, field: str = "event_type") 
     team_slug = str(body.get("teamSlug") or body.get("team_slug") or "").strip() or None
     host_username = str(body.get("host") or body.get("username") or "").strip() or None
     if kind == "team" and not team_slug:
-        raise SchedulingError(f"{field}.teamSlug is required for a team event; team events are reached by teamSlug")
+        raise SchedulingError(
+            f"{field}.teamSlug is required for a team event; team events are reached by teamSlug"
+        )
     if kind == "personal" and not host_username:
-        raise SchedulingError(f"{field}.host is required for a personal event; it is reached by username")
+        raise SchedulingError(
+            f"{field}.host is required for a personal event; it is reached by username"
+        )
 
     raw_hosts = body.get("hosts")
     if raw_hosts in (None, ""):
@@ -255,7 +266,10 @@ def normalise_event_type(spec: Mapping[str, Any], *, field: str = "event_type") 
         ]
     if not isinstance(raw_hosts, Sequence) or isinstance(raw_hosts, (str, bytes)):
         raise SchedulingError(f"{field}.hosts must be a list of host working-hour definitions")
-    hosts = [normalise_host(entry, field=f"{field}.hosts[{index}]") for index, entry in enumerate(raw_hosts)]
+    hosts = [
+        normalise_host(entry, field=f"{field}.hosts[{index}]")
+        for index, entry in enumerate(raw_hosts)
+    ]
     if not hosts:
         raise SchedulingError(f"{field}.hosts must name at least one host")
     names = [host["username"] for host in hosts]
@@ -267,7 +281,9 @@ def normalise_event_type(spec: Mapping[str, Any], *, field: str = "event_type") 
     except (TypeError, ValueError) as exc:
         raise SchedulingError(f"{field}.length_minutes must be a whole number of minutes") from exc
     if length_minutes < 5:
-        raise SchedulingError(f"{field}.length_minutes must be at least 5; a shorter meeting is not bookable")
+        raise SchedulingError(
+            f"{field}.length_minutes must be at least 5; a shorter meeting is not bookable"
+        )
     if length_minutes > 8 * 60:
         raise SchedulingError(f"{field}.length_minutes may not exceed a working day")
 
@@ -333,7 +349,9 @@ def normalise_event_type(spec: Mapping[str, Any], *, field: str = "event_type") 
     }
 
 
-def normalise_calendar_connection(spec: Mapping[str, Any], *, field: str = "calendar") -> dict[str, Any]:
+def normalise_calendar_connection(
+    spec: Mapping[str, Any], *, field: str = "calendar"
+) -> dict[str, Any]:
     """A calendar connection, validated.
 
     Google, Outlook and Apple, from the researched list. A connection without a
@@ -345,7 +363,9 @@ def normalise_calendar_connection(spec: Mapping[str, Any], *, field: str = "cale
     provider = require_calendar_provider(str(body.get("provider") or "").strip())
     host = str(body.get("host") or "").strip()
     if not host:
-        raise SchedulingError(f"{field}.host is required; a calendar connection is for a named host")
+        raise SchedulingError(
+            f"{field}.host is required; a calendar connection is for a named host"
+        )
     return {
         "provider": provider,
         "host": host,

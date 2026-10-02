@@ -331,6 +331,7 @@ export default function CrmConnections() {
 
   const rooms = useAsync(() => apiRequest('/records/room?limit=200&order_by=name'), [])
   const vocabulary = useAsync(() => crmApi.vocabulary(), [])
+  const inferences = useAsync(() => crmApi.inferences(), [])
   const connectors = useAsync(() => crmApi.connectors(), [])
   const summary = useAsync(() => crmApi.summary(), [])
   const connections = useAsync(

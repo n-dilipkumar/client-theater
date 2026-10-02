@@ -204,7 +204,11 @@ def validate_row(
                 "duplicate_target",
                 f"Row {source_field} targets {target!r}, which row {owner} already targets; "
                 "only one of them can be sent.",
-                detail={"target_property": target, "claimed_by": owner, "source_field": source_field},
+                detail={
+                    "target_property": target,
+                    "claimed_by": owner,
+                    "source_field": source_field,
+                },
             )
         )
 
@@ -264,7 +268,9 @@ def validate_row(
     return _row_result(row, findings)
 
 
-def _option_findings(row: Mapping[str, Any], prop: Property, direction: str) -> list[dict[str, Any]]:
+def _option_findings(
+    row: Mapping[str, Any], prop: Property, direction: str
+) -> list[dict[str, Any]]:
     """The ``unsupported_option`` findings for a row, on the side that travels.
 
     Outbound the *value* side of a picklist table is what the CRM is sent, so that
@@ -528,11 +534,17 @@ def build_report(
         "counts": counts,
         "mappable_rows": len(covered),
         "inbound_rows": len(
-            [item for item in results if sends_in(str(item["direction"])) and str(item["target_property"])]
+            [
+                item
+                for item in results
+                if sends_in(str(item["direction"])) and str(item["target_property"])
+            ]
         ),
         "sync_key": key_section,
         "can_activate": errors == 0 and key_section["pinned"],
-        "blocking": [flag for item in results if item["status"] == "error" for flag in item["flags"]]
+        "blocking": [
+            flag for item in results if item["status"] == "error" for flag in item["flags"]
+        ]
         + [str(item["flag"]) for item in key_section["findings"] if item["severity"] == "error"],
         "researched_flags": list(METADATA_FLAGS),
         "added_flags": list(MAPPING_FLAGS),

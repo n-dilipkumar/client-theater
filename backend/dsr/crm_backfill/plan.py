@@ -83,9 +83,7 @@ def normalise_scope(raw: Any, now: datetime) -> dict[str, Any]:
         # written against the range picker works without a wrapper.
         kind = "range" if raw.get("from") else "full_history"
     if kind not in SCOPES:
-        raise InvalidRange(
-            f"scope kind {kind!r} is not understood; pick {' or '.join(SCOPES)}"
-        )
+        raise InvalidRange(f"scope kind {kind!r} is not understood; pick {' or '.join(SCOPES)}")
 
     if kind == "full_history":
         start = raw.get("from")
@@ -324,7 +322,9 @@ def estimate_calls(*, total: int | None, page_size: int, polls: int = 1) -> int 
 
 def _parse(value: Any, field: str) -> datetime:
     if isinstance(value, datetime):
-        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return (
+            value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        )
     text = str(value).strip()
     if not text:
         raise InvalidRange(f"{field} is empty; give a timestamp or omit it")

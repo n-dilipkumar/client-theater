@@ -22,9 +22,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
+from fastapi.testclient import TestClient
 
 BUYER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0 Safari/537.36"
 SCANNER_AGENT = "Microsoft Outlook preview scanner"
@@ -144,7 +143,11 @@ def test_invalid_policy_is_400_with_a_field_keyed_error_map(client):
     room = make_room(client)
 
     response = set_policy(
-        client, room["id"], mode="identify", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="identify",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
 
@@ -185,8 +188,13 @@ def test_policy_on_a_missing_room_is_404(client):
 def test_requirements_reflect_the_tier(client):
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_name=True, collect_email=True,
-        domain_security=True, allowed_domains="northwind.example",
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_name=True,
+        collect_email=True,
+        domain_security=True,
+        allowed_domains="northwind.example",
     )
 
     body = client.get(f"{PREFIX}/rooms/{room['id']}/access/requirements").json()
@@ -201,7 +209,11 @@ def test_requirements_never_expose_the_allowlist(client):
     """A form that says which domains pass is a free allowlist oracle."""
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
 
@@ -296,7 +308,9 @@ def test_verify_tier_issues_a_pending_session_and_queues_one_message(client):
     assert body["delivered_via"] == "outbox"
     assert count(client, "verification_outbox") == 1
     # The room is still closed.
-    check = client.get(f"{PREFIX}/rooms/{room['id']}/access/session", params={"token": body["token"]}).json()
+    check = client.get(
+        f"{PREFIX}/rooms/{room['id']}/access/session", params={"token": body["token"]}
+    ).json()
     assert check["status"] == "pending"
     assert check["owed"] == ["verification"]
 
@@ -304,11 +318,16 @@ def test_verify_tier_issues_a_pending_session_and_queues_one_message(client):
 def test_full_round_trip_from_the_outbox_link(client):
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_name=True, collect_email=True,
-        domain_security=True, allowed_domains="northwind.example",
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_name=True,
+        collect_email=True,
+        domain_security=True,
+        allowed_domains="northwind.example",
     )
 
-    pending = submit(client, room["id"]).json()
+    submit(client, room["id"]).json()
     message = outbox(client, room["id"])[0]
     token = token_from(message["data"]["link"])
 
@@ -319,7 +338,9 @@ def test_full_round_trip_from_the_outbox_link(client):
     assert verified.json()["identity"]["email"] == "alex@northwind.example"
     assert outbox(client, room["id"])[0]["data"]["status"] == "sent"
 
-    granted = client.get(f"{PREFIX}/rooms/{room['id']}/access/session", params={"token": token}).json()
+    granted = client.get(
+        f"{PREFIX}/rooms/{room['id']}/access/session", params={"token": token}
+    ).json()
     assert granted["status"] == "granted"
     assert granted["verified"] is True
     assert granted["viewed_at"]
@@ -346,7 +367,9 @@ def test_verification_is_idempotent(client):
     token = submit(client, room["id"]).json()["token"]
 
     first = client.get(f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token}).json()
-    second = client.get(f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token}).json()
+    second = client.get(
+        f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token}
+    ).json()
 
     assert first["already_verified"] is False
     assert second["already_verified"] is True
@@ -359,7 +382,12 @@ def test_eleventh_presentation_of_a_token_retires_it(client):
     token = submit(client, room["id"]).json()["token"]
 
     for _ in range(10):
-        assert client.get(f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token}).status_code == 200
+        assert (
+            client.get(
+                f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token}
+            ).status_code
+            == 200
+        )
 
     response = client.get(f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token})
 
@@ -404,8 +432,18 @@ def test_unknown_and_foreign_tokens_are_403(client):
     set_policy(client, room["id"], mode="verify_email", collect_email=True)
     token = submit(client, room["id"]).json()["token"]
 
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": "access_session_x"}).status_code == 403
-    assert client.get(f"{PREFIX}/rooms/{other['id']}/access/verify", params={"token": token}).status_code == 403
+    assert (
+        client.get(
+            f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": "access_session_x"}
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get(
+            f"{PREFIX}/rooms/{other['id']}/access/verify", params={"token": token}
+        ).status_code
+        == 403
+    )
 
 
 def test_missing_required_field_is_400(client):
@@ -434,7 +472,11 @@ def test_malformed_address_is_400(client):
 def test_disallowed_domain_is_refused_and_no_mail_is_sent(client):
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
 
@@ -450,7 +492,11 @@ def test_refused_attempt_is_recorded_without_verifying_anybody(client):
     credit for the attempt."""
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
     refused = submit(client, room["id"], email="someone@contoso.example").json()
@@ -468,7 +514,11 @@ def test_refused_attempt_is_recorded_without_verifying_anybody(client):
 def test_a_second_listed_domain_is_accepted(client):
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example, contoso.example",
     )
 
@@ -480,7 +530,11 @@ def test_subdomain_is_not_implicitly_allowed(client):
     accepting one is how an allowlist quietly grows."""
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
 
@@ -492,12 +546,20 @@ def test_allowlist_tightened_mid_flight_locks_out_the_pending_link(client):
     legitimate when it was sent must not outlive the policy."""
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
     token = submit(client, room["id"]).json()["token"]
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="contoso.example",
     )
 
@@ -583,7 +645,10 @@ def test_room_without_a_policy_resolves_to_the_template(client):
 def test_room_policy_overrides_the_template(client):
     template = make_template(client)
     room = make_room(client, template_id=template["id"])
-    client.put(f"{PREFIX}/templates/{template['id']}/access", json={"mode": "verify_email", "collect_email": True})
+    client.put(
+        f"{PREFIX}/templates/{template['id']}/access",
+        json={"mode": "verify_email", "collect_email": True},
+    )
     set_policy(client, room["id"], mode="identify", collect_name=True)
 
     body = client.get(f"{PREFIX}/rooms/{room['id']}/access").json()
@@ -597,9 +662,14 @@ def test_template_change_reaches_an_inheriting_room_with_no_write_to_the_room(cl
     room = make_room(client, template_id=template["id"])
     assert client.get(f"{PREFIX}/rooms/{room['id']}/access").json()["policy"]["mode"] == "open"
 
-    client.put(f"{PREFIX}/templates/{template['id']}/access", json={"mode": "verify_email", "collect_email": True})
+    client.put(
+        f"{PREFIX}/templates/{template['id']}/access",
+        json={"mode": "verify_email", "collect_email": True},
+    )
 
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/access").json()["policy"]["mode"] == "verify_email"
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/access").json()["policy"]["mode"] == "verify_email"
+    )
     # Nothing was written to the room itself.
     assert count(client, "access_policy") == 1
 
@@ -607,14 +677,22 @@ def test_template_change_reaches_an_inheriting_room_with_no_write_to_the_room(cl
 def test_clearing_a_room_policy_falls_back_to_the_template_and_is_audited(client):
     template = make_template(client)
     room = make_room(client, template_id=template["id"])
-    client.put(f"{PREFIX}/templates/{template['id']}/access", json={"mode": "verify_email", "collect_email": True})
+    client.put(
+        f"{PREFIX}/templates/{template['id']}/access",
+        json={"mode": "verify_email", "collect_email": True},
+    )
     set_policy(client, room["id"], mode="open")
 
     cleared = client.delete(f"{PREFIX}/rooms/{room['id']}/access")
 
     assert cleared.json()["cleared"] is True
     assert client.get(f"{PREFIX}/rooms/{room['id']}/access").json()["level"] == "template"
-    assert client.get("/api/audit", params={"collection": "access_policy", "action": "delete"}).json()["count"] == 1
+    assert (
+        client.get("/api/audit", params={"collection": "access_policy", "action": "delete"}).json()[
+            "count"
+        ]
+        == 1
+    )
 
 
 def test_clearing_a_policy_that_does_not_exist_says_so(client):
@@ -629,7 +707,10 @@ def test_clearing_a_policy_that_does_not_exist_says_so(client):
 def test_inherit_on_a_room_policy_defers_to_its_template(client):
     template = make_template(client)
     room = make_room(client, template_id=template["id"])
-    client.put(f"{PREFIX}/templates/{template['id']}/access", json={"mode": "identify", "collect_name": True})
+    client.put(
+        f"{PREFIX}/templates/{template['id']}/access",
+        json={"mode": "identify", "collect_name": True},
+    )
     set_policy(client, room["id"], mode="open", inherit=True, template_id=template["id"])
 
     assert client.get(f"{PREFIX}/rooms/{room['id']}/access").json()["policy"]["mode"] == "identify"
@@ -640,7 +721,11 @@ def test_a_stored_policy_that_no_longer_validates_is_reported_not_hidden(client)
     their own room, and must not disappear either."""
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
     # Reach past validation the way a future rule change would break old data.
@@ -658,7 +743,9 @@ def test_a_stored_policy_that_no_longer_validates_is_reported_not_hidden(client)
 
 def test_a_full_round_trip_leaves_exactly_the_expected_audit_rows(client):
     room = make_room(client)
-    client.put(f"{PREFIX}/rooms/{room['id']}/access", json={"mode": "verify_email", "collect_email": True})
+    client.put(
+        f"{PREFIX}/rooms/{room['id']}/access", json={"mode": "verify_email", "collect_email": True}
+    )
     token = submit(client, room["id"]).json()["token"]
     client.get(f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token})
     client.get(f"{PREFIX}/rooms/{room['id']}/access/session", params={"token": token})
@@ -683,8 +770,12 @@ def test_a_refusal_is_audited_too(client):
     room = make_room(client)
     client.put(
         f"{PREFIX}/rooms/{room['id']}/access",
-        json={"mode": "verify_email", "collect_email": True, "domain_security": True,
-              "allowed_domains": "northwind.example"},
+        json={
+            "mode": "verify_email",
+            "collect_email": True,
+            "domain_security": True,
+            "allowed_domains": "northwind.example",
+        },
     )
     submit(client, room["id"], email="someone@contoso.example")
 
@@ -696,13 +787,15 @@ def test_a_refusal_is_audited_too(client):
 
 def test_the_verification_state_change_is_audited_with_a_diff(client):
     room = make_room(client)
-    client.put(f"{PREFIX}/rooms/{room['id']}/access", json={"mode": "verify_email", "collect_email": True})
+    client.put(
+        f"{PREFIX}/rooms/{room['id']}/access", json={"mode": "verify_email", "collect_email": True}
+    )
     token = submit(client, room["id"]).json()["token"]
     client.get(f"{PREFIX}/rooms/{room['id']}/access/verify", params={"token": token})
 
-    update = client.get(
-        "/api/audit", params={"record_id": token, "action": "update"}
-    ).json()["entries"][0]
+    update = client.get("/api/audit", params={"record_id": token, "action": "update"}).json()[
+        "entries"
+    ][0]
 
     assert update["diff"]["status"] == {"from": "pending_verification", "to": "verified"}
 
@@ -723,19 +816,32 @@ def test_emailed_link_redirects_a_human_into_the_app(client):
     assert response.status_code == 303
     assert response.headers["location"] == f"/#/view/{room['id']}?token={token}"
     # ...and the session really is verified by following it.
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/access/session", params={"token": token}).json()["status"] == "granted"
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/access/session", params={"token": token}).json()[
+            "status"
+        ]
+        == "granted"
+    )
 
 
 def test_a_refused_link_still_returns_403_rather_than_redirecting(client):
     """A dead link must tell the buyer why, not bounce them to an error page."""
     room = make_room(client)
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="northwind.example",
     )
-    token = submit(client, room["id"]).json()["token"]
+    submit(client, room["id"]).json()["token"]
     set_policy(
-        client, room["id"], mode="verify_email", collect_email=True, domain_security=True,
+        client,
+        room["id"],
+        mode="verify_email",
+        collect_email=True,
+        domain_security=True,
         allowed_domains="contoso.example",
     )
     link = outbox(client, room["id"])[0]["data"]["open_link"].replace("http://salesroom.test", "")

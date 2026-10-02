@@ -275,7 +275,11 @@ def normalise_stream_event(record: Mapping[str, Any], fields: Mapping[str, Any])
 
     def pick(concept: str) -> str:
         for key in _as_list(fields.get(concept)) or EVENT_FIELDS.get(concept, []):
-            if key in data and data[key] not in (None, "") and not isinstance(data[key], (dict, list)):
+            if (
+                key in data
+                and data[key] not in (None, "")
+                and not isinstance(data[key], (dict, list))
+            ):
                 return _as_text(data[key])
         return ""
 
@@ -336,7 +340,8 @@ def event_type_summary(
     return {
         "id": record.get("id"),
         "app_id": app_id,
-        "app_identifier": _identifier_of(app, "app_identifier") or _as_text(data.get("app_identifier")),
+        "app_identifier": _identifier_of(app, "app_identifier")
+        or _as_text(data.get("app_identifier")),
         "name": _as_text(data.get("name")),
         "event_id": _as_text(data.get("event_id")),
         "template": _as_text(data.get("template")),
@@ -603,7 +608,8 @@ class FeedPublisher:
     def list_event_types(self) -> list[dict[str, Any]]:
         apps = self._apps_by_id()
         return [
-            event_type_summary(record, apps=apps) for record in _scan(self.store, EVENT_TYPE_COLLECTION)
+            event_type_summary(record, apps=apps)
+            for record in _scan(self.store, EVENT_TYPE_COLLECTION)
         ]
 
     def get_event_type(self, event_type_id: str) -> dict[str, Any] | None:
@@ -697,7 +703,10 @@ class FeedPublisher:
             )
         if not enabled:
             blockers.append(
-                {"code": "no_event_type", "detail": "no custom event is enabled, so no DSR event qualifies"}
+                {
+                    "code": "no_event_type",
+                    "detail": "no custom event is enabled, so no DSR event qualifies",
+                }
             )
         for entry in enabled:
             app = apps.get(entry["app_id"])
@@ -711,10 +720,16 @@ class FeedPublisher:
                 continue
             identifier = _identifier_of(app, "app_identifier")
             if not _identifier_of(app, "token"):
-                blockers.append({"code": "app_not_ready", "detail": f"app {identifier!r} has no S2S token"})
+                blockers.append(
+                    {"code": "app_not_ready", "detail": f"app {identifier!r} has no S2S token"}
+                )
             if not _as_bool((app.get("data") or {}).get("enabled")):
-                blockers.append({"code": "app_disabled", "detail": f"app {identifier!r} is disabled"})
-            if not _identifier_of(app, "room_base_url") and not any(link["external_url"] for link in active_links):
+                blockers.append(
+                    {"code": "app_disabled", "detail": f"app {identifier!r} is disabled"}
+                )
+            if not _identifier_of(app, "room_base_url") and not any(
+                link["external_url"] for link in active_links
+            ):
                 blockers.append(
                     {
                         "code": "no_room_base_url",
@@ -851,7 +866,9 @@ class FeedPublisher:
         data: dict[str, Any] = {
             "app_identifier": identifier,
             "token": token,
-            "webhook_secret": _as_text(payload.get("webhook_secret") or payload.get("webhookSecret")),
+            "webhook_secret": _as_text(
+                payload.get("webhook_secret") or payload.get("webhookSecret")
+            ),
             "room_base_url": base_url,
             "enabled": _as_bool(payload.get("enabled")),
             "environment": _as_text(payload.get("environment")),
@@ -883,7 +900,9 @@ class FeedPublisher:
         if "token" in patch or "s2s_token" in patch:
             token = _as_text(patch.get("token") or patch.get("s2s_token"))
             if not token:
-                raise AppError("token cannot be blank; send enabled=false to switch an app off instead")
+                raise AppError(
+                    "token cannot be blank; send enabled=false to switch an app off instead"
+                )
             payload["token"] = token
         if "webhook_secret" in patch or "webhookSecret" in patch:
             payload["webhook_secret"] = _as_text(
@@ -900,9 +919,7 @@ class FeedPublisher:
             payload["environment"] = _as_text(patch.get("environment"))
         override = patch.get("field_map")
         if isinstance(override, Mapping):
-            payload["field_map"] = {
-                str(k): _as_list(v) for k, v in override.items() if _as_list(v)
-            }
+            payload["field_map"] = {str(k): _as_list(v) for k, v in override.items() if _as_list(v)}
 
         merged = _deep_merge(current, payload)
         return app_summary(self.store.update(record["id"], merged, actor=actor, source=source))
@@ -1000,7 +1017,9 @@ class FeedPublisher:
         payload: dict[str, Any] = {}
 
         if "name" in patch:
-            name = require_event_name(patch.get("name"), app_identifiers=self._app_identifiers(apps))
+            name = require_event_name(
+                patch.get("name"), app_identifiers=self._app_identifiers(apps)
+            )
             identifier, event_id = name.split(":", 1)
             payload.update({"name": name, "event_id": event_id, "app_identifier": identifier})
         if "template" in patch:
@@ -1029,7 +1048,9 @@ class FeedPublisher:
             payload["app_id"] = app_id
 
         merged = _deep_merge(current, payload)
-        return event_type_summary(self.store.update(record["id"], merged, actor=actor, source=source), apps=apps)
+        return event_type_summary(
+            self.store.update(record["id"], merged, actor=actor, source=source), apps=apps
+        )
 
     def delete_event_type(
         self, event_type_id: str, *, actor: str | None = None, source: str
@@ -1071,7 +1092,9 @@ class FeedPublisher:
 
         data = {
             "prospect_id": prospect_id,
-            "opportunity_id": _as_text(payload.get("opportunity_id") or payload.get("opportunityId")),
+            "opportunity_id": _as_text(
+                payload.get("opportunity_id") or payload.get("opportunityId")
+            ),
             "account_id": _as_text(payload.get("account_id") or payload.get("accountId")),
             "label": _as_text(payload.get("label")),
             "external_url": external_url,
@@ -1176,7 +1199,9 @@ class FeedPublisher:
             claimants = [record for record in enabled if matches(record.get("data") or {}, event)]
             if not claimants:
                 label = str(event.get("action") or "") or "(unreadable)"
-                row = unmapped.setdefault(label, {"action": label, "count": 0, "example_events": []})
+                row = unmapped.setdefault(
+                    label, {"action": label, "count": 0, "example_events": []}
+                )
                 row["count"] += 1
                 if len(row["example_events"]) < 3:
                     row["example_events"].append(event["id"])
@@ -1334,7 +1359,9 @@ class FeedPublisher:
         def blocked(reason: str, detail: str, *, prospect_id: str = "") -> dict[str, Any]:
             key, existing = resolve_row(prospect_id)
             if dry_run:
-                return outcome_for("skipped", key=key, prospect_id=prospect_id, reason=reason, detail=detail)
+                return outcome_for(
+                    "skipped", key=key, prospect_id=prospect_id, reason=reason, detail=detail
+                )
             record = self._upsert_delivery(
                 existing,
                 {
@@ -1368,7 +1395,11 @@ class FeedPublisher:
         if not links:
             return [blocked("no_prospect", SKIP_REASONS["no_prospect"])]
         if not app:
-            return [blocked("app_not_ready", f"the app {app_id!r} this event is scoped to is not registered")]
+            return [
+                blocked(
+                    "app_not_ready", f"the app {app_id!r} this event is scoped to is not registered"
+                )
+            ]
         if not _as_text(app_data.get("token")):
             return [blocked("app_not_ready", SKIP_REASONS["app_not_ready"])]
         if not _as_bool(app_data.get("enabled")):
@@ -1378,7 +1409,10 @@ class FeedPublisher:
         for link in links:
             prospect_id = _as_text(link.get("prospect_id"))
             key, existing = resolve_row(prospect_id)
-            if existing is not None and _as_text((existing.get("data") or {}).get("status")) == STATUS_DELIVERED:
+            if (
+                existing is not None
+                and _as_text((existing.get("data") or {}).get("status")) == STATUS_DELIVERED
+            ):
                 results.append(
                     outcome_for(
                         "duplicate",
@@ -1395,7 +1429,11 @@ class FeedPublisher:
                 base_url = _as_text(app_data.get("room_base_url"))
                 if not base_url:
                     results.append(
-                        blocked("no_room_base_url", SKIP_REASONS["no_room_base_url"], prospect_id=prospect_id)
+                        blocked(
+                            "no_room_base_url",
+                            SKIP_REASONS["no_room_base_url"],
+                            prospect_id=prospect_id,
+                        )
                     )
                     continue
                 try:
@@ -1590,13 +1628,17 @@ class FeedPublisher:
         )
         for entry in outcomes:
             entry["retried"] = True
-        return outcomes[0] if outcomes else {
-            "outcome": "skipped",
-            "delivery_id": record["id"],
-            "reason": "no_prospect",
-            "detail": SKIP_REASONS["no_prospect"],
-            "retried": True,
-        }
+        return (
+            outcomes[0]
+            if outcomes
+            else {
+                "outcome": "skipped",
+                "delivery_id": record["id"],
+                "reason": "no_prospect",
+                "detail": SKIP_REASONS["no_prospect"],
+                "retried": True,
+            }
+        )
 
     # -- the inbound half ----------------------------------------------------- #
 
@@ -1614,9 +1656,7 @@ class FeedPublisher:
         would be permanent data loss, not a nudge.
         """
         body = raw.encode("utf-8") if isinstance(raw, str) else bytes(raw or b"")
-        secrets = [
-            _identifier_of(record, "webhook_secret") for record in self._apps()
-        ]
+        secrets = [_identifier_of(record, "webhook_secret") for record in self._apps()]
         secrets = [secret for secret in secrets if secret]
         if not secrets:
             raise FeedNotConfiguredError(
@@ -1629,7 +1669,11 @@ class FeedPublisher:
         version = webhooks.require_payload_version(payload)
         normal = webhooks.normalise(payload)
         key = webhooks.signal_key(
-            normal["resource"], normal["type"], normal["mailing_id"], normal["sequence"], normal["prospect_id"]
+            normal["resource"],
+            normal["type"],
+            normal["mailing_id"],
+            normal["sequence"],
+            normal["prospect_id"],
         )
 
         existing = self.store.find(SIGNAL_COLLECTION, {"signal_key": key}, limit=1)
@@ -1704,7 +1748,9 @@ class FeedPublisher:
             return "unknown_prospect", None, 0
         records = [
             record
-            for record in self.store.find(PROSPECT_COLLECTION, {"prospect_id": prospect_id}, limit=50)
+            for record in self.store.find(
+                PROSPECT_COLLECTION, {"prospect_id": prospect_id}, limit=50
+            )
             if _as_bool((record.get("data") or {}).get("active"))
         ]
         if not records:

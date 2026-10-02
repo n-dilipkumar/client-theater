@@ -218,7 +218,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "started_fields": ["started_at", "start_date", "kickoff", "began_at"],
         "completed_fields": ["completed_at", "finished_at", "done_at", "end_date"],
         "due_fields": ["due_at", "due_date", "target_date", "go_live", "go_live_date"],
-        "active_states": ["active", "in_progress", "in progress", "onboarding", "started", "at_risk"],
+        "active_states": [
+            "active",
+            "in_progress",
+            "in progress",
+            "onboarding",
+            "started",
+            "at_risk",
+        ],
         "completed_states": ["completed", "complete", "done", "delivered", "live"],
     },
 }
@@ -586,7 +593,11 @@ def classify_audience(
             if domain == suffix or domain.endswith(f".{suffix}"):
                 return AUDIENCE_INTERNAL
 
-    return AUDIENCE_EXTERNAL if _as_bool(audience.get("unknown_is_external", True)) else AUDIENCE_INTERNAL
+    return (
+        AUDIENCE_EXTERNAL
+        if _as_bool(audience.get("unknown_is_external", True))
+        else AUDIENCE_INTERNAL
+    )
 
 
 def collect_events(
@@ -772,7 +783,9 @@ def assign_keys(names: Iterable[str]) -> dict[str, str]:
     Two names that collapse to the same slug are told apart by a numeric
     suffix, assigned in sorted order so the keys are stable between calls.
     """
-    ordered = sorted({_as_text(name, UNATTRIBUTED_ACCOUNT) or UNATTRIBUTED_ACCOUNT for name in names})
+    ordered = sorted(
+        {_as_text(name, UNATTRIBUTED_ACCOUNT) or UNATTRIBUTED_ACCOUNT for name in names}
+    )
     keys: dict[str, str] = {}
     taken: set[str] = set()
     for name in ordered:
@@ -1161,10 +1174,10 @@ def build_rollup(
             "unique_clients_portfolio": len(by_client),
             "avg_unique_clients_per_workspace": round(average, 3),
             "multi_threaded_accounts": sum(1 for row in accounts if row["multi_threaded"]),
-            "single_threaded_accounts": sum(
-                1 for row in accounts if row["champion_only_thread"]
+            "single_threaded_accounts": sum(1 for row in accounts if row["champion_only_thread"]),
+            "accounts_without_client_activity": sum(
+                1 for row in accounts if row["no_client_activity"]
             ),
-            "accounts_without_client_activity": sum(1 for row in accounts if row["no_client_activity"]),
             "stale_accounts": sum(1 for row in accounts if row["stale"]),
             "internal_actions": len(internal),
         },
@@ -1249,7 +1262,9 @@ def sort_accounts(
 # --------------------------------------------------------------------------- #
 
 
-def _tile_values(rollup: Mapping[str, Any], series: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _tile_values(
+    rollup: Mapping[str, Any], series: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     """The five sourced tiles.
 
     ``expand`` is the account-list sort key a click carries. The route builds the
@@ -1367,12 +1382,12 @@ def client_engagement(
     workspaces = scan_workspaces(store, config)
     events = collect_events(store, config)
 
-    rollup = build_rollup(workspaces=workspaces, events=events, config=config, now=now, window=filters)
+    rollup = build_rollup(
+        workspaces=workspaces, events=events, config=config, now=now, window=filters
+    )
     thresholds = config.get("thresholds") or {}
     start, end = _chart_window(rollup["events"], filters, now, thresholds.get("chart_days"))
-    resolved_grain, widened = _resolve_grain(
-        start, end, grain, thresholds.get("max_chart_points")
-    )
+    resolved_grain, widened = _resolve_grain(start, end, grain, thresholds.get("max_chart_points"))
     series = views_over_time(rollup["events"], start=start, end=end, grain=resolved_grain)
 
     payload = _context(
@@ -1392,7 +1407,12 @@ def client_engagement(
 
 
 def workspace_engagement(
-    store: RecordStore, room_id: str, *, filters: Filters, grain: str = "day", as_of: str | None = None
+    store: RecordStore,
+    room_id: str,
+    *,
+    filters: Filters,
+    grain: str = "day",
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """The same report narrowed to one workspace, with that workspace's clients.
 
@@ -1409,15 +1429,11 @@ def workspace_engagement(
     now = resolve_now(as_of)
     config = load_config(store)
     require_workspace(store, room_id)
-    target = next(
-        (item for item in scan_workspaces(store, config) if item.id == room_id), None
-    )
+    target = next((item for item in scan_workspaces(store, config) if item.id == room_id), None)
     scoped = [target] if target is not None else []
     window = Filters(start=filters.start, end=filters.end)
     events = collect_events(store, config, room_id=room_id)
-    rollup = build_rollup(
-        workspaces=scoped, events=events, config=config, now=now, window=window
-    )
+    rollup = build_rollup(workspaces=scoped, events=events, config=config, now=now, window=window)
 
     thresholds = config.get("thresholds") or {}
     start, end = _chart_window(rollup["events"], window, now, thresholds.get("chart_days"))
@@ -1466,7 +1482,9 @@ def account_list(
     config = load_config(store)
     workspaces = scan_workspaces(store, config)
     events = collect_events(store, config)
-    rollup = build_rollup(workspaces=workspaces, events=events, config=config, now=now, window=filters)
+    rollup = build_rollup(
+        workspaces=workspaces, events=events, config=config, now=now, window=filters
+    )
     ordered = sort_accounts(rollup["accounts"], sort, descending)
 
     # The config cap applies only when the caller asked for no limit of its own.
@@ -1538,10 +1556,7 @@ def available_filters(store: RecordStore, *, as_of: str | None = None) -> dict[s
     for event in events:
         audiences[str(event.get("audience"))] += 1
 
-    accounts = {
-        workspace.account or UNATTRIBUTED_ACCOUNT
-        for workspace in workspaces
-    } | {
+    accounts = {workspace.account or UNATTRIBUTED_ACCOUNT for workspace in workspaces} | {
         _as_text(event.get("account")) or UNATTRIBUTED_ACCOUNT
         for event in events
         if _as_text(event.get("account"))
@@ -1562,9 +1577,7 @@ def available_filters(store: RecordStore, *, as_of: str | None = None) -> dict[s
         "grains": ["day", "week"],
         "sortable_columns": dict(SORTABLE_COLUMNS),
         "default_sort": DEFAULT_SORT,
-        "tiles": [
-            {"key": key, "label": label, "expand": expand} for key, label, expand in TILES
-        ],
+        "tiles": [{"key": key, "label": label, "expand": expand} for key, label, expand in TILES],
         "audience_split": dict(sorted(audiences.items())),
         "collections": {
             "workspaces": COLLECTION_ROOM,
@@ -1579,9 +1592,7 @@ def available_filters(store: RecordStore, *, as_of: str | None = None) -> dict[s
 # --------------------------------------------------------------------------- #
 
 
-def team_usage(
-    store: RecordStore, *, filters: Filters, as_of: str | None = None
-) -> dict[str, Any]:
+def team_usage(store: RecordStore, *, filters: Filters, as_of: str | None = None) -> dict[str, Any]:
     """Team Usage: "How actively is your team using Dock?"
 
     Sourced as one sentence, with no widget vocabulary of its own, so every
@@ -1594,7 +1605,9 @@ def team_usage(
     config = load_config(store)
     workspaces = scan_workspaces(store, config)
     events = collect_events(store, config)
-    rollup = build_rollup(workspaces=workspaces, events=events, config=config, now=now, window=filters)
+    rollup = build_rollup(
+        workspaces=workspaces, events=events, config=config, now=now, window=filters
+    )
 
     owned: dict[str, dict[str, Any]] = {}
     for workspace in rollup["workspaces"]:
@@ -1677,9 +1690,7 @@ def team_usage(
                 "unique_client_people": len(row["_client_people"]),
                 "multi_threaded_accounts": multi_threaded_by_owner.get(owner, 0),
                 "accounts_without_client_activity": quiet_by_owner.get(owner, 0),
-                "client_actions_per_account": round(
-                    row["_client_actions"] / accounts_owned, 3
-                )
+                "client_actions_per_account": round(row["_client_actions"] / accounts_owned, 3)
                 if accounts_owned
                 else 0.0,
             }
@@ -1703,9 +1714,7 @@ def team_usage(
         "count": len(rows),
         "owners_detail": rows,
         "unattributed_internal_people": sorted(
-            person
-            for person in internal_by_person
-            if person.lower() not in people_to_owner
+            person for person in internal_by_person if person.lower() not in people_to_owner
         ),
         "workspaces_without_an_owner": [
             {"id": workspace.id, "name": workspace.name, "account": workspace.account}
@@ -1818,7 +1827,9 @@ def implementations(
     by_owner: dict[str, dict[str, Any]] = {}
     for row in rows:
         key = row["owner"] or "(unassigned)"
-        entry = by_owner.setdefault(key, {"owner": key, "total": 0, "active": 0, "completed": 0, "at_risk": 0})
+        entry = by_owner.setdefault(
+            key, {"owner": key, "total": 0, "active": 0, "completed": 0, "at_risk": 0}
+        )
         entry["total"] += 1
         if row["state"] == "active":
             entry["active"] += 1
@@ -1842,7 +1853,12 @@ def implementations(
         round(sum(row["duration_days"] for row in timed) / len(timed), 2) if timed else None
     )
     on_time_rate = (
-        round(100.0 * sum(1 for row in dated_completions if row["completed_on_time"]) / len(dated_completions), 2)
+        round(
+            100.0
+            * sum(1 for row in dated_completions if row["completed_on_time"])
+            / len(dated_completions),
+            2,
+        )
         if dated_completions
         else None
     )
@@ -1878,7 +1894,12 @@ def implementations(
         "at_risk": [row for row in rows if row["at_risk"]],
         "count": len(rows),
         "implementations_detail": sorted(
-            rows, key=lambda row: (row["at_risk"] is False, str(row["account"]).lower(), row["name"].lower())
+            rows,
+            key=lambda row: (
+                row["at_risk"] is False,
+                str(row["account"]).lower(),
+                row["name"].lower(),
+            ),
         ),
     }
 
@@ -1930,9 +1951,7 @@ def record_event(
     ):
         data["user_type"] = audience if audience != AUDIENCE_UNKNOWN else AUDIENCE_EXTERNAL
 
-    record = store.create(
-        COLLECTION_ACTIVITY, data, room_id=room_id, actor=actor, source=source
-    )
+    record = store.create(COLLECTION_ACTIVITY, data, room_id=room_id, actor=actor, source=source)
     return {
         "event": record,
         "counted_as": audience,

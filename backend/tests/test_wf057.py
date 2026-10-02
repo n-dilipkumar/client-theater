@@ -35,12 +35,10 @@ from __future__ import annotations
 import inspect
 import re
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -53,27 +51,19 @@ from dsr.panel_time import (
     ATTENDANCE_STATUSES,
     ATTENDANCE_WEIGHTS,
     BOOKING_COLLECTION,
-    BusyMap,
     CALENDAR_COLLECTION,
     CALENDAR_EXPANSION_MAX_LIMIT,
-    CALENDAR_EXPANSION_MAX_QUOTE,
     CALENDAR_EXPANSION_MAX_LIMIT as CAL_CAP,
-    Candidate,
-    CalendarShapeError,
-    Clock,
+    CALENDAR_EXPANSION_MAX_QUOTE,
     COLLECTIONS,
-    ConstraintError,
     DEFAULT_MEETING_DURATION,
-    DEFAULT_SLOT_INTERVAL,
     DRIFT_QUOTE,
     EMPTY_BUSY_SUGGESTIONS,
-    EMPTY_NONE,
-    EMPTY_NOT_ORGANIZER,
     EMPTY_NOT_ENOUGH_CALENDAR_FREE_TIME,
     EMPTY_NOT_ENOUGH_PEOPLE_FREE,
+    EMPTY_NOT_ORGANIZER,
     EMPTY_REASONS,
     EMPTY_SUGGESTIONS_REASON_QUOTE,
-    Evaluation,
     GOOGLE_FREEBUSY_SCOPE,
     GOOGLE_FREEBUSY_URL,
     GRAPH_DELEGATED_SCOPE,
@@ -82,28 +72,34 @@ from dsr.panel_time import (
     HOUSE_RULE_KEYS,
     INFERENCES,
     KINDS,
-    LimitExceeded,
-    LocalDirectory,
     LOCATION_ROOM,
     LOCATION_SUGGEST,
-    NotFound,
     PANEL_COLLECTION,
-    PanelShapeError,
-    PanelTimeNotConfigured,
     RANK_CONFIDENCE,
     RANK_WEIGHTED,
     RANKERS,
+    RETUNE_ADJUSTMENTS,
     SEARCH_COLLECTION,
+    SOURCED_GAPS,
+    SOURCED_QUOTES,
     STATUS_BUSY,
     STATUS_FREE,
     STATUS_UNKNOWN,
     SUGGESTION_REASON_ALL_FREE,
     SUGGESTION_REASON_QUOTE,
+    USER_FLOW,
+    BusyMap,
+    CalendarShapeError,
+    Candidate,
+    Clock,
+    ConstraintError,
+    LimitExceeded,
+    LocalDirectory,
+    NotFound,
+    PanelShapeError,
+    PanelTimeNotConfigured,
     SlotFinder,
     SlotUnavailable,
-    SOURCED_GAPS,
-    SOURCED_QUOTES,
-    USER_FLOW,
     UrllibProvider,
     apply_adjustment,
     apply_house_rules,
@@ -131,8 +127,8 @@ from dsr.panel_time import (
     tzdb_available,
     window,
 )
-from dsr.panel_time import RETUNE_ADJUSTMENTS
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -163,7 +159,9 @@ def count(store: RecordStore, collection: str) -> int:
 
 
 def busy_map(
-    *, busy: dict[str, list[tuple[str, str]]] | None = None, unreadable: dict[str, str] | None = None
+    *,
+    busy: dict[str, list[tuple[str, str]]] | None = None,
+    unreadable: dict[str, str] | None = None,
 ) -> BusyMap:
     """A hand-built availability read, with no provider and no store behind it.
 
@@ -176,9 +174,7 @@ def busy_map(
         blocks[calendar_id] = [
             (parse_instant(start), parse_instant(end)) for start, end in intervals
         ]
-    return BusyMap(
-        busy=blocks, unreadable=dict(unreadable or {}), requested=tuple(sorted(blocks))
-    )
+    return BusyMap(busy=blocks, unreadable=dict(unreadable or {}), requested=tuple(sorted(blocks)))
 
 
 def candidates(*starts: str, minutes: int = 60) -> list[Candidate]:
@@ -212,7 +208,8 @@ def finder(store):
 @pytest.fixture()
 def room(store):
     return store.create(
-        "room", {"name": "Northwind — Enterprise Evaluation", "account": "Northwind Traders"},
+        "room",
+        {"name": "Northwind — Enterprise Evaluation", "account": "Northwind Traders"},
         actor="dana",
     )
 
@@ -317,7 +314,7 @@ def test_the_calendar_expansion_cap_carries_its_own_quote():
 
 
 def test_the_sort_quote_names_both_halves_of_the_order():
-    """"sorted high→low then chronologically" - the tie-break is part of it."""
+    """ "sorted high→low then chronologically" - the tie-break is part of it."""
     assert "high→low" in describe_vocabulary()["availability"]["quote"] or True
     assert "sorted high→low then chronologically" in " ".join(SOURCED_QUOTES)
     assert RANKERS == (RANK_CONFIDENCE, RANK_WEIGHTED)
@@ -327,9 +324,7 @@ def test_the_suggestion_reason_quote_is_carried_with_the_key_it_arrived_under():
     assert SUGGESTION_REASON_ALL_FREE == (
         "Suggested because it is one of the nearest times when all attendees are available."
     )
-    assert SUGGESTION_REASON_QUOTE == (
-        f'"suggestionReason": "{SUGGESTION_REASON_ALL_FREE}"'
-    )
+    assert SUGGESTION_REASON_QUOTE == (f'"suggestionReason": "{SUGGESTION_REASON_ALL_FREE}"')
     assert SUGGESTION_REASON_QUOTE in " ".join(SOURCED_QUOTES)
 
 
@@ -360,7 +355,7 @@ def test_the_two_providers_carry_their_endpoints_scopes_and_headers():
 
 
 def test_the_google_request_body_carries_exactly_the_researched_fields():
-    """"{timeMin, timeMax, timeZone, groupExpansionMax, calendarExpansionMax,
+    """ "{timeMin, timeMax, timeZone, groupExpansionMax, calendarExpansionMax,
     items[{id}]}" - the research enumerates them, so the renderer emits them and
     nothing else."""
     request = render_free_busy_request(
@@ -410,7 +405,7 @@ def test_the_graph_request_body_carries_the_researched_parameters():
 
 
 def test_the_graph_delegated_path_is_the_documented_one():
-    """"POST /users/{id|userPrincipalName}/findMeetingTimes" is the second path."""
+    """ "POST /users/{id|userPrincipalName}/findMeetingTimes" is the second path."""
     mine = render_free_busy_request(
         provider="graph",
         calendar_ids=["a@x.example"],
@@ -430,8 +425,10 @@ def test_the_vocabulary_names_the_surfaces_this_build_does_not_implement():
     assert any("room resource" in surface for surface in surfaces)
     assert any("events.watch" in surface for surface in surfaces)
     assert any("WF-058" in entry["why_not"] for entry in ADJACENT_SURFACES)
-    assert any("push-based" in entry["why_not"] or "*pull*" in entry["why_not"]
-               for entry in ADJACENT_SURFACES)
+    assert any(
+        "push-based" in entry["why_not"] or "*pull*" in entry["why_not"]
+        for entry in ADJACENT_SURFACES
+    )
 
 
 def test_the_researchs_own_gaps_are_carried_next_to_the_facts():
@@ -512,7 +509,9 @@ def test_a_free_slot_scores_one_hundred():
 def test_a_fully_busy_slot_scores_zero():
     [row] = evaluate(
         candidates(at(MONDAY, 9)),
-        busy_map(busy={"a": [(at(MONDAY, 9), at(MONDAY, 10))], "b": [(at(MONDAY, 9), at(MONDAY, 10))]}),
+        busy_map(
+            busy={"a": [(at(MONDAY, 9), at(MONDAY, 10))], "b": [(at(MONDAY, 9), at(MONDAY, 10))]}
+        ),
         ["a", "b"],
     )
     assert row.confidence == 0
@@ -692,7 +691,7 @@ def test_the_bar_rejects_a_candidate_below_it():
 
 
 def test_an_unknown_calendar_does_not_count_toward_the_bar():
-    """"minAttendeePercentage" reads as a floor on attendance, and an unknown is
+    """ "minAttendeePercentage" reads as a floor on attendance, and an unknown is
     not known to attend - which is what lets a panel force everyone to publish."""
     [row] = evaluate(
         candidates(at(MONDAY, 9)),
@@ -873,8 +872,12 @@ def test_applying_an_adjustment_produces_the_next_parameters():
     }
     widened = apply_adjustment(parameters, "widen_window", days=7)
     slot = widened["time_constraint"]["timeSlots"][0]
-    assert parse_instant(slot["start"]["dateTime"]) == parse_instant(at(MONDAY, 9)) - timedelta(days=7)
-    assert parse_instant(slot["end"]["dateTime"]) == parse_instant(at(MONDAY, 17)) + timedelta(days=7)
+    assert parse_instant(slot["start"]["dateTime"]) == parse_instant(at(MONDAY, 9)) - timedelta(
+        days=7
+    )
+    assert parse_instant(slot["end"]["dateTime"]) == parse_instant(at(MONDAY, 17)) + timedelta(
+        days=7
+    )
     assert widened["widen_days"] == 7
 
     relaxed = apply_adjustment(parameters, "relax_min_attendee_percentage")
@@ -921,8 +924,9 @@ def test_widening_never_inverts_the_window():
         }
     )
     assert pad_window(original) == original
-    assert pad_window(original, before=timedelta(days=3))["timeSlots"][0]["start"]["dateTime"] < (
-        original["timeSlots"][0]["start"]["dateTime"]
+    assert (
+        pad_window(original, before=timedelta(days=3))["timeSlots"][0]["start"]["dateTime"]
+        < (original["timeSlots"][0]["start"]["dateTime"])
     )
 
 
@@ -1043,7 +1047,7 @@ def test_an_enormous_window_is_refused_rather_than_enumerated():
 
 
 def test_a_busy_block_ending_exactly_at_the_start_is_not_a_conflict():
-    """"A 09:00-10:00 block does not conflict with a 10:00-11:00 meeting.
+    """ "A 09:00-10:00 block does not conflict with a 10:00-11:00 meeting.
 
     The inclusive reading would refuse to book the entire back half of every
     working day, and the researched house rule 'no back-to-back' is the explicit
@@ -1076,7 +1080,7 @@ def test_the_back_to_back_house_rule_rejects_exactly_what_overlap_will_not():
 
 
 def test_every_researched_house_rule_key_is_recognised():
-    """"no Friday afternoons, no back-to-back" are the research's own examples."""
+    """ "no Friday afternoons, no back-to-back" are the research's own examples."""
     assert "no_back_to_back" in HOUSE_RULE_KEYS
     assert "no_friday_after" in HOUSE_RULE_KEYS
     rules = normalise_house_rules(
@@ -1096,9 +1100,7 @@ def test_a_house_rule_refusal_names_the_rule_and_the_candidate():
     constraint = window_for((at(MONDAY, 9), at(MONDAY, 13)))
     found = enumerate_candidates(constraint, meeting_duration="PT1H", slot_interval="PT1H")
     assert len(found) == 4
-    _, refused = apply_house_rules(
-        found, {"earliest_start": "10:00"}, busy_map(), ["a"]
-    )
+    _, refused = apply_house_rules(found, {"earliest_start": "10:00"}, busy_map(), ["a"])
     assert [row["start"] for row in refused] == [at(MONDAY, 9)]
     assert [row["rule"] for row in refused] == ["earliest_start"]
     assert "before 10:00" in refused[0]["detail"]
@@ -1123,7 +1125,10 @@ def test_a_blackout_refuses_the_slots_inside_it():
         slot_interval="PT1H",
     )
     _, refused = apply_house_rules(
-        found, {"blackouts": [{"from": at(MONDAY, 11), "to": at(MONDAY, 12, 30)}]}, busy_map(), ["a"]
+        found,
+        {"blackouts": [{"from": at(MONDAY, 11), "to": at(MONDAY, 12, 30)}]},
+        busy_map(),
+        ["a"],
     )
     assert [row["start"] for row in refused] == [at(MONDAY, 11), at(MONDAY, 12)]
     assert all(row["rule"] == "blackouts" for row in refused)
@@ -1167,7 +1172,12 @@ def test_an_unrecognised_house_rule_is_carried_rather_than_refused():
 
 
 def test_a_malformed_house_rule_is_refused():
-    for bad in ({"earliest_start": "nine"}, {"no_back_to_back": "maybe"}, {"weekdays": [9]}, {"blackouts": "noon"}):
+    for bad in (
+        {"earliest_start": "nine"},
+        {"no_back_to_back": "maybe"},
+        {"weekdays": [9]},
+        {"blackouts": "noon"},
+    ):
         with pytest.raises(ConstraintError):
             normalise_house_rules(bad)
 
@@ -1250,16 +1260,17 @@ def test_a_time_constraint_must_carry_time_slots():
 
 def test_a_time_slot_that_ends_before_it_starts_is_refused():
     with pytest.raises(ConstraintError) as caught:
-        normalise_time_constraint(
-            {"timeSlots": [{"start": at(MONDAY, 12), "end": at(MONDAY, 9)}]}
-        )
+        normalise_time_constraint({"timeSlots": [{"start": at(MONDAY, 12), "end": at(MONDAY, 9)}]})
     assert "ends at or before it starts" in str(caught.value)
 
 
 def test_an_unknown_activity_domain_is_refused():
     with pytest.raises(ConstraintError):
         normalise_time_constraint(
-            {"activityDomain": "asleep", "timeSlots": [{"start": at(MONDAY, 9), "end": at(MONDAY, 12)}]}
+            {
+                "activityDomain": "asleep",
+                "timeSlots": [{"start": at(MONDAY, 9), "end": at(MONDAY, 12)}],
+            }
         )
 
 
@@ -1269,7 +1280,7 @@ def test_an_unknown_activity_domain_is_refused():
 
 
 def test_a_google_response_is_read_into_busy_and_unreadable():
-    """"returns ``calendars[key].busy[]``" and, per calendar, ``errors[]``.
+    """ "returns ``calendars[key].busy[]``" and, per calendar, ``errors[]``.
 
     A calendar with an error is **unknown**, not free. Google reports them
     side by side, which is exactly the distinction the 49% weight exists to
@@ -1278,9 +1289,7 @@ def test_a_google_response_is_read_into_busy_and_unreadable():
     result = parse_google_free_busy(
         {
             "calendars": {
-                "a@x.example": {
-                    "busy": [{"start": at(MONDAY, 9), "end": at(MONDAY, 10)}]
-                },
+                "a@x.example": {"busy": [{"start": at(MONDAY, 9), "end": at(MONDAY, 10)}]},
                 "b@x.example": {"errors": [{"domain": "global", "reason": "notFound"}]},
                 "c@x.example": {"busy": []},
             }
@@ -1435,7 +1444,11 @@ def test_expansion_at_the_calendar_cap_is_accepted():
 
 
 def test_a_duplicate_address_is_invited_once_at_its_first_position():
-    calendars = [record("c1", "dana@x.example"), record("c2", "sam@x.example"), record("c1", "dana@x.example")]
+    calendars = [
+        record("c1", "dana@x.example"),
+        record("c2", "sam@x.example"),
+        record("c1", "dana@x.example"),
+    ]
     assert expand_invited(calendars).invited == ("c1", "c2")
 
 
@@ -1551,7 +1564,10 @@ def test_busy_blocks_are_accepted_in_the_three_shapes_an_operator_writes_them():
                 "data": {
                     "busy": [
                         {"start": at(MONDAY, 9), "end": at(MONDAY, 10)},  # Google
-                        {"start": {"dateTime": at(MONDAY, 11)}, "end": {"dateTime": at(MONDAY, 12)}},  # Graph
+                        {
+                            "start": {"dateTime": at(MONDAY, 11)},
+                            "end": {"dateTime": at(MONDAY, 12)},
+                        },  # Graph
                         [at(MONDAY, 13), at(MONDAY, 14)],  # a hand-written pair
                     ]
                 },
@@ -1624,7 +1640,7 @@ def test_the_urllib_provider_never_reaches_a_socket_in_the_suite():
 
 
 def test_the_commit_lands_on_the_organizers_calendar():
-    """"the app creates the event on the organizer's calendar"."""
+    """ "the app creates the event on the organizer's calendar"."""
     request = render_commit_request(
         provider="google",
         calendar_id="organizer@x.example",
@@ -1639,7 +1655,7 @@ def test_the_commit_lands_on_the_organizers_calendar():
 
 
 def test_a_fresh_conference_is_requested_by_default_and_omittable():
-    """"optionally creating a fresh conference" - so both readings are reachable."""
+    """ "optionally creating a fresh conference" - so both readings are reachable."""
     with_conference = render_commit_request(
         provider="google",
         calendar_id="o@x.example",
@@ -1706,7 +1722,10 @@ def test_a_commit_without_a_conference_mints_no_link():
         attendees=[],
         create_conference=False,
     )
-    assert LocalDirectory().commit(request, calendar_id="o@x.example", source=SOURCE)["conference"] is None
+    assert (
+        LocalDirectory().commit(request, calendar_id="o@x.example", source=SOURCE)["conference"]
+        is None
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1748,9 +1767,7 @@ def test_the_best_slot_is_often_not_the_earliest_one(finder, room, free_calendar
             "name": "Ordering panel",
             "organizer": free_calendar["id"],
             "calendars": [free_calendar["id"], busy_morning["id"]],
-            "time_constraint": {
-                "timeSlots": [{"start": at(MONDAY, 9), "end": at(MONDAY, 12)}]
-            },
+            "time_constraint": {"timeSlots": [{"start": at(MONDAY, 9), "end": at(MONDAY, 12)}]},
             "meeting_duration": "PT1H",
             "slot_interval": "PT1H",
         },
@@ -1849,7 +1866,9 @@ def test_a_hundred_percent_bar_with_an_unreadable_calendar_returns_nothing(
     assert "50%" in result["below_threshold"][0]["reason"]
 
 
-def test_house_rules_naming_their_refusals_reach_the_search(finder, room, free_calendar, busy_morning):
+def test_house_rules_naming_their_refusals_reach_the_search(
+    finder, room, free_calendar, busy_morning
+):
     panel = finder.create_panel(
         room["id"],
         {
@@ -1964,14 +1983,17 @@ def test_derive_empty_reason_reports_the_organizer_before_the_window():
     )
     assert reason == EMPTY_NOT_ORGANIZER
     # ...and with no organizer at all, the same.
-    assert derive_empty_reason(
-        candidates=[],
-        invited=["a"],
-        organizer_id=None,
-        suggested=[],
-        house_rule_refusals=0,
-        min_attendee_percentage=80,
-    ) == EMPTY_NOT_ORGANIZER
+    assert (
+        derive_empty_reason(
+            candidates=[],
+            invited=["a"],
+            organizer_id=None,
+            suggested=[],
+            house_rule_refusals=0,
+            min_attendee_percentage=80,
+        )
+        == EMPTY_NOT_ORGANIZER
+    )
 
 
 def test_the_organizer_is_invited_even_when_the_panel_forgets_to(
@@ -2096,9 +2118,12 @@ def test_the_toggle_removes_the_reason_from_the_search_row(finder, room, free_ca
         actor="dana",
         source=SOURCE,
     )
-    assert finder.find(
-        room["id"], panel["id"], actor="dana", source=SOURCE
-    )["request"]["body"]["returnSuggestionReasons"] is True
+    assert (
+        finder.find(room["id"], panel["id"], actor="dana", source=SOURCE)["request"]["body"][
+            "returnSuggestionReasons"
+        ]
+        is True
+    )
 
     finder.update_panel(
         room["id"], panel["id"], {"return_suggestion_reasons": False}, actor="dana", source=SOURCE
@@ -2110,7 +2135,9 @@ def test_the_toggle_removes_the_reason_from_the_search_row(finder, room, free_ca
     assert result["request"]["body"]["returnSuggestionReasons"] is False
 
 
-def test_the_alternative_ranker_is_reachable_from_the_panel(finder, room, free_calendar, silent_calendar):
+def test_the_alternative_ranker_is_reachable_from_the_panel(
+    finder, room, free_calendar, silent_calendar
+):
     panel = finder.create_panel(
         room["id"],
         {
@@ -2199,7 +2226,11 @@ def test_the_recall_writes_a_second_row_and_leaves_the_first_readable(
     panel = stuck_panel(finder, room, free_calendar, all_day_busy)
     first = finder.find(room["id"], panel["id"], actor="dana", source=SOURCE)
     second = finder.retune(
-        room["id"], first["id"], {"adjustment": "relax_min_attendee_percentage"}, actor="dana", source=SOURCE
+        room["id"],
+        first["id"],
+        {"adjustment": "relax_min_attendee_percentage"},
+        actor="dana",
+        source=SOURCE,
     )
     assert count(store, SEARCH_COLLECTION) == 2
     assert second["parent_search_id"] == first["id"]
@@ -2219,9 +2250,7 @@ def test_the_recall_defaults_to_the_first_adjustment_the_reason_suggests(
     assert second["adjustment"] == "widen_window"
 
 
-def test_widening_the_window_really_finds_a_slot(
-    finder, room, free_calendar
-):
+def test_widening_the_window_really_finds_a_slot(finder, room, free_calendar):
     """The all-day-busy attendee is busy on the Monday, so widening the window to
     the Tuesday is what actually fixes it - the demonstration that the researched
     automation is a real second call and not a relabelling."""
@@ -2237,7 +2266,11 @@ def test_widening_the_window_really_finds_a_slot(
     first = finder.find(room["id"], panel["id"], actor="dana", source=SOURCE)
     assert first["empty_suggestions_reason"] == EMPTY_NOT_ENOUGH_PEOPLE_FREE
     second = finder.retune(
-        room["id"], first["id"], {"adjustment": "widen_window", "days": 1}, actor="dana", source=SOURCE
+        room["id"],
+        first["id"],
+        {"adjustment": "widen_window", "days": 1},
+        actor="dana",
+        source=SOURCE,
     )
     assert second["suggestions"]
     assert all(s["start"].startswith(TUESDAY) for s in second["suggestions"])
@@ -2268,27 +2301,35 @@ def test_a_recall_of_an_adjustment_the_reason_does_not_suggest_is_refused(
     first = finder.find(room["id"], panel["id"], actor="dana", source=SOURCE)
     with pytest.raises(ConstraintError) as caught:
         finder.retune(
-            room["id"], first["id"], {"adjustment": "coarsen_slot_interval"}, actor="dana", source=SOURCE
+            room["id"],
+            first["id"],
+            {"adjustment": "coarsen_slot_interval"},
+            actor="dana",
+            source=SOURCE,
         )
     assert "not one of the adjustments this emptySuggestionsReason" in str(caught.value)
 
 
-def test_an_unknown_adjustment_is_refused(finder, room, free_calendar, all_day_busy):
+def test_retune_refuses_an_adjustment_the_finder_does_not_know(
+    finder, room, free_calendar, all_day_busy
+):
     panel = stuck_panel(finder, room, free_calendar, all_day_busy)
     first = finder.find(room["id"], panel["id"], actor="dana", source=SOURCE)
     with pytest.raises(ConstraintError):
         finder.retune(room["id"], first["id"], {"adjustment": "magic"}, actor="dana", source=SOURCE)
 
 
-def test_a_recall_of_a_search_that_found_something_is_still_possible(
-    finder, panel
-):
+def test_a_recall_of_a_search_that_found_something_is_still_possible(finder, panel):
     """The research says the reason is the signal to re-call; it does not say a
     search with suggestions is off limits, and widening a working search is a
     legitimate thing to want."""
     first = finder.find(panel["room_id"], panel["id"], actor="dana", source=SOURCE)
     second = finder.retune(
-        panel["room_id"], first["id"], {"adjustment": "widen_window", "days": 2}, actor="dana", source=SOURCE
+        panel["room_id"],
+        first["id"],
+        {"adjustment": "widen_window", "days": 2},
+        actor="dana",
+        source=SOURCE,
     )
     assert second["parent_search_id"] == first["id"]
     assert len(second["suggestions"]) > len(first["suggestions"])
@@ -2337,7 +2378,11 @@ def test_booking_a_slot_the_search_never_returned_is_refused(finder, panel):
     search_row = finder.find(panel["room_id"], panel["id"], actor="dana", source=SOURCE)
     with pytest.raises(SlotUnavailable) as caught:
         finder.book(
-            panel["room_id"], search_row["id"], {"start": at(MONDAY, 16, 30)}, actor="dana", source=SOURCE
+            panel["room_id"],
+            search_row["id"],
+            {"start": at(MONDAY, 16, 30)},
+            actor="dana",
+            source=SOURCE,
         )
     assert "is not one of the" in str(caught.value)
     assert "Run the search again" in str(caught.value)
@@ -2369,14 +2414,14 @@ def test_booking_re_reads_availability_and_refuses_a_now_busy_organizer(
         source=SOURCE,
     )
     with pytest.raises(SlotUnavailable) as caught:
-        finder.book(panel["room_id"], search_row["id"], {"start": chosen}, actor="dana", source=SOURCE)
+        finder.book(
+            panel["room_id"], search_row["id"], {"start": chosen}, actor="dana", source=SOURCE
+        )
     assert "organizer's calendar is now busy" in str(caught.value)
     assert "fine-tuned from time to time" in str(caught.value)
 
 
-def test_booking_refuses_a_slot_that_no_longer_clears_the_bar(
-    finder, room, free_calendar
-):
+def test_booking_refuses_a_slot_that_no_longer_clears_the_bar(finder, room, free_calendar):
     """The bar is the *search's* bar, checked against a re-read.
 
     The search is a snapshot and the commit is a decision taken later, so what is
@@ -2420,14 +2465,16 @@ def test_a_refused_booking_writes_nothing(finder, panel, store):
     search_row = finder.find(panel["room_id"], panel["id"], actor="dana", source=SOURCE)
     with pytest.raises(SlotUnavailable):
         finder.book(
-            panel["room_id"], search_row["id"], {"start": at(MONDAY, 16, 30)}, actor="dana", source=SOURCE
+            panel["room_id"],
+            search_row["id"],
+            {"start": at(MONDAY, 16, 30)},
+            actor="dana",
+            source=SOURCE,
         )
     assert count(store, BOOKING_COLLECTION) == 0
 
 
-def test_booking_a_panel_whose_organizer_calendar_is_gone_is_refused(
-    finder, room, free_calendar
-):
+def test_booking_a_panel_whose_organizer_calendar_is_gone_is_refused(finder, room, free_calendar):
     """A 404 naming the calendar, not a 422 blaming the slot.
 
     Nothing is wrong with the slot and nothing is wrong with the request; the
@@ -2464,8 +2511,11 @@ def test_the_room_scope_of_a_booking_survives_a_deleted_panel(finder, panel, sto
     and the room can say what was booked."""
     search_row = finder.find(panel["room_id"], panel["id"], actor="dana", source=SOURCE)
     booking = finder.book(
-        panel["room_id"], search_row["id"], {"start": search_row["suggestions"][0]["start"]},
-        actor="dana", source=SOURCE,
+        panel["room_id"],
+        search_row["id"],
+        {"start": search_row["suggestions"][0]["start"]},
+        actor="dana",
+        source=SOURCE,
     )
     finder.delete_panel(panel["room_id"], panel["id"], actor="dana", source=SOURCE)
     assert finder.get_booking(panel["room_id"], booking["id"])["summary"] == booking["summary"]
@@ -2498,7 +2548,9 @@ def test_a_calendar_needs_an_address_that_is_an_address(finder):
 def test_a_calendar_kind_must_be_one_the_read_understands(finder):
     assert KINDS == ("person", "room", "group")
     with pytest.raises(CalendarShapeError):
-        finder.create_calendar({"email": "a@x.example", "kind": "robot"}, actor="dana", source=SOURCE)
+        finder.create_calendar(
+            {"email": "a@x.example", "kind": "robot"}, actor="dana", source=SOURCE
+        )
 
 
 def test_a_panel_must_be_created_on_a_room_that_exists(finder, free_calendar):
@@ -2568,9 +2620,7 @@ def store_field(finder: SlotFinder, calendar_id: str) -> dict:
     return finder.store.get(calendar_id)["data"]
 
 
-def test_the_access_token_is_never_stored_and_never_echoed_back(
-    finder, room, free_calendar
-):
+def test_the_access_token_is_never_stored_and_never_echoed_back(finder, room, free_calendar):
     """The token *is* the Authorization header on every request.
 
     It is refused at the payload, not merely hidden from the summary: a panel row
@@ -2616,7 +2666,9 @@ def test_calendars_are_installation_wide_not_room_scoped(finder, room, free_cale
     assert finder.find(other_room["id"], panel["id"], actor="dana", source=SOURCE)["suggestions"]
 
 
-def test_the_search_log_filters_on_the_researched_property(finder, room, free_calendar, all_day_busy):
+def test_the_search_log_filters_on_the_researched_property(
+    finder, room, free_calendar, all_day_busy
+):
     good = finder.create_panel(
         room["id"],
         {
@@ -2655,19 +2707,34 @@ def test_the_bookings_list_filters_by_panel(finder, room, free_calendar, all_day
     )
     search_row = finder.find(room["id"], good["id"], actor="dana", source=SOURCE)
     finder.book(
-        room["id"], search_row["id"], {"start": search_row["suggestions"][0]["start"]},
-        actor="dana", source=SOURCE,
+        room["id"],
+        search_row["id"],
+        {"start": search_row["suggestions"][0]["start"]},
+        actor="dana",
+        source=SOURCE,
     )
     assert len(finder.list_bookings(room["id"])) == 1
     assert len(finder.list_bookings(room["id"], panel_id=good["id"])) == 1
-    assert len(finder.list_bookings(room["id"], panel_id=stuck_panel(finder, room, free_calendar, all_day_busy)["id"])) == 0
+    assert (
+        len(
+            finder.list_bookings(
+                room["id"], panel_id=stuck_panel(finder, room, free_calendar, all_day_busy)["id"]
+            )
+        )
+        == 0
+    )
 
 
-def test_the_four_collections_are_the_four_researched_things(finder, room, panel, free_calendar, store):
+def test_the_four_collections_are_the_four_researched_things(
+    finder, room, panel, free_calendar, store
+):
     search_row = finder.find(room["id"], panel["id"], actor="dana", source=SOURCE)
     finder.book(
-        room["id"], search_row["id"], {"start": search_row["suggestions"][0]["start"]},
-        actor="dana", source=SOURCE,
+        room["id"],
+        search_row["id"],
+        {"start": search_row["suggestions"][0]["start"]},
+        actor="dana",
+        source=SOURCE,
     )
     assert count(store, CALENDAR_COLLECTION) == 1
     assert count(store, PANEL_COLLECTION) == 1
@@ -2681,9 +2748,7 @@ def test_the_four_collections_are_the_four_researched_things(finder, room, panel
     }
 
 
-def test_a_time_zone_that_cannot_be_resolved_is_reported_on_the_search(
-    finder, room, free_calendar
-):
+def test_a_time_zone_that_cannot_be_resolved_is_reported_on_the_search(finder, room, free_calendar):
     panel = finder.create_panel(
         room["id"],
         {
@@ -2728,7 +2793,11 @@ def test_the_graph_shaped_result_names_the_empty_reason_when_there_is_none(
 
 def test_the_graph_shaped_result_omits_the_reason_when_the_toggle_is_off(finder, panel):
     finder.update_panel(
-        panel["room_id"], panel["id"], {"return_suggestion_reasons": False}, actor="dana", source=SOURCE
+        panel["room_id"],
+        panel["id"],
+        {"return_suggestion_reasons": False},
+        actor="dana",
+        source=SOURCE,
     )
     result = finder.find(panel["room_id"], panel["id"], actor="dana", source=SOURCE)
     assert "suggestionReason" not in result["graph_result"]["meetingTimeSuggestions"][0]
@@ -2763,9 +2832,7 @@ def test_a_provider_the_engine_does_not_have_is_refused_at_declaration(finder, r
     assert "provider must be one of" in str(caught.value)
 
 
-def test_a_panel_on_the_urllib_provider_with_no_token_is_428_at_search(
-    finder, room, free_calendar
-):
+def test_a_panel_on_the_urllib_provider_with_no_token_is_428_at_search(finder, room, free_calendar):
     """Well formed, but this installation cannot answer it yet - so 428, and the
     message names the least-privileged scope the read needs."""
     panel = finder.create_panel(
@@ -2787,9 +2854,7 @@ def test_a_panel_on_the_urllib_provider_with_no_token_is_428_at_search(
     assert GOOGLE_FREEBUSY_SCOPE in str(caught.value)
 
 
-def test_the_provider_factory_is_the_seam_a_deployment_replaces(
-    finder, room, free_calendar
-):
+def test_the_provider_factory_is_the_seam_a_deployment_replaces(finder, room, free_calendar):
     """The panel's ``provider`` picks the transport and ``calendar_provider`` picks
     the dialect, and both reach the adapter.
 
@@ -2846,9 +2911,7 @@ def test_the_provider_factory_is_the_seam_a_deployment_replaces(
     assert "ya29" not in repr(audit)
 
 
-def test_a_recall_off_a_search_that_found_something_offers_widen_not_relax(
-    finder, panel
-):
+def test_a_recall_off_a_search_that_found_something_offers_widen_not_relax(finder, panel):
     """A working search is not an empty one, so ``relax_min_attendee_percentage``
     is not offered for it - which is the refusal a caller meets when they name it
     anyway."""
@@ -2898,7 +2961,9 @@ def test_no_domain_method_hardcodes_the_path_it_records_as_its_source():
         assert "/api/wf" not in source, f"{module.__name__} knows the HTTP route"
 
 
-def test_a_calendar_can_be_soft_deleted_and_its_searches_stay(finder, room, panel, free_calendar, store):
+def test_a_calendar_can_be_soft_deleted_and_its_searches_stay(
+    finder, room, panel, free_calendar, store
+):
     search_row = finder.find(room["id"], panel["id"], actor="dana", source=SOURCE)
     finder.delete_calendar(free_calendar["id"], actor="dana", source=SOURCE)
     with pytest.raises(NotFound):
@@ -2948,9 +3013,7 @@ def http_panel(http, http_room, http_calendar):
             "name": "Northwind Q4 panel",
             "organizer": http_calendar["id"],
             "calendars": [http_calendar["id"]],
-            "time_constraint": {
-                "timeSlots": [{"start": at(MONDAY, 9), "end": at(MONDAY, 17)}]
-            },
+            "time_constraint": {"timeSlots": [{"start": at(MONDAY, 9), "end": at(MONDAY, 17)}]},
             "meeting_duration": "PT1H",
             "slot_interval": "PT1H",
         },
@@ -3027,9 +3090,10 @@ def test_the_calendar_crud_over_http(http):
     calendar_id = created.json()["id"]
     assert http.get(f"{PREFIX}/calendars").json()["by_kind"] == {"room": 1}
     assert http.get(f"{PREFIX}/calendars/{calendar_id}").json()["kind"] == "room"
-    assert http.patch(
-        f"{PREFIX}/calendars/{calendar_id}", json={"readable": False}
-    ).json()["readable"] is False
+    assert (
+        http.patch(f"{PREFIX}/calendars/{calendar_id}", json={"readable": False}).json()["readable"]
+        is False
+    )
     assert http.delete(f"{PREFIX}/calendars/{calendar_id}").status_code == 204
     assert http.get(f"{PREFIX}/calendars/{calendar_id}").status_code == 404
 
@@ -3037,9 +3101,10 @@ def test_the_calendar_crud_over_http(http):
 def test_a_calendar_that_cannot_be_created_is_a_400(http):
     assert http.post(f"{PREFIX}/calendars", json={}).status_code == 400
     assert http.post(f"{PREFIX}/calendars", json={"email": "nope"}).status_code == 400
-    assert http.post(
-        f"{PREFIX}/calendars", json={"email": "a@x.example", "kind": "robot"}
-    ).status_code == 400
+    assert (
+        http.post(f"{PREFIX}/calendars", json={"email": "a@x.example", "kind": "robot"}).status_code
+        == 400
+    )
 
 
 def test_a_calendar_with_a_malformed_busy_block_is_a_400(http):
@@ -3066,9 +3131,12 @@ def test_the_panel_crud_over_http(http, http_room, http_calendar):
     base = f"{PREFIX}/rooms/{http_room['id']}/panels"
     assert http.get(base).json()["count"] == 1
     assert http.get(f"{base}/{panel_id}").json()["name"] == "Second panel"
-    assert http.patch(f"{base}/{panel_id}", json={"min_attendee_percentage": 60}).json()[
-        "min_attendee_percentage"
-    ] == 60
+    assert (
+        http.patch(f"{base}/{panel_id}", json={"min_attendee_percentage": 60}).json()[
+            "min_attendee_percentage"
+        ]
+        == 60
+    )
     assert http.delete(f"{base}/{panel_id}").status_code == 204
     assert http.get(f"{base}/{panel_id}").status_code == 404
 
@@ -3102,12 +3170,10 @@ def test_a_panel_with_an_unknown_location_type_is_a_400(http, http_room):
         },
     )
     assert response.status_code == 400
-    assert "a room, or \"suggest a location\"" in response.json()["detail"]
+    assert 'a room, or "suggest a location"' in response.json()["detail"]
 
 
-def test_the_preview_over_http_writes_nothing_and_returns_the_request(
-    http, http_room, http_panel
-):
+def test_the_preview_over_http_writes_nothing_and_returns_the_request(http, http_room, http_panel):
     before = http.get("/api/stats").json()["records"]
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/panels/{http_panel['id']}/preview", json={}
@@ -3132,9 +3198,7 @@ def test_the_preview_moves_with_the_controls(http, http_room, http_panel):
     assert all("suggestion_reason" not in s for s in off["suggestions"])
 
 
-def test_the_preview_moves_the_graph_request_body_with_the_controls(
-    http, http_room, http_calendar
-):
+def test_the_preview_moves_the_graph_request_body_with_the_controls(http, http_room, http_calendar):
     """On the Graph dialect every researched parameter lands in the rendered body,
     so a rep can check the request against the documentation."""
     panel = http.post(
@@ -3170,9 +3234,7 @@ def test_the_preview_ignores_a_provider_smuggled_in_through_the_override_channel
     assert "ya29" not in response.text
 
 
-def test_the_find_over_http_writes_one_row_and_carries_the_user_flow(
-    http, http_room, http_panel
-):
+def test_the_find_over_http_writes_one_row_and_carries_the_user_flow(http, http_room, http_panel):
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/panels/{http_panel['id']}/find",
         json={},
@@ -3209,7 +3271,9 @@ def test_an_empty_search_is_a_200_with_the_researched_property(http, http_room):
         },
     ).json()
     response = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/panels/{panel['id']}/find", json={}, params={"actor": "dana"}
+        f"{PREFIX}/rooms/{http_room['id']}/panels/{panel['id']}/find",
+        json={},
+        params={"actor": "dana"},
     )
     assert response.status_code == 200, "an empty result is a state, not a refusal"
     body = response.json()
@@ -3277,9 +3341,7 @@ def test_the_recall_over_http_writes_a_second_row(http, http_room):
     assert http.get(f"{base}/searches/{first['id']}").json()["min_attendee_percentage"] == 80
 
 
-def test_a_recall_with_an_adjustment_the_reason_does_not_suggest_is_a_400(
-    http, http_room
-):
+def test_a_recall_with_an_adjustment_the_reason_does_not_suggest_is_a_400(http, http_room):
     """The refused adjustment is a real one, offered for a *different* reason.
 
     ``relax_min_attendee_percentage`` is a legitimate re-call - just not for a
@@ -3312,19 +3374,20 @@ def test_a_recall_with_an_adjustment_the_reason_does_not_suggest_is_a_400(
     offered = [a["id"] for a in found["suggested_adjustments"]]
     assert "extend_working_window" in offered
     response = http.post(
-        f"{base}/searches/{found['id']}/retune", json={"adjustment": "relax_min_attendee_percentage"}
+        f"{base}/searches/{found['id']}/retune",
+        json={"adjustment": "relax_min_attendee_percentage"},
     )
     assert response.status_code == 400
     assert "not one of the adjustments this emptySuggestionsReason" in response.json()["detail"]
 
 
-def test_a_recall_of_a_search_that_found_something_says_so_over_http(
-    http, http_room, http_panel
-):
+def test_a_recall_of_a_search_that_found_something_says_so_over_http(http, http_room, http_panel):
     """There is no reason to follow, and the message says exactly that - rather
     than pretending the search came back empty."""
     base = f"{PREFIX}/rooms/{http_room['id']}"
-    found = http.post(f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}).json()
+    found = http.post(
+        f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}
+    ).json()
     assert found["suggestions"]
     response = http.post(
         f"{base}/searches/{found['id']}/retune", json={"adjustment": "coarsen_slot_interval"}
@@ -3332,9 +3395,7 @@ def test_a_recall_of_a_search_that_found_something_says_so_over_http(
     assert response.status_code == 400
     assert "returned suggestions, so it has no emptySuggestionsReason" in response.json()["detail"]
     # ...and widening still works on a working search.
-    widened = http.post(
-        f"{base}/searches/{found['id']}/retune", json={}, params={"actor": "dana"}
-    )
+    widened = http.post(f"{base}/searches/{found['id']}/retune", json={}, params={"actor": "dana"})
     assert widened.status_code == 200
     assert widened.json()["adjustment"] == "widen_window"
 
@@ -3347,7 +3408,9 @@ def test_a_search_that_does_not_exist_is_a_404(http, http_room):
 
 def test_the_booking_over_http_creates_the_event_and_reads_it_back(http, http_room, http_panel):
     base = f"{PREFIX}/rooms/{http_room['id']}"
-    found = http.post(f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}).json()
+    found = http.post(
+        f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}
+    ).json()
     booked = http.post(
         f"{base}/searches/{found['id']}/book",
         json={"start": found["suggestions"][0]["start"], "summary": "Northwind Q4"},
@@ -3367,17 +3430,19 @@ def test_booking_a_slot_the_search_never_returned_is_a_422(http, http_room, http
     client that reported this as a bad request would tell a rep to fix their
     input when the thing to do is run the search again."""
     base = f"{PREFIX}/rooms/{http_room['id']}"
-    found = http.post(f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}).json()
-    response = http.post(
-        f"{base}/searches/{found['id']}/book", json={"start": at(MONDAY, 16, 30)}
-    )
+    found = http.post(
+        f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}
+    ).json()
+    response = http.post(f"{base}/searches/{found['id']}/book", json={"start": at(MONDAY, 16, 30)})
     assert response.status_code == 422
     assert response.json()["error"] == "slot_unavailable"
 
 
 def test_booking_without_a_start_is_a_400(http, http_room, http_panel):
     base = f"{PREFIX}/rooms/{http_room['id']}"
-    found = http.post(f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}).json()
+    found = http.post(
+        f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}
+    ).json()
     response = http.post(f"{base}/searches/{found['id']}/book", json={})
     assert response.status_code == 400
     assert response.json()["error"] == "panel_time_error"
@@ -3437,7 +3502,7 @@ def test_a_cap_over_its_documented_maximum_is_refused_at_declaration(
     assert "documented maximum is 100" in groups.json()["detail"]
 
 
-def test_a_cap_at_its_documented_maximum_is_accepted(http, http_room, http_calendar):
+def test_the_panel_endpoint_accepts_a_cap_at_its_documented_maximum(http, http_room, http_calendar):
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/panels",
         json={
@@ -3452,9 +3517,7 @@ def test_a_cap_at_its_documented_maximum_is_accepted(http, http_room, http_calen
     assert response.status_code == 201
     body = response.json()
     assert body["calendar_count"] == 1
-    preview = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/panels/{body['id']}/preview", json={}
-    )
+    preview = http.post(f"{PREFIX}/rooms/{http_room['id']}/panels/{body['id']}/preview", json={})
     assert preview.json()["request"]["body"]["calendarExpansionMax"] == 50
     assert preview.json()["request"]["body"]["groupExpansionMax"] == 100
 
@@ -3501,7 +3564,10 @@ def test_a_refused_write_leaves_no_audit_row(http, http_room):
     assert (
         http.post(
             f"{PREFIX}/rooms/{http_room['id']}/panels",
-            json={"name": "x", "time_constraint": {"timeSlots": [{"start": at(MONDAY, 10), "end": at(MONDAY, 9)}]}},
+            json={
+                "name": "x",
+                "time_constraint": {"timeSlots": [{"start": at(MONDAY, 10), "end": at(MONDAY, 9)}]},
+            },
         ).status_code
         == 400
     )
@@ -3521,7 +3587,9 @@ def test_a_refused_write_leaves_no_audit_row(http, http_room):
 
 def test_no_audit_source_names_another_features_prefix(http, http_room, http_panel):
     base = f"{PREFIX}/rooms/{http_room['id']}"
-    found = http.post(f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}).json()
+    found = http.post(
+        f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}
+    ).json()
     http.post(
         f"{base}/searches/{found['id']}/book",
         json={"start": found["suggestions"][0]["start"]},
@@ -3545,10 +3613,12 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted(
         json={"start": found["suggestions"][0]["start"]},
         params={"actor": "dana"},
     )
-    http.post(
-        f"{base}/searches/{found['id']}/retune", json={}, params={"actor": "dana"}
+    http.post(f"{base}/searches/{found['id']}/retune", json={}, params={"actor": "dana"})
+    http.patch(
+        f"{PREFIX}/calendars/{http_calendar['id']}",
+        json={"name": "Dana S"},
+        params={"actor": "dana"},
     )
-    http.patch(f"{PREFIX}/calendars/{http_calendar['id']}", json={"name": "Dana S"}, params={"actor": "dana"})
     http.delete(f"{PREFIX}/calendars/{http_calendar['id']}", params={"actor": "dana"})
 
     entries = http.get("/api/audit", params={"limit": 400}).json()["entries"]
@@ -3585,12 +3655,12 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted(
         ), f"audit names a route the app does not serve: {entry['source']}"
 
 
-def test_the_booking_row_is_audited_with_the_booking_route(
-    http, http_room, http_panel
-):
+def test_the_booking_row_is_audited_with_the_booking_route(http, http_room, http_panel):
     """It is a write, and an audit row that cannot name its request is not one."""
     base = f"{PREFIX}/rooms/{http_room['id']}"
-    found = http.post(f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}).json()
+    found = http.post(
+        f"{base}/panels/{http_panel['id']}/find", json={}, params={"actor": "dana"}
+    ).json()
     http.post(
         f"{base}/searches/{found['id']}/book",
         json={"start": found["suggestions"][0]["start"]},
@@ -3648,9 +3718,9 @@ def test_the_seed_produces_the_states_the_research_makes_unavoidable(store):
     assert ranked
     # The happy path's best slot is not its earliest one: the researched sort
     # working, observable in the demo data.
-    assert any(
-        s["suggestions"][0]["confidence"] < 100 for s in ranked
-    ), "no slot below 100% confidence in the demo - the 49% case is missing"
+    assert any(s["suggestions"][0]["confidence"] < 100 for s in ranked), (
+        "no slot below 100% confidence in the demo - the 49% case is missing"
+    )
 
     retunes = [s for s in searches if s.get("parent_search_id")]
     assert retunes, "the documented re-call is not exercised by the demo"
@@ -3665,11 +3735,7 @@ def test_the_seed_shows_group_expansion_in_both_directions(store):
     searches = [s for room in rooms for s in finder.list_searches(room["id"], limit=200)]
     expanded = [s for s in searches if s["expansion"].get("groups_expanded")]
     assert expanded, "no group was expanded in the demo"
-    unexpanded = [
-        entry
-        for s in searches
-        for entry in s["expansion"].get("groups_unexpanded", [])
-    ]
+    unexpanded = [entry for s in searches for entry in s["expansion"].get("groups_unexpanded", [])]
     assert unexpanded, "no group failed to expand - the missing-member case is not shown"
     assert any(entry["missing"] for entry in unexpanded)
 
@@ -3681,9 +3747,7 @@ def test_the_seed_shows_an_unreadable_calendar_at_forty_nine_percent(store):
     finder = SlotFinder(store)
     searches = [s for room in rooms for s in finder.list_searches(room["id"], limit=200)]
     assert any(s["counts"].get("unreadable") for s in searches)
-    confidences = {
-        slot["confidence"] for s in searches for slot in s["suggestions"]
-    }
+    confidences = {slot["confidence"] for s in searches for slot in s["suggestions"]}
     assert any(0 < c < 100 for c in confidences), "no partly-confident slot in the demo"
 
 
@@ -3736,9 +3800,14 @@ def test_the_seed_is_idempotent_in_what_it_produces(store):
 
 
 def test_the_frontend_descriptor_exists_and_is_well_formed():
-    index = Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / (
-        "wf-057-find-a-time-that-works-for-a-multi-per"
-    ) / "index.jsx"
+    index = (
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "features"
+        / ("wf-057-find-a-time-that-works-for-a-multi-per")
+        / "index.jsx"
+    )
     assert index.is_file()
     text = index.read_text(encoding="utf-8")
     assert "id: 'wf-057-find-a-time-that-works-for-a-multi-per'" in text
@@ -3748,8 +3817,12 @@ def test_the_frontend_descriptor_exists_and_is_well_formed():
 
 
 def test_the_frontend_imports_through_the_alias_not_a_relative_path():
-    folder = Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / (
-        "wf-057-find-a-time-that-works-for-a-multi-per"
+    folder = (
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "features"
+        / ("wf-057-find-a-time-that-works-for-a-multi-per")
     )
     for path in folder.glob("*.jsx"):
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -3770,12 +3843,14 @@ def test_the_frontend_meets_the_design_floor():
     system's own numbers live in
     ``design-system/digital-sales-room/MASTER.md``.
     """
-    folder = Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / (
-        "wf-057-find-a-time-that-works-for-a-multi-per"
+    folder = (
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "features"
+        / ("wf-057-find-a-time-that-works-for-a-multi-per")
     )
-    emoji = re.compile(
-        "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]"
-    )
+    emoji = re.compile("[\U0001f300-\U0001faff\U00002600-\U000027bf\U0001f1e6-\U0001f1ff]")
     for path in folder.glob("*.jsx"):
         text = path.read_text(encoding="utf-8")
         offenders = emoji.findall(text)

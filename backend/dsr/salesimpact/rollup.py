@@ -43,7 +43,6 @@ from typing import Any, Iterable, Mapping, Sequence
 from dsr.salesimpact.deals import view_deal
 from dsr.salesimpact.filters import ReportFilter, bucket_key, date_range
 from dsr.salesimpact.vocabulary import (
-    FIELD_SYNONYMS,
     VIEW_ACTIONS,
     as_number,
     as_text,
@@ -121,7 +120,9 @@ def days_between(start: date | None, end: date | None) -> float | None:
 # --------------------------------------------------------------------------- #
 
 
-def project_deal(record: Mapping[str, Any], *, stage_sets: Mapping[str, Sequence[str]] | None = None) -> dict[str, Any]:
+def project_deal(
+    record: Mapping[str, Any], *, stage_sets: Mapping[str, Sequence[str]] | None = None
+) -> dict[str, Any]:
     """One deal as the rollup needs it: raw values, no derived cache.
 
     Accepts **either** shape - a stored record, which is enveloped and carries its payload
@@ -239,7 +240,9 @@ def population(
     excluded: list[dict[str, Any]] = []
     for room in sorted(rooms, key=lambda entry: str(entry.get("id") or "")):
         room_id = str(room.get("id") or "")
-        attached = sorted(deals_by_room.get(room_id, []), key=lambda entry: str(entry.get("id") or ""))
+        attached = sorted(
+            deals_by_room.get(room_id, []), key=lambda entry: str(entry.get("id") or "")
+        )
         is_sales = is_sales_type(room.get("type"), sales_type=sales_type)
         if not is_sales:
             excluded.append(
@@ -267,9 +270,7 @@ def population(
     return {
         "included": included,
         "excluded": sorted(excluded, key=lambda entry: (entry["reason"], entry["room_id"])),
-        "deals_not_attached": sorted(
-            unattached, key=lambda entry: str(entry.get("id") or "")
-        ),
+        "deals_not_attached": sorted(unattached, key=lambda entry: str(entry.get("id") or "")),
         "rooms_total": len(rooms),
         "sales_typed_rooms": sum(
             1 for room in rooms if is_sales_type(room.get("type"), sales_type=sales_type)
@@ -320,9 +321,10 @@ def money_by_currency(
     out: dict[str, dict[str, float]] = {}
     for deal in deals:
         stage_class = deal.get("stage_class", "unknown")
-        if wanted is not None and (
-            stage_class if stage_class in ("won", "lost") else "open"
-        ) not in wanted:
+        if (
+            wanted is not None
+            and (stage_class if stage_class in ("won", "lost") else "open") not in wanted
+        ):
             continue
         code = (normalise(deal.get("currency")) or (currency or "usd")).upper()
         bucket = out.setdefault(
@@ -336,7 +338,10 @@ def money_by_currency(
             bucket["active_pipeline"] += amount
         elif stage_class == "won":
             bucket["revenue"] += amount
-    return {code: {key: round(value, 2) for key, value in bucket.items()} for code, bucket in sorted(out.items())}
+    return {
+        code: {key: round(value, 2) for key, value in bucket.items()}
+        for code, bucket in sorted(out.items())
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -344,7 +349,9 @@ def money_by_currency(
 # --------------------------------------------------------------------------- #
 
 
-def classify_deal(deal: Mapping[str, Any], *, stage_sets: Mapping[str, Sequence[str]] | None = None) -> dict[str, Any]:
+def classify_deal(
+    deal: Mapping[str, Any], *, stage_sets: Mapping[str, Sequence[str]] | None = None
+) -> dict[str, Any]:
     """A projected deal with its stage classification and resolved owner attached.
 
     The owner falls back to the workspace's owner, and ``owner_source`` records which of
@@ -604,7 +611,13 @@ def engagement(
     for event in in_range:
         row = buyers.setdefault(
             event["buyer"],
-            {"buyer": event["buyer"], "views": 0, "actions": 0, "workspaces": set(), "last_view_at": None},
+            {
+                "buyer": event["buyer"],
+                "views": 0,
+                "actions": 0,
+                "workspaces": set(),
+                "last_view_at": None,
+            },
         )
         row["actions"] += 1
         if event["room_id"]:
@@ -612,10 +625,16 @@ def engagement(
         if event["is_view"]:
             row["views"] += 1
             occurred = event["occurred"]
-            if occurred is not None and (row["last_view_at"] is None or occurred > row["last_view_at"]):
+            if occurred is not None and (
+                row["last_view_at"] is None or occurred > row["last_view_at"]
+            ):
                 row["last_view_at"] = occurred
-        if occurred_key := (bucket_key(event["occurred"], report_filter.bucket) if event["occurred"] else None):
-            slot = per_bucket.setdefault(occurred_key, {"date": occurred_key, "views": 0, "actions": 0})
+        if occurred_key := (
+            bucket_key(event["occurred"], report_filter.bucket) if event["occurred"] else None
+        ):
+            slot = per_bucket.setdefault(
+                occurred_key, {"date": occurred_key, "views": 0, "actions": 0}
+            )
             slot["actions"] += 1
             if event["is_view"]:
                 slot["views"] += 1
@@ -743,7 +762,9 @@ def coverage(
         "without_deal": len(without_deal),
         "untyped_rooms": len(untyped),
         "deals_not_attached": len(scope.get("deals_not_attached") or []),
-        "complete": bool(crm_connected) and not without_deal and not (scope.get("deals_not_attached") or []),
+        "complete": bool(crm_connected)
+        and not without_deal
+        and not (scope.get("deals_not_attached") or []),
         "rooms_without_deal": [
             {"room_id": row["room_id"], "name": row["name"]} for row in without_deal
         ],
@@ -840,9 +861,7 @@ def report(
     money = money_by_currency(classified, currency=currency)
     in_scope_ids = {str(room["id"]) for room in in_scope_rooms}
     scoped_events = [
-        event
-        for event in events
-        if event.get("room_id") and str(event["room_id"]) in in_scope_ids
+        event for event in events if event.get("room_id") and str(event["room_id"]) in in_scope_ids
     ]
 
     coverage_block = coverage(scope, crm_connected=crm_connected, provider=provider)
@@ -879,12 +898,16 @@ def report(
             "excluded": scope["excluded"],
         },
         "funnel": funnel(classified),
-        "deals_created_over_time": deals_created_over_time(classified, report_filter, currency=currency),
+        "deals_created_over_time": deals_created_over_time(
+            classified, report_filter, currency=currency
+        ),
         "deals_by_owner": deals_by_owner(classified),
         "engagement": engagement(scoped_events, report_filter, in_scope_rooms=len(in_scope_rooms)),
         "coverage": coverage_block,
         "warnings": coverage_block["warnings"],
-        "data_warnings": sorted(data_warnings, key=lambda row: (row["code"], str(row.get("deal_id") or ""))),
+        "data_warnings": sorted(
+            data_warnings, key=lambda row: (row["code"], str(row.get("deal_id") or ""))
+        ),
     }
 
 
@@ -949,7 +972,9 @@ def room_report(
     scope = population(rooms, deals, stage_sets=stage_sets)
     room_id = str(room.get("id") or "")
     entry = next((item for item in scope["included"] if str(item["id"]) == room_id), None)
-    excluded = next((entry_row for entry_row in scope["excluded"] if entry_row["room_id"] == room_id), None)
+    excluded = next(
+        (entry_row for entry_row in scope["excluded"] if entry_row["room_id"] == room_id), None
+    )
 
     rows: list[dict[str, Any]] = []
     if entry is not None:
@@ -969,9 +994,7 @@ def room_report(
 
     currency = choose_currency(rows)
     scoped_events = [
-        event
-        for event in events
-        if event.get("room_id") and str(event["room_id"]) == room_id
+        event for event in events if event.get("room_id") and str(event["room_id"]) == room_id
     ]
     engagement_block = engagement(scoped_events, report_filter, in_scope_rooms=1 if entry else 0)
     engagement_block.pop("buyer_views_over_time", None)

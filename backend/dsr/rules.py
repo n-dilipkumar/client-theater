@@ -87,6 +87,7 @@ RULE_FORBIDDEN_BLOCK_TYPES: frozenset[str] = frozenset(
     {"accept", "accept_block", "acceptance", "acceptance_block"}
 )
 
+
 class RuleError(ValueError):
     """Raised when a rule cannot be accepted. Carries a machine-readable field."""
 
@@ -243,9 +244,7 @@ def validate_rule(
 
     # S10. Checked before the conditions so the message names the real problem.
     if raw_conditions and not block_accepts_rules(block):
-        raise RuleError(
-            "an Accept Block cannot have rules; every other block type can"
-        )
+        raise RuleError("an Accept Block cannot have rules; every other block type can")
 
     conditions: list[dict[str, Any]] = []
     for position, condition in enumerate(raw_conditions):
@@ -315,9 +314,7 @@ def is_incomplete(condition: Mapping[str, Any]) -> bool:
 # --------------------------------------------------------------------------- #
 
 
-def _match_text(
-    modifier: str, observed: Any, expected: Any, case_sensitive: bool
-) -> bool:
+def _match_text(modifier: str, observed: Any, expected: Any, case_sensitive: bool) -> bool:
     matcher = TEXT_MATCHERS[modifier]
     return matcher(_fold(observed, case_sensitive), _fold(expected, case_sensitive), case_sensitive)
 
@@ -386,11 +383,21 @@ def evaluate_condition(
             "is_less_than": left < right,
         }
         matched = comparisons[modifier]
-        return {**result, "status": "matched" if matched else "unmatched", "observed": observed, "matched": matched}
+        return {
+            **result,
+            "status": "matched" if matched else "unmatched",
+            "observed": observed,
+            "matched": matched,
+        }
 
     case_sensitive = bool(condition.get("case_sensitive", False))  # D1
     matched = _match_text(modifier, observed, expected, case_sensitive)
-    return {**result, "status": "matched" if matched else "unmatched", "observed": observed, "matched": matched}
+    return {
+        **result,
+        "status": "matched" if matched else "unmatched",
+        "observed": observed,
+        "matched": matched,
+    }
 
 
 def evaluate_rule(
@@ -471,7 +478,9 @@ def personalise_blocks(
         {
             "block_id": block.get("id"),
             "title": (block.get("data") or {}).get("title") if isinstance(block, Mapping) else None,
-            **evaluate_block((block.get("data") or {}) if isinstance(block, Mapping) else {}, variables),
+            **evaluate_block(
+                (block.get("data") or {}) if isinstance(block, Mapping) else {}, variables
+            ),
         }
         for block in blocks
     ]

@@ -97,8 +97,8 @@ from dsr.partial_failures.retry import (
     disposition_for,
     is_retryable,
     next_attempt_at,
+    plan as retry_plan,
 )
-from dsr.partial_failures.retry import plan as retry_plan
 from dsr.partial_failures.rules import (
     DEFAULT_RULES,
     ROUTING_RULE_KEYS,
@@ -138,9 +138,9 @@ from dsr.partial_failures.vocabulary import (
     CONNECTOR_QUOTES,
     CONNECTORS,
     CORRELATION,
-    DISPOSITIONS,
     DISPOSITION_LABELS,
     DISPOSITION_MEANING,
+    DISPOSITIONS,
     DOC_LINK_SOURCE,
     ERROR_MODEL_KEYS,
     ERROR_MODEL_SPELLING,
@@ -152,9 +152,9 @@ from dsr.partial_failures.vocabulary import (
     ROW_COLLECTION,
     ROW_STATUS_LABELS,
     ROW_STATUSES,
-    RUN_COLLECTION,
     RULES_COLLECTION,
     RULES_RECORD_ID,
+    RUN_COLLECTION,
     require_connector,
     vocabulary,
 )

@@ -475,9 +475,7 @@ class SubscriptionBook:
         if "active" in patch:
             # The webhook's live count has to follow a pause, or it would keep
             # reporting a subscription that is off the delivery path.
-            self._count_subscriptions(
-                str(data.get("webhook_id") or ""), actor=actor, source=source
-            )
+            self._count_subscriptions(str(data.get("webhook_id") or ""), actor=actor, source=source)
         return updated
 
     def unsubscribe(
@@ -490,7 +488,9 @@ class SubscriptionBook:
         """
         record = self.require(subscription_id)
         result = self.store.delete(subscription_id, actor=actor, source=source)
-        self._count_subscriptions(str(record["data"].get("webhook_id") or ""), actor=actor, source=source)
+        self._count_subscriptions(
+            str(record["data"].get("webhook_id") or ""), actor=actor, source=source
+        )
         return result
 
     def record_outcome(
@@ -535,9 +535,7 @@ class SubscriptionBook:
 
     # -- internals ---------------------------------------------------------- #
 
-    def _count_subscriptions(
-        self, webhook_id: str, *, actor: str | None, source: str
-    ) -> None:
+    def _count_subscriptions(self, webhook_id: str, *, actor: str | None, source: str) -> None:
         if not webhook_id:
             return
         webhook = self.endpoints.get(webhook_id)

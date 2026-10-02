@@ -117,7 +117,9 @@ def normalise(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     elif isinstance(raw_sections, Iterable):
         sections = [require_section(part) for part in raw_sections]
     else:
-        raise HeadlessBookingError("sections must be a list of section names, or a comma-separated string")
+        raise HeadlessBookingError(
+            "sections must be a list of section names, or a comma-separated string"
+        )
     if not sections:
         sections = list(SECTIONS)
     # Order is normalised so two callers naming the same scope in a different
@@ -129,7 +131,9 @@ def normalise(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     if raw_permissions in (None, ""):
         permissions = list(PERMISSIONS)
     elif isinstance(raw_permissions, str):
-        permissions = [require_permission(part) for part in raw_permissions.split(",") if part.strip()]
+        permissions = [
+            require_permission(part) for part in raw_permissions.split(",") if part.strip()
+        ]
     elif isinstance(raw_permissions, Iterable):
         permissions = [require_permission(part) for part in raw_permissions]
     else:
@@ -192,7 +196,11 @@ def scope_of(spec: Mapping[str, Any], section: str) -> tuple[str, ...]:
     if wanted not in list(spec.get("sections") or []):
         return ()
     granted = set(spec.get("permissions") or [])
-    return tuple(permission for permission in SECTION_PERMISSIONS.get(wanted, PERMISSIONS) if permission in granted)
+    return tuple(
+        permission
+        for permission in SECTION_PERMISSIONS.get(wanted, PERMISSIONS)
+        if permission in granted
+    )
 
 
 def require_scope(spec: Mapping[str, Any], section: str, permission: str) -> str:

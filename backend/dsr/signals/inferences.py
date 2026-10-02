@@ -57,11 +57,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "which attribution value decides the receiving seller when a signal carries several",
         "topic_note": "the largest inference in the package",
         "basis": (
-            "The research says \"Salesloft will use the attribution value to derive the "
-            "appropriate Salesloft user to receive the signal\" and names five values, but "
+            'The research says "Salesloft will use the attribution value to derive the '
+            'appropriate Salesloft user to receive the signal" and names five values, but '
             "publishes no order across them. Section 13 of the same research file, which is a "
             "different workflow and is NOT implemented here, states the assignment precedence "
-            "as \"User, Content, Person, Account\". That is the only sourced order this product "
+            'as "User, Content, Person, Account". That is the only sourced order this product '
             "has, so it is followed rather than replaced with an invented one."
         ),
         "value": {
@@ -128,7 +128,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "default-broadcast",
         "topic": "whether a signal reaches the Live Feed when neither it nor its registration says",
         "basis": (
-            "The research says broadcast_notification \"controls Live Feed display\" on both the "
+            'The research says broadcast_notification "controls Live Feed display" on both the '
             "registration and the signal, and states no default."
         ),
         "value": {"default": True},
@@ -144,9 +144,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "locale-fallback-chain",
         "topic": "which locale a description renders in when the requested one is absent",
-        "basis": (
-            "The research requires a localized description and gives no fallback rule."
-        ),
+        "basis": ("The research requires a localized description and gives no fallback rule."),
         "value": {
             "chain": ["the exact tag", "the bare language", "en", "the first locale declared"],
             "always_reported": "locale_resolved and locale_fallback travel on every render",
@@ -164,7 +162,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "how an indicator's bound is read out of its key",
         "basis": (
             "The research contrasts spent_more_than_30s_on_site with time_spent_on_site and "
-            "concludes \"Indicators should be very specific\", but publishes no grammar for "
+            'concludes "Indicators should be very specific", but publishes no grammar for '
             "encoding a bound."
         ),
         "value": {
@@ -194,9 +192,9 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "emission-requires-an-indicator",
         "topic": "whether a signal may carry no indicators at all",
         "basis": (
-            "The data flow matches every interaction \"to a registered indicator with quantified "
-            "metadata\", and the research says \"A signal should have high value and should drive "
-            "a seller to act\". Neither sentence forbids an empty array outright."
+            'The data flow matches every interaction "to a registered indicator with quantified '
+            'metadata", and the research says "A signal should have high value and should drive '
+            'a seller to act". Neither sentence forbids an empty array outright.'
         ),
         "value": {"rule": "a signal with no indicators is refused", "status": 400},
         "why": (
@@ -211,7 +209,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "bound-not-met-is-a-refusal-not-a-drop",
         "topic": "what happens when a signal's own evidence contradicts its indicator",
         "basis": (
-            "The research does not discuss it. \"Indicators should be very specific\" is the "
+            'The research does not discuss it. "Indicators should be very specific" is the '
             "closest line, and the indicator is what is rendered to a seller."
         ),
         "value": {
@@ -231,8 +229,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "withdraw-used-registration",
         "topic": "whether a registration that has already emitted signals can be withdrawn",
         "basis": (
-            "\"Globally installed signals should be considered an immutable API contract with "
-            "Salesloft and only additive changes will be allowed.\" The sentence does not "
+            '"Globally installed signals should be considered an immutable API contract with '
+            'Salesloft and only additive changes will be allowed." The sentence does not '
             "address retraction, and this reading is stricter than it."
         ),
         "value": {
@@ -274,7 +272,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "amendment-invalidation-test",
-        "topic": "how \"only additive changes will be allowed\" became a decision",
+        "topic": 'how "only additive changes will be allowed" became a decision',
         "basis": (
             "The sentence states the rule and nothing about how to apply it. This entry records "
             "the reading, because a rule with no test is a slogan."
@@ -316,8 +314,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "duplicate-idempotency-key-is-not-an-error",
         "topic": "what a repeated idempotency_key returns",
         "basis": (
-            "\"If we receive two signals with the same idempotency_key one of them will be "
-            "dropped. The first one wins.\" A dropped signal is not a failed request."
+            '"If we receive two signals with the same idempotency_key one of them will be '
+            'dropped. The first one wins." A dropped signal is not a failed request.'
         ),
         "value": {
             "status": 200,
@@ -375,9 +373,9 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "actionability-is-never-set-by-the-sender",
         "topic": "whether a signal can claim to be actionable",
         "basis": (
-            "\"It is important to note that users may choose to not take action on a signal. "
+            '"It is important to note that users may choose to not take action on a signal. '
             "Actionability depends on the end user's governance (Play) configurations and "
-            "settings within Salesloft.\""
+            'settings within Salesloft."'
         ),
         "value": {
             "actionable": False,
@@ -388,7 +386,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         },
         "why": (
             "The field is stored as false rather than omitted, so a reader never has to guess "
-            "whether absence meant \"no\" or \"this product does not know\". It is refused in the "
+            'whether absence meant "no" or "this product does not know". It is refused in the '
             "payload because a sender that could set it would be able to promise a seller a task "
             "this product does not create."
         ),
@@ -427,8 +425,16 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "value": {
             "supported": sorted(schema.SUPPORTED_KEYWORDS),
             "not_supported": [
-                "$ref", "$defs", "allOf", "anyOf", "oneOf", "not", "if/then/else",
-                "patternProperties", "dependentSchemas", "non-boolean additionalProperties",
+                "$ref",
+                "$defs",
+                "allOf",
+                "anyOf",
+                "oneOf",
+                "not",
+                "if/then/else",
+                "patternProperties",
+                "dependentSchemas",
+                "non-boolean additionalProperties",
             ],
             "unknown_keywords": "ignored, as JSON Schema requires of an annotation",
             "extra_fields": (
@@ -454,7 +460,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "and a plural with =1/other and #."
         ),
         "value": {
-            "implemented": list(icume.SUPPORTED_ARGUMENT_TYPES) + ["simple argument", "=N exact plural branches", "#"],
+            "implemented": list(icume.SUPPORTED_ARGUMENT_TYPES)
+            + ["simple argument", "=N exact plural branches", "#"],
             "not_implemented": ["number", "date", "time", "apostrophe escaping"],
             "apostrophe": "treated as an ordinary character",
             "plural_categories": "English only: zero, one, other, with exact matches checked first",

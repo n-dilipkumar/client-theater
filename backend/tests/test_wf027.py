@@ -46,8 +46,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -62,13 +60,12 @@ from dsr.signals import (
     SignalError,
     UndeclaredIndicator,
     UnregisteredSignalType,
-    amendment_findings,
+    feed as feed_module,
+    icume,
+    indicators as indicator_rules,
     normalise_registration,
+    schema as schema_rules,
 )
-from dsr.signals import feed as feed_module
-from dsr.signals import icume
-from dsr.signals import indicators as indicator_rules
-from dsr.signals import schema as schema_rules
 from dsr.signals.emission import (
     OBSERVATION_FIELDS,
     canonical_emission,
@@ -78,7 +75,6 @@ from dsr.signals.emission import (
 )
 from dsr.signals.inferences import INFERENCES, by_id
 from dsr.signals.registration import (
-    apply_amendment,
     canonical,
     normalise_attribution as registration_attribution,
     normalise_indicators,
@@ -99,6 +95,7 @@ from dsr.signals.vocabulary import (
     urgency_rank,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -293,9 +290,9 @@ def test_the_prefix_is_ours_alone(http):
     for feature in body["features"]:
         if feature["id"] == FEATURE_ID:
             continue
-        assert not any(
-            route["path"].startswith(PREFIX) for route in feature["routes"]
-        ), f"{feature['id']} also serves under {PREFIX}"
+        assert not any(route["path"].startswith(PREFIX) for route in feature["routes"]), (
+            f"{feature['id']} also serves under {PREFIX}"
+        )
 
 
 def test_feature_module_does_not_import_the_shared_app():
@@ -444,7 +441,8 @@ def test_the_researched_example_resolves_by_precedence_not_by_dict_order():
     that would fail if somebody changed the tuple without reading why.
     """
     receiver = resolve_receiver(
-        {"person_id": "per_1", "user_guid": "usr_1", "account_id": "acc_1"}, {"data": {"owner": "dana"}}
+        {"person_id": "per_1", "user_guid": "usr_1", "account_id": "acc_1"},
+        {"data": {"owner": "dana"}},
     )
     assert receiver["attributed_by"] == "user_guid"
     assert receiver["object"] == "User"
@@ -609,7 +607,11 @@ def test_a_required_field_may_be_present_and_null():
 
 
 def test_additional_properties_false_closes_the_object():
-    shape = {"type": "object", "properties": {"a": {"type": "string"}}, "additionalProperties": False}
+    shape = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}},
+        "additionalProperties": False,
+    }
     assert schema_rules.validate(shape, {"a": "x"}) == []
     findings = schema_rules.validate(shape, {"a": "x", "b": 1})
     assert findings[0]["keyword"] == "additionalProperties"
@@ -617,7 +619,12 @@ def test_additional_properties_false_closes_the_object():
 
 def test_extra_fields_are_allowed_by_default():
     """The product's standing rule: a team adds a field without coordination."""
-    assert schema_rules.validate({"type": "object", "properties": {"a": {"type": "string"}}}, {"a": "x", "b": 1}) == []
+    assert (
+        schema_rules.validate(
+            {"type": "object", "properties": {"a": {"type": "string"}}}, {"a": "x", "b": 1}
+        )
+        == []
+    )
 
 
 def test_enum_and_const():
@@ -754,7 +761,9 @@ def test_the_researched_example_renders_exactly_as_written():
     rendered sentence carries the same imbalance. Asserted literally rather than
     tidied up, because the point of the test is that this exact string renders.
     """
-    template = '"{video_name}" was viewed "{view_count, plural, =1 {# time} other {# times}} within 7 days'
+    template = (
+        '"{video_name}" was viewed "{view_count, plural, =1 {# time} other {# times}} within 7 days'
+    )
     rendered = icume.render(template, {"video_name": "Customer Reference", "view_count": 3})
     assert rendered["text"] == '"Customer Reference" was viewed "3 times within 7 days'
     assert rendered["warnings"] == []
@@ -999,7 +1008,9 @@ def test_a_shape_with_several_numeric_fields_is_ambiguous_rather_than_guessed():
 def test_a_shape_with_no_numeric_field_cannot_resolve_a_bound():
     claim = indicator_rules.parse_claim("spent_more_than_30s_on_site")
     assert (
-        indicator_rules.resolve_observation_field(claim, {"type": "object", "properties": {"a": {}}})
+        indicator_rules.resolve_observation_field(
+            claim, {"type": "object", "properties": {"a": {}}}
+        )
         is None
     )
 
@@ -1015,7 +1026,10 @@ def test_a_bound_with_no_numeric_field_to_check_qualifies_on_trust():
 def test_a_bound_whose_field_is_absent_qualifies_on_trust_and_says_so():
     indicator = {
         "key": "spent_more_than_30s_on_site",
-        "metadata_shape": {"type": "object", "properties": {"time_in_seconds": {"type": "integer"}}},
+        "metadata_shape": {
+            "type": "object",
+            "properties": {"time_in_seconds": {"type": "integer"}},
+        },
     }
     decision = indicator_rules.evaluate(indicator, {})
     assert decision["qualifies"] is True
@@ -1047,20 +1061,26 @@ def test_every_reason_evaluate_can_return_is_published():
 
 
 def test_a_vague_key_is_warned_about_with_the_researched_pair_named():
-    findings = indicator_rules.specificity_findings("time_spent_on_site", DURATION_SHAPE, {"en": "x"})
+    findings = indicator_rules.specificity_findings(
+        "time_spent_on_site", DURATION_SHAPE, {"en": "x"}
+    )
     assert findings[0]["code"] == "indicator_key_states_no_bound"
     assert "spent_more_than_30s_on_site" in findings[0]["detail"]
     assert "time_spent_on_site" in findings[0]["detail"]
 
 
 def test_a_specific_key_is_not_warned_about_for_its_bound():
-    findings = indicator_rules.specificity_findings("spent_more_than_30s_on_site", DURATION_SHAPE, {"en": "x"})
+    findings = indicator_rules.specificity_findings(
+        "spent_more_than_30s_on_site", DURATION_SHAPE, {"en": "x"}
+    )
     assert [finding["code"] for finding in findings] == []
 
 
 def test_unquantified_metadata_is_warned_about():
     findings = indicator_rules.specificity_findings(
-        "viewed_pricing_page", {"type": "object", "properties": {"a": {"type": "string"}}}, {"en": "x"}
+        "viewed_pricing_page",
+        {"type": "object", "properties": {"a": {"type": "string"}}},
+        {"en": "x"},
     )
     codes = {finding["code"] for finding in findings}
     assert "indicator_key_states_no_bound" in codes
@@ -1068,7 +1088,9 @@ def test_unquantified_metadata_is_warned_about():
 
 
 def test_a_missing_indicator_description_is_warned_about():
-    findings = indicator_rules.specificity_findings("spent_more_than_30s_on_site", DURATION_SHAPE, None)
+    findings = indicator_rules.specificity_findings(
+        "spent_more_than_30s_on_site", DURATION_SHAPE, None
+    )
     assert "indicator_description_missing" in {finding["code"] for finding in findings}
 
 
@@ -1093,8 +1115,13 @@ def test_every_declared_indicator_comes_back_from_evaluate_all():
         {"key": "spent_more_than_30s_on_site", "metadata_shape": DURATION_SHAPE},
         {"key": "watched_more_than_75_percent", "metadata_shape": WATCH_SHAPE},
     ]
-    decisions = indicator_rules.evaluate_all(declared, {"time_in_seconds": 90, "watched_percent": 10})
-    assert [d["key"] for d in decisions] == ["spent_more_than_30s_on_site", "watched_more_than_75_percent"]
+    decisions = indicator_rules.evaluate_all(
+        declared, {"time_in_seconds": 90, "watched_percent": 10}
+    )
+    assert [d["key"] for d in decisions] == [
+        "spent_more_than_30s_on_site",
+        "watched_more_than_75_percent",
+    ]
     assert [d["qualifies"] for d in decisions] == [True, False]
 
 
@@ -1117,7 +1144,16 @@ def test_a_registration_normalises_to_the_researched_fields(registered):
 
 
 @pytest.mark.parametrize(
-    "field", ["signal_name", "type", "integration_id", "description", "data_shape", "indicators", "attribution"]
+    "field",
+    [
+        "signal_name",
+        "type",
+        "integration_id",
+        "description",
+        "data_shape",
+        "indicators",
+        "attribution",
+    ],
 )
 def test_every_researched_registration_field_is_required(field):
     payload = registration_payload()
@@ -1200,13 +1236,17 @@ def test_broadcast_notification_defaults_to_visible_and_says_it_did():
     payload.pop("broadcast_notification")
     record = normalise_registration(payload)
     assert record["broadcast_notification"] is True
-    assert any(warning["code"] == "broadcast_notification_defaulted" for warning in record["warnings"])
+    assert any(
+        warning["code"] == "broadcast_notification_defaulted" for warning in record["warnings"]
+    )
 
 
 def test_an_explicit_broadcast_notification_produces_no_defaulting_warning():
     record = normalise_registration(registration_payload(broadcast_notification=False))
     assert record["broadcast_notification"] is False
-    assert not any(warning["code"] == "broadcast_notification_defaulted" for warning in record["warnings"])
+    assert not any(
+        warning["code"] == "broadcast_notification_defaulted" for warning in record["warnings"]
+    )
 
 
 def test_a_non_boolean_broadcast_notification_is_refused():
@@ -1301,7 +1341,9 @@ def test_the_duplicate_message_names_the_existing_registration(engine):
 def test_the_same_type_may_be_registered_on_two_integrations(engine):
     """The rule is per integration, so this is legal rather than a loophole."""
     engine.register(registration_payload(), actor="dana", source=SOURCE)
-    engine.register(registration_payload(integration_id="partner_portal"), actor="dana", source=SOURCE)
+    engine.register(
+        registration_payload(integration_id="partner_portal"), actor="dana", source=SOURCE
+    )
     assert len(engine.registrations()) == 2
 
 
@@ -1313,9 +1355,7 @@ def test_a_different_type_on_the_same_integration_is_fine(engine):
 
 def test_a_repeated_registration_idempotency_key_returns_the_first_registration(engine):
     key = uuid4()
-    first = engine.register(
-        registration_payload(idempotency_key=key), actor="dana", source=SOURCE
-    )
+    first = engine.register(registration_payload(idempotency_key=key), actor="dana", source=SOURCE)
     second = engine.register(
         registration_payload(idempotency_key=key, signal_name="A different name"),
         actor="dana",
@@ -1329,7 +1369,9 @@ def test_a_repeated_registration_idempotency_key_returns_the_first_registration(
 
 def test_a_registration_idempotency_key_must_be_a_uuid4(engine):
     with pytest.raises(SignalError):
-        engine.register(registration_payload(idempotency_key="not-a-uuid"), actor="dana", source=SOURCE)
+        engine.register(
+            registration_payload(idempotency_key="not-a-uuid"), actor="dana", source=SOURCE
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -1357,7 +1399,9 @@ def test_adding_an_indicator_is_additive_and_allowed(engine, registered):
         "watched_more_than_75_percent",
     }
     # The existing indicator is untouched, not rebuilt.
-    original = next(i for i in registered["indicators"] if i["key"] == "spent_more_than_30s_on_site")
+    original = next(
+        i for i in registered["indicators"] if i["key"] == "spent_more_than_30s_on_site"
+    )
     kept = next(i for i in amended["indicators"] if i["key"] == "spent_more_than_30s_on_site")
     assert kept["metadata_shape"] == original["metadata_shape"]
 
@@ -1434,7 +1478,10 @@ def test_an_indicators_shape_cannot_be_rewritten_through_an_omission(engine, reg
                 "indicators": [
                     {
                         "key": "spent_more_than_30s_on_site",
-                        "metadata_shape": {"type": "object", "properties": {"n": {"type": "integer"}}},
+                        "metadata_shape": {
+                            "type": "object",
+                            "properties": {"n": {"type": "integer"}},
+                        },
                     }
                 ]
             },
@@ -1468,7 +1515,10 @@ def test_changing_an_indicator_metadata_shape_is_refused(engine, registered):
 def test_rewriting_a_locale_a_seller_has_already_read_is_refused(engine, registered):
     with pytest.raises(ImmutableContractError) as caught:
         engine.amend(
-            registered["id"], {"description": {"en": "A different sentence."}}, actor="dana", source=SOURCE
+            registered["id"],
+            {"description": {"en": "A different sentence."}},
+            actor="dana",
+            source=SOURCE,
         )
     assert "description.en" in str(caught.value)
 
@@ -1518,7 +1568,10 @@ def test_omitting_a_declared_data_shape_property_does_not_remove_it(engine, regi
 
 
 def test_adding_a_data_shape_requirement_is_refused_because_it_breaks_emitters(engine, registered):
-    shape = {**registered["data_shape"], "required": [*registered["data_shape"]["required"], "page"]}
+    shape = {
+        **registered["data_shape"],
+        "required": [*registered["data_shape"]["required"], "page"],
+    }
     with pytest.raises(ImmutableContractError) as caught:
         engine.amend(registered["id"], {"data_shape": shape}, actor="dana", source=SOURCE)
     assert "requirement added" in str(caught.value)
@@ -1543,7 +1596,10 @@ def test_every_offending_path_is_reported_at_once(engine, registered):
                 "type": "other",
                 "signal_name": "Other",
                 "integration_id": "other_integration",
-                "data_shape": {**registered["data_shape"], "required": [*registered["data_shape"]["required"], "page"]},
+                "data_shape": {
+                    **registered["data_shape"],
+                    "required": [*registered["data_shape"]["required"], "page"],
+                },
             },
             actor="dana",
             source=SOURCE,
@@ -1567,9 +1623,7 @@ def test_an_amendment_adds_a_licence_not_a_migration(store, engine):
     """The point of additive: an existing signal still conforms afterwards."""
     engine.register(registration_payload(), actor="dana", source=SOURCE)
     registration = engine.registrations()[0]
-    emitted = engine.emit(
-        signal_payload(), room_id=None, actor="dana", source=SOURCE
-    )["signal"]
+    emitted = engine.emit(signal_payload(), room_id=None, actor="dana", source=SOURCE)["signal"]
     engine.amend(
         registration["id"],
         {
@@ -1583,7 +1637,13 @@ def test_an_amendment_adds_a_licence_not_a_migration(store, engine):
         source=SOURCE,
     )
     after = engine.registrations()[0]
-    assert emitted["data"] == {"document_name": "Security & Compliance Pack", "document_kind": "pdf", "action": "viewed", "buyer_first_name": "Priya", "room_name": "Northwind Traders — Enterprise Evaluation"}
+    assert emitted["data"] == {
+        "document_name": "Security & Compliance Pack",
+        "document_kind": "pdf",
+        "action": "viewed",
+        "buyer_first_name": "Priya",
+        "room_name": "Northwind Traders — Enterprise Evaluation",
+    }
     assert "referrer" in after["data_shape"]["properties"]
     assert store.get(emitted["id"]) is not None
 
@@ -1613,7 +1673,9 @@ def test_a_withdrawn_registration_is_soft_deleted_so_the_audit_trail_still_point
     engine.withdraw(registered["id"], actor="dana", source=SOURCE)
     assert store.get(registered["id"]) is None
     rows = store.audit(limit=50)
-    assert any(entry["action"] == "delete" and entry["record_id"] == registered["id"] for entry in rows)
+    assert any(
+        entry["action"] == "delete" and entry["record_id"] == registered["id"] for entry in rows
+    )
 
 
 def test_withdrawing_an_unknown_registration_is_refused(engine):
@@ -1638,7 +1700,9 @@ def test_a_well_formed_signal_is_emitted_and_stored(engine, registered, room):
 
 
 def test_a_signal_carries_the_researched_field_list(engine, registered, room):
-    signal = engine.emit(signal_payload(), room_id=room["id"], actor="dana", source=SOURCE)["signal"]
+    signal = engine.emit(signal_payload(), room_id=room["id"], actor="dana", source=SOURCE)[
+        "signal"
+    ]
     for field in (
         "type",
         "data",
@@ -1670,9 +1734,14 @@ def test_an_unregistered_type_names_the_integration_when_one_was_given(engine, r
 
 
 def test_a_signal_may_name_its_integration_to_disambiguate(engine, room):
-    engine.register(registration_payload(integration_id="partner_portal"), actor="dana", source=SOURCE)
+    engine.register(
+        registration_payload(integration_id="partner_portal"), actor="dana", source=SOURCE
+    )
     result = engine.emit(
-        signal_payload(integration_id="partner_portal"), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(integration_id="partner_portal"),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     assert result["outcome"] == "emitted"
     assert result["signal"]["integration_id"] == "partner_portal"
@@ -1700,7 +1769,10 @@ def test_data_must_satisfy_the_registered_data_shape(engine, registered, room):
 def test_data_missing_a_required_field_is_refused(engine, registered, room):
     with pytest.raises(EmissionError) as caught:
         engine.emit(
-            signal_payload(data={"document_name": "x"}), room_id=room["id"], actor="dana", source=SOURCE
+            signal_payload(data={"document_name": "x"}),
+            room_id=room["id"],
+            actor="dana",
+            source=SOURCE,
         )
     assert "action" in str(caught.value)
 
@@ -1718,9 +1790,7 @@ def test_data_may_carry_a_field_the_shape_never_declared(engine, registered, roo
 
 def test_a_signal_must_carry_at_least_one_indicator(engine, registered, room):
     with pytest.raises(EmissionError) as caught:
-        engine.emit(
-            signal_payload(indicators=[]), room_id=room["id"], actor="dana", source=SOURCE
-        )
+        engine.emit(signal_payload(indicators=[]), room_id=room["id"], actor="dana", source=SOURCE)
     assert "at least one indicator" in str(caught.value)
 
 
@@ -1855,7 +1925,9 @@ def test_an_unbounded_indicator_qualifies_on_trust_and_says_so(engine, room):
         source=SOURCE,
     )
     result = engine.emit(
-        signal_payload(indicators=[{"key": "time_spent_on_site", "metadata": {"time_in_seconds": 30}}]),
+        signal_payload(
+            indicators=[{"key": "time_spent_on_site", "metadata": {"time_in_seconds": 30}}]
+        ),
         room_id=room["id"],
         actor="dana",
         source=SOURCE,
@@ -1941,9 +2013,7 @@ def test_attribution_is_required_on_a_signal(engine, registered, room):
 
 
 def test_broadcast_notification_defaults_to_the_registrations_setting(engine, room):
-    engine.register(
-        registration_payload(broadcast_notification=False), actor="dana", source=SOURCE
-    )
+    engine.register(registration_payload(broadcast_notification=False), actor="dana", source=SOURCE)
     payload = signal_payload()
     payload.pop("broadcast_notification")
     result = engine.emit(payload, room_id=room["id"], actor="dana", source=SOURCE)
@@ -1952,15 +2022,21 @@ def test_broadcast_notification_defaults_to_the_registrations_setting(engine, ro
 
 def test_a_signal_may_override_the_registrations_broadcast_setting(engine, registered, room):
     result = engine.emit(
-        signal_payload(broadcast_notification=False), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(broadcast_notification=False),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     assert result["signal"]["broadcast_notification"] is False
 
 
-def test_a_non_boolean_broadcast_notification_is_refused(engine, registered, room):
+def test_the_engine_also_refuses_a_non_boolean_broadcast_notification(engine, registered, room):
     with pytest.raises(EmissionError):
         engine.emit(
-            signal_payload(broadcast_notification="yes"), room_id=room["id"], actor="dana", source=SOURCE
+            signal_payload(broadcast_notification="yes"),
+            room_id=room["id"],
+            actor="dana",
+            source=SOURCE,
         )
 
 
@@ -2023,8 +2099,12 @@ def test_canonical_emission_folds_and_refuses():
 
 def test_a_repeated_idempotency_key_drops_the_second_signal(engine, registered, room):
     key = uuid4()
-    first = engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
-    second = engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
+    first = engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
+    second = engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert first["outcome"] == "emitted"
     assert second["outcome"] == "dropped"
     assert second["reason"] == "duplicate_idempotency_key"
@@ -2034,13 +2114,17 @@ def test_a_repeated_idempotency_key_drops_the_second_signal(engine, registered, 
 def test_the_dropped_signal_is_the_one_that_was_kept(engine, registered, room):
     key = uuid4()
     first = engine.emit(
-        signal_payload(idempotency_key=key, data={**signal_payload()["data"], "document_name": "First"}),
+        signal_payload(
+            idempotency_key=key, data={**signal_payload()["data"], "document_name": "First"}
+        ),
         room_id=room["id"],
         actor="dana",
         source=SOURCE,
     )
     engine.emit(
-        signal_payload(idempotency_key=key, data={**signal_payload()["data"], "document_name": "Second"}),
+        signal_payload(
+            idempotency_key=key, data={**signal_payload()["data"], "document_name": "Second"}
+        ),
         room_id=room["id"],
         actor="dana",
         source=SOURCE,
@@ -2052,13 +2136,17 @@ def test_the_dropped_signal_is_the_one_that_was_kept(engine, registered, room):
 def test_a_dropped_signal_leaves_one_row_not_two(engine, registered, room):
     key = uuid4()
     for _ in range(3):
-        engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
+        engine.emit(
+            signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+        )
     assert len(engine.signals(room_id=room["id"])) == 1
 
 
 def test_the_dropped_attempts_are_counted_on_the_winner(engine, registered, room):
     key = uuid4()
-    engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
+    engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
     for expected in (1, 2, 3):
         dropped = engine.emit(
             signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
@@ -2070,10 +2158,16 @@ def test_the_dropped_attempts_are_counted_on_the_winner(engine, registered, room
 def test_a_dropped_signal_keeps_the_winners_urgency_and_data(engine, registered, room):
     key = uuid4()
     first = engine.emit(
-        signal_payload(idempotency_key=key, urgency="high"), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(idempotency_key=key, urgency="high"),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     engine.emit(
-        signal_payload(idempotency_key=key, urgency="low"), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(idempotency_key=key, urgency="low"),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     assert engine.signal(first["signal"]["id"])["urgency"] == "high"
 
@@ -2082,7 +2176,9 @@ def test_an_idempotency_key_is_dropped_across_rooms(engine, registered, room, st
     """The key is a global identity for the signal, not a per-room one."""
     key = uuid4()
     other = store.create("room", {**ROOM, "name": "Elsewhere"}, actor="dana")
-    engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
+    engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
     second = engine.emit(
         signal_payload(idempotency_key=key), room_id=other["id"], actor="dana", source=SOURCE
     )
@@ -2096,22 +2192,30 @@ def test_a_malformed_retry_cannot_occupy_a_key_and_block_the_real_signal(engine,
         engine.emit(
             signal_payload(
                 idempotency_key=key,
-                indicators=[{"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 1}}],
+                indicators=[
+                    {"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 1}}
+                ],
             ),
             room_id=room["id"],
             actor="dana",
             source=SOURCE,
         )
-    assert engine.emit(
-        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
-    )["outcome"] == "emitted"
+    assert (
+        engine.emit(
+            signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+        )["outcome"]
+        == "emitted"
+    )
 
 
 def test_different_idempotency_keys_both_land(engine, registered, room):
     for _ in range(3):
-        assert engine.emit(
-            signal_payload(), room_id=room["id"], actor="dana", source=SOURCE
-        )["outcome"] == "emitted"
+        assert (
+            engine.emit(signal_payload(), room_id=room["id"], actor="dana", source=SOURCE)[
+                "outcome"
+            ]
+            == "emitted"
+        )
     assert len(engine.signals(room_id=room["id"])) == 3
 
 
@@ -2121,7 +2225,9 @@ def test_different_idempotency_keys_both_land(engine, registered, room):
 
 
 def test_no_signal_is_ever_actionable(engine, registered, room):
-    signal = engine.emit(signal_payload(), room_id=room["id"], actor="dana", source=SOURCE)["signal"]
+    signal = engine.emit(signal_payload(), room_id=room["id"], actor="dana", source=SOURCE)[
+        "signal"
+    ]
     assert signal["actionable"] is False
     assert "Play configuration" in signal["actionability_note"]
 
@@ -2165,7 +2271,9 @@ def test_a_signal_renders_its_registration_description(engine, registered, room)
     signal = engine.emit(
         signal_payload(
             data={**signal_payload()["data"], "buyer_first_name": "Priya"},
-            indicators=[{"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 42}}],
+            indicators=[
+                {"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 42}}
+            ],
         ),
         room_id=room["id"],
         actor="dana",
@@ -2192,7 +2300,9 @@ def test_indicator_metadata_wins_over_signal_data_for_the_same_name(engine, room
     signal = engine.emit(
         signal_payload(
             data={**signal_payload()["data"], "time_in_seconds": 999},
-            indicators=[{"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 42}}],
+            indicators=[
+                {"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 42}}
+            ],
         ),
         room_id=room["id"],
         actor="dana",
@@ -2323,7 +2433,9 @@ def test_a_signal_whose_registration_was_withdrawn_still_reads_and_says_it_canno
     engine, room, store
 ):
     record = engine.register(registration_payload(), actor="dana", source=SOURCE)["registration"]
-    signal = engine.emit(signal_payload(), room_id=room["id"], actor="dana", source=SOURCE)["signal"]
+    signal = engine.emit(signal_payload(), room_id=room["id"], actor="dana", source=SOURCE)[
+        "signal"
+    ]
     store.delete(record["id"], actor="dana", source=SOURCE)
     reread = engine.signal(signal["id"])
     assert reread is not None
@@ -2337,9 +2449,14 @@ def test_a_signal_whose_registration_was_withdrawn_still_reads_and_says_it_canno
 
 
 def test_the_feed_shows_only_broadcast_signals(engine, registered, room):
-    engine.emit(signal_payload(broadcast_notification=True), room_id=room["id"], actor="dana", source=SOURCE)
     engine.emit(
-        signal_payload(broadcast_notification=False), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(broadcast_notification=True), room_id=room["id"], actor="dana", source=SOURCE
+    )
+    engine.emit(
+        signal_payload(broadcast_notification=False),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     feed = engine.live_feed(room_id=room["id"])
     assert feed["count"] == 1
@@ -2348,7 +2465,10 @@ def test_the_feed_shows_only_broadcast_signals(engine, registered, room):
 
 def test_a_withheld_signal_is_still_stored_and_listed(engine, registered, room):
     engine.emit(
-        signal_payload(broadcast_notification=False), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(broadcast_notification=False),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     assert len(engine.signals(room_id=room["id"], broadcast=False)) == 1
 
@@ -2368,10 +2488,16 @@ def test_urgency_drives_the_feed_order(engine, registered, room):
 
 def test_a_low_urgency_signal_never_outranks_a_high_one_however_recent(engine, registered, room):
     engine.emit(
-        signal_payload(urgency="high", occurred_at=ago(600)), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(urgency="high", occurred_at=ago(600)),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     engine.emit(
-        signal_payload(urgency="low", occurred_at=ago(1)), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(urgency="low", occurred_at=ago(1)),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     assert engine.live_feed(room_id=room["id"])["entries"][0]["urgency"] == "high"
 
@@ -2428,7 +2554,10 @@ def test_the_feed_can_render_in_another_locale(engine, room):
         source=SOURCE,
     )
     engine.emit(signal_payload(locale="en"), room_id=room["id"], actor="dana", source=SOURCE)
-    assert engine.live_feed(room_id=room["id"], locale="fr")["entries"][0]["rendered"]["text"] == "Ouvert."
+    assert (
+        engine.live_feed(room_id=room["id"], locale="fr")["entries"][0]["rendered"]["text"]
+        == "Ouvert."
+    )
 
 
 def test_a_feed_row_carries_the_attribution_and_the_receiver(engine, registered, room):
@@ -2449,6 +2578,7 @@ def test_build_filters_and_orders_without_an_engine(store):
     registrations = {
         "r1": {"description": {"en": "{n} things."}, "indicators": []},
     }
+
     def signal(urgency, minutes, broadcast=True):
         return {
             "id": minutes,
@@ -2470,6 +2600,7 @@ def test_build_filters_and_orders_without_an_engine(store):
 
 def test_build_can_filter_by_seller():
     registrations = {"r1": {"description": {"en": "x"}, "indicators": []}}
+
     def signal(seller):
         return {
             "id": seller,
@@ -2505,9 +2636,7 @@ def interaction(**overrides):
 
 
 def test_a_qualifying_interaction_emits_a_signal(engine, registered, room):
-    result = engine.interact(
-        interaction(), room_id=room["id"], actor="dana", source=SOURCE
-    )
+    result = engine.interact(interaction(), room_id=room["id"], actor="dana", source=SOURCE)
     assert result["qualified"] is True
     assert result["outcome"] == "emitted"
     assert result["signal"]["indicators"][0]["key"] == "spent_more_than_30s_on_site"
@@ -2515,7 +2644,10 @@ def test_a_qualifying_interaction_emits_a_signal(engine, registered, room):
 
 def test_a_non_qualifying_interaction_reports_and_stores_nothing(engine, registered, room):
     result = engine.interact(
-        interaction(observations={"time_in_seconds": 6}), room_id=room["id"], actor="dana", source=SOURCE
+        interaction(observations={"time_in_seconds": 6}),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     assert result["qualified"] is False
     assert result["outcome"] == "not_qualifying"
@@ -2603,16 +2735,17 @@ def test_an_indicator_that_qualifies_on_trust_is_reported_as_unchecked(engine, r
         source=SOURCE,
     )
     result = engine.interact(
-        interaction(observations={"time_in_seconds": 3}), room_id=room["id"], actor="dana", source=SOURCE
+        interaction(observations={"time_in_seconds": 3}),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     assert result["qualified"] is True
     assert result["indicators"][0]["reason"] == "no_bound_claimed"
     assert result["indicators"][0]["checked"] is False
 
 
-def test_an_interaction_carrying_only_the_evidence_for_one_indicator_sends_only_that(
-    engine, room
-):
+def test_an_interaction_carrying_only_the_evidence_for_one_indicator_sends_only_that(engine, room):
     engine.register(
         registration_payload(
             indicators=[
@@ -2685,7 +2818,10 @@ def test_an_interaction_with_no_observations_matches_nothing_and_says_why(engine
 def test_observations_may_be_sent_under_the_researched_metadata_spelling(engine, registered, room):
     payload = interaction()
     payload["metadata"] = payload.pop("observations")
-    assert engine.interact(payload, room_id=room["id"], actor="dana", source=SOURCE)["qualified"] is True
+    assert (
+        engine.interact(payload, room_id=room["id"], actor="dana", source=SOURCE)["qualified"]
+        is True
+    )
 
 
 def test_observations_must_be_an_object(engine, registered, room):
@@ -2703,8 +2839,12 @@ def test_an_interaction_against_an_unregistered_type_is_refused(engine, room):
 
 def test_a_repeated_interaction_key_drops_rather_than_emits_twice(engine, registered, room):
     key = uuid4()
-    first = engine.interact(interaction(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
-    second = engine.interact(interaction(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
+    first = engine.interact(
+        interaction(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
+    second = engine.interact(
+        interaction(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert first["outcome"] == "emitted"
     assert first["duplicate_attempts"] == 0
     assert second["outcome"] == "dropped"
@@ -2726,7 +2866,10 @@ def test_an_interaction_against_an_unregistered_type_needs_a_type(engine, room):
 def test_signals_are_listed_newest_first(engine, registered, room):
     for minutes in (30, 5, 15):
         engine.emit(
-            signal_payload(occurred_at=ago(minutes)), room_id=room["id"], actor="dana", source=SOURCE
+            signal_payload(occurred_at=ago(minutes)),
+            room_id=room["id"],
+            actor="dana",
+            source=SOURCE,
         )
     listed = engine.signals(room_id=room["id"])
     assert len(listed) == 3
@@ -2795,10 +2938,17 @@ def test_the_summary_reports_withheld_and_dropped_counts(engine, registered, roo
     key = uuid4()
     engine.emit(signal_payload(urgency="high"), room_id=room["id"], actor="dana", source=SOURCE)
     engine.emit(
-        signal_payload(broadcast_notification=False), room_id=room["id"], actor="dana", source=SOURCE
+        signal_payload(broadcast_notification=False),
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
-    engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
-    engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
+    engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
+    engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
     summary = engine.summary(room_id=room["id"])
     assert summary["signals"] == 3
     assert summary["broadcast"] == 2
@@ -2824,7 +2974,9 @@ def test_an_unresolved_receiver_is_counted_as_unresolved_not_as_a_seller(engine,
     ownerless = store.create("room", {"name": "No owner"}, actor="dana")
     engine.register(registration_payload(), actor="dana", source=SOURCE)
     engine.emit(signal_payload(), room_id=ownerless["id"], actor="dana", source=SOURCE)
-    assert engine.summary(room_id=ownerless["id"])["by_seller"] == [{"seller": "unresolved", "count": 1}]
+    assert engine.summary(room_id=ownerless["id"])["by_seller"] == [
+        {"seller": "unresolved", "count": 1}
+    ]
 
 
 def test_registrations_can_be_listed_by_integration_and_type(engine):
@@ -2872,7 +3024,9 @@ def test_the_vocabulary_publishes_the_indicator_claim_grammar(engine):
 
 
 def test_every_qualification_reason_is_published_by_the_vocabulary(engine):
-    assert set(engine.vocabulary()["qualification_reasons"]) == set(indicator_rules.QUALIFICATION_REASONS)
+    assert set(engine.vocabulary()["qualification_reasons"]) == set(
+        indicator_rules.QUALIFICATION_REASONS
+    )
 
 
 def test_the_inference_register_names_every_judgement_call(engine):
@@ -2899,7 +3053,10 @@ def test_the_attribution_precedence_inference_names_the_section_it_borrows_from(
 
 def test_the_amendment_inference_states_the_one_way_rule():
     entry = by_id("amendment-invalidation-test")
-    assert entry["value"]["test"] == "an amendment may only add. It may not remove, and it may not tighten."
+    assert (
+        entry["value"]["test"]
+        == "an amendment may only add. It may not remove, and it may not tighten."
+    )
     assert any("add a data_shape.required name" in item for item in entry["value"]["refused"])
     assert any("remove a data_shape.required name" in item for item in entry["value"]["refused"])
     assert "add an optional data_shape property" in entry["value"]["allowed"]
@@ -2944,8 +3101,12 @@ def test_emitting_is_audited_to_the_route_that_served_it(store, engine, register
 
 def test_the_dropped_duplicate_increment_is_audited_as_an_update(store, engine, registered, room):
     key = uuid4()
-    engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
-    engine.emit(signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE)
+    engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
+    engine.emit(
+        signal_payload(idempotency_key=key), room_id=room["id"], actor="dana", source=SOURCE
+    )
     entries = store.audit(collection="intent_signal")
     assert [entry["action"] for entry in entries] == ["update", "insert"]
     # The increment happened while serving the emit request, so that is what the
@@ -2979,7 +3140,9 @@ def test_a_refused_emission_writes_nothing_at_all(store, engine, registered, roo
     with pytest.raises(IndicatorNotQualified):
         engine.emit(
             signal_payload(
-                indicators=[{"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 1}}]
+                indicators=[
+                    {"key": "spent_more_than_30s_on_site", "metadata": {"time_in_seconds": 1}}
+                ]
             ),
             room_id=room["id"],
             actor="dana",
@@ -3004,7 +3167,9 @@ def test_every_write_method_demands_a_source():
     for name in ("register", "amend", "withdraw", "emit", "interact"):
         method = getattr(engine, name)
         assert "source" in inspect.signature(method).parameters, name
-        assert inspect.signature(method).parameters["source"].default is inspect.Parameter.empty, name
+        assert inspect.signature(method).parameters["source"].default is inspect.Parameter.empty, (
+            name
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -3072,8 +3237,14 @@ def test_listing_registrations_counts_the_flagged_ones(http):
 def test_a_registration_can_be_filtered_over_http(http):
     http.post(f"{PREFIX}/registrations", json=registration_payload())
     http.post(f"{PREFIX}/registrations", json=registration_payload(integration_id="partner"))
-    assert http.get(f"{PREFIX}/registrations", params={"integration_id": "partner"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/registrations", params={"type": "document_engagement"}).json()["count"] == 2
+    assert (
+        http.get(f"{PREFIX}/registrations", params={"integration_id": "partner"}).json()["count"]
+        == 1
+    )
+    assert (
+        http.get(f"{PREFIX}/registrations", params={"type": "document_engagement"}).json()["count"]
+        == 2
+    )
 
 
 def test_reading_one_registration_over_http(http, http_registration):
@@ -3120,7 +3291,9 @@ def test_withdrawing_a_used_registration_over_http_is_409(http, http_registratio
     assert "already delivered" in response.json()["detail"]
 
 
-def test_emitting_over_http_returns_201_and_the_rendered_sentence(http, http_registration, http_room):
+def test_emitting_over_http_returns_201_and_the_rendered_sentence(
+    http, http_registration, http_room
+):
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(), params={"actor": "dana"}
     )
@@ -3213,8 +3386,18 @@ def test_the_live_feed_over_http_can_be_narrowed_to_a_seller(http, http_registra
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(), params={"actor": "dana"}
     )
-    assert http.get(f"{PREFIX}/rooms/{http_room['id']}/live-feed", params={"seller": "dana"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/rooms/{http_room['id']}/live-feed", params={"seller": "sam"}).json()["count"] == 0
+    assert (
+        http.get(f"{PREFIX}/rooms/{http_room['id']}/live-feed", params={"seller": "dana"}).json()[
+            "count"
+        ]
+        == 1
+    )
+    assert (
+        http.get(f"{PREFIX}/rooms/{http_room['id']}/live-feed", params={"seller": "sam"}).json()[
+            "count"
+        ]
+        == 0
+    )
 
 
 def test_an_interaction_that_qualifies_over_http_emits(http, http_registration, http_room):
@@ -3271,9 +3454,7 @@ def test_reading_one_signal_over_http_returns_the_sentence_and_the_evidence(
     emitted = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(), params={"actor": "dana"}
     ).json()
-    body = http.get(
-        f"{PREFIX}/rooms/{http_room['id']}/signals/{emitted['signal']['id']}"
-    ).json()
+    body = http.get(f"{PREFIX}/rooms/{http_room['id']}/signals/{emitted['signal']['id']}").json()
     assert body["rendered"]["text"] == "Priya spent 214 seconds on Security & Compliance Pack."
     assert body["indicators"][0]["metadata"] == {"time_in_seconds": 214}
     assert body["actionable"] is False
@@ -3284,7 +3465,10 @@ def test_reading_a_signal_from_another_room_over_http_is_404(http, http_registra
     emitted = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(), params={"actor": "dana"}
     ).json()
-    assert http.get(f"{PREFIX}/rooms/{other['id']}/signals/{emitted['signal']['id']}").status_code == 404
+    assert (
+        http.get(f"{PREFIX}/rooms/{other['id']}/signals/{emitted['signal']['id']}").status_code
+        == 404
+    )
 
 
 def test_the_room_summary_route(http, http_registration, http_room):
@@ -3313,7 +3497,9 @@ def test_a_signal_against_a_room_that_does_not_exist_still_emits(http, http_regi
 
 
 def test_a_read_over_http_writes_nothing(http, http_registration, http_room):
-    http.post(f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(), params={"actor": "dana"})
+    http.post(
+        f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(), params={"actor": "dana"}
+    )
     before = len(http.get("/api/audit", params={"limit": 500}).json()["entries"])
     http.get(f"{PREFIX}/rooms/{http_room['id']}/signals")
     http.get(f"{PREFIX}/rooms/{http_room['id']}/live-feed")
@@ -3327,19 +3513,26 @@ def test_a_field_this_code_never_declared_needs_no_migration(http, http_room):
     """The requirement, stated as a test: a team adds a field and it just works."""
     http.post(f"{PREFIX}/registrations", json=registration_payload())
     payload = signal_payload(
-        data={**signal_payload()["data"], "wf027EscalationPolicy": {"reviewer": "sam", "slaHours": 4}}
+        data={
+            **signal_payload()["data"],
+            "wf027EscalationPolicy": {"reviewer": "sam", "slaHours": 4},
+        }
     )
     emitted = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/signals", json=payload, params={"actor": "dana"}
     )
     assert emitted.status_code == 201
-    assert emitted.json()["signal"]["data"]["wf027EscalationPolicy"] == {"reviewer": "sam", "slaHours": 4}
+    assert emitted.json()["signal"]["data"]["wf027EscalationPolicy"] == {
+        "reviewer": "sam",
+        "slaHours": 4,
+    }
 
     # And it is immediately queryable through the dynamic index, dotted path and
     # all, with no migration and no change to the route.
-    assert http.get(
-        f"{PREFIX}/rooms/{http_room['id']}/signals", params={"where": "{}"}
-    ).status_code == 200
+    assert (
+        http.get(f"{PREFIX}/rooms/{http_room['id']}/signals", params={"where": "{}"}).status_code
+        == 200
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -3363,7 +3556,7 @@ def _matches_registered_route(source: str, served: list[dict[str, Any]]) -> bool
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -3375,17 +3568,23 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http, http_room):
     The same class of bug has shipped in this codebase before: a feature's audit
     log kept naming a path the app had stopped serving.
     """
-    registration = http.post(f"{PREFIX}/registrations", json=registration_payload()).json()["registration"]
-    http.patch(f"{PREFIX}/registrations/{registration['id']}", json={"description": {"fr": "Ouvert."}})
+    registration = http.post(f"{PREFIX}/registrations", json=registration_payload()).json()[
+        "registration"
+    ]
+    http.patch(
+        f"{PREFIX}/registrations/{registration['id']}", json={"description": {"fr": "Ouvert."}}
+    )
     http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/interactions", json=interaction(), params={"actor": "dana"}
+        f"{PREFIX}/rooms/{http_room['id']}/interactions",
+        json=interaction(),
+        params={"actor": "dana"},
     )
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(), params={"actor": "dana"}
     )
-    withdrawn = http.post(f"{PREFIX}/registrations", json=registration_payload(type="content_opened")).json()[
-        "registration"
-    ]
+    withdrawn = http.post(
+        f"{PREFIX}/registrations", json=registration_payload(type="content_opened")
+    ).json()["registration"]
     http.delete(f"{PREFIX}/registrations/{withdrawn['id']}")
 
     served = [
@@ -3409,7 +3608,11 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http, http_room):
 def test_the_interaction_route_audits_under_its_own_route_not_the_emit_route(
     http, http_room, http_registration
 ):
-    http.post(f"{PREFIX}/rooms/{http_room['id']}/interactions", json=interaction(), params={"actor": "dana"})
+    http.post(
+        f"{PREFIX}/rooms/{http_room['id']}/interactions",
+        json=interaction(),
+        params={"actor": "dana"},
+    )
     entries = http.get("/api/audit", params={"collection": "intent_signal"}).json()["entries"]
     assert len(entries) == 1
     assert entries[0]["source"] == f"POST {PREFIX}/rooms/{{room_id}}/interactions"
@@ -3418,11 +3621,13 @@ def test_the_interaction_route_audits_under_its_own_route_not_the_emit_route(
 def test_a_dropped_duplicate_audits_against_the_emit_route(http, http_room, http_registration):
     key = uuid4()
     http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(idempotency_key=key),
+        f"{PREFIX}/rooms/{http_room['id']}/signals",
+        json=signal_payload(idempotency_key=key),
         params={"actor": "dana"},
     )
     http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/signals", json=signal_payload(idempotency_key=key),
+        f"{PREFIX}/rooms/{http_room['id']}/signals",
+        json=signal_payload(idempotency_key=key),
         params={"actor": "dana"},
     )
     entries = http.get("/api/audit", params={"collection": "intent_signal"}).json()["entries"]
@@ -3518,9 +3723,7 @@ def test_the_seeded_feed_actually_orders_by_urgency(tmp_path):
     db = AuditedDatabase(tmp_path / "seeded.db")
     store = RecordStore(db)
     rooms = [seed_rooms(store)[0]]
-    load_feature(MODULE).seed(
-        db, {"room_ids": rooms, "now": NOW, "rng": random.Random("wf027")}
-    )
+    load_feature(MODULE).seed(db, {"room_ids": rooms, "now": NOW, "rng": random.Random("wf027")})
     feed = SignalEngine(store).live_feed(room_id=rooms[0][0])
     ranks = [URGENCIES.index(row["urgency"]) for row in feed["entries"]]
     assert ranks == sorted(ranks)
@@ -3556,7 +3759,10 @@ def test_the_seed_is_reproducible(tmp_path):
             )
         )
         signals.append(
-            sorted(record["data"]["idempotency_key"] for record in store.list("intent_signal", limit=100))
+            sorted(
+                record["data"]["idempotency_key"]
+                for record in store.list("intent_signal", limit=100)
+            )
         )
         db.close()
     assert summaries[0] == summaries[1]
@@ -3575,9 +3781,7 @@ def test_no_seeded_sentence_has_a_hole_in_it(tmp_path):
     db = AuditedDatabase(tmp_path / "seeded.db")
     store = RecordStore(db)
     rooms = seed_rooms(store)
-    load_feature(MODULE).seed(
-        db, {"room_ids": rooms, "now": NOW, "rng": random.Random("wf027")}
-    )
+    load_feature(MODULE).seed(db, {"room_ids": rooms, "now": NOW, "rng": random.Random("wf027")})
     engine = SignalEngine(store)
     for room_id, _account in rooms:
         for signal in engine.live_feed(room_id=room_id)["entries"]:
@@ -3593,9 +3797,7 @@ def test_the_seed_produces_a_video_signal_that_names_the_percentage(tmp_path):
     db = AuditedDatabase(tmp_path / "seeded.db")
     store = RecordStore(db)
     rooms = seed_rooms(store)
-    load_feature(MODULE).seed(
-        db, {"room_ids": rooms, "now": NOW, "rng": random.Random("wf027")}
-    )
+    load_feature(MODULE).seed(db, {"room_ids": rooms, "now": NOW, "rng": random.Random("wf027")})
     feed = SignalEngine(store).live_feed(room_id=rooms[0][0])
     video = next(row for row in feed["entries"] if row["type"] == "video_engagement")
     indicator_text = " ".join(indicator["text"] for indicator in video["rendered"]["indicators"])

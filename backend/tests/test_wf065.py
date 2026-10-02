@@ -53,8 +53,6 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.booking_crm import (
     ACTIVITY_ASSIGNED_TO,
@@ -72,14 +70,14 @@ from dsr.booking_crm import (
     NO_RECORD_MESSAGE,
     OPEN_STATUS,
     ORDERING_QUOTE,
-    OUTCOMES,
     OUTCOME_APPLIED,
     OUTCOME_FAILED,
     OUTCOME_SKIPPED,
+    OUTCOMES,
     PATHS,
+    REASON_NO_CREATE,
     RELATED_REQUIRES_CONTACT_QUOTE,
     RELATED_SELECTION_QUOTE,
-    REASON_NO_CREATE,
     RUN_COLLECTION,
     SELECTION_RULES,
     SOURCED_GAPS,
@@ -119,6 +117,7 @@ from dsr.booking_crm.flow import (
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -162,7 +161,8 @@ def engine(store):
 @pytest.fixture()
 def room(store):
     return store.create(
-        "room", {"name": "Northwind - Enterprise Evaluation", "account": "Northwind Traders"},
+        "room",
+        {"name": "Northwind - Enterprise Evaluation", "account": "Northwind Traders"},
         actor="dana",
     )
 
@@ -176,48 +176,151 @@ def room_id(room):
 #: *newest* of all three, two Open Cases at different dates, and three
 #: Opportunities at very different distances from ``MEETING``.
 CRM_ROWS: tuple[dict, ...] = (
-    {"crm_id": "cnt-0001", "vendor": "salesforce", "type": "Contact",
-     "name": "Amara Okonkwo", "email": "a.buyer@northwind.example",
-     "account_id": "acc-0001", "owner": "dana@acme.example",
-     "fields": {"Rating": "Warm", "Status": "Open"}, "created_on": "2026-05-02"},
-    {"crm_id": "acc-0001", "vendor": "salesforce", "type": "Account",
-     "name": "Northwind Traders", "owner": "sam@acme.example", "created_on": "2026-04-18"},
-    {"crm_id": "lead-0001", "vendor": "salesforce", "type": "Lead",
-     "name": "Bayo Toure", "email": "b.toure@northwind.example",
-     "company": "Northwind Traders", "owner": "dana@acme.example", "created_on": "2026-08-21"},
+    {
+        "crm_id": "cnt-0001",
+        "vendor": "salesforce",
+        "type": "Contact",
+        "name": "Amara Okonkwo",
+        "email": "a.buyer@northwind.example",
+        "account_id": "acc-0001",
+        "owner": "dana@acme.example",
+        "fields": {"Rating": "Warm", "Status": "Open"},
+        "created_on": "2026-05-02",
+    },
+    {
+        "crm_id": "acc-0001",
+        "vendor": "salesforce",
+        "type": "Account",
+        "name": "Northwind Traders",
+        "owner": "sam@acme.example",
+        "created_on": "2026-04-18",
+    },
+    {
+        "crm_id": "lead-0001",
+        "vendor": "salesforce",
+        "type": "Lead",
+        "name": "Bayo Toure",
+        "email": "b.toure@northwind.example",
+        "company": "Northwind Traders",
+        "owner": "dana@acme.example",
+        "created_on": "2026-08-21",
+    },
     # Newest of the three Cases and Closed: it must lose to an older Open one.
-    {"crm_id": "case-0001", "vendor": "salesforce", "type": "Case",
-     "name": "Procurement blocked the order", "status": "Closed", "created_on": "2026-09-25"},
-    {"crm_id": "case-0002", "vendor": "salesforce", "type": "Case",
-     "name": "SSO provisioning question", "status": "Open", "created_on": "2026-09-11"},
-    {"crm_id": "case-0003", "vendor": "salesforce", "type": "Case",
-     "name": "Seat count dispute", "status": "Open", "created_on": "2026-01-04"},
-    {"crm_id": "opp-0001", "vendor": "salesforce", "type": "Opportunity",
-     "name": "FY27 renewal", "close_date": "2027-02-28", "created_on": "2026-03-01"},
-    {"crm_id": "opp-0002", "vendor": "salesforce", "type": "Opportunity",
-     "name": "Q4 enterprise", "close_date": "2026-10-07", "created_on": "2026-06-14"},
-    {"crm_id": "opp-0003", "vendor": "salesforce", "type": "Opportunity",
-     "name": "pilot", "close_date": "2026-09-20", "created_on": "2026-02-02"},
-    {"crm_id": "camp-0001", "vendor": "salesforce", "type": "Campaign",
-     "name": "Q4 Enterprise", "created_on": "2026-09-01"},
+    {
+        "crm_id": "case-0001",
+        "vendor": "salesforce",
+        "type": "Case",
+        "name": "Procurement blocked the order",
+        "status": "Closed",
+        "created_on": "2026-09-25",
+    },
+    {
+        "crm_id": "case-0002",
+        "vendor": "salesforce",
+        "type": "Case",
+        "name": "SSO provisioning question",
+        "status": "Open",
+        "created_on": "2026-09-11",
+    },
+    {
+        "crm_id": "case-0003",
+        "vendor": "salesforce",
+        "type": "Case",
+        "name": "Seat count dispute",
+        "status": "Open",
+        "created_on": "2026-01-04",
+    },
+    {
+        "crm_id": "opp-0001",
+        "vendor": "salesforce",
+        "type": "Opportunity",
+        "name": "FY27 renewal",
+        "close_date": "2027-02-28",
+        "created_on": "2026-03-01",
+    },
+    {
+        "crm_id": "opp-0002",
+        "vendor": "salesforce",
+        "type": "Opportunity",
+        "name": "Q4 enterprise",
+        "close_date": "2026-10-07",
+        "created_on": "2026-06-14",
+    },
+    {
+        "crm_id": "opp-0003",
+        "vendor": "salesforce",
+        "type": "Opportunity",
+        "name": "pilot",
+        "close_date": "2026-09-20",
+        "created_on": "2026-02-02",
+    },
+    {
+        "crm_id": "camp-0001",
+        "vendor": "salesforce",
+        "type": "Campaign",
+        "name": "Q4 Enterprise",
+        "created_on": "2026-09-01",
+    },
     # A Campaign with a date but no status, so "most recent" and "nearest" differ
     # for it and the rule this build chose is visible.
-    {"crm_id": "camp-0002", "vendor": "salesforce", "type": "Campaign",
-     "name": "FY27 Expansion", "created_on": "2026-10-01"},
-    {"crm_id": "hs-cnt-0001", "vendor": "hubspot", "type": "Contact",
-     "name": "Priya Raman", "email": "priya.raman@contoso.example",
-     "account_id": "comp-0001", "owner": "sam@acme.example",
-     "fields": {"lifecyclestage": "salesqualifiedlead"}, "created_on": "2026-05-20"},
-    {"crm_id": "comp-0001", "vendor": "hubspot", "type": "Company",
-     "name": "Contoso Health", "owner": "sam@acme.example", "created_on": "2026-05-01"},
-    {"crm_id": "hs-deal-0001", "vendor": "hubspot", "type": "Deal",
-     "name": "security review", "close_date": "2026-10-09", "created_on": "2026-06-02"},
-    {"crm_id": "hs-deal-0002", "vendor": "hubspot", "type": "Deal",
-     "name": "pilot", "close_date": "2026-12-15", "created_on": "2026-07-19"},
-    {"crm_id": "hs-tick-0001", "vendor": "hubspot", "type": "Ticket",
-     "name": "DPA request", "status": "Closed", "created_on": "2026-09-18"},
-    {"crm_id": "hs-tick-0002", "vendor": "hubspot", "type": "Ticket",
-     "name": "BAA countersignature", "status": "Open", "created_on": "2026-09-20"},
+    {
+        "crm_id": "camp-0002",
+        "vendor": "salesforce",
+        "type": "Campaign",
+        "name": "FY27 Expansion",
+        "created_on": "2026-10-01",
+    },
+    {
+        "crm_id": "hs-cnt-0001",
+        "vendor": "hubspot",
+        "type": "Contact",
+        "name": "Priya Raman",
+        "email": "priya.raman@contoso.example",
+        "account_id": "comp-0001",
+        "owner": "sam@acme.example",
+        "fields": {"lifecyclestage": "salesqualifiedlead"},
+        "created_on": "2026-05-20",
+    },
+    {
+        "crm_id": "comp-0001",
+        "vendor": "hubspot",
+        "type": "Company",
+        "name": "Contoso Health",
+        "owner": "sam@acme.example",
+        "created_on": "2026-05-01",
+    },
+    {
+        "crm_id": "hs-deal-0001",
+        "vendor": "hubspot",
+        "type": "Deal",
+        "name": "security review",
+        "close_date": "2026-10-09",
+        "created_on": "2026-06-02",
+    },
+    {
+        "crm_id": "hs-deal-0002",
+        "vendor": "hubspot",
+        "type": "Deal",
+        "name": "pilot",
+        "close_date": "2026-12-15",
+        "created_on": "2026-07-19",
+    },
+    {
+        "crm_id": "hs-tick-0001",
+        "vendor": "hubspot",
+        "type": "Ticket",
+        "name": "DPA request",
+        "status": "Closed",
+        "created_on": "2026-09-18",
+    },
+    {
+        "crm_id": "hs-tick-0002",
+        "vendor": "hubspot",
+        "type": "Ticket",
+        "name": "BAA countersignature",
+        "status": "Open",
+        "created_on": "2026-09-20",
+    },
 )
 
 
@@ -228,23 +331,51 @@ def crm(store, room_id):
     return client
 
 
-def meeting_type(engine, room_id, *, name="Enterprise demo", vendor="salesforce",
-                 event_type_id="445511", sync=True, **extra):
+def meeting_type(
+    engine,
+    room_id,
+    *,
+    name="Enterprise demo",
+    vendor="salesforce",
+    event_type_id="445511",
+    sync=True,
+    **extra,
+):
     return engine.create_meeting_type(
         room_id,
-        {"name": name, "vendor": vendor, "event_type_id": event_type_id,
-         "sync_to_crm": sync, **extra},
+        {
+            "name": name,
+            "vendor": vendor,
+            "event_type_id": event_type_id,
+            "sync_to_crm": sync,
+            **extra,
+        },
         actor="dana",
         source=SOURCE,
     )
 
 
-def flow(engine, room_id, meeting, nodes, *, name="Writeback", path="scheduled",
-         vendor="salesforce", **extra):
+def flow(
+    engine,
+    room_id,
+    meeting,
+    nodes,
+    *,
+    name="Writeback",
+    path="scheduled",
+    vendor="salesforce",
+    **extra,
+):
     return engine.create_flow(
         room_id,
-        {"name": name, "vendor": vendor, "path": path,
-         "meeting_type_id": str(meeting["id"]), "nodes": nodes, **extra},
+        {
+            "name": name,
+            "vendor": vendor,
+            "path": path,
+            "meeting_type_id": str(meeting["id"]),
+            "nodes": nodes,
+            **extra,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -405,7 +536,9 @@ def test_the_delete_event_modes_are_served_with_what_each_one_fires_on():
 def test_cal_s_the_documented_error_endpoint_is_served_as_a_path_and_a_description():
     payload = describe_vocabulary()
     assert payload["cal_sync_errors_path"] == "/v2/event-types/{event_type_id}/crm-sync-errors"
-    assert payload["cal_sync_errors_description"] if "cal_sync_errors_description" in payload else True
+    assert (
+        payload["cal_sync_errors_description"] if "cal_sync_errors_description" in payload else True
+    )
     assert "List CRM sync errors for an event type" in str(payload)
 
 
@@ -424,21 +557,30 @@ def test_a_flow_whose_event_node_comes_first_is_refused_with_the_quote(engine, r
     """[sourced] the sentence, refused rather than silently reordered."""
     meeting = meeting_type(engine, room_id)
     with pytest.raises(NodeOrderError) as excinfo:
-        flow(engine, room_id, meeting, [
-            {"node": "create_event"},
-            anchor(),
-        ], name="wrong order")
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [
+                {"node": "create_event"},
+                anchor(),
+            ],
+            name="wrong order",
+        )
     message = str(excinfo.value)
     assert "create_event" in message
     assert ORDERING_QUOTE in message
 
 
-@pytest.mark.parametrize("node", [
-    {"node": "create_event"},
-    {"node": "update_field", "fields": [{"field": "Status", "value": "x"}]},
-    {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    {"node": "update_ownership"},
-])
+@pytest.mark.parametrize(
+    "node",
+    [
+        {"node": "create_event"},
+        {"node": "update_field", "fields": [{"field": "Status", "value": "x"}]},
+        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        {"node": "update_ownership"},
+    ],
+)
 def test_every_node_the_sentence_names_is_refused_before_the_anchor(engine, room_id, crm, node):
     """The sentence names four; the HubSpot spellings of two of them are the same
     rule, and both are refused."""
@@ -466,17 +608,27 @@ def test_the_anchor_alone_is_a_legal_flow(engine, room_id, crm):
 
 def test_a_flow_with_every_node_in_order_is_accepted(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(),
-        {"node": "related_object", "object": "Case"},
-        {"node": "create_event", "child_events": True},
-        {"node": "update_field", "fields": [{"field": "Rating", "value": "Hot"}]},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-        {"node": "update_ownership"},
-    ], name="the whole flow")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Case"},
+            {"node": "create_event", "child_events": True},
+            {"node": "update_field", "fields": [{"field": "Rating", "value": "Hot"}]},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+            {"node": "update_ownership"},
+        ],
+        name="the whole flow",
+    )
     assert declared["data"]["plan"]["order"] == [
-        "create_or_update_record", "related_object", "create_event",
-        "update_field", "add_to_campaign", "update_ownership",
+        "create_or_update_record",
+        "related_object",
+        "create_event",
+        "update_field",
+        "add_to_campaign",
+        "update_ownership",
     ]
 
 
@@ -487,12 +639,15 @@ def test_the_anchor_may_be_declared_only_once(engine, room_id, crm):
     assert "declares 2 at positions [0, 1]" in str(excinfo.value)
 
 
-@pytest.mark.parametrize("twice", [
-    "create_event",
-    "related_object",
-    "add_to_campaign",
-    "update_ownership",
-])
+@pytest.mark.parametrize(
+    "twice",
+    [
+        "create_event",
+        "related_object",
+        "add_to_campaign",
+        "update_ownership",
+    ],
+)
 def test_a_singleton_node_may_not_be_declared_twice(engine, room_id, crm, twice):
     """The palette carries one of each; a second has no meaning."""
     settings = {
@@ -512,20 +667,30 @@ def test_a_field_node_may_be_declared_more_than_once(engine, room_id, crm):
     which implies a node per field rather than a node per node. A custom field is
     another node, which is the researched extensibility made concrete."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(),
-        {"node": "update_field", "fields": [{"field": "Status", "value": "Sales Qualified"}]},
-        {"node": "update_field", "fields": [{"field": "NumberOfEmployees", "value": 40}]},
-    ], name="two field nodes")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_field", "fields": [{"field": "Status", "value": "Sales Qualified"}]},
+            {"node": "update_field", "fields": [{"field": "NumberOfEmployees", "value": 40}]},
+        ],
+        name="two field nodes",
+    )
     assert declared["data"]["plan"]["order"].count("update_field") == 2
 
 
 def test_the_singleton_set_is_exactly_the_nodes_the_research_describes_once():
     assert SINGLETON_NODES == frozenset(
         {
-            "create_or_update_record", "create_or_update_contact",
-            "create_event", "create_engagement", "related_object",
-            "add_to_campaign", "update_ownership",
+            "create_or_update_record",
+            "create_or_update_contact",
+            "create_event",
+            "create_engagement",
+            "related_object",
+            "add_to_campaign",
+            "update_ownership",
         }
     )
 
@@ -552,9 +717,11 @@ def test_patching_a_flow_cannot_smuggle_in_a_bad_order(engine, room_id, crm, sto
     declared = flow(engine, room_id, meeting, [anchor(), {"node": "create_event"}])
     with pytest.raises(NodeOrderError):
         engine.update_flow(
-            room_id, str(declared["id"]),
+            room_id,
+            str(declared["id"]),
             {"nodes": [{"node": "create_event"}, anchor()]},
-            actor="dana", source=SOURCE,
+            actor="dana",
+            source=SOURCE,
         )
     assert engine.flow(str(declared["id"]), room_id=room_id)["data"]["nodes"][0]["node"] == (
         "create_or_update_record"
@@ -576,21 +743,40 @@ def test_a_salesforce_flow_cannot_declare_the_hubspot_node_names(engine, room_id
     """The research pairs the names and never mixes them."""
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidNode) as excinfo:
-        flow(engine, room_id, meeting, [
-            {"node": "create_or_update_contact", "update": "matched_contact_or_lead",
-             "create": "contact_or_lead", "record_type": "contact"},
-            {"node": "create_engagement"},
-        ])
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [
+                {
+                    "node": "create_or_update_contact",
+                    "update": "matched_contact_or_lead",
+                    "create": "contact_or_lead",
+                    "record_type": "contact",
+                },
+                {"node": "create_engagement"},
+            ],
+        )
     assert "belongs to the hubspot palette" in str(excinfo.value)
 
 
 def test_the_palettes_mirror_each_other(engine, room_id):
     meeting = meeting_type(engine, room_id, vendor="hubspot")
-    declared = flow(engine, room_id, meeting, [
-        {"node": "create_or_update_contact", "update": "matched_contact_or_lead",
-         "create": "contact_or_lead", "record_type": "contact"},
-        {"node": "create_engagement"},
-    ], vendor="hubspot")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            {
+                "node": "create_or_update_contact",
+                "update": "matched_contact_or_lead",
+                "create": "contact_or_lead",
+                "record_type": "contact",
+            },
+            {"node": "create_engagement"},
+        ],
+        vendor="hubspot",
+    )
     assert declared["data"]["plan"]["order"] == ["create_or_update_contact", "create_engagement"]
 
 
@@ -610,9 +796,15 @@ def test_a_node_with_no_name_is_refused(engine, room_id):
 
 def test_every_node_this_build_knows_is_one_the_research_names():
     assert set(ALL_NODES) == {
-        "create_or_update_record", "create_or_update_contact", "create_event",
-        "create_engagement", "related_object", "update_field", "update_property",
-        "add_to_campaign", "update_ownership",
+        "create_or_update_record",
+        "create_or_update_contact",
+        "create_event",
+        "create_engagement",
+        "related_object",
+        "update_field",
+        "update_property",
+        "add_to_campaign",
+        "update_ownership",
     }
 
 
@@ -620,9 +812,15 @@ def test_a_flow_needs_a_vendor_because_the_node_names_differ(engine, room_id):
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidConfig) as excinfo:
         engine.create_flow(
-            room_id, {"name": "x", "path": "scheduled", "meeting_type_id": str(meeting["id"]),
-                     "nodes": [anchor()]},
-            actor="dana", source=SOURCE,
+            room_id,
+            {
+                "name": "x",
+                "path": "scheduled",
+                "meeting_type_id": str(meeting["id"]),
+                "nodes": [anchor()],
+            },
+            actor="dana",
+            source=SOURCE,
         )
     assert "needs a vendor" in str(excinfo.value)
 
@@ -633,7 +831,9 @@ def test_a_flow_needs_a_vendor_because_the_node_names_differ(engine, room_id):
 
 
 def test_matching_is_by_email_and_case_insensitive(crm):
-    found = crm.match_by_email("  A.Buyer@Northwind.Example ", record_types=("Contact",), source=SOURCE)
+    found = crm.match_by_email(
+        "  A.Buyer@Northwind.Example ", record_types=("Contact",), source=SOURCE
+    )
     assert found["matched"]["data"]["crm_id"] == "cnt-0001"
     assert found["reason"] == "matched_email"
 
@@ -662,7 +862,9 @@ def test_the_search_order_is_reported_on_the_run_so_a_reader_can_see_which_rule_
 def test_a_lead_wins_over_a_contact_when_both_carry_the_address(crm):
     """The order is a gap in the research, so it is a stated order - and it is Lead
     first, or "Only update matched Lead" could never do its job."""
-    report = crm.match_by_email("a.buyer@northwind.example", record_types=("Contact", "Lead"), source=SOURCE)
+    report = crm.match_by_email(
+        "a.buyer@northwind.example", record_types=("Contact", "Lead"), source=SOURCE
+    )
     assert report["matched"] is None or report["matched_type"] == "Contact"
     assert MATCH_ORDER["salesforce"] == ("Lead", "Contact")
     assert MATCH_ORDER["hubspot"] == ("Contact",)
@@ -670,10 +872,17 @@ def test_a_lead_wins_over_a_contact_when_both_carry_the_address(crm):
 
 def test_hubspot_searches_contact_alone_because_it_has_no_lead(engine, room_id, store, crm):
     hubspot_crm = LocalCrm(store, room_id=room_id)
-    hubspot_crm.seed([
-        {"crm_id": "hs-cnt-9", "vendor": "hubspot", "type": "Contact",
-         "email": "priya.raman@contoso.example", "name": "Priya Raman"},
-    ])
+    hubspot_crm.seed(
+        [
+            {
+                "crm_id": "hs-cnt-9",
+                "vendor": "hubspot",
+                "type": "Contact",
+                "email": "priya.raman@contoso.example",
+                "name": "Priya Raman",
+            },
+        ]
+    )
     report = hubspot_crm.match_by_email(
         "priya.raman@contoso.example", record_types=MATCH_ORDER["hubspot"], source=SOURCE
     )
@@ -698,9 +907,17 @@ def test_an_empty_email_reports_its_own_reason(crm):
 
 def test_update_matched_contact_or_lead_writes_the_matched_record(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(update="matched_contact_or_lead", fields=[{"field": "Status", "value": "Sales Qualified"}]),
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(
+                update="matched_contact_or_lead",
+                fields=[{"field": "Status", "value": "Sales Qualified"}],
+            ),
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     assert steps_of(run)["create_or_update_record"]["resolved"]["update_outcome"] == "applied"
     assert crm.get("cnt-0001")["data"]["fields"]["Status"] == "Sales Qualified"
@@ -709,9 +926,16 @@ def test_update_matched_contact_or_lead_writes_the_matched_record(engine, room_i
 def test_only_update_matched_lead_declines_to_write_a_contact(engine, room_id, crm):
     """[sourced] "Only update matched Lead" - a Contact match is not updated."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(update="matched_lead_only", fields=[{"field": "Status", "value": "Sales Qualified"}]),
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(
+                update="matched_lead_only", fields=[{"field": "Status", "value": "Sales Qualified"}]
+            ),
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     resolved = steps_of(run)["create_or_update_record"]["resolved"]
     assert resolved["update_outcome"] == "skipped_lead_only"
@@ -721,10 +945,17 @@ def test_only_update_matched_lead_declines_to_write_a_contact(engine, room_id, c
 def test_only_update_matched_lead_does_write_a_lead(engine, room_id, crm):
     """The branch exists to update a Lead, so it has to."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(update="matched_lead_only", fields=[{"field": "Rating", "value": "Hot"}]),
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(update="matched_lead_only", fields=[{"field": "Rating", "value": "Hot"}]),
+        ],
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm
+    )
     assert steps_of(run)["create_or_update_record"]["resolved"]["update_outcome"] == "applied"
     assert crm.get("lead-0001")["data"]["fields"]["Rating"] == "Hot"
 
@@ -733,7 +964,9 @@ def test_create_contact_or_lead_makes_whichever_the_node_names(engine, room_id, 
     """[sourced] the branch is a branch; the node's record_type says which."""
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(record_type="contact")])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert run["data"]["record"]["type"] == "Contact"
 
 
@@ -773,14 +1006,24 @@ def test_the_two_create_branches_produce_different_records_from_the_same_booking
 ):
     meeting = meeting_type(engine, room_id)
     matched = run_flow(
-        engine, room_id,
+        engine,
+        room_id,
         flow(engine, room_id, meeting, [anchor(create="lead", record_type="lead")], name="lead"),
-        booking(), crm,
+        booking(),
+        crm,
     )
     always = run_flow(
-        engine, room_id,
-        flow(engine, room_id, meeting, [anchor(create="always_lead", record_type="lead")], name="always"),
-        booking(), crm,
+        engine,
+        room_id,
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [anchor(create="always_lead", record_type="lead")],
+            name="always",
+        ),
+        booking(),
+        crm,
     )
     assert matched["data"]["record"]["type"] == "Contact"
     assert always["data"]["record"]["type"] == "Lead"
@@ -791,7 +1034,9 @@ def test_a_flow_with_no_create_branch_never_creates(engine, room_id, crm):
     no-record catch-all reachable rather than hypothetical."""
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(create="none")])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert run["data"]["record"] == {"crm_id": "", "type": ""}
     created = {row["data"]["crm_id"] for row in crm.records("Contact", include_deleted=True)}
     assert created == {"cnt-0001", "hs-cnt-0001"}
@@ -801,9 +1046,14 @@ def test_a_field_update_merges_and_keeps_the_fields_it_did_not_touch(engine, roo
     """A field write that dropped untouched keys would be destructive, which is
     not what "Update Field" says."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(fields=[{"field": "Status", "value": "Sales Qualified"}]),
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(fields=[{"field": "Status", "value": "Sales Qualified"}]),
+        ],
+    )
     run_flow(engine, room_id, declared, booking(), crm)
     fields = crm.get("cnt-0001")["data"]["fields"]
     assert fields == {"Rating": "Warm", "Status": "Sales Qualified"}
@@ -812,9 +1062,14 @@ def test_a_field_update_merges_and_keeps_the_fields_it_did_not_touch(engine, roo
 def test_a_data_field_can_be_mapped_onto_a_custom_crm_field(engine, room_id, crm):
     """[sourced] "Data Fields can be mapped to custom CRM fields"."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(fields=[{"field": "NumberOfEmployees__c", "from_data_field": "seats"}]),
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(fields=[{"field": "NumberOfEmployees__c", "from_data_field": "seats"}]),
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(data_fields={"seats": "40"}), crm)
     written = steps_of(run)["create_or_update_record"]["resolved"]["fields_written"]
     assert written[0]["value"] == "40"
@@ -825,9 +1080,14 @@ def test_a_data_field_the_booking_does_not_carry_is_reported_not_defaulted(engin
     """A field map that silently wrote "" would be indistinguishable from one that
     legitimately mapped an empty value."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(fields=[{"field": "Region", "from_data_field": "region"}]),
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(fields=[{"field": "Region", "from_data_field": "region"}]),
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     written = steps_of(run)["create_or_update_record"]["resolved"]["fields_written"][0]
     assert written["written"] is False
@@ -862,16 +1122,23 @@ def test_an_unknown_create_branch_is_refused_and_names_the_three(engine, room_id
 # --------------------------------------------------------------------------- #
 
 
-def test_a_related_object_needs_a_contact_and_refuses_to_resolve_off_a_lead(
-    engine, room_id, crm
-):
+def test_a_related_object_needs_a_contact_and_refuses_to_resolve_off_a_lead(engine, room_id, crm):
     """[sourced] "If we have found a contact" - a Lead is not a Contact, and the
     natural reading of that paragraph is exactly the mistake this guards against."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "related_object", "object": "Case"}, {"node": "create_event"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Case"},
+            {"node": "create_event"},
+        ],
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm
+    )
     step = steps_of(run)["related_object"]
     assert step["outcome"] == OUTCOME_SKIPPED
     assert step["reason"] == RELATED_REQUIRES_CONTACT_QUOTE
@@ -882,10 +1149,17 @@ def test_a_lead_still_gets_the_researched_default_relation(engine, room_id, crm)
     """[sourced] "All created Events will be related to the Contact or Lead **by
     default**" - unconditionally, whatever the record is."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "related_object", "object": "Case"}, {"node": "create_event"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Case"},
+            {"node": "create_event"},
+        ],
+    )
+    run_flow(engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm)
     history = engine.history(room_id)
     assert history[0]["data"]["related_to"] == "lead-0001"
     assert history[0]["data"]["related_object"] == ""
@@ -919,10 +1193,18 @@ def test_a_campaign_relation_must_name_the_campaign(engine, room_id):
 
 def test_a_related_object_with_no_record_skips_with_the_no_record_reason(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(create="none"), {"node": "related_object", "object": "Case"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(create="none"),
+            {"node": "related_object", "object": "Case"},
+        ],
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert steps_of(run)["related_object"]["reason"] == SKIP_NO_RECORD
 
 
@@ -935,9 +1217,15 @@ def test_a_case_chooses_the_most_recently_created_open_one(engine, room_id, crm)
     """[sourced] "For **Cases**, we will relate with the most recently created Open
     one" - case-0002 (11 Sep), not the *newer* Closed case-0001 (25 Sep)."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "related_object", "object": "Case"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Case"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     assert run["data"]["related"]["crm_id"] == "case-0002"
     assert run["data"]["related"]["rule"] == "most_recent_open"
@@ -961,8 +1249,18 @@ def test_the_case_refusal_reports_how_many_closed_cases_were_not_candidates(stor
 def test_a_case_with_no_creation_date_never_wins_the_most_recently_created_rule(store, crm):
     """A row with an unparseable date must not win by default."""
     other = LocalCrm(store, room_id=crm.room_id)
-    other.seed([{"crm_id": "case-0009", "vendor": "salesforce", "type": "Case",
-                 "status": "Open", "created_on": "not-a-date"}], source=SOURCE)
+    other.seed(
+        [
+            {
+                "crm_id": "case-0009",
+                "vendor": "salesforce",
+                "type": "Case",
+                "status": "Open",
+                "created_on": "not-a-date",
+            }
+        ],
+        source=SOURCE,
+    )
     selection = other.select_related("Case", record=None, on=date(2026, 10, 5), source=SOURCE)
     assert selection["chosen"]["data"]["crm_id"] == "case-0002"
 
@@ -972,9 +1270,15 @@ def test_an_opportunity_chooses_the_one_with_the_nearest_close_date(engine, room
     nearest Close Date" - and 7 October is two days from the meeting, where 20
     September is fifteen days away and 28 February is nearly five months."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "related_object", "object": "Opportunity"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Opportunity"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     assert run["data"]["related"]["crm_id"] == "opp-0002"
     assert run["data"]["related"]["rule"] == "nearest_close_date"
@@ -993,10 +1297,26 @@ def test_nearest_is_measured_against_the_meeting_and_not_the_soonest(crm):
 
 def test_nearest_breaks_a_tie_on_the_earlier_close_date(store, crm):
     other = LocalCrm(store, room_id=crm.room_id)
-    other.seed([{"crm_id": "opp-9001", "vendor": "salesforce", "type": "Opportunity",
-                 "close_date": "2026-10-03"}, {"crm_id": "opp-9002", "vendor": "salesforce",
-                 "type": "Opportunity", "close_date": "2026-10-07"}], source=SOURCE)
-    selection = other.select_related("Opportunity", record=None, on=date(2026, 10, 5), source=SOURCE)
+    other.seed(
+        [
+            {
+                "crm_id": "opp-9001",
+                "vendor": "salesforce",
+                "type": "Opportunity",
+                "close_date": "2026-10-03",
+            },
+            {
+                "crm_id": "opp-9002",
+                "vendor": "salesforce",
+                "type": "Opportunity",
+                "close_date": "2026-10-07",
+            },
+        ],
+        source=SOURCE,
+    )
+    selection = other.select_related(
+        "Opportunity", record=None, on=date(2026, 10, 5), source=SOURCE
+    )
     assert selection["chosen"]["data"]["crm_id"] == "opp-9001"
 
 
@@ -1010,16 +1330,36 @@ def test_an_opportunity_with_no_meeting_date_falls_back_to_the_earliest_and_says
 def test_a_related_object_with_no_candidate_is_skipped_not_failed(engine, room_id, store):
     """The Event keeps its researched default relation rather than losing the run."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "related_object", "object": "Case"}, {"node": "create_event"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Case"},
+            {"node": "create_event"},
+        ],
+    )
     empty = LocalCrm(store, room_id=room_id)
-    empty.seed([
-        {"crm_id": "cnt-only", "vendor": "salesforce", "type": "Contact",
-         "email": "a.buyer@northwind.example", "name": "Amara"},
-        {"crm_id": "case-closed-only", "vendor": "salesforce", "type": "Case",
-         "status": "Closed", "created_on": "2026-09-01"},
-    ], source=SOURCE)
+    empty.seed(
+        [
+            {
+                "crm_id": "cnt-only",
+                "vendor": "salesforce",
+                "type": "Contact",
+                "email": "a.buyer@northwind.example",
+                "name": "Amara",
+            },
+            {
+                "crm_id": "case-closed-only",
+                "vendor": "salesforce",
+                "type": "Case",
+                "status": "Closed",
+                "created_on": "2026-09-01",
+            },
+        ],
+        source=SOURCE,
+    )
     run = run_flow(engine, room_id, declared, booking(), empty)
     step = steps_of(run)["related_object"]
     assert step["outcome"] == OUTCOME_SKIPPED
@@ -1040,10 +1380,16 @@ def test_a_campaign_relation_resolves_the_campaign_the_node_named(engine, room_i
     """The engine looks up the named Campaign; the raw selector's "most recent" rule
     is a different question and picks the other one, which is why the node names it."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "related_object", "object": "Campaign", "campaign": "Q4 Enterprise"},
-        {"node": "create_event"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Campaign", "campaign": "Q4 Enterprise"},
+            {"node": "create_event"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     assert run["data"]["related"]["crm_id"] == "camp-0001"
     assert run["data"]["related"]["rule"] == "named_explicitly"
@@ -1051,9 +1397,15 @@ def test_a_campaign_relation_resolves_the_campaign_the_node_named(engine, room_i
 
 def test_a_campaign_relation_naming_a_campaign_that_does_not_exist_skips(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "related_object", "object": "Campaign", "campaign": "Nonexistent"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "related_object", "object": "Campaign", "campaign": "Nonexistent"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     step = steps_of(run)["related_object"]
     assert step["outcome"] == OUTCOME_SKIPPED
@@ -1098,7 +1450,9 @@ def test_l2a_creates_an_account_for_a_matched_lead(engine, room_id, crm):
     """[sourced] "Salesforce L2A matching applied" - Lead *to Account*."""
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(l2a=True)])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), crm
+    )
     l2a = steps_of(run)["create_or_update_record"]["resolved"]["l2a"]
     assert l2a["applied"] is True
     assert l2a["reason"] == "l2a_matched_an_existing_account"
@@ -1116,12 +1470,24 @@ def test_l2a_links_the_ledger_to_the_account_it_matched(engine, room_id, crm):
 
 def test_l2a_creates_the_account_when_there_is_none_to_match(store, room_id):
     empty = LocalCrm(store, room_id=room_id)
-    empty.seed([{"crm_id": "lead-x", "vendor": "salesforce", "type": "Lead",
-                 "email": "b.toure@northwind.example", "company": "Brand New Co"}], source=SOURCE)
+    empty.seed(
+        [
+            {
+                "crm_id": "lead-x",
+                "vendor": "salesforce",
+                "type": "Lead",
+                "email": "b.toure@northwind.example",
+                "company": "Brand New Co",
+            }
+        ],
+        source=SOURCE,
+    )
     engine = BookingWriteback(store)
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(l2a=True, create="")])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), empty)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "b.toure@northwind.example"}), empty
+    )
     l2a = steps_of(run)["create_or_update_record"]["resolved"]["l2a"]
     assert l2a["reason"] == "l2a_created_an_account"
     assert empty.get(l2a["account_crm_id"])["data"]["name"] == "Brand New Co"
@@ -1131,10 +1497,21 @@ def test_l2a_is_a_salesforce_rule_and_says_so_on_hubspot(store, room_id):
     hubspot = LocalCrm(store, room_id=room_id)
     engine = BookingWriteback(store)
     meeting = meeting_type(engine, room_id, vendor="hubspot")
-    declared = flow(engine, room_id, meeting, [
-        {"node": "create_or_update_contact", "update": "matched_contact_or_lead",
-         "create": "contact_or_lead", "record_type": "contact", "l2a": True},
-    ], vendor="hubspot")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            {
+                "node": "create_or_update_contact",
+                "update": "matched_contact_or_lead",
+                "create": "contact_or_lead",
+                "record_type": "contact",
+                "l2a": True,
+            },
+        ],
+        vendor="hubspot",
+    )
     run = run_flow(engine, room_id, declared, booking(), hubspot)
     l2a = steps_of(run)["create_or_update_contact"]["resolved"]["l2a"]
     assert l2a == {"applied": False, "reason": "l2a_is_a_salesforce_rule"}
@@ -1142,12 +1519,23 @@ def test_l2a_is_a_salesforce_rule_and_says_so_on_hubspot(store, room_id):
 
 def test_l2a_with_no_company_to_convert_says_why_it_did_nothing(store, room_id):
     empty = LocalCrm(store, room_id=room_id)
-    empty.seed([{"crm_id": "lead-y", "vendor": "salesforce", "type": "Lead",
-                 "email": "solo@prospect.example"}], source=SOURCE)
+    empty.seed(
+        [
+            {
+                "crm_id": "lead-y",
+                "vendor": "salesforce",
+                "type": "Lead",
+                "email": "solo@prospect.example",
+            }
+        ],
+        source=SOURCE,
+    )
     engine = BookingWriteback(store)
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(l2a=True, create="")])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "solo@prospect.example"}), empty)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "solo@prospect.example"}), empty
+    )
     assert steps_of(run)["create_or_update_record"]["resolved"]["l2a"]["reason"] == (
         "no_company_on_the_lead_to_convert"
     )
@@ -1161,9 +1549,15 @@ def test_l2a_with_no_company_to_convert_says_why_it_did_nothing(store, room_id):
 def test_a_campaign_member_is_created_with_status_booked(engine, room_id, crm):
     """[sourced] "CampaignMember created/updated with status **Booked**"."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     step = steps_of(run)["add_to_campaign"]
     assert step["outcome"] == OUTCOME_APPLIED
@@ -1175,9 +1569,15 @@ def test_a_campaign_member_is_created_with_status_booked(engine, room_id, crm):
 def test_a_second_booking_updates_the_member_rather_than_duplicating_it(engine, room_id, crm):
     """The "created/**updated**" half of the same sentence."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
     first = run_flow(engine, room_id, declared, booking(booking_ref="b-1"), crm)
     second = run_flow(engine, room_id, declared, booking(booking_ref="b-2"), crm)
     assert steps_of(first)["add_to_campaign"]["resolved"]["outcome"] == "created"
@@ -1187,10 +1587,20 @@ def test_a_second_booking_updates_the_member_rather_than_duplicating_it(engine, 
 
 def test_a_campaign_member_in_a_different_campaign_is_a_different_member(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    first = flow(engine, room_id, meeting, [
-        anchor(), {"node": "add_to_campaign", "campaign": "Q4 Enterprise"}], name="q4")
-    second = flow(engine, room_id, meeting, [
-        anchor(), {"node": "add_to_campaign", "campaign": "FY27 Expansion"}], name="fy27")
+    first = flow(
+        engine,
+        room_id,
+        meeting,
+        [anchor(), {"node": "add_to_campaign", "campaign": "Q4 Enterprise"}],
+        name="q4",
+    )
+    second = flow(
+        engine,
+        room_id,
+        meeting,
+        [anchor(), {"node": "add_to_campaign", "campaign": "FY27 Expansion"}],
+        name="fy27",
+    )
     run_flow(engine, room_id, first, booking(), crm)
     run_flow(engine, room_id, second, booking(), crm)
     assert len(crm.records("CampaignMember")) == 2
@@ -1201,18 +1611,32 @@ def test_a_campaign_member_status_other_than_booked_is_refused_with_the_quote(en
     this build will not honour."""
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidConfig) as excinfo:
-        flow(engine, room_id, meeting, [
-            anchor(), {"node": "add_to_campaign", "campaign": "Q4 Enterprise", "status": "Attended"},
-        ])
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [
+                anchor(),
+                {"node": "add_to_campaign", "campaign": "Q4 Enterprise", "status": "Attended"},
+            ],
+        )
     assert "CampaignMember created/updated with status Booked" in str(excinfo.value)
 
 
 def test_a_campaign_member_with_no_record_skips_with_the_no_record_reason(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(create="none"), {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(create="none"),
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert steps_of(run)["add_to_campaign"]["reason"] == SKIP_NO_RECORD
 
 
@@ -1224,27 +1648,42 @@ def test_a_campaign_member_with_no_record_skips_with_the_no_record_reason(engine
 def test_the_owner_is_reassigned_to_the_assignee(engine, room_id, crm):
     """[sourced] "record Owner reassigned to the assignee"."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": "assignee"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "assign_to": "assignee"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     step = steps_of(run)["update_ownership"]
     assert step["resolved"]["owner"] == "sam@acme.example"
     assert crm.get("cnt-0001")["data"]["owner"] == "sam@acme.example"
 
 
-@pytest.mark.parametrize("which,email", [
-    ("assignee", "sam@acme.example"),
-    ("host", "dana@acme.example"),
-    ("booker", "a.buyer@northwind.example"),
-])
+@pytest.mark.parametrize(
+    "which,email",
+    [
+        ("assignee", "sam@acme.example"),
+        ("host", "dana@acme.example"),
+        ("booker", "a.buyer@northwind.example"),
+    ],
+)
 def test_the_owner_can_be_any_of_the_three_identities_the_research_names(
     engine, room_id, crm, which, email
 ):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": which},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "assign_to": which},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     assert steps_of(run)["update_ownership"]["resolved"]["owner"] == email
 
@@ -1252,10 +1691,16 @@ def test_the_owner_can_be_any_of_the_three_identities_the_research_names(
 def test_ownership_can_be_transferred_to_the_booker_who_took_the_meeting(engine, room_id, crm):
     """[sourced] "ownership can be transferred to whoever took the meeting"."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": "booker"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "assign_to": "booker"},
+        ],
+    )
+    run_flow(engine, room_id, declared, booking(), crm)
     assert crm.get("cnt-0001")["data"]["owner"] == "a.buyer@northwind.example"
 
 
@@ -1267,9 +1712,15 @@ def test_the_relationship_fallback_reads_the_owner_of_the_related_record(engine,
     researched sentence never happened on any record with a related one.
     """
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "fallback_mode": "relationship"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "fallback_mode": "relationship"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(assignee={}), crm)
     step = steps_of(run)["update_ownership"]
     assert step["resolved"]["branch"] == "fallback_relationship"
@@ -1284,10 +1735,15 @@ def test_the_relationship_fallback_reads_the_owner_of_the_related_record(engine,
 def test_the_assignee_beats_the_fallback_when_the_booking_carries_one(engine, room_id, crm):
     """[sourced] "record Owner reassigned to the assignee" - first, not last."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": "assignee",
-                   "fallback_mode": "relationship"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "assign_to": "assignee", "fallback_mode": "relationship"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     step = steps_of(run)["update_ownership"]
     assert step["resolved"]["branch"] == "assignee"
@@ -1298,13 +1754,22 @@ def test_the_assignee_beats_the_fallback_when_the_booking_carries_one(engine, ro
 def test_the_attribute_rules_fallback_takes_the_first_matching_rule(engine, room_id, crm):
     """[sourced] Cal's other documented value."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "fallback_mode": "attributeRules",
-                   "attribute_rules": [
-                       {"field": "Rating", "equals": "Hot", "owner": "lead@acme.example"},
-                       {"field": "Rating", "owner": "fallback@acme.example"},
-                   ]},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {
+                "node": "update_ownership",
+                "fallback_mode": "attributeRules",
+                "attribute_rules": [
+                    {"field": "Rating", "equals": "Hot", "owner": "lead@acme.example"},
+                    {"field": "Rating", "owner": "fallback@acme.example"},
+                ],
+            },
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(assignee={}), crm)
     step = steps_of(run)["update_ownership"]
     # cnt-0001's Rating is Warm, so the first rule misses and the second catches it.
@@ -1315,27 +1780,43 @@ def test_the_attribute_rules_fallback_takes_the_first_matching_rule(engine, room
 
 def test_the_first_matching_attribute_rule_wins_over_the_later_ones(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "fallback_mode": "attributeRules",
-                   "attribute_rules": [
-                       {"field": "Status", "equals": "Open", "owner": "first@acme.example"},
-                       {"field": "Status", "owner": "second@acme.example"},
-                   ]},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {
+                "node": "update_ownership",
+                "fallback_mode": "attributeRules",
+                "attribute_rules": [
+                    {"field": "Status", "equals": "Open", "owner": "first@acme.example"},
+                    {"field": "Status", "owner": "second@acme.example"},
+                ],
+            },
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(assignee={}), crm)
     assert steps_of(run)["update_ownership"]["resolved"]["owner"] == "first@acme.example"
 
 
-def test_attribute_rules_matching_nothing_falls_through_to_the_records_owner(
-    engine, room_id, crm
-):
+def test_attribute_rules_matching_nothing_falls_through_to_the_records_owner(engine, room_id, crm):
     """Neither fallback nor assignee resolving is not "nobody": the record's own
     owner is the last resort, and the run says which branch it used."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "fallback_mode": "attributeRules",
-                   "attribute_rules": [{"field": "Nonexistent", "owner": "x@acme.example"}]},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {
+                "node": "update_ownership",
+                "fallback_mode": "attributeRules",
+                "attribute_rules": [{"field": "Nonexistent", "owner": "x@acme.example"}],
+            },
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(assignee={}), crm)
     step = steps_of(run)["update_ownership"]
     assert step["resolved"]["fallback"]["reason"] == "no_rule_matched"
@@ -1349,19 +1830,34 @@ def test_attribute_rules_with_no_rules_is_refused_at_declaration(engine, room_id
     """A mode that needs rules and has none would resolve to nothing silently."""
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidConfig) as excinfo:
-        flow(engine, room_id, meeting, [
-            anchor(), {"node": "update_ownership", "fallback_mode": "attributeRules"},
-        ])
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [
+                anchor(),
+                {"node": "update_ownership", "fallback_mode": "attributeRules"},
+            ],
+        )
     assert "needs at least one rule" in str(excinfo.value)
 
 
 def test_attribute_rules_under_the_relationship_mode_is_refused(engine, room_id):
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidConfig) as excinfo:
-        flow(engine, room_id, meeting, [
-            anchor(), {"node": "update_ownership", "fallback_mode": "relationship",
-                       "attribute_rules": [{"field": "Rating", "owner": "x@y.example"}]},
-        ])
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [
+                anchor(),
+                {
+                    "node": "update_ownership",
+                    "fallback_mode": "relationship",
+                    "attribute_rules": [{"field": "Rating", "owner": "x@y.example"}],
+                },
+            ],
+        )
     assert "only applies to fallback_mode 'attributeRules'" in str(excinfo.value)
 
 
@@ -1369,9 +1865,15 @@ def test_skip_contact_owner_writes_the_assignee_without_reading_the_crm(engine, 
     """[sourced] routing.skipContactOwner - "Whether to skip contact owner assignment
     from CRM integration"."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": "host", "skip_contact_owner": True},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "assign_to": "host", "skip_contact_owner": True},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     step = steps_of(run)["update_ownership"]
     assert step["resolved"]["branch"] == "skip_contact_owner"
@@ -1383,10 +1885,19 @@ def test_cal_s_crm_app_slug_and_owner_record_type_are_kept_for_tracing(engine, r
     """The research names both booking fields; they are recorded rather than acted on,
     because it does not say what they do beyond naming the app and the record type."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "crm_app_slug": "salesforce",
-                   "crm_owner_record_type": "Contact"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {
+                "node": "update_ownership",
+                "crm_app_slug": "salesforce",
+                "crm_owner_record_type": "Contact",
+            },
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     resolved = steps_of(run)["update_ownership"]["resolved"]
     assert resolved["crm_app_slug"] == "salesforce"
@@ -1396,11 +1907,22 @@ def test_cal_s_crm_app_slug_and_owner_record_type_are_kept_for_tracing(engine, r
 def test_an_ownership_change_that_is_a_no_op_is_skipped_not_written(engine, room_id, crm):
     """A no-op write produces an audit row describing a change that did not happen."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": "booker"},
-    ])
-    declared_twice = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": "booker"}], name="again")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "assign_to": "booker"},
+        ],
+    )
+    declared_twice = flow(
+        engine,
+        room_id,
+        meeting,
+        [anchor(), {"node": "update_ownership", "assign_to": "booker"}],
+        name="again",
+    )
     run_flow(engine, room_id, declared, booking(), crm)
     run = run_flow(engine, room_id, declared_twice, booking(), crm)
     step = steps_of(run)["update_ownership"]
@@ -1412,16 +1934,35 @@ def test_an_owner_nobody_can_resolve_is_skipped_with_a_named_reason(store, room_
     """A write to nobody is worse than saying so. No assignee, no fallback match, and
     no owner on the record either."""
     empty = LocalCrm(store, room_id=room_id)
-    empty.seed([{"crm_id": "cnt-lonely", "vendor": "salesforce", "type": "Contact",
-                 "email": "solo@prospect.example", "name": "Solo"}], source=SOURCE)
+    empty.seed(
+        [
+            {
+                "crm_id": "cnt-lonely",
+                "vendor": "salesforce",
+                "type": "Contact",
+                "email": "solo@prospect.example",
+                "name": "Solo",
+            }
+        ],
+        source=SOURCE,
+    )
     engine = BookingWriteback(store)
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "update_ownership", "assign_to": "host"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "update_ownership", "assign_to": "host"},
+        ],
+    )
     run = run_flow(
-        engine, room_id, declared,
-        booking(booker={"email": "solo@prospect.example"}, host={}, assignee={}), empty,
+        engine,
+        room_id,
+        declared,
+        booking(booker={"email": "solo@prospect.example"}, host={}, assignee={}),
+        empty,
     )
     step = steps_of(run)["update_ownership"]
     assert step["outcome"] == OUTCOME_SKIPPED
@@ -1431,14 +1972,21 @@ def test_an_owner_nobody_can_resolve_is_skipped_with_a_named_reason(store, room_
 def test_ownership_with_no_record_skips_with_the_no_record_reason(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(create="none"), {"node": "update_ownership"}])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert steps_of(run)["update_ownership"]["reason"] == SKIP_NO_RECORD
 
 
 def test_an_unknown_assign_to_is_refused_and_names_the_three(engine, room_id):
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidConfig) as excinfo:
-        flow(engine, room_id, meeting, [anchor(), {"node": "update_ownership", "assign_to": "nobody"}])
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [anchor(), {"node": "update_ownership", "assign_to": "nobody"}],
+        )
     for identity in ("assignee", "host", "booker"):
         assert identity in str(excinfo.value)
 
@@ -1454,20 +2002,41 @@ def test_activity_assigned_to_carries_the_bookers_email_into_the_engagement(
     """[sourced] "It passes the email of the booker or the assignee to the
     'Activity Assigned to' field inside the engagement created in Hubspot"."""
     hs = LocalCrm(store, room_id=room_id)
-    hs.seed([
-        {"crm_id": "hs-c", "vendor": "hubspot", "type": "Contact",
-         "email": "priya.raman@contoso.example", "name": "Priya Raman"},
-    ], source=SOURCE)
+    hs.seed(
+        [
+            {
+                "crm_id": "hs-c",
+                "vendor": "hubspot",
+                "type": "Contact",
+                "email": "priya.raman@contoso.example",
+                "name": "Priya Raman",
+            },
+        ],
+        source=SOURCE,
+    )
     engine = BookingWriteback(store)
     meeting = meeting_type(engine, room_id, vendor="hubspot")
-    declared = flow(engine, room_id, meeting, [
-        {"node": "create_or_update_contact", "update": "matched_contact_or_lead",
-         "create": "contact_or_lead", "record_type": "contact"},
-        {"node": "create_engagement", "activity_assigned_to": "booker"},
-    ], vendor="hubspot")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            {
+                "node": "create_or_update_contact",
+                "update": "matched_contact_or_lead",
+                "create": "contact_or_lead",
+                "record_type": "contact",
+            },
+            {"node": "create_engagement", "activity_assigned_to": "booker"},
+        ],
+        vendor="hubspot",
+    )
     run = run_flow(
-        engine, room_id, declared,
-        booking(booker={"email": "priya.raman@contoso.example", "name": "Priya Raman"}), hs,
+        engine,
+        room_id,
+        declared,
+        booking(booker={"email": "priya.raman@contoso.example", "name": "Priya Raman"}),
+        hs,
     )
     step = steps_of(run)["create_engagement"]
     assert step["resolved"]["activity_assigned_to"] == "booker"
@@ -1477,25 +2046,47 @@ def test_activity_assigned_to_carries_the_bookers_email_into_the_engagement(
     )
 
 
-@pytest.mark.parametrize("which,email", [
-    ("host", "dana@acme.example"),
-    ("booker", "a.buyer@northwind.example"),
-    ("assignee", "sam@acme.example"),
-])
+@pytest.mark.parametrize(
+    "which,email",
+    [
+        ("host", "dana@acme.example"),
+        ("booker", "a.buyer@northwind.example"),
+        ("assignee", "sam@acme.example"),
+    ],
+)
 def test_all_three_activity_assigned_to_choices_resolve_to_an_email(
     engine, room_id, store, which, email
 ):
     """[sourced] "Host / Booker / Assignee"."""
     hs = LocalCrm(store, room_id=room_id)
-    hs.seed([{"crm_id": "hs-c", "vendor": "hubspot", "type": "Contact",
-              "email": "a.buyer@northwind.example"}], source=SOURCE)
+    hs.seed(
+        [
+            {
+                "crm_id": "hs-c",
+                "vendor": "hubspot",
+                "type": "Contact",
+                "email": "a.buyer@northwind.example",
+            }
+        ],
+        source=SOURCE,
+    )
     engine = BookingWriteback(store)
     meeting = meeting_type(engine, room_id, vendor="hubspot")
-    declared = flow(engine, room_id, meeting, [
-        {"node": "create_or_update_contact", "update": "matched_contact_or_lead",
-         "create": "contact_or_lead", "record_type": "contact"},
-        {"node": "create_engagement", "activity_assigned_to": which},
-    ], vendor="hubspot")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            {
+                "node": "create_or_update_contact",
+                "update": "matched_contact_or_lead",
+                "create": "contact_or_lead",
+                "record_type": "contact",
+            },
+            {"node": "create_engagement", "activity_assigned_to": which},
+        ],
+        vendor="hubspot",
+    )
     run = run_flow(engine, room_id, declared, booking(), hs)
     assert steps_of(run)["create_engagement"]["resolved"]["activity_assigned_to_email"] == email
 
@@ -1504,34 +2095,69 @@ def test_activity_assigned_to_is_refused_on_a_salesforce_flow(engine, room_id):
     """[sourced] the research documents it on Chili Piper's HubSpot nodes only."""
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidConfig) as excinfo:
-        flow(engine, room_id, meeting, [
-            anchor(), {"node": "create_event", "activity_assigned_to": "booker"},
-        ])
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [
+                anchor(),
+                {"node": "create_event", "activity_assigned_to": "booker"},
+            ],
+        )
     assert "documented on Chili Piper's HubSpot nodes only" in str(excinfo.value)
 
 
 def test_an_unknown_activity_assigned_to_is_refused_by_name(engine, room_id):
     meeting = meeting_type(engine, room_id, vendor="hubspot")
     with pytest.raises(InvalidConfig) as excinfo:
-        flow(engine, room_id, meeting, [
-            {"node": "create_or_update_contact", "update": "matched_contact_or_lead",
-             "create": "contact_or_lead", "record_type": "contact"},
-            {"node": "create_engagement", "activity_assigned_to": "the intern"},
-        ], vendor="hubspot")
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [
+                {
+                    "node": "create_or_update_contact",
+                    "update": "matched_contact_or_lead",
+                    "create": "contact_or_lead",
+                    "record_type": "contact",
+                },
+                {"node": "create_engagement", "activity_assigned_to": "the intern"},
+            ],
+            vendor="hubspot",
+        )
     assert "assignee" in str(excinfo.value)
 
 
 def test_the_history_row_carries_the_activity_assigned_to_email(engine, room_id, store):
     hs = LocalCrm(store, room_id=room_id)
-    hs.seed([{"crm_id": "hs-c", "vendor": "hubspot", "type": "Contact",
-              "email": "a.buyer@northwind.example"}], source=SOURCE)
+    hs.seed(
+        [
+            {
+                "crm_id": "hs-c",
+                "vendor": "hubspot",
+                "type": "Contact",
+                "email": "a.buyer@northwind.example",
+            }
+        ],
+        source=SOURCE,
+    )
     engine = BookingWriteback(store)
     meeting = meeting_type(engine, room_id, vendor="hubspot")
-    declared = flow(engine, room_id, meeting, [
-        {"node": "create_or_update_contact", "update": "matched_contact_or_lead",
-         "create": "contact_or_lead", "record_type": "contact"},
-        {"node": "create_engagement", "activity_assigned_to": "assignee"},
-    ], vendor="hubspot")
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            {
+                "node": "create_or_update_contact",
+                "update": "matched_contact_or_lead",
+                "create": "contact_or_lead",
+                "record_type": "contact",
+            },
+            {"node": "create_engagement", "activity_assigned_to": "assignee"},
+        ],
+        vendor="hubspot",
+    )
     run_flow(engine, room_id, declared, booking(), hs)
     assert engine.history(room_id)[0]["data"]["activity_assigned_to_email"] == "sam@acme.example"
 
@@ -1544,13 +2170,25 @@ def test_the_history_row_carries_the_activity_assigned_to_email(engine, room_id,
 def test_a_child_event_is_created_per_additional_guest(engine, room_id, crm):
     """[sourced] "Create child Event, per additional guest"."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "child_events": True},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "child_events": True},
+        ],
+    )
     run = run_flow(
-        engine, room_id, declared,
-        booking(guests=[{"name": "Bayo", "email": "b1@northwind.example"},
-                        {"name": "Ines", "email": "b2@northwind.example"}]),
+        engine,
+        room_id,
+        declared,
+        booking(
+            guests=[
+                {"name": "Bayo", "email": "b1@northwind.example"},
+                {"name": "Ines", "email": "b2@northwind.example"},
+            ]
+        ),
         crm,
     )
     assert len(run["data"]["created_events"]) == 3
@@ -1559,9 +2197,15 @@ def test_a_child_event_is_created_per_additional_guest(engine, room_id, crm):
 
 def test_no_child_events_means_one_event_and_the_run_says_why(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "child_events": True},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "child_events": True},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     resolved = steps_of(run)["create_event"]["resolved"]
     assert resolved["child_events"] == 0
@@ -1573,8 +2217,11 @@ def test_the_child_events_setting_off_ignores_the_guests_entirely(engine, room_i
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(), {"node": "create_event"}])
     run = run_flow(
-        engine, room_id, declared,
-        booking(guests=[{"name": "Bayo", "email": "b1@northwind.example"}]), crm,
+        engine,
+        room_id,
+        declared,
+        booking(guests=[{"name": "Bayo", "email": "b1@northwind.example"}]),
+        crm,
     )
     assert len(run["data"]["created_events"]) == 1
 
@@ -1582,12 +2229,21 @@ def test_the_child_events_setting_off_ignores_the_guests_entirely(engine, room_i
 def test_every_child_gets_its_own_history_row(engine, room_id, crm):
     """[sourced] "Admin later retries any failed CRM Event" - per Event."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "child_events": True},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "child_events": True},
+        ],
+    )
     run_flow(
-        engine, room_id, declared,
-        booking(guests=[{"name": "Bayo", "email": "b1@northwind.example"}]), crm,
+        engine,
+        room_id,
+        declared,
+        booking(guests=[{"name": "Bayo", "email": "b1@northwind.example"}]),
+        crm,
     )
     rows = engine.history(room_id)
     assert len(rows) == 2
@@ -1598,7 +2254,9 @@ def test_every_child_gets_its_own_history_row(engine, room_id, crm):
 def test_a_guest_with_no_email_is_refused_before_the_run_is_written(engine, room_id, crm):
     """A guest with no address cannot be invited, and the failure is at the door."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [anchor(), {"node": "create_event", "child_events": True}])
+    declared = flow(
+        engine, room_id, meeting, [anchor(), {"node": "create_event", "child_events": True}]
+    )
     with pytest.raises(InvalidConfig) as excinfo:
         run_flow(engine, room_id, declared, booking(guests=[{"name": "No Address"}]), crm)
     assert "per additional guest" in str(excinfo.value)
@@ -1659,22 +2317,31 @@ def test_the_run_reports_one_actionable_error_and_keeps_every_outcome(engine, ro
     assert len(run["data"]["steps"]) == 2
 
 
-def test_every_node_produces_a_step_even_when_an_earlier_one_produced_nothing(
-    engine, room_id, crm
-):
+def test_every_node_produces_a_step_even_when_an_earlier_one_produced_nothing(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(create="none"),
-        {"node": "related_object", "object": "Case"},
-        {"node": "create_event", "child_events": True},
-        {"node": "update_field", "fields": [{"field": "Rating", "value": "Hot"}]},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-        {"node": "update_ownership"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(create="none"),
+            {"node": "related_object", "object": "Case"},
+            {"node": "create_event", "child_events": True},
+            {"node": "update_field", "fields": [{"field": "Rating", "value": "Hot"}]},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+            {"node": "update_ownership"},
+        ],
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert [step["node"] for step in run["data"]["steps"]] == [
-        "create_or_update_record", "related_object", "create_event",
-        "update_field", "add_to_campaign", "update_ownership",
+        "create_or_update_record",
+        "related_object",
+        "create_event",
+        "update_field",
+        "add_to_campaign",
+        "update_ownership",
     ]
     assert set(run["data"]["counts"]) == set(OUTCOMES)
 
@@ -1688,15 +2355,22 @@ def test_no_record_makes_every_later_node_skip_with_a_named_reason(engine, room_
     """The rule most likely to be got wrong. A flow whose fourth node has no
     record must not 'succeed' quietly."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(create="none"),
-        {"node": "related_object", "object": "Case"},
-        {"node": "create_event", "child_events": True},
-        {"node": "update_field", "fields": [{"field": "Rating", "value": "Hot"}]},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-        {"node": "update_ownership"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(create="none"),
+            {"node": "related_object", "object": "Case"},
+            {"node": "create_event", "child_events": True},
+            {"node": "update_field", "fields": [{"field": "Rating", "value": "Hot"}]},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+            {"node": "update_ownership"},
+        ],
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     later = run["data"]["steps"][1:]
     assert all(step["reason"] == SKIP_NO_RECORD for step in later)
     assert all(step["outcome"] == OUTCOME_SKIPPED for step in later)
@@ -1706,10 +2380,16 @@ def test_no_record_makes_every_later_node_skip_with_a_named_reason(engine, room_
 
 def test_no_record_writes_nothing_at_all_to_the_crm(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(create="none"), {"node": "create_event", "child_events": True},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(create="none"),
+            {"node": "create_event", "child_events": True},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
     run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
     assert crm.records("Event") == []
     assert crm.records("CampaignMember") == []
@@ -1718,7 +2398,9 @@ def test_no_record_writes_nothing_at_all_to_the_crm(engine, room_id, crm):
 def test_the_no_record_run_says_why_in_words_and_in_a_reason(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(create="none"), {"node": "create_event"}])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     first, second = run["data"]["steps"]
     assert first["reason"] == "nothing_matched_and_no_create_branch"
     assert NO_RECORD_MESSAGE in first["message"]
@@ -1734,7 +2416,9 @@ def test_no_record_is_still_written_as_a_run_row(engine, room_id, crm, store):
     infer from an absence."""
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(create="none")])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert store.get(str(run["id"]))["data"]["ok"] is False
 
 
@@ -1743,12 +2427,19 @@ def test_a_create_branch_that_produces_a_record_makes_the_catch_all_unreachable(
 ):
     """The catch-all is about *no record*, not about no match."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(create="contact_or_lead", record_type="contact"),
-        {"node": "create_event", "child_events": True},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm)
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(create="contact_or_lead", record_type="contact"),
+            {"node": "create_event", "child_events": True},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), crm
+    )
     assert run["data"]["ok"] is True
     assert all(step["outcome"] == OUTCOME_APPLIED for step in run["data"]["steps"])
 
@@ -1757,8 +2448,12 @@ def test_a_crm_that_refuses_the_create_is_reported_as_a_failure_not_a_skip(engin
     """A refusal from the CRM is a failure. A skip is this build declining."""
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(), {"node": "create_event"}])
-    faulted = LocalCrm(crm.store, room_id=crm.room_id, faults={"create:Contact": "DUPLICATE_VALUE: already exists"})
-    run = run_flow(engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), faulted)
+    faulted = LocalCrm(
+        crm.store, room_id=crm.room_id, faults={"create:Contact": "DUPLICATE_VALUE: already exists"}
+    )
+    run = run_flow(
+        engine, room_id, declared, booking(booker={"email": "new@prospect.example"}), faulted
+    )
     first, second = run["data"]["steps"]
     assert first["outcome"] == OUTCOME_FAILED
     assert "DUPLICATE_VALUE" in first["message"]
@@ -1811,8 +2506,10 @@ def test_a_run_cannot_carry_its_own_toggle_value(engine, room_id, crm):
 def test_a_non_boolean_toggle_is_refused_at_declaration(engine, room_id):
     with pytest.raises(InvalidConfig) as excinfo:
         engine.create_meeting_type(
-            room_id, {"name": "x", "vendor": "salesforce", "sync_to_crm": "yes"},
-            actor="dana", source=SOURCE,
+            room_id,
+            {"name": "x", "vendor": "salesforce", "sync_to_crm": "yes"},
+            actor="dana",
+            source=SOURCE,
         )
     assert "per-run value" in str(excinfo.value)
 
@@ -1888,10 +2585,16 @@ def test_the_writeback_resolves_the_flow_from_the_booking_alone(engine, room_id,
     """[sourced] "writes fire on the scheduled, not-scheduled and disqualified paths
     automatically" - the caller need not know the flow."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event"},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event"},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
     run = engine.writeback_for_path(
         room_id, booking(path="scheduled"), actor="dana", source=SOURCE, crm=crm
     )
@@ -1918,7 +2621,9 @@ def _failing_event_row(engine, room_id, crm, *, faults=None):
     meeting = meeting_type(engine, room_id)
     declared = flow(engine, room_id, meeting, [anchor(), {"node": "create_event"}])
     faulted = LocalCrm(
-        crm.store, room_id=room_id, faults=faults if faults is not None else {"create:Event": CRM_REFUSAL}
+        crm.store,
+        room_id=room_id,
+        faults=faults if faults is not None else {"create:Event": CRM_REFUSAL},
     )
     run = run_flow(engine, room_id, declared, booking(), faulted)
     return run, faulted, [row for row in engine.history(room_id, status="failed")]
@@ -1929,7 +2634,10 @@ def test_a_failed_event_can_be_retried_and_the_retry_succeeds(engine, room_id, c
     Events History." """
     _run, faulted, failed = _failing_event_row(engine, room_id, crm)
     result = engine.retry(
-        room_id, str(failed[0]["id"]), actor="dana", source=SOURCE,
+        room_id,
+        str(failed[0]["id"]),
+        actor="dana",
+        source=SOURCE,
         crm=with_faults(faulted),
     )
     assert result["retried"] is True
@@ -1943,7 +2651,10 @@ def test_a_retry_appends_a_row_and_keeps_the_failure(engine, room_id, crm):
     _run, faulted, failed = _failing_event_row(engine, room_id, crm)
     original = str(failed[0]["id"])
     engine.retry(
-        room_id, original, actor="dana", source=SOURCE,
+        room_id,
+        original,
+        actor="dana",
+        source=SOURCE,
         crm=with_faults(faulted),
     )
     rows = engine.history(room_id)
@@ -1958,7 +2669,10 @@ def test_the_retry_row_names_the_attempt_and_the_row_it_retried(engine, room_id,
     """The pair "failed at T, retried at T, succeeded" has to be readable."""
     _run, faulted, failed = _failing_event_row(engine, room_id, crm)
     result = engine.retry(
-        room_id, str(failed[0]["id"]), actor="dana", source=SOURCE,
+        room_id,
+        str(failed[0]["id"]),
+        actor="dana",
+        source=SOURCE,
         crm=with_faults(faulted),
     )
     row = engine.history_row(room_id, str(result["history"]["id"]))
@@ -1970,7 +2684,10 @@ def test_the_retry_row_names_the_attempt_and_the_row_it_retried(engine, room_id,
 def test_a_second_retry_that_fails_again_marks_the_original(engine, room_id, crm):
     _run, faulted, failed = _failing_event_row(engine, room_id, crm)
     result = engine.retry(
-        room_id, str(failed[0]["id"]), actor="dana", source=SOURCE,
+        room_id,
+        str(failed[0]["id"]),
+        actor="dana",
+        source=SOURCE,
         crm=with_faults(faulted, **{"create:Event": "STILL_REFUSED: no"}),
     )
     assert result["status"] == "failed"
@@ -1997,15 +2714,30 @@ def test_a_retry_creates_one_event_and_does_not_re_run_the_booking(engine, room_
     """A child that failed has to be retryable on its own, without duplicating the
     Events that already succeeded."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "child_events": True},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "child_events": True},
+        ],
+    )
     faulted = with_faults(crm, **{"create:Event": CRM_REFUSAL})
-    run_flow(engine, room_id, declared, booking(guests=[{"name": "B", "email": "b1@nw.example"}]), faulted)
+    run_flow(
+        engine,
+        room_id,
+        declared,
+        booking(guests=[{"name": "B", "email": "b1@nw.example"}]),
+        faulted,
+    )
     assert len(crm.records("Event")) == 0
     failed = engine.history(room_id, status="failed")[0]
     engine.retry(
-        room_id, str(failed["id"]), actor="dana", source=SOURCE,
+        room_id,
+        str(failed["id"]),
+        actor="dana",
+        source=SOURCE,
         crm=with_faults(faulted),
     )
     assert len(faulted.records("Event")) == 1
@@ -2015,16 +2747,25 @@ def test_delete_event_on_retry_cleans_up_before_creating_its_own(engine, room_id
     """[sourced] the retry reading of the Delete Event behaviour: whatever a failed
     attempt left behind is removed, so a retry cannot double-book."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "delete_event": "on_retry"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "delete_event": "on_retry"},
+        ],
+    )
     faulted = with_faults(crm, **{"create:Event": CRM_REFUSAL})
     run_flow(engine, room_id, declared, booking(), faulted)
     # The failed attempt left nothing, so there is nothing to clean - and that is
     # an answer, not an error.
     failed = engine.history(room_id, status="failed")[0]
     result = engine.retry(
-        room_id, str(failed["id"]), actor="dana", source=SOURCE,
+        room_id,
+        str(failed["id"]),
+        actor="dana",
+        source=SOURCE,
         crm=with_faults(faulted),
     )
     assert result["cleaned_previous"] == []
@@ -2035,9 +2776,15 @@ def test_delete_event_on_retry_removes_a_partial_event_it_is_pointed_at(engine, 
     """The compensation is reported, never silent: a run whose Events vanished is
     otherwise indistinguishable from one that never made them."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "delete_event": "on_retry"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "delete_event": "on_retry"},
+        ],
+    )
     faulted = with_faults(crm, **{"create:Event": CRM_REFUSAL})
     run_flow(engine, room_id, declared, booking(), faulted)
     failed = engine.history(room_id, status="failed")[0]
@@ -2046,11 +2793,12 @@ def test_delete_event_on_retry_removes_a_partial_event_it_is_pointed_at(engine, 
     # that the CRM stopped refusing.
     partial = crm.create("Event", {"subject": "partial"}, source=SOURCE)
     partial_id = str(partial["data"]["crm_id"])
-    engine.store.update(
-        str(failed["id"]), {"crm_id": partial_id}, actor="dana", source=SOURCE
-    )
+    engine.store.update(str(failed["id"]), {"crm_id": partial_id}, actor="dana", source=SOURCE)
     result = engine.retry(
-        room_id, str(failed["id"]), actor="dana", source=SOURCE,
+        room_id,
+        str(failed["id"]),
+        actor="dana",
+        source=SOURCE,
         crm=with_faults(faulted),
     )
     assert result["cleaned_previous"] == [partial_id]
@@ -2059,11 +2807,17 @@ def test_delete_event_on_retry_removes_a_partial_event_it_is_pointed_at(engine, 
 
 
 def test_a_deleted_event_still_resolves_from_the_history(engine, room_id, crm):
-    """"Created and then deleted" is a different conversation from "never created"."""
+    """ "Created and then deleted" is a different conversation from "never created"."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "delete_event": "never"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "delete_event": "never"},
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(), crm)
     event_id = run["data"]["created_events"][0]
     crm.delete(event_id, source=SOURCE)
@@ -2075,10 +2829,16 @@ def test_delete_event_on_failure_compensates_when_a_later_node_fails(engine, roo
     """The other reading of the researched setting: a run that half-wrote is undone,
     and the run says so."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "delete_event": "on_failure"},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "delete_event": "on_failure"},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
     # A CRM that creates Events but refuses CampaignMembers: the run half-writes.
     half = with_faults(crm, **{"create:CampaignMember": "LOCKED: cannot create"})
     run = run_flow(engine, room_id, declared, booking(), half)
@@ -2094,10 +2854,16 @@ def test_delete_event_on_failure_compensates_when_a_later_node_fails(engine, roo
 
 def test_delete_event_never_leaves_the_events_alone(engine, room_id, crm):
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "delete_event": "never"},
-        {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "delete_event": "never"},
+            {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
+        ],
+    )
     half = with_faults(crm, **{"create:CampaignMember": "LOCKED: cannot create"})
     run = run_flow(engine, room_id, declared, booking(), half)
     assert run["data"]["deleted_events"] == []
@@ -2107,7 +2873,12 @@ def test_delete_event_never_leaves_the_events_alone(engine, room_id, crm):
 def test_an_unknown_delete_event_mode_is_refused_at_declaration(engine, room_id):
     meeting = meeting_type(engine, room_id)
     with pytest.raises(InvalidConfig) as excinfo:
-        flow(engine, room_id, meeting, [anchor(), {"node": "create_event", "delete_event": "on_cancel"}])
+        flow(
+            engine,
+            room_id,
+            meeting,
+            [anchor(), {"node": "create_event", "delete_event": "on_cancel"}],
+        )
     assert "on_retry" in str(excinfo.value)
 
 
@@ -2179,7 +2950,8 @@ def test_a_non_global_salesforce_connection_does_not_enable_the_gate(engine):
 def test_a_connector_read_never_returns_its_token(engine):
     created = engine.create_connector(
         {"vendor": "salesforce", "name": "prod", "token": "00D-super-secret-value"},
-        actor="dana", source=SOURCE,
+        actor="dana",
+        source=SOURCE,
     )
     summary = engine.connector_summary(created)
     assert "token" not in summary
@@ -2236,9 +3008,15 @@ def test_a_retry_does_not_reuse_the_id_of_the_event_it_replaced(engine, room_id,
     deletes the partial Event and then creates its own, and the two must not answer
     to the same id."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(), {"node": "create_event", "delete_event": "on_retry"},
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(),
+            {"node": "create_event", "delete_event": "on_retry"},
+        ],
+    )
     faulted = with_faults(crm, **{"create:Event": CRM_REFUSAL})
     run_flow(engine, room_id, declared, booking(), faulted)
     failed = engine.history(room_id, status="failed")[0]
@@ -2307,8 +3085,12 @@ def http_room(http):
 def http_meeting_type(http, http_room):
     return http.post(
         f"{PREFIX}/rooms/{http_room['id']}/meeting-types",
-        json={"name": "Enterprise demo", "vendor": "salesforce", "event_type_id": "445511",
-              "sync_to_crm": True},
+        json={
+            "name": "Enterprise demo",
+            "vendor": "salesforce",
+            "event_type_id": "445511",
+            "sync_to_crm": True,
+        },
     ).json()
 
 
@@ -2317,11 +3099,17 @@ def http_flow(http, http_room, http_meeting_type):
     return http.post(
         f"{PREFIX}/rooms/{http_room['id']}/flows",
         json={
-            "name": "Northwind writeback", "vendor": "salesforce", "path": "scheduled",
+            "name": "Northwind writeback",
+            "vendor": "salesforce",
+            "path": "scheduled",
             "meeting_type_id": http_meeting_type["id"],
             "nodes": [
-                {"node": "create_or_update_record", "update": "matched_contact_or_lead",
-                 "create": "contact_or_lead", "record_type": "contact"},
+                {
+                    "node": "create_or_update_record",
+                    "update": "matched_contact_or_lead",
+                    "create": "contact_or_lead",
+                    "record_type": "contact",
+                },
                 {"node": "create_event", "child_events": True},
                 {"node": "add_to_campaign", "campaign": "Q4 Enterprise"},
                 {"node": "update_ownership", "assign_to": "assignee"},
@@ -2354,7 +3142,12 @@ def test_the_feature_is_discovered_and_mounted_without_editing_the_host(http):
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-065"
     assert entry["exception_handlers"] == [
-        "InvalidConfig", "InvalidNode", "NodeOrderError", "NotConfigured", "NotFound", "WritebackError",
+        "InvalidConfig",
+        "InvalidNode",
+        "NodeOrderError",
+        "NotConfigured",
+        "NotFound",
+        "WritebackError",
     ]
     assert len(entry["routes"]) == 25
 
@@ -2404,9 +3197,12 @@ def test_the_meeting_type_crud_over_http(http, http_room):
     meeting_type_id = created.json()["id"]
     assert http.get(path).json()["count"] == 1
     assert http.get(f"{path}/{meeting_type_id}").json()["data"]["name"] == "Pilot"
-    assert http.patch(
-        f"{path}/{meeting_type_id}", json={"sync_to_crm": True}
-    ).json()["data"]["sync_to_crm"] is True
+    assert (
+        http.patch(f"{path}/{meeting_type_id}", json={"sync_to_crm": True}).json()["data"][
+            "sync_to_crm"
+        ]
+        is True
+    )
     assert http.delete(f"{path}/{meeting_type_id}").status_code == 204
     assert http.get(f"{path}/{meeting_type_id}").status_code == 404
 
@@ -2427,23 +3223,39 @@ def test_the_flow_crud_over_http(http, http_room, http_meeting_type, http_flow):
     assert http.get(f"{room_path}/flows").json()["count"] == 1
     # The HTTP layer returns the store's own record shape, so a payload this build
     # stores is a payload a client reads back without a second schema.
-    assert http.get(f"{room_path}/flows/{http_flow['id']}").json()["data"]["plan"]["has_anchor"] is True
-    assert http.patch(
-        f"{room_path}/flows/{http_flow['id']}", json={"name": "renamed"}
-    ).json()["data"]["name"] == "renamed"
+    assert (
+        http.get(f"{room_path}/flows/{http_flow['id']}").json()["data"]["plan"]["has_anchor"]
+        is True
+    )
+    assert (
+        http.patch(f"{room_path}/flows/{http_flow['id']}", json={"name": "renamed"}).json()["data"][
+            "name"
+        ]
+        == "renamed"
+    )
     assert http.delete(f"{room_path}/flows/{http_flow['id']}").status_code == 204
     assert http.get(f"{room_path}/flows/{http_flow['id']}").status_code == 404
 
 
-def test_the_ordering_rule_over_http_is_a_400_carrying_the_quote(http, http_room, http_meeting_type):
+def test_the_ordering_rule_over_http_is_a_400_carrying_the_quote(
+    http, http_room, http_meeting_type
+):
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/flows",
         json={
-            "name": "wrong", "vendor": "salesforce", "path": "scheduled",
+            "name": "wrong",
+            "vendor": "salesforce",
+            "path": "scheduled",
             "meeting_type_id": http_meeting_type["id"],
-            "nodes": [{"node": "create_event"}, {"node": "create_or_update_record",
-                       "update": "matched_contact_or_lead", "create": "contact_or_lead",
-                       "record_type": "contact"}],
+            "nodes": [
+                {"node": "create_event"},
+                {
+                    "node": "create_or_update_record",
+                    "update": "matched_contact_or_lead",
+                    "create": "contact_or_lead",
+                    "record_type": "contact",
+                },
+            ],
         },
     )
     assert response.status_code == 400
@@ -2457,7 +3269,9 @@ def test_a_node_of_the_other_vendor_over_http_is_its_own_error_code(
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/flows",
         json={
-            "name": "wrong palette", "vendor": "salesforce", "path": "scheduled",
+            "name": "wrong palette",
+            "vendor": "salesforce",
+            "path": "scheduled",
             "meeting_type_id": http_meeting_type["id"],
             "nodes": [{"node": "create_engagement"}],
         },
@@ -2466,9 +3280,7 @@ def test_a_node_of_the_other_vendor_over_http_is_its_own_error_code(
     assert response.json()["error"] == "invalid_node"
 
 
-def test_the_validate_route_reports_a_bad_candidate_without_refusing_it(
-    http, http_room, http_flow
-):
+def test_the_validate_route_reports_a_bad_candidate_without_refusing_it(http, http_room, http_flow):
     """A check exists to say what is wrong, so a bad candidate is reported rather
     than refused."""
     good = http.post(f"{PREFIX}/rooms/{http_room['id']}/flows/{http_flow['id']}/validate", json={})
@@ -2477,9 +3289,17 @@ def test_the_validate_route_reports_a_bad_candidate_without_refusing_it(
     assert good.json()["plan"]["event_node"] == "create_event"
     bad = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/flows/{http_flow['id']}/validate",
-        json={"nodes": [{"node": "create_event"}, {"node": "create_or_update_record",
-                        "update": "matched_contact_or_lead", "create": "contact_or_lead",
-                        "record_type": "contact"}]},
+        json={
+            "nodes": [
+                {"node": "create_event"},
+                {
+                    "node": "create_or_update_record",
+                    "update": "matched_contact_or_lead",
+                    "create": "contact_or_lead",
+                    "record_type": "contact",
+                },
+            ]
+        },
     )
     assert bad.status_code == 200
     assert bad.json()["valid"] is False
@@ -2532,10 +3352,18 @@ def test_the_path_writeback_over_http_finds_the_flow(http, http_room, http_meeti
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/flows",
         json={
-            "name": "auto", "vendor": "salesforce", "path": "disqualified",
+            "name": "auto",
+            "vendor": "salesforce",
+            "path": "disqualified",
             "meeting_type_id": http_meeting_type["id"],
-            "nodes": [{"node": "create_or_update_record", "update": "matched_contact_or_lead",
-                       "create": "contact_or_lead", "record_type": "contact"}],
+            "nodes": [
+                {
+                    "node": "create_or_update_record",
+                    "update": "matched_contact_or_lead",
+                    "create": "contact_or_lead",
+                    "record_type": "contact",
+                }
+            ],
         },
     )
     run = http.post(
@@ -2567,7 +3395,8 @@ def test_the_run_log_and_a_run_in_full_over_http(http, http_room, http_flow):
 
 def test_a_flow_on_a_room_that_does_not_exist_is_a_404_naming_the_room(http):
     response = http.post(
-        f"{PREFIX}/rooms/room_nope/flows", json={"name": "x", "vendor": "salesforce", "path": "scheduled"}
+        f"{PREFIX}/rooms/room_nope/flows",
+        json={"name": "x", "vendor": "salesforce", "path": "scheduled"},
     )
     assert response.status_code == 404
     assert response.json()["error"] == "not_found"
@@ -2577,8 +3406,13 @@ def test_a_flow_on_a_room_that_does_not_exist_is_a_404_naming_the_room(http):
 def test_a_flow_on_a_meeting_type_that_does_not_exist_is_a_404(http, http_room):
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/flows",
-        json={"name": "x", "vendor": "salesforce", "path": "scheduled",
-              "meeting_type_id": "mt_nope", "nodes": []},
+        json={
+            "name": "x",
+            "vendor": "salesforce",
+            "path": "scheduled",
+            "meeting_type_id": "mt_nope",
+            "nodes": [],
+        },
     )
     assert response.status_code == 404
     assert response.json()["resource"] == "meeting_type"
@@ -2591,8 +3425,13 @@ def test_a_flow_cannot_mix_two_vendors_through_one_meeting_type(http, http_room)
     ).json()
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/flows",
-        json={"name": "x", "vendor": "salesforce", "path": "scheduled",
-              "meeting_type_id": meeting_type["id"], "nodes": []},
+        json={
+            "name": "x",
+            "vendor": "salesforce",
+            "path": "scheduled",
+            "meeting_type_id": meeting_type["id"],
+            "nodes": [],
+        },
     )
     assert response.status_code == 400
     assert "the node names differ per CRM" in response.json()["detail"]
@@ -2629,18 +3468,14 @@ def test_the_crm_sync_errors_route_is_per_event_type_over_http(
 ):
     room_path = f"{PREFIX}/rooms/{http_room['id']}"
     http.post(f"{room_path}/flows/{http_flow['id']}/writeback", json=booking_json())
-    body = http.get(
-        f"{room_path}/meeting-types/{http_meeting_type['id']}/crm-sync-errors"
-    )
+    body = http.get(f"{room_path}/meeting-types/{http_meeting_type['id']}/crm-sync-errors")
     assert body.status_code == 200
     assert body.json()["event_type_id"] == "445511"
     assert body.json()["count"] == 0
     assert body.json()["errors"] == []
 
 
-def test_retrying_a_successful_row_over_http_is_a_200_with_the_refusal(
-    http, http_room, http_flow
-):
+def test_retrying_a_successful_row_over_http_is_a_200_with_the_refusal(http, http_room, http_flow):
     """Not an error: the research offers retry on a failure, and this row is not one."""
     room_path = f"{PREFIX}/rooms/{http_room['id']}"
     http.post(f"{room_path}/flows/{http_flow['id']}/writeback", json=booking_json())
@@ -2664,8 +3499,13 @@ def test_the_crm_records_route_groups_by_type_over_http(http, http_room):
     Crm(RecordStore(engine_store.db), room_id=http_room["id"]).seed(
         [
             {"crm_id": "cnt-1", "vendor": "salesforce", "type": "Contact", "email": "a@b.example"},
-            {"crm_id": "case-1", "vendor": "salesforce", "type": "Case", "status": "Open",
-             "created_on": "2026-01-01"},
+            {
+                "crm_id": "case-1",
+                "vendor": "salesforce",
+                "type": "Case",
+                "status": "Open",
+                "created_on": "2026-01-01",
+            },
         ]
     )
     body = http.get(f"{PREFIX}/rooms/{http_room['id']}/crm-records")
@@ -2714,10 +3554,15 @@ def test_a_connector_with_an_unknown_vendor_is_a_400(http):
 def test_a_refused_write_leaves_no_audit_row(http, http_room):
     """Nothing was attempted, so there is nothing to audit."""
     assert http.post(f"{PREFIX}/connectors", json={"vendor": "sap"}).status_code == 400
-    assert http.get("/api/audit", params={"collection": "crm_booking_connector"}).json()["count"] == 0
-    assert http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/flows", json={"name": "x", "vendor": "sap"}
-    ).status_code == 400
+    assert (
+        http.get("/api/audit", params={"collection": "crm_booking_connector"}).json()["count"] == 0
+    )
+    assert (
+        http.post(
+            f"{PREFIX}/rooms/{http_room['id']}/flows", json={"name": "x", "vendor": "sap"}
+        ).status_code
+        == 400
+    )
     assert http.get("/api/audit", params={"collection": FLOW_COLLECTION}).json()["count"] == 0
     assert http.post(f"{PREFIX}/rooms/room_nope/flows", json={"name": "x"}).status_code == 404
     assert http.get("/api/audit", params={"collection": FLOW_COLLECTION}).json()["count"] == 0
@@ -2774,10 +3619,20 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted(
     http.patch(f"{room_path}/flows/{http_flow['id']}", json={"name": "renamed"})
     http.post(
         f"{room_path}/flows",
-        json={"name": "second", "vendor": "salesforce", "path": "disqualified",
-              "meeting_type_id": http_meeting_type["id"],
-              "nodes": [{"node": "create_or_update_record", "update": "matched_contact_or_lead",
-                         "create": "lead", "record_type": "lead"}]},
+        json={
+            "name": "second",
+            "vendor": "salesforce",
+            "path": "disqualified",
+            "meeting_type_id": http_meeting_type["id"],
+            "nodes": [
+                {
+                    "node": "create_or_update_record",
+                    "update": "matched_contact_or_lead",
+                    "create": "lead",
+                    "record_type": "lead",
+                }
+            ],
+        },
     )
     http.delete(f"{room_path}/flows/{http_flow['id']}")
     http.post(f"{PREFIX}/connectors", json={"vendor": "salesforce", "name": "prod"})
@@ -2815,9 +3670,7 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted(
         ), f"audit names a route the app does not serve: {entry['source']}"
 
 
-def test_the_rows_the_crm_creates_are_audited_with_the_writeback_route(
-    http, http_room, http_flow
-):
+def test_the_rows_the_crm_creates_are_audited_with_the_writeback_route(http, http_room, http_flow):
     """They are writes, and an audit row that cannot name its request is not one."""
     room_path = f"{PREFIX}/rooms/{http_room['id']}"
     http.post(f"{room_path}/flows/{http_flow['id']}/writeback", json=booking_json())
@@ -2842,11 +3695,21 @@ def test_a_retry_is_audited_with_the_retry_route(http, http_room, http_meeting_t
     room_path = f"{PREFIX}/rooms/{http_room['id']}"
     declared = http.post(
         f"{room_path}/flows",
-        json={"name": "r", "vendor": "salesforce", "path": "scheduled",
-              "meeting_type_id": http_meeting_type["id"],
-              "nodes": [{"node": "create_or_update_record", "update": "matched_contact_or_lead",
-                         "create": "contact_or_lead", "record_type": "contact"},
-                        {"node": "create_event"}]},
+        json={
+            "name": "r",
+            "vendor": "salesforce",
+            "path": "scheduled",
+            "meeting_type_id": http_meeting_type["id"],
+            "nodes": [
+                {
+                    "node": "create_or_update_record",
+                    "update": "matched_contact_or_lead",
+                    "create": "contact_or_lead",
+                    "record_type": "contact",
+                },
+                {"node": "create_event"},
+            ],
+        },
     ).json()
     http.post(f"{room_path}/flows/{declared['id']}/writeback", json=booking_json())
     created = http.get(f"{room_path}/events-history").json()["history"][0]
@@ -2856,7 +3719,9 @@ def test_a_retry_is_audited_with_the_retry_route(http, http_room, http_meeting_t
     assert http.get("/api/audit", params={"collection": HISTORY_COLLECTION}).json()["count"] == 1
 
 
-def test_no_audit_source_names_another_features_prefix(http, http_room, http_meeting_type, http_flow):
+def test_no_audit_source_names_another_features_prefix(
+    http, http_room, http_meeting_type, http_flow
+):
     room_path = f"{PREFIX}/rooms/{http_room['id']}"
     http.post(f"{room_path}/flows/{http_flow['id']}/writeback", json=booking_json())
     sources = [
@@ -2875,9 +3740,14 @@ def test_a_team_can_add_a_data_field_and_a_crm_field_with_no_migration(engine, r
     """The researched extensibility claim, made concrete: a custom CRM field is
     another entry in a payload, and nothing else changes."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(fields=[{"field": "A_Team_Specific_Field__c", "from_data_field": "seats"}]),
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(fields=[{"field": "A_Team_Specific_Field__c", "from_data_field": "seats"}]),
+        ],
+    )
     run = run_flow(engine, room_id, declared, booking(data_fields={"seats": "40"}), crm)
     assert run["data"]["ok"] is True
     assert crm.get("cnt-0001")["data"]["fields"]["A_Team_Specific_Field__c"] == "40"
@@ -2887,19 +3757,32 @@ def test_an_arbitrary_key_on_a_node_is_kept_rather_than_rejected(engine, room_id
     """Schema-flexible in both directions: a team may add a key this build reads
     nothing from, and it survives the round trip."""
     meeting = meeting_type(engine, room_id)
-    declared = flow(engine, room_id, meeting, [
-        anchor(team_specific={"owner_queue": "emea-enterprise", "sla_hours": 24}),
-    ])
+    declared = flow(
+        engine,
+        room_id,
+        meeting,
+        [
+            anchor(team_specific={"owner_queue": "emea-enterprise", "sla_hours": 24}),
+        ],
+    )
     node = declared["data"]["nodes"][0]
     assert node["team_specific"] == {"owner_queue": "emea-enterprise", "sla_hours": 24}
 
 
 def test_the_crm_record_payload_is_arbitrary_json(store, room_id):
     crm = LocalCrm(store, room_id=room_id)
-    crm.seed([
-        {"crm_id": "opp-custom", "vendor": "salesforce", "type": "Opportunity",
-         "close_date": "2026-10-06", "a_team_field__c": {"nested": [1, 2, 3]}},
-    ], source=SOURCE)
+    crm.seed(
+        [
+            {
+                "crm_id": "opp-custom",
+                "vendor": "salesforce",
+                "type": "Opportunity",
+                "close_date": "2026-10-06",
+                "a_team_field__c": {"nested": [1, 2, 3]},
+            },
+        ],
+        source=SOURCE,
+    )
     assert crm.get("opp-custom")["data"]["a_team_field__c"] == {"nested": [1, 2, 3]}
 
 
@@ -2907,8 +3790,13 @@ def test_a_flow_can_be_found_by_a_json_path_no_feature_declared(engine, room_id,
     """The dynamic index is the mechanism, not a query this build wrote. The path is
     the store's own dotted form for a list element, ``nodes.1.node``."""
     meeting = meeting_type(engine, room_id)
-    flow(engine, room_id, meeting, [anchor(), {"node": "add_to_campaign", "campaign": "Q4 Enterprise"}],
-         name="with campaign")
+    flow(
+        engine,
+        room_id,
+        meeting,
+        [anchor(), {"node": "add_to_campaign", "campaign": "Q4 Enterprise"}],
+        name="with campaign",
+    )
     assert len(engine.store.find(FLOW_COLLECTION, {"nodes.1.node": "add_to_campaign"})) == 1
     assert len(engine.store.find(FLOW_COLLECTION, {"nodes.1.node": "update_ownership"})) == 0
     assert len(engine.store.find(FLOW_COLLECTION, {"nodes.0.node": "create_or_update_record"})) == 1
@@ -2951,7 +3839,10 @@ def test_the_inference_ids_are_unique_and_describe_is_the_whole_registry():
 def test_the_ordering_inference_names_where_the_check_lives():
     entry = next(e for e in INFERENCES if e["id"] == "node-order-is-checked-not-sorted")
     assert "validate_nodes" in entry["change_it"]
-    assert "reordering" in entry["value"] and entry["value"]["reordering"] == "never - the declared order is the order that will run"
+    assert (
+        "reordering" in entry["value"]
+        and entry["value"]["reordering"] == "never - the declared order is the order that will run"
+    )
 
 
 def test_the_delete_event_inference_explains_why_cancellation_is_not_implemented():
@@ -2962,7 +3853,9 @@ def test_the_delete_event_inference_explains_why_cancellation_is_not_implemented
 
 
 def test_the_nearest_close_date_inference_names_the_reference_point():
-    entry = next(e for e in INFERENCES if e["id"] == "nearest-close-date-is-measured-against-the-meeting")
+    entry = next(
+        e for e in INFERENCES if e["id"] == "nearest-close-date-is-measured-against-the-meeting"
+    )
     assert entry["value"]["reference"] == "the booking's starts_at"
     assert entry["value"]["tie_break"] == "the earlier close date"
 

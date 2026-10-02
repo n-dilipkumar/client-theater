@@ -146,7 +146,7 @@ def main() -> int:
         )
     print(f"  documents {len(DOCUMENTS)}")
 
-    for step in range(140):
+    for _step in range(140):
         room_id, account = rng.choice(room_ids)
         happened = now - timedelta(minutes=rng.randint(0, 60 * 24 * 21))
         db.create(

@@ -37,10 +37,10 @@ says "no" without saying why is one a prospect cannot act on.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 
-from dsr.inroom_scheduling.errors import SelectorError, SchedulingError, SlotUnavailable
+from dsr.inroom_scheduling.errors import SchedulingError, SelectorError, SlotUnavailable
 from dsr.inroom_scheduling.schedules import (
     candidate_starts,
     iso,
@@ -161,9 +161,7 @@ def read_selector(params: Mapping[str, Any]) -> Selector:
                 "a slug must be paired with a username or a teamSlug; the research "
                 "documents eventTypeSlug+username+organizationSlug and teamSlug"
             )
-        raise SelectorError(
-            "a slot query must name one of " + ", ".join(SLOT_SELECTORS)
-        )
+        raise SelectorError("a slot query must name one of " + ", ".join(SLOT_SELECTORS))
 
     kind = named[0]
     if kind == "usernames":
@@ -189,6 +187,7 @@ def read_selector(params: Mapping[str, Any]) -> Selector:
         team_slug=str(team_slug) if team_slug is not None else None,
         organization_slug=organization,
     )
+
 
 def reschedule_uid(params: Mapping[str, Any]) -> str | None:
     """The ``bookingUidToReschedule`` in a query, under either spelling."""

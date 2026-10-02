@@ -151,7 +151,9 @@ class PlayEngine:
             "warnings": data.get("warnings") or [],
         }
 
-    def register(self, payload: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def register(
+        self, payload: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Register a Play framework against a signal registration.
 
         "An application can create more than one framework per signal
@@ -170,8 +172,8 @@ class PlayEngine:
             if declared is None:
                 raise UnknownSignalRegistration(
                     f"no signal registration {registration_id.strip()!r}. A Play is "
-                    "registered against a signal registration - \"After registering a "
-                    "signal (see #12), register a Play\" - and a Play whose registration "
+                    'registered against a signal registration - "After registering a '
+                    'signal (see #12), register a Play" - and a Play whose registration '
                     "does not exist can never fire. Register the signal type first."
                 )
         else:
@@ -215,10 +217,15 @@ class PlayEngine:
             where["enabled"] = enabled
 
         if where:
-            found = self.store.find(FRAMEWORKS, where, limit=1000, include_deleted=include_destroyed)
+            found = self.store.find(
+                FRAMEWORKS, where, limit=1000, include_deleted=include_destroyed
+            )
         else:
             found = self.store.list(
-                FRAMEWORKS, limit=1000, order_by="created_at", descending=False,
+                FRAMEWORKS,
+                limit=1000,
+                order_by="created_at",
+                descending=False,
                 include_deleted=include_destroyed,
             )
         if not include_destroyed:
@@ -387,7 +394,7 @@ class PlayEngine:
                 self.store.update(
                     existing[0]["id"], {"duplicate_attempts": attempts}, actor=actor, source=source
                 )
-                fresh = self.store.get(existing[0]["id"]) or existing[0]
+                self.store.get(existing[0]["id"]) or existing[0]
                 already.append(
                     {
                         "play_id": play["id"],
@@ -440,9 +447,7 @@ class PlayEngine:
         if not plays:
             note = matching.note_no_plays()
         elif not fired:
-            note = matching.note_no_plays(
-                [p for p in plays if p.get("enabled") is True]
-            )
+            note = matching.note_no_plays([p for p in plays if p.get("enabled") is True])
         else:
             note = {
                 "reason": "fired",
@@ -480,7 +485,7 @@ class PlayEngine:
             ):
                 raise UnknownSignal(
                     f"no stored signal {signal_id.strip()!r}. The researched flow starts at "
-                    "\"Registered signal fires\", so a dispatch names a signal this product "
+                    '"Registered signal fires", so a dispatch names a signal this product '
                     "already holds, or supplies one inline as `signal`."
                 )
             data = dict(record.get("data") or {})
@@ -617,7 +622,11 @@ class PlayEngine:
         stamp = self.stamp()
         updated = self.store.update(
             task_id,
-            {"state": "completed", "completed_at": stamp, "outcome_note": (note or "").strip() or None},
+            {
+                "state": "completed",
+                "completed_at": stamp,
+                "outcome_note": (note or "").strip() or None,
+            },
             actor=actor,
             source=source,
         )
@@ -756,7 +765,9 @@ class PlayEngine:
 
     # -- webhook subscriptions ---------------------------------------------- #
 
-    def subscribe(self, payload: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def subscribe(
+        self, payload: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Register a webhook subscription for the researched event types."""
         data = events.normalise_subscription(payload)
         if not data.get("target_url"):
@@ -775,7 +786,11 @@ class PlayEngine:
         else:
             data["warnings"] = []
         created = self.store.create(WEBHOOKS, data, actor=actor, source=source)
-        return {"outcome": "subscribed", "subscription": self.present(created), "warnings": data["warnings"]}
+        return {
+            "outcome": "subscribed",
+            "subscription": self.present(created),
+            "warnings": data["warnings"],
+        }
 
     def present(self, record: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(record.get("data") or {})
@@ -793,7 +808,9 @@ class PlayEngine:
             for record in self.store.list(WEBHOOKS, limit=max(1, min(int(limit), 1000)))
         ]
 
-    def unsubscribe(self, subscription_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
+    def unsubscribe(
+        self, subscription_id: str, *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         record = self.store.get(subscription_id)
         if record is None or record.get("collection") != WEBHOOKS:
             raise SubscriptionNotFound(f"webhook subscription {subscription_id} not found")
@@ -856,10 +873,12 @@ class PlayEngine:
             ],
             "events": len(recorded),
             "by_event_type": [
-                {"event_type": name, "count": count} for name, count in sorted(by_event_type.items())
+                {"event_type": name, "count": count}
+                for name, count in sorted(by_event_type.items())
             ],
             "by_delivery_state": [
-                {"state": name, "count": by_delivery.get(name, 0)} for name in events.DELIVERY_STATES
+                {"state": name, "count": by_delivery.get(name, 0)}
+                for name in events.DELIVERY_STATES
             ],
             "webhook_subscriptions": len(self.store.list(WEBHOOKS, limit=1000)),
             "automation_note": AUTOMATION_NOTE,

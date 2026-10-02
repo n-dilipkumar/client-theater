@@ -23,10 +23,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.roles import ACCESS, INVITATIONS
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-004-invite-buyer"
 
@@ -108,9 +107,9 @@ def test_access_snapshot_of_an_empty_room(client, room):
 def test_access_snapshot_lists_members_with_derived_expiry_facts(client, room):
     _grant(client, room["id"], "a@example.com", access_valid_until=FUTURE)
 
-    member = client.get(
-        f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}
-    ).json()["members"][0]
+    member = client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).json()[
+        "members"
+    ][0]
 
     assert member["principal"] == "a@example.com"
     assert member["role_label"] == "Viewer"
@@ -123,9 +122,9 @@ def test_access_snapshot_lists_members_with_derived_expiry_facts(client, room):
 def test_access_snapshot_reports_no_expiration_for_an_open_grant(client, room):
     _grant(client, room["id"], "a@example.com")
 
-    member = client.get(
-        f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}
-    ).json()["members"][0]
+    member = client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).json()[
+        "members"
+    ][0]
 
     assert member["access_valid_until"] is None
     assert member["expires_at_utc"] is None
@@ -191,8 +190,13 @@ def test_the_branch_paths_are_not_served_anywhere(client, room):
         assert "members" not in response.json(), f"{method} {path} served a snapshot"
 
     # And the same routes do answer under the prefix the feature owns.
-    assert client.get(f"{PREFIX}/access/roles", params={"actor_role": "room_owner"}).status_code == 200
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).status_code == 200
+    assert (
+        client.get(f"{PREFIX}/access/roles", params={"actor_role": "room_owner"}).status_code == 200
+    )
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).status_code
+        == 200
+    )
 
 
 # -- sending invitations ------------------------------------------------------ #
@@ -219,9 +223,7 @@ def test_invite_lands_in_the_room_invitation_collection(client, room):
         json={"emails": ["a@example.com"]},
     )
 
-    listed = client.get(
-        "/api/records/room_invitation", params={"room_id": room["id"]}
-    ).json()
+    listed = client.get("/api/records/room_invitation", params={"room_id": room["id"]}).json()
     assert listed["count"] == 1
     assert listed["records"][0]["data"]["state"] == "pending"
 
@@ -327,9 +329,9 @@ def test_accepting_turns_the_invitation_into_a_grant(client, room):
         params={"actor": "dana"},
         json={"emails": ["a@example.com"], "role": "content_contributor"},
     )
-    invitation = client.get(
-        "/api/records/room_invitation", params={"room_id": room["id"]}
-    ).json()["records"][0]
+    invitation = client.get("/api/records/room_invitation", params={"room_id": room["id"]}).json()[
+        "records"
+    ][0]
 
     response = client.post(
         f"{PREFIX}/invitations/{invitation['id']}/accept", params={"actor": "a@example.com"}
@@ -346,9 +348,9 @@ def test_an_accepted_invitation_joins_who_has_access(client, room):
         params={"actor": "dana"},
         json={"emails": ["a@example.com"]},
     )
-    invitation = client.get(
-        "/api/records/room_invitation", params={"room_id": room["id"]}
-    ).json()["records"][0]
+    invitation = client.get("/api/records/room_invitation", params={"room_id": room["id"]}).json()[
+        "records"
+    ][0]
     client.post(f"{PREFIX}/invitations/{invitation['id']}/accept")
 
     body = client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).json()
@@ -362,9 +364,9 @@ def test_accepting_twice_is_400(client, room):
         params={"actor": "dana"},
         json={"emails": ["a@example.com"]},
     )
-    invitation = client.get(
-        "/api/records/room_invitation", params={"room_id": room["id"]}
-    ).json()["records"][0]
+    invitation = client.get("/api/records/room_invitation", params={"room_id": room["id"]}).json()[
+        "records"
+    ][0]
     client.post(f"{PREFIX}/invitations/{invitation['id']}/accept")
 
     assert client.post(f"{PREFIX}/invitations/{invitation['id']}/accept").status_code == 400
@@ -386,9 +388,9 @@ def test_an_already_known_invitee_joins_immediately(client, room):
     body = response.json()
     assert body["joined_immediately"] == ["a@example.com"]
     assert body["pending"] == []
-    members = client.get(
-        f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}
-    ).json()["members"]
+    members = client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).json()[
+        "members"
+    ]
     assert [m["role"] for m in members] == ["content_contributor"]
 
 
@@ -412,7 +414,9 @@ def test_changing_a_role_without_confirmation_is_428(client, room):
     grant = _grant(client, room["id"], "a@example.com")
 
     response = client.patch(
-        f"{PREFIX}/access/{grant['id']}", params={"actor": "dana"}, json={"role": "content_contributor"}
+        f"{PREFIX}/access/{grant['id']}",
+        params={"actor": "dana"},
+        json={"role": "content_contributor"},
     )
 
     assert response.status_code == 428
@@ -423,7 +427,9 @@ def test_changing_the_expiry_needs_no_confirmation(client, room):
     grant = _grant(client, room["id"], "a@example.com")
 
     response = client.patch(
-        f"{PREFIX}/access/{grant['id']}", params={"actor": "dana"}, json={"set_expiry": True, "access_valid_until": FUTURE}
+        f"{PREFIX}/access/{grant['id']}",
+        params={"actor": "dana"},
+        json={"set_expiry": True, "access_valid_until": FUTURE},
     )
 
     assert response.status_code == 200
@@ -491,9 +497,9 @@ def test_removal_is_audited(client, room):
     grant = _grant(client, room["id"], "a@example.com")
     client.delete(f"{PREFIX}/access/{grant['id']}", params={"actor": "dana", "confirm": True})
 
-    entry = client.get(
-        "/api/audit", params={"record_id": grant["id"], "action": "delete"}
-    ).json()["entries"][0]
+    entry = client.get("/api/audit", params={"record_id": grant["id"], "action": "delete"}).json()[
+        "entries"
+    ][0]
     assert entry["before_state"]["principal"] == "a@example.com"
 
 
@@ -504,9 +510,12 @@ def test_a_removed_person_disappears_from_who_has_access(client, room):
     body = client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).json()
     assert body["members"] == []
     # And the removal really took: they can no longer share.
-    assert client.get(
-        f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "a@example.com"}
-    ).json()["actor"]["can_share"] is False
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "a@example.com"}).json()[
+            "actor"
+        ]["can_share"]
+        is False
+    )
 
 
 def test_the_owners_grant_cannot_be_removed(client, room):
@@ -536,9 +545,9 @@ def test_the_full_share_flow(client, room):
     )
     assert invited.status_code == 201
 
-    pending = client.get(
-        f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}
-    ).json()["pending_invitations"]
+    pending = client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).json()[
+        "pending_invitations"
+    ]
     assert len(pending) == 2
     assert all(item["hours_until_expiry"] == 48.0 for item in pending)
     assert all(item["role"] == "content_contributor" for item in pending)
@@ -550,9 +559,9 @@ def test_the_full_share_flow(client, room):
     buyer = next(item for item in pending if item["email"] == "buyer@northwind.example")
     client.post(f"{PREFIX}/invitations/{buyer['id']}/accept")
 
-    members = client.get(
-        f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}
-    ).json()["members"]
+    members = client.get(f"{PREFIX}/rooms/{room['id']}/access", params={"actor": "dana"}).json()[
+        "members"
+    ]
     assert [m["principal"] for m in members] == ["buyer@northwind.example"]
     assert members[0]["role_label"] == "Content Contributor"
     assert members[0]["access_valid_until"] == FUTURE

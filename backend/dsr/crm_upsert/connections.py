@@ -244,7 +244,9 @@ class Connection:
             batch_size=_optional_int(data.get("batch_size")),
             all_or_none=bool(data.get("all_or_none", False)),
             update_only=bool(data.get("update_only", False)),
-            fields=dict(fields) if isinstance(fields, Mapping) else dict(mapping.get("fields") or {}),
+            fields=dict(fields)
+            if isinstance(fields, Mapping)
+            else dict(mapping.get("fields") or {}),
             required_properties=[str(p) for p in (data.get("required_properties") or [])],
             capability=dict(data.get("capability") or {}),
             entity_set=str(data.get("entity_set") or data.get("object") or ""),
@@ -585,7 +587,9 @@ def backlog(
     threshold = int((config.get("queue") or {}).get("opportunistic_threshold") or 25)
 
     runs = _page(store, COLLECTION_RUN, room_id=room_id)
-    connection_runs = [run for run in runs if (run.get("data") or {}).get("connection_id") == connection.id]
+    connection_runs = [
+        run for run in runs if (run.get("data") or {}).get("connection_id") == connection.id
+    ]
     connection_runs.sort(key=lambda run: str(run.get("updated_at") or ""), reverse=True)
     last = connection_runs[0] if connection_runs else None
     # `started_at`, not `finished_at`: a schedule is measured from when the run
@@ -633,7 +637,9 @@ def backlog(
         "interval_hours": interval_hours,
         "last_run_at": last_at or None,
         "last_run_id": (last or {}).get("id"),
-        "next_due_at": _next_due(last_at, interval_hours, moment).isoformat(timespec="seconds") if last_at else None,
+        "next_due_at": _next_due(last_at, interval_hours, moment).isoformat(timespec="seconds")
+        if last_at
+        else None,
         "due": bool(reasons) and pending > 0,
         "reasons": reasons,
         "as_of": moment.isoformat(timespec="seconds"),

@@ -9,7 +9,6 @@ uploads to everyone but an instance administrator.
 from __future__ import annotations
 
 import pytest
-
 from dsr.permissions import (
     CONTENT_CONTRIBUTOR,
     INSTANCE_ADMIN,
@@ -19,7 +18,6 @@ from dsr.permissions import (
     normalise_role,
     role_vocabulary,
 )
-
 
 # -- vocabulary -------------------------------------------------------------- #
 
@@ -65,9 +63,7 @@ def test_missing_role_cannot_upload():
 
 
 def test_contributor_cannot_delete_someone_elses_document():
-    gate = capabilities(
-        CONTENT_CONTRIBUTOR, uploaded_by="dana", actor="sam"
-    )
+    gate = capabilities(CONTENT_CONTRIBUTOR, uploaded_by="dana", actor="sam")
     assert gate.can_delete is False
     assert gate.can_delete_others is False
 

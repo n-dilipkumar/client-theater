@@ -36,7 +36,7 @@ Design inferences (NOT sourced)
 These are recorded here because the workflow marks them as unspecified, and a
 reader must be able to tell sourced behaviour from inferred behaviour:
 
-* :data:`DEFAULT_CNAME_TARGET` is a placeholder. The vendor points customers at
+* :func:`cname_target` is a placeholder. The vendor points customers at
   ``custom-domains.qwilr.com``; that is *their* edge and a customer must never
   be sent there. This product needs its own canonical target, so it is read from
   ``DSR_CNAME_TARGET`` and the deployment operator sets it. The default uses the
@@ -69,7 +69,6 @@ from typing import Iterable, Protocol
 
 __all__ = [
     "CnameResolver",
-    "DEFAULT_CNAME_TARGET",
     "DomainError",
     "StaticResolver",
     "SystemResolver",
@@ -537,7 +536,11 @@ class SystemResolver:
 
     def __init__(self, edge_addresses: Iterable[str] | None = None) -> None:
         configured = os.environ.get("DSR_EDGE_ADDRESSES", "")
-        raw = list(edge_addresses) if edge_addresses is not None else [a.strip() for a in configured.split(",")]
+        raw = (
+            list(edge_addresses)
+            if edge_addresses is not None
+            else [a.strip() for a in configured.split(",")]
+        )
         self.edge_addresses = {a.strip().lower() for a in raw if a and a.strip()}
 
     def resolves_to(self, host: str, target: str) -> tuple[bool, list[str]]:

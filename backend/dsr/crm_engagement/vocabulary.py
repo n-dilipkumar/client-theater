@@ -74,7 +74,7 @@ SOURCED_QUOTES: dict[str, str] = {
     ),
     "extensibility": (
         "New event types are rows in the room's event catalogue mapped by the field map, "
-        "so adding \"download\", \"pricing-view\", \"cta-click\" needs a mapping row, not a "
+        'so adding "download", "pricing-view", "cta-click" needs a mapping row, not a '
         "code path. Optional `Prefer: return=representation` / `respond-async` style "
         "preferences let a connector opt into returning created data."
     ),
@@ -119,7 +119,9 @@ CREATE_ENDPOINTS: dict[str, dict[str, Any]] = {
             "HubSpot, so any 2xx is a success. Stated rather than guessed: a reviewer who "
             "has the API reference can narrow this list without reading any code."
         ),
-        "sources": ["https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts"],
+        "sources": [
+            "https://developers.hubspot.com/docs/api-reference/legacy/crm/objects/contacts"
+        ],
     },
     "dataverse": {
         "label": "Dataverse",
@@ -168,7 +170,9 @@ CREATE_ENDPOINTS: dict[str, dict[str, Any]] = {
             "here: on this vendor's own reference a 204 to a create is not a create that "
             "succeeded."
         ),
-        "sources": ["https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html"],
+        "sources": [
+            "https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html"
+        ],
     },
 }
 
@@ -416,16 +420,15 @@ def describe() -> dict[str, Any]:
         "vendors": list(VENDORS),
         "create_endpoints": {vendor: dict(spec) for vendor, spec in CREATE_ENDPOINTS.items()},
         "record_id_locations": {
-            vendor: [dict(entry) for entry in entries] for vendor, entries in RECORD_ID_LOCATIONS.items()
+            vendor: [dict(entry) for entry in entries]
+            for vendor, entries in RECORD_ID_LOCATIONS.items()
         },
         "preferences": {name: dict(spec) for name, spec in PREFERENCES.items()},
         "queue_states": list(QUEUE_STATES),
         "block_reasons": dict(BLOCK_REASONS),
         "block_tones": dict(BLOCK_TONES),
         "failure_reasons": dict(FAILURE_REASONS),
-        "failure_tones": {
-            reason: BLOCK_TONES.get(reason, "info") for reason in FAILURE_REASONS
-        },
+        "failure_tones": {reason: BLOCK_TONES.get(reason, "info") for reason in FAILURE_REASONS},
         "retryable_status": sorted(RETRYABLE_STATUS),
         "transforms": list(TRANSFORM_NAMES),
         "canonical_fields": dict(CANONICAL_FIELDS),

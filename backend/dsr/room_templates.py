@@ -260,9 +260,7 @@ def _derived_base(name: str) -> str:
     return base
 
 
-def _resolve_friendly_url(
-    store: RecordStore, name: str, requested: str | None
-) -> tuple[str, bool]:
+def _resolve_friendly_url(store: RecordStore, name: str, requested: str | None) -> tuple[str, bool]:
     """Return ``(friendly_url, derived)``.
 
     An operator-supplied URL that collides is an error: silently rewriting what
@@ -310,7 +308,8 @@ def _clean_name(raw: Any) -> str:
         raise RoomCreationError("invalid_name", "a room name is required")
     if len(name) > MAX_NAME_LENGTH:
         raise RoomCreationError(
-            "invalid_name", f"room name must be at most {MAX_NAME_LENGTH} characters, got {len(name)}"
+            "invalid_name",
+            f"room name must be at most {MAX_NAME_LENGTH} characters, got {len(name)}",
         )
     return name
 

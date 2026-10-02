@@ -33,8 +33,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -58,9 +56,10 @@ from dsr.pdf_analytics import (
     VideoAnalyticsUnavailable,
     describe_inferences,
     metrics,
+    vocabulary as vocab,
 )
-from dsr.pdf_analytics import vocabulary as vocab
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the
@@ -103,7 +102,11 @@ def book(store):
 def room(store):
     return store.create(
         "room",
-        {"name": "Northwind — Enterprise Evaluation", "account": "Northwind Traders", "owner": "dana"},
+        {
+            "name": "Northwind — Enterprise Evaluation",
+            "account": "Northwind Traders",
+            "owner": "dana",
+        },
         actor="dana",
     )
 
@@ -164,7 +167,9 @@ def http(monkeypatch):
 @pytest.fixture()
 def http_room(http):
     return http.post(
-        "/api/records/room", json={"name": "Northwind", "account": "Northwind"}, params={"actor": "dana"}
+        "/api/records/room",
+        json={"name": "Northwind", "account": "Northwind"},
+        params={"actor": "dana"},
     ).json()
 
 
@@ -192,9 +197,7 @@ def test_the_whole_host_reports_no_failed_feature(http):
 
 
 def test_the_feature_is_navigable_without_editing_app_jsx(http):
-    entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["prefix"] == PREFIX
-    )
+    entry = next(f for f in http.get("/api/features").json()["features"] if f["prefix"] == PREFIX)
     assert entry["nav"] == [{"id": "pdf-analytics", "label": "PDF analytics"}]
 
 
@@ -244,7 +247,9 @@ def test_only_one_error_type_is_claimed(http):
     """Claiming a builtin would let this feature intercept errors product-wide."""
     claimed = list(load_feature(MODULE).EXCEPTION_HANDLERS)
     assert claimed == [load_feature(MODULE).AnalyticsError]
-    assert not any(issubclass(error, Exception) and error.__module__ == "builtins" for error in claimed)
+    assert not any(
+        issubclass(error, Exception) and error.__module__ == "builtins" for error in claimed
+    )
 
 
 def test_the_error_type_is_this_workflows_own(http):
@@ -355,7 +360,9 @@ def test_a_video_defaults_to_self_hosted():
 
 
 def test_a_pdf_gets_no_self_hosted_flag():
-    assert "selfHosted" not in vocab.normalise_snapshot({"name": "D", "type": "pdf", "pageCount": 4})
+    assert "selfHosted" not in vocab.normalise_snapshot(
+        {"name": "D", "type": "pdf", "pageCount": 4}
+    )
 
 
 def test_researched_camel_case_survives_normalisation():
@@ -378,7 +385,13 @@ def test_researched_camel_case_survives_normalisation():
 
 def test_snake_case_input_is_normalised_to_the_researched_spelling():
     clean = vocab.normalise_snapshot(
-        {"name": "D", "type": "pdf", "page_count": 8, "share_url": "https://s.example/a", "tracking_enabled": False}
+        {
+            "name": "D",
+            "type": "pdf",
+            "page_count": 8,
+            "share_url": "https://s.example/a",
+            "tracking_enabled": False,
+        }
     )
     assert clean["pageCount"] == 8
     assert clean["shareUrl"] == "https://s.example/a"
@@ -387,20 +400,35 @@ def test_snake_case_input_is_normalised_to_the_researched_spelling():
 
 def test_the_string_false_is_read_not_truth_tested():
     """``bool("false")`` is True, which would silently untrack an asset."""
-    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "trackingEnabled": "false"})[
-        "trackingEnabled"
-    ] is False
-    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "trackingEnabled": "no"})[
-        "trackingEnabled"
-    ] is False
-    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "trackingEnabled": "true"})[
-        "trackingEnabled"
-    ] is True
+    assert (
+        vocab.normalise_snapshot({"name": "D", "type": "pdf", "trackingEnabled": "false"})[
+            "trackingEnabled"
+        ]
+        is False
+    )
+    assert (
+        vocab.normalise_snapshot({"name": "D", "type": "pdf", "trackingEnabled": "no"})[
+            "trackingEnabled"
+        ]
+        is False
+    )
+    assert (
+        vocab.normalise_snapshot({"name": "D", "type": "pdf", "trackingEnabled": "true"})[
+            "trackingEnabled"
+        ]
+        is True
+    )
 
 
 def test_numeric_booleans_are_accepted():
-    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "isInternal": 1})["isInternal"] is True
-    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "isInternal": 0})["isInternal"] is False
+    assert (
+        vocab.normalise_snapshot({"name": "D", "type": "pdf", "isInternal": 1})["isInternal"]
+        is True
+    )
+    assert (
+        vocab.normalise_snapshot({"name": "D", "type": "pdf", "isInternal": 0})["isInternal"]
+        is False
+    )
 
 
 def test_a_boolean_that_is_neither_is_refused():
@@ -410,12 +438,19 @@ def test_a_boolean_that_is_neither_is_refused():
 
 
 def test_tags_may_be_a_list():
-    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "tags": ["a", " b "]})["tags"] == ["a", "b"]
+    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "tags": ["a", " b "]})["tags"] == [
+        "a",
+        "b",
+    ]
 
 
 def test_tags_may_be_a_comma_separated_string():
     """A query string has no arrays, and a tag filter is common enough to want."""
-    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "tags": "a, b ,c"})["tags"] == ["a", "b", "c"]
+    assert vocab.normalise_snapshot({"name": "D", "type": "pdf", "tags": "a, b ,c"})["tags"] == [
+        "a",
+        "b",
+        "c",
+    ]
 
 
 def test_tags_may_be_absent():
@@ -438,13 +473,20 @@ def test_a_page_count_must_be_a_positive_whole_number():
 
 
 def test_an_empty_external_id_is_dropped_rather_than_stored_blank():
-    assert "externalId" not in vocab.normalise_snapshot({"name": "D", "type": "pdf", "externalId": "  "})
+    assert "externalId" not in vocab.normalise_snapshot(
+        {"name": "D", "type": "pdf", "externalId": "  "}
+    )
 
 
 def test_an_undeclared_field_is_kept_verbatim():
     """No migration, no typed column: a team's own field just works."""
     clean = vocab.normalise_snapshot(
-        {"name": "D", "type": "pdf", "pricingTier": "gold", "review": {"owner": "dana", "cycle": 42}}
+        {
+            "name": "D",
+            "type": "pdf",
+            "pricingTier": "gold",
+            "review": {"owner": "dana", "cycle": 42},
+        }
     )
     assert clean["pricingTier"] == "gold"
     assert clean["review"] == {"owner": "dana", "cycle": 42}
@@ -639,7 +681,10 @@ def test_the_last_page_reports_no_drop_because_there_is_nothing_after_it():
 
 def test_the_drops_account_for_every_reader_who_did_not_finish():
     result = curve()
-    assert sum(entry["dropped"] for entry in result["curve"]) == result["sessions"] - result["completed_sessions"]
+    assert (
+        sum(entry["dropped"] for entry in result["curve"])
+        == result["sessions"] - result["completed_sessions"]
+    )
 
 
 def test_retained_rate_is_measured_against_the_opening_page():
@@ -748,12 +793,16 @@ def test_a_session_reports_its_span_and_its_pages():
 
 
 def test_a_row_with_an_unreadable_timestamp_still_groups():
-    assert metrics.group_sessions([{"viewer": "a@x", "page": 1, "seconds": 5}])[0]["deepest_page"] == 1
+    assert (
+        metrics.group_sessions([{"viewer": "a@x", "page": 1, "seconds": 5}])[0]["deepest_page"] == 1
+    )
 
 
 def test_timestamps_parse_from_every_spelling_the_ingest_accepts():
     assert metrics.parse_ts("2026-09-27T12:00:00Z") == NOW
-    assert metrics.parse_ts("2026-09-27T12:00:00") == NOW, "a naive stamp is UTC, not the server's zone"
+    assert metrics.parse_ts("2026-09-27T12:00:00") == NOW, (
+        "a naive stamp is UTC, not the server's zone"
+    )
     assert metrics.parse_ts("2026-09-27T14:00:00+02:00") == NOW
     assert metrics.parse_ts(NOW) == NOW
     assert metrics.parse_ts("not a date") is None
@@ -773,7 +822,11 @@ def test_average_watch_time_over_no_watches_is_null_not_zero():
 
 def test_average_watch_time_is_over_watches():
     result = metrics.average_watch_time(
-        rows({"seconds": 100, "viewer": "a@x"}, {"seconds": 200, "viewer": "b@x"}, {"seconds": 300, "viewer": "a@x"})
+        rows(
+            {"seconds": 100, "viewer": "a@x"},
+            {"seconds": 200, "viewer": "b@x"},
+            {"seconds": 300, "viewer": "a@x"},
+        )
     )
     assert result["watches"] == 3
     assert result["unique_viewers"] == 2
@@ -976,7 +1029,9 @@ def test_a_registration_is_audited_with_the_source_the_route_passed(book, store)
 
 
 def test_an_asset_is_scoped_to_a_room(book, room):
-    record = book.register_asset({"name": "D", "type": "pdf", "pageCount": 3}, room_id=room["id"], source=SOURCE)
+    record = book.register_asset(
+        {"name": "D", "type": "pdf", "pageCount": 3}, room_id=room["id"], source=SOURCE
+    )
     assert record["room_id"] == room["id"]
     assert [r["id"] for r in book.list_assets(room_id=room["id"])] == [record["id"]]
     assert book.list_assets(room_id="room_missing") == []
@@ -984,7 +1039,9 @@ def test_an_asset_is_scoped_to_a_room(book, room):
 
 def test_registering_into_a_room_that_does_not_exist_is_refused(book):
     with pytest.raises(NotFound):
-        book.register_asset({"name": "D", "type": "pdf", "pageCount": 3}, room_id="room_nope", source=SOURCE)
+        book.register_asset(
+            {"name": "D", "type": "pdf", "pageCount": 3}, room_id="room_nope", source=SOURCE
+        )
 
 
 def test_the_availability_flags_are_derived_at_registration(book):
@@ -1154,14 +1211,18 @@ def test_a_row_page_must_be_a_positive_whole_number(book):
     asset = deck(book)
     for bad in (0, -1, "two", None):
         with pytest.raises(ValidationError):
-            book.record_timings(asset["id"], {"timings": [{"page": bad, "seconds": 5}]}, source="seed")
+            book.record_timings(
+                asset["id"], {"timings": [{"page": bad, "seconds": 5}]}, source="seed"
+            )
 
 
 def test_a_row_must_spend_a_positive_number_of_seconds(book):
     asset = deck(book)
     for bad in (0, -5, None, "ages"):
         with pytest.raises(ValidationError):
-            book.record_timings(asset["id"], {"timings": [{"page": 1, "seconds": bad}]}, source="seed")
+            book.record_timings(
+                asset["id"], {"timings": [{"page": 1, "seconds": bad}]}, source="seed"
+            )
 
 
 def test_a_refused_batch_writes_nothing_at_all(book, store):
@@ -1169,7 +1230,9 @@ def test_a_refused_batch_writes_nothing_at_all(book, store):
     before = store.stats()["records"]
     with pytest.raises(ValidationError):
         book.record_timings(
-            asset["id"], {"timings": [{"page": 1, "seconds": 5}, {"page": 0, "seconds": 5}]}, source="seed"
+            asset["id"],
+            {"timings": [{"page": 1, "seconds": 5}, {"page": 0, "seconds": 5}]},
+            source="seed",
         )
     assert store.stats()["records"] == before
 
@@ -1393,8 +1456,12 @@ def test_the_detail_page_of_a_video_carries_the_watch_time(book):
 
 
 def test_a_room_lists_its_own_assets_with_their_headline_numbers(book, room, other_room):
-    mine = book.register_asset({"name": "Mine", "type": "pdf", "pageCount": 4}, room_id=room["id"], source=SOURCE)
-    book.register_asset({"name": "Theirs", "type": "pdf", "pageCount": 4}, room_id=other_room["id"], source=SOURCE)
+    mine = book.register_asset(
+        {"name": "Mine", "type": "pdf", "pageCount": 4}, room_id=room["id"], source=SOURCE
+    )
+    book.register_asset(
+        {"name": "Theirs", "type": "pdf", "pageCount": 4}, room_id=other_room["id"], source=SOURCE
+    )
     read(book, mine["id"], "a@x", 4, room_id=room["id"])
     book.record_event(
         mine["id"], {"event": "asset.viewed", "viewer": "a@x", "room_id": room["id"]}, source="seed"
@@ -1413,7 +1480,9 @@ def test_a_room_lists_its_own_assets_with_their_headline_numbers(book, room, oth
 
 
 def test_a_room_view_counts_only_that_rooms_readers(book, room, other_room):
-    asset = book.register_asset({"name": "Shared", "type": "pdf", "pageCount": 4}, room_id=room["id"], source=SOURCE)
+    asset = book.register_asset(
+        {"name": "Shared", "type": "pdf", "pageCount": 4}, room_id=room["id"], source=SOURCE
+    )
     read(book, asset["id"], "a@x", 4, room_id=room["id"], session="mine")
     read(book, asset["id"], "b@x", 4, room_id=other_room["id"], session="theirs")
     result = book.room_assets(room["id"])
@@ -1422,7 +1491,9 @@ def test_a_room_view_counts_only_that_rooms_readers(book, room, other_room):
 
 def test_a_room_view_summarises_a_video_too(book, room):
     video = book.register_asset({"name": "V", "type": "video"}, room_id=room["id"], source=SOURCE)
-    book.record_watch(video["id"], {"viewer": "a@x", "seconds": 60, "room_id": room["id"]}, source="seed")
+    book.record_watch(
+        video["id"], {"viewer": "a@x", "seconds": 60, "room_id": room["id"]}, source="seed"
+    )
     entry = book.room_assets(room["id"])["assets"][0]
     assert entry["video"]["average_seconds"] == 60.0
     assert entry["videoAnalyticsAvailable"] is True
@@ -1496,7 +1567,9 @@ def test_the_library_list_rejects_a_limit_outside_its_bounds(http):
 def test_registering_an_asset_returns_201_and_is_audited(http):
     response = http.post(f"{PREFIX}/assets", json={"name": "D", "type": "pdf", "pageCount": 4})
     assert response.status_code == 201
-    entry = http.get("/api/audit", params={"collection": "contentAsset", "limit": 1}).json()["entries"][0]
+    entry = http.get("/api/audit", params={"collection": "contentAsset", "limit": 1}).json()[
+        "entries"
+    ][0]
     assert entry["source"] == f"POST {PREFIX}/assets"
 
 
@@ -1571,7 +1644,9 @@ def test_asking_for_pdf_analytics_on_a_single_page_pdf_is_a_422_with_a_reason(ht
 
 
 def test_asking_for_video_analytics_on_an_externally_hosted_video_is_a_422(http):
-    asset = http.post(f"{PREFIX}/assets", json={"name": "Keynote", "type": "video", "selfHosted": False}).json()
+    asset = http.post(
+        f"{PREFIX}/assets", json={"name": "Keynote", "type": "video", "selfHosted": False}
+    ).json()
     response = http.get(f"{PREFIX}/assets/{asset['id']}/video-analytics")
     assert response.status_code == 422
     assert response.json()["reason"] == "not_self_hosted"
@@ -1579,8 +1654,12 @@ def test_asking_for_video_analytics_on_an_externally_hosted_video_is_a_422(http)
 
 def test_recording_a_watch_over_http_then_reading_the_average(http):
     asset = http.post(f"{PREFIX}/assets", json={"name": "Walkthrough", "type": "video"}).json()
-    assert http.post(f"{PREFIX}/assets/{asset['id']}/watch", json={"seconds": 60}).status_code == 201
-    assert http.post(f"{PREFIX}/assets/{asset['id']}/watch", json={"seconds": 120}).status_code == 201
+    assert (
+        http.post(f"{PREFIX}/assets/{asset['id']}/watch", json={"seconds": 60}).status_code == 201
+    )
+    assert (
+        http.post(f"{PREFIX}/assets/{asset['id']}/watch", json={"seconds": 120}).status_code == 201
+    )
     body = http.get(f"{PREFIX}/assets/{asset['id']}/video-analytics").json()
     assert body["average_seconds"] == 90.0
     assert body["watches"] == 2
@@ -1605,7 +1684,9 @@ def test_the_detail_route_answers_the_whole_page(http):
 
 def test_the_room_route_needs_a_real_room(http, http_room):
     asset = http.post(
-        f"{PREFIX}/assets", params={"room_id": http_room["id"]}, json={"name": "D", "type": "pdf", "pageCount": 3}
+        f"{PREFIX}/assets",
+        params={"room_id": http_room["id"]},
+        json={"name": "D", "type": "pdf", "pageCount": 3},
     ).json()
     http.post(
         f"{PREFIX}/assets/{asset['id']}/timings",
@@ -1626,13 +1707,17 @@ def test_the_room_route_for_an_unknown_room_is_a_404(http):
 def test_every_asset_route_for_an_unknown_asset_is_a_404(http):
     for path in ("", "/pdf-analytics", "/video-analytics", "/core-analytics"):
         assert http.get(f"{PREFIX}/assets/asset_nope{path}").status_code == 404
-    assert http.post(
-        f"{PREFIX}/assets/asset_nope/timings", json={"timings": [{"page": 1, "seconds": 5}]}
-    ).status_code == 404
+    assert (
+        http.post(
+            f"{PREFIX}/assets/asset_nope/timings", json={"timings": [{"page": 1, "seconds": 5}]}
+        ).status_code
+        == 404
+    )
     assert http.post(f"{PREFIX}/assets/asset_nope/watch", json={"seconds": 5}).status_code == 404
-    assert http.post(
-        f"{PREFIX}/assets/asset_nope/events", json={"event": "asset.viewed"}
-    ).status_code == 404
+    assert (
+        http.post(f"{PREFIX}/assets/asset_nope/events", json={"event": "asset.viewed"}).status_code
+        == 404
+    )
 
 
 def test_a_malformed_body_is_refused_before_the_reference_is_resolved(http):
@@ -1674,7 +1759,9 @@ def test_a_room_scope_on_the_analytics_routes_narrows_the_numbers(http, http_roo
         json={"timings": [{"page": 1, "seconds": 20}]},
     )
     assert http.get(f"{PREFIX}/assets/{asset['id']}/pdf-analytics").json()["readings"] == 3
-    scoped = http.get(f"{PREFIX}/assets/{asset['id']}/pdf-analytics", params={"room_id": other_id}).json()
+    scoped = http.get(
+        f"{PREFIX}/assets/{asset['id']}/pdf-analytics", params={"room_id": other_id}
+    ).json()
     assert scoped["readings"] == 1
     assert scoped["room_id"] == other_id
 
@@ -1692,7 +1779,7 @@ def _matches_registered_route(path, served):
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -1706,7 +1793,9 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http):
     assumed.
     """
     asset = register(http)
-    http.post(f"{PREFIX}/assets/{asset['id']}/events", json={"event": "asset.viewed", "viewer": "a@x"})
+    http.post(
+        f"{PREFIX}/assets/{asset['id']}/events", json={"event": "asset.viewed", "viewer": "a@x"}
+    )
     http.post(
         f"{PREFIX}/assets/{asset['id']}/timings",
         json={"timings": [{"page": 1, "seconds": 30}]},
@@ -1736,7 +1825,9 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http):
 def test_a_write_source_names_the_concrete_request_not_a_placeholder(http):
     """``/assets/{asset_id}/timings`` would be a template, not a route we served."""
     asset = register(http)
-    http.post(f"{PREFIX}/assets/{asset['id']}/timings", json={"timings": [{"page": 1, "seconds": 5}]})
+    http.post(
+        f"{PREFIX}/assets/{asset['id']}/timings", json={"timings": [{"page": 1, "seconds": 5}]}
+    )
     entries = http.get("/api/audit", params={"collection": "pageTiming"}).json()["entries"]
     assert entries[0]["source"] == f"POST {PREFIX}/assets/{asset['id']}/timings"
 
@@ -1749,7 +1840,9 @@ def test_no_write_source_names_a_path_outside_the_prefix(http):
         source = entry["source"] or ""
         if source == "seed":
             continue
-        assert source.split(" ")[1].startswith("/api/") or source.startswith("POST /api/records"), source
+        assert source.split(" ")[1].startswith("/api/") or source.startswith("POST /api/records"), (
+            source
+        )
 
 
 def test_reading_the_analytics_writes_nothing(http):
@@ -1809,7 +1902,8 @@ def seeded(store):
         store.create("room", {"name": "Contoso"}, actor="dana"),
     ]
     summary = module.seed(
-        store.db, {"room_ids": [(r["id"], r["data"]["name"]) for r in rooms], "now": NOW, "rng": None}
+        store.db,
+        {"room_ids": [(r["id"], r["data"]["name"]) for r in rooms], "now": NOW, "rng": None},
     )
     return module, summary, [r["id"] for r in rooms]
 
@@ -1851,9 +1945,15 @@ def test_the_seed_contains_every_state_a_reviewer_needs_to_see(seeded, store):
     book = AnalyticsBook(store)
     assets = {record["data"]["name"]: record["data"] for record in book.list_assets()}
 
-    assert assets["Commercial Terms One-Pager"]["pageCount"] == 1, "the single-page refusal has a home"
-    assert assets["M&A Diligence Data Room Index"]["trackingEnabled"] is False, "the refusal has a home"
-    assert assets["Analyst Day Keynote (external player)"]["selfHosted"] is False, "the refusal has a home"
+    assert assets["Commercial Terms One-Pager"]["pageCount"] == 1, (
+        "the single-page refusal has a home"
+    )
+    assert assets["M&A Diligence Data Room Index"]["trackingEnabled"] is False, (
+        "the refusal has a home"
+    )
+    assert assets["Analyst Day Keynote (external player)"]["selfHosted"] is False, (
+        "the refusal has a home"
+    )
     assert assets["Partner Referral Terms (internal)"]["isInternal"] is True
 
     internal_id = book.resolve_asset("asset_demo_05")["id"]
@@ -1881,9 +1981,13 @@ def test_the_seed_is_deterministic(store):
         "rng": None,
     }
     first = module.seed(store.db, context)
-    ids_first = sorted(record["data"]["externalId"] for record in AnalyticsBook(store).list_assets())
+    ids_first = sorted(
+        record["data"]["externalId"] for record in AnalyticsBook(store).list_assets()
+    )
     second = module.seed(store.db, context)
-    ids_second = sorted(record["data"]["externalId"] for record in AnalyticsBook(store).list_assets())
+    ids_second = sorted(
+        record["data"]["externalId"] for record in AnalyticsBook(store).list_assets()
+    )
     assert ids_first == ids_second
     assert first.split(",")[1:] == second.split(",")[1:], "re-seeding adds no new telemetry"
 

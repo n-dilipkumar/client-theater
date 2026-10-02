@@ -173,7 +173,11 @@ def _present(value: Any) -> bool:
 def _membership(expected: Any, actual: Any) -> bool:
     """``in`` / ``not_in`` over a scalar or over a list-valued field."""
     if isinstance(actual, (list, tuple)):
-        return any(_compare_scalar("eq", item, candidate) for item in actual for candidate in _candidates(expected))
+        return any(
+            _compare_scalar("eq", item, candidate)
+            for item in actual
+            for candidate in _candidates(expected)
+        )
     return any(_compare_scalar("eq", actual, candidate) for candidate in _candidates(expected))
 
 
@@ -318,7 +322,7 @@ def require_rules(rules: Any) -> list[dict[str, Any]]:
             if "value" not in rule:
                 raise SegmentError(
                     f"{where} uses {operator} but has no value",
-                    remediation=f"Add a value, or use exists / not_exists.",
+                    remediation="Add a value, or use exists / not_exists.",
                 )
             value = rule.get("value")
             if isinstance(value, (list, tuple)):
@@ -389,7 +393,11 @@ def evaluate_rule(rule: Mapping[str, Any], payload: Mapping[str, Any]) -> dict[s
     actual = resolve(payload, path)
     missing = actual is MISSING
     expected = rule.get("value")
-    matched = False if missing and operator not in UNARY_OPERATORS else _compare_scalar(operator, actual, expected)
+    matched = (
+        False
+        if missing and operator not in UNARY_OPERATORS
+        else _compare_scalar(operator, actual, expected)
+    )
 
     if missing:
         reason = "the lead does not carry this path"

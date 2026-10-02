@@ -32,6 +32,7 @@ on CI. A test that passes on one machine proves nothing about ordering, so each
 one here also asserts the order is unchanged by a second identical read: a
 one-off correct answer is still luck if the next read can differ.
 """
+
 from __future__ import annotations
 
 import sys
@@ -158,9 +159,7 @@ def test_activity_is_ordered_by_when_it_happened_not_when_it_was_written(tmp_pat
 
         rows = engine.activity(room_id=room_id)
         stamps = [r["occurred_at"] for r in rows]
-        assert stamps == sorted(stamps), (
-            f"activity is in write order, not event order: {stamps}"
-        )
+        assert stamps == sorted(stamps), f"activity is in write order, not event order: {stamps}"
         assert len(stamps) == 3
     finally:
         db.close()

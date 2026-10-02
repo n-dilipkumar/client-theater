@@ -27,11 +27,9 @@ from dsr.plays.vocabulary import AUTOMATION_NOTE
 #: Every reason a Play did or did not fire, published so a client renders the
 #: sentence this module wrote rather than one of its own.
 MATCH_REASONS: dict[str, str] = {
-    "matched": (
-        "the signal carries an indicator this Play triggers on, and the Play is enabled"
-    ),
+    "matched": ("the signal carries an indicator this Play triggers on, and the Play is enabled"),
     "not_enabled": (
-        "\"After registration, the registered Play must be enabled in the Salesloft UI.\" "
+        '"After registration, the registered Play must be enabled in the Salesloft UI." '
         "This one is not, so it creates nothing."
     ),
     "registration_mismatch": (
@@ -42,9 +40,7 @@ MATCH_REASONS: dict[str, str] = {
         "the signal carries no indicators, and a Play triggers on an indicator list, so "
         "there is nothing to match"
     ),
-    "no_overlap": (
-        "the signal carries none of the indicators this Play triggers on"
-    ),
+    "no_overlap": ("the signal carries none of the indicators this Play triggers on"),
 }
 
 

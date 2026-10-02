@@ -273,7 +273,8 @@ class SalesforceBulkAdapter(_SourceBacked):
     def start(self, connection: Mapping[str, Any], plan: Mapping[str, Any]) -> VendorPage:
         handle = self._handle("750", connection, plan)
         total = self._count(connection, plan.get("scope") or {})
-        ready_after = int(plan.get("ready_after", 1))
+        # `ready_after` is not read here: `read_page` takes it from the job
+        # payload the first page carries, so a poll count starts at 1.
         return VendorPage(
             cursor=handle,
             job_state="queued",
@@ -677,10 +678,6 @@ class SimulatedHistory:
             [*self._rows, *(dict(row) for row in rows)],
             key=lambda row: (str(row.get("occurred_at") or ""), str(row.get("id") or "")),
         )
-
-    @property
-    def rows(self) -> list[dict[str, Any]]:
-        return [dict(row) for row in self._rows]
 
     def scoped(
         self, connection: Mapping[str, Any] | None, scope: Mapping[str, Any] | None

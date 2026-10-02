@@ -50,8 +50,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -65,9 +63,9 @@ from dsr.partial_failures import (
     CORRELATION,
     DEFAULT_BASIS,
     DEFAULT_PREFLIGHT_RULES,
-    DISPOSITIONS,
     DISPOSITION_LABELS,
     DISPOSITION_MEANING,
+    DISPOSITIONS,
     ERROR_MODEL_KEYS,
     EXTENSIBILITY_QUOTE,
     FUTURE_TOLERANCE_SECONDS,
@@ -85,16 +83,15 @@ from dsr.partial_failures import (
     PREFLIGHT_KINDS,
     ROW_COLLECTION,
     ROW_STATUSES,
-    RUN_COLLECTION,
     RULES_COLLECTION,
     RULES_RECORD_ID,
+    RUN_COLLECTION,
     SENT_PREVIEW_CHARS,
     SOURCED_AUTOMATION,
     SOURCED_EXTENSIBILITY,
     SOURCED_GAP,
     InvalidPayload,
     InvalidRule,
-    PartialFailureError,
     SyncLog,
     UnknownConnector,
     UnknownRoom,
@@ -118,13 +115,14 @@ from dsr.partial_failures import (
     normalise,
     preflight_defaults,
     retry_plan,
-    validate_rule,
     validate_routing_rule,
+    validate_rule,
+    validation as validation_module,
     vocabulary,
 )
-from dsr.partial_failures import validation as validation_module
 from dsr.partial_failures.normalise import DEFAULT_CLASSIFICATION as UNRECOGNISED
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Written out here rather than imported, so a renamed
 #: prefix fails a test instead of following silently.
@@ -237,7 +235,9 @@ def hubspot_success(trace, record_id=None):
     return entry
 
 
-def hubspot_failure(trace, message, code="VALIDATION_ERROR", field=None, code_inner="INVALID_VALUE"):
+def hubspot_failure(
+    trace, message, code="VALIDATION_ERROR", field=None, code_inner="INVALID_VALUE"
+):
     error = {"message": message, "code": code_inner}
     if field:
         error["in"] = field
@@ -307,9 +307,7 @@ def post_run(http, room_id, connector, input_rows, status, body, **params):
 
 
 def retry_via(http, run_id, body, **params):
-    return http.post(
-        f"{PREFIX}/runs/{run_id}/retry", json={"vendor": body}, params=params or None
-    )
+    return http.post(f"{PREFIX}/runs/{run_id}/retry", json={"vendor": body}, params=params or None)
 
 
 def an_hour_hence():
@@ -375,7 +373,12 @@ def test_feature_module_does_not_import_the_shared_app():
 
 def test_frontend_descriptor_id_matches_the_backend_feature_id():
     descriptor = (
-        Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / FEATURE_ID / "index.jsx"
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "features"
+        / FEATURE_ID
+        / "index.jsx"
     )
     text = descriptor.read_text(encoding="utf-8")
     module = load_feature(MODULE)
@@ -388,9 +391,7 @@ def test_the_frontend_only_calls_its_own_prefix():
     """A page that reaches another feature's routes is a coupling the host cannot see."""
     folder = Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / FEATURE_ID
     others = sorted(
-        path.name
-        for path in folder.parent.iterdir()
-        if path.is_dir() and path.name != FEATURE_ID
+        path.name for path in folder.parent.iterdir() if path.is_dir() and path.name != FEATURE_ID
     )
 
     for name in ("api.js", "SyncLog.jsx", "index.jsx", "icons.jsx", "primitives.jsx"):
@@ -461,7 +462,9 @@ def test_the_partial_statuses_are_the_ones_the_research_quotes():
 
 
 def test_only_dataverse_is_documented_to_produce_a_doc_link():
-    annotations = {entry["id"]: entry["doc_link"]["annotation"] for entry in vocabulary()["connectors"]}
+    annotations = {
+        entry["id"]: entry["doc_link"]["annotation"] for entry in vocabulary()["connectors"]
+    }
     assert annotations["dataverse"] == HELP_LINK_ANNOTATION
     assert annotations["hubspot"] is None
     assert annotations["salesforce"] is None
@@ -491,7 +494,10 @@ def test_every_disposition_is_labelled_and_explained():
 
 
 def test_the_two_researched_quotations_are_carried_verbatim():
-    assert "Retry queue drains automatically for retryable classes (rate limit, locked)" in SOURCED_AUTOMATION
+    assert (
+        "Retry queue drains automatically for retryable classes (rate limit, locked)"
+        in SOURCED_AUTOMATION
+    )
     assert "{retryable, field, code, message, docLink}" in SOURCED_EXTENSIBILITY
     assert "batch create" in SOURCED_GAP
     assert AUTOMATION_QUOTE == SOURCED_AUTOMATION
@@ -640,7 +646,9 @@ def test_a_hubspot_2xx_that_carries_results_is_read_as_per_record():
 
     assert outcome.per_record is True
     assert outcome.failed == 1
-    assert any("the status alone would not have shown the failures" in note for note in outcome.notes)
+    assert any(
+        "the status alone would not have shown the failures" in note for note in outcome.notes
+    )
 
 
 def test_the_hubspot_error_count_is_reconciled_against_what_was_described():
@@ -725,7 +733,10 @@ def test_a_dataverse_validation_error_names_the_property_inside_its_own_message(
 
 def test_the_researched_message_yields_the_property_it_quotes():
     assert dataverse_field_from_message(DATAVERSE_VALIDATION_MESSAGE) == "subject"
-    assert dataverse_field_from_message("The 'email' attribute of the 'contact' entity is required") == "email"
+    assert (
+        dataverse_field_from_message("The 'email' attribute of the 'contact' entity is required")
+        == "email"
+    )
     assert dataverse_field_from_message("The 'subject' property is too long") == "subject"
     assert dataverse_field_from_message("nothing quoted here") is None
     assert dataverse_field_from_message("") is None
@@ -805,7 +816,9 @@ def test_a_dataverse_200_whose_body_is_not_the_per_request_array_fails_every_row
 
     assert outcome.failed == 1
     assert outcome.rows[0].error.code == "BATCH_WITHOUT_OUTCOMES"
-    assert any("neither per-request responses nor an error object" in note for note in outcome.notes)
+    assert any(
+        "neither per-request responses nor an error object" in note for note in outcome.notes
+    )
 
 
 def test_a_dataverse_200_with_an_empty_response_array_is_still_read_as_per_record():
@@ -1048,9 +1061,7 @@ def test_a_hubspot_property_is_read_from_whichever_key_the_vendor_used():
             "context": {"objectWriteTraceId": ["t"]},
             "errors": [{"message": "x", "code": "C", key: "email"}],
         }
-        outcome = normalise(
-            "hubspot", 207, {"results": [result]}, rows(("a", "contact", "t", {}))
-        )
+        outcome = normalise("hubspot", 207, {"results": [result]}, rows(("a", "contact", "t", {})))
         assert outcome.rows[0].error.field == "email", key
 
 
@@ -1079,7 +1090,9 @@ def test_every_classification_entry_states_why_it_classifies_that_way(entry):
 
 
 def test_the_two_researched_retryable_classes_are_retryable():
-    limit, basis, rule = classify(connector="salesforce", code="REQUEST_LIMIT_EXCEEDED", http_status=403)
+    limit, basis, rule = classify(
+        connector="salesforce", code="REQUEST_LIMIT_EXCEEDED", http_status=403
+    )
     assert limit is True
     assert rule == "salesforce-request-limit-exceeded"
     assert "Quoted" in basis
@@ -1099,7 +1112,9 @@ def test_the_researched_validation_class_waits_for_a_person():
 
 @pytest.mark.parametrize("status", [404, 405, 409, 418, 422, 451])
 def test_an_unrecognised_status_waits_for_a_person(status):
-    retryable, basis, matched = classify(connector="hubspot", code="SOMETHING_NEW", http_status=status)
+    retryable, basis, matched = classify(
+        connector="hubspot", code="SOMETHING_NEW", http_status=status
+    )
 
     assert retryable is False
     assert matched == UNRECOGNISED
@@ -1189,8 +1204,13 @@ def test_a_routing_rule_can_make_a_terminal_class_retryable():
         "then": {"retryable": True},
         "basis": "a plug-in this deployment knows is flaky",
     }
-    assert classify(connector="dataverse", code="PLUGIN_TIMEOUT", http_status=500, overrides=[rule])[0] is True
-    assert classify(connector="dataverse", code="OTHER", http_status=500, overrides=[rule])[0] is True
+    assert (
+        classify(connector="dataverse", code="PLUGIN_TIMEOUT", http_status=500, overrides=[rule])[0]
+        is True
+    )
+    assert (
+        classify(connector="dataverse", code="OTHER", http_status=500, overrides=[rule])[0] is True
+    )
 
 
 def test_a_routing_rule_only_fires_when_every_when_key_matches():
@@ -1207,8 +1227,18 @@ def test_a_routing_rule_only_fires_when_every_when_key_matches():
 
 def test_the_last_matching_routing_rule_wins():
     rules = [
-        {"id": "broad", "when": {"connector": "hubspot"}, "then": {"retryable": False}, "basis": "broad"},
-        {"id": "narrow", "when": {"code": "FORBIDDEN"}, "then": {"retryable": True}, "basis": "narrow"},
+        {
+            "id": "broad",
+            "when": {"connector": "hubspot"},
+            "then": {"retryable": False},
+            "basis": "broad",
+        },
+        {
+            "id": "narrow",
+            "when": {"code": "FORBIDDEN"},
+            "then": {"retryable": True},
+            "basis": "narrow",
+        },
     ]
     _retryable, _basis, matched = classify(connector="hubspot", code="FORBIDDEN", overrides=rules)
 
@@ -1222,7 +1252,9 @@ def test_a_routing_rule_can_match_on_the_message():
         "then": {"retryable": True},
         "basis": "the vendor's own wording for a transient condition",
     }
-    hit = classify(connector="hubspot", code="X", message="Please try again later", overrides=[rule])
+    hit = classify(
+        connector="hubspot", code="X", message="Please try again later", overrides=[rule]
+    )
     miss = classify(connector="hubspot", code="X", message="Invalid", overrides=[rule])
     assert hit[0] is True
     assert miss[0] is False
@@ -1389,7 +1421,13 @@ def test_a_rule_only_applies_to_its_own_connector_and_entity():
 def test_a_wildcard_rule_applies_to_every_connector_and_entity():
     rules = [
         validate_rule(
-            {"id": "any-email", "connector": ANY, "entity": ANY, "field": "email", "kind": "required"}
+            {
+                "id": "any-email",
+                "connector": ANY,
+                "entity": ANY,
+                "field": "email",
+                "kind": "required",
+            }
         )
     ]
     batch = check_batch(
@@ -1402,7 +1440,9 @@ def test_a_wildcard_rule_applies_to_every_connector_and_entity():
 
 def test_a_length_rule_never_fires_on_an_absent_value():
     found = check_row(
-        {"row_key": "t", "entity": "task", "values": {}}, preflight_defaults(), connector="dataverse"
+        {"row_key": "t", "entity": "task", "values": {}},
+        preflight_defaults(),
+        connector="dataverse",
     )
     assert found == []
 
@@ -1411,11 +1451,20 @@ def test_a_length_rule_does_not_measure_a_number():
     """A numeric property has a length in digits, and no documented bound on it."""
     rules = [
         validate_rule(
-            {"id": "max-zip", "connector": ANY, "entity": ANY, "field": "zip", "kind": "max_length", "value": 5}
+            {
+                "id": "max-zip",
+                "connector": ANY,
+                "entity": ANY,
+                "field": "zip",
+                "kind": "max_length",
+                "value": 5,
+            }
         )
     ]
     found = check_row(
-        {"row_key": "z", "entity": "contact", "values": {"zip": 1234567}}, rules, connector="hubspot"
+        {"row_key": "z", "entity": "contact", "values": {"zip": 1234567}},
+        rules,
+        connector="hubspot",
     )
     assert found == []
 
@@ -1423,11 +1472,20 @@ def test_a_length_rule_does_not_measure_a_number():
 def test_a_min_length_rule_fires_on_a_short_string():
     rules = [
         validate_rule(
-            {"id": "min-subject", "connector": ANY, "entity": ANY, "field": "subject", "kind": "min_length", "value": 3}
+            {
+                "id": "min-subject",
+                "connector": ANY,
+                "entity": ANY,
+                "field": "subject",
+                "kind": "min_length",
+                "value": 3,
+            }
         )
     ]
     violations = check_row(
-        {"row_key": "s", "entity": "task", "values": {"subject": "ab"}}, rules, connector="dataverse"
+        {"row_key": "s", "entity": "task", "values": {"subject": "ab"}},
+        rules,
+        connector="dataverse",
     )
 
     assert [v["kind"] for v in violations] == ["min_length"]
@@ -1461,7 +1519,14 @@ def test_a_rejected_value_is_echoed_but_bounded():
 def test_an_unknown_preflight_kind_is_refused_rather_than_stored_and_ignored():
     with pytest.raises(InvalidRule) as raised:
         validate_rule(
-            {"id": "x", "connector": "hubspot", "entity": "contact", "field": "email", "kind": "maxLen", "value": 5}
+            {
+                "id": "x",
+                "connector": "hubspot",
+                "entity": "contact",
+                "field": "email",
+                "kind": "maxLen",
+                "value": 5,
+            }
         )
 
     assert "looks exactly like a rule that passes" in str(raised.value)
@@ -1470,7 +1535,14 @@ def test_an_unknown_preflight_kind_is_refused_rather_than_stored_and_ignored():
 def test_an_unknown_preflight_key_is_refused():
     with pytest.raises(InvalidRule) as raised:
         validate_rule(
-            {"id": "x", "connector": "hubspot", "entity": "contact", "field": "email", "kind": "required", "valeu": 5}
+            {
+                "id": "x",
+                "connector": "hubspot",
+                "entity": "contact",
+                "field": "email",
+                "kind": "required",
+                "valeu": 5,
+            }
         )
     assert "unknown rule key" in str(raised.value)
 
@@ -1478,14 +1550,28 @@ def test_an_unknown_preflight_key_is_refused():
 def test_a_length_rule_without_a_numeric_limit_is_refused():
     with pytest.raises(InvalidRule):
         validate_rule(
-            {"id": "x", "connector": ANY, "entity": ANY, "field": "s", "kind": "max_length", "value": "long"}
+            {
+                "id": "x",
+                "connector": ANY,
+                "entity": ANY,
+                "field": "s",
+                "kind": "max_length",
+                "value": "long",
+            }
         )
 
 
 def test_a_required_rule_with_a_value_is_refused():
     with pytest.raises(InvalidRule):
         validate_rule(
-            {"id": "x", "connector": ANY, "entity": ANY, "field": "s", "kind": "required", "value": 5}
+            {
+                "id": "x",
+                "connector": ANY,
+                "entity": ANY,
+                "field": "s",
+                "kind": "required",
+                "value": 5,
+            }
         )
 
 
@@ -1549,7 +1635,17 @@ def test_a_patch_adds_a_preflight_rule_without_removing_the_shipped_ones():
 
     merged = merge_rules(
         DEFAULT_RULES,
-        {"preflight": [{"id": "extra", "connector": "hubspot", "entity": "deal", "field": "amount", "kind": "required"}]},
+        {
+            "preflight": [
+                {
+                    "id": "extra",
+                    "connector": "hubspot",
+                    "entity": "deal",
+                    "field": "amount",
+                    "kind": "required",
+                }
+            ]
+        },
     )
 
     ids = {rule["id"] for rule in merged["preflight"]}
@@ -1563,10 +1659,23 @@ def test_a_patch_replaces_a_shipped_rule_rather_than_shadowing_it():
 
     merged = merge_rules(
         DEFAULT_RULES,
-        {"preflight": [{"id": "dataverse-task-subject-length", "connector": "dataverse", "entity": "task", "field": "subject", "kind": "max_length", "value": 120}]},
+        {
+            "preflight": [
+                {
+                    "id": "dataverse-task-subject-length",
+                    "connector": "dataverse",
+                    "entity": "task",
+                    "field": "subject",
+                    "kind": "max_length",
+                    "value": 120,
+                }
+            ]
+        },
     )
 
-    matches = [rule for rule in merged["preflight"] if rule["id"] == "dataverse-task-subject-length"]
+    matches = [
+        rule for rule in merged["preflight"] if rule["id"] == "dataverse-task-subject-length"
+    ]
     assert len(matches) == 1
     assert matches[0]["value"] == 120
 
@@ -1576,7 +1685,18 @@ def test_a_retuned_limit_actually_moves_the_boundary():
 
     merged = merge_rules(
         DEFAULT_RULES,
-        {"preflight": [{"id": "dataverse-task-subject-length", "connector": "dataverse", "entity": "task", "field": "subject", "kind": "max_length", "value": 120}]},
+        {
+            "preflight": [
+                {
+                    "id": "dataverse-task-subject-length",
+                    "connector": "dataverse",
+                    "entity": "task",
+                    "field": "subject",
+                    "kind": "max_length",
+                    "value": 120,
+                }
+            ]
+        },
     )
     batch = check_batch(
         [{"row_key": "t", "entity": "task", "values": {"subject": "A" * 150}}],
@@ -1725,10 +1845,21 @@ def test_a_lost_attempt_count_still_gets_a_real_wait_rather_than_zero():
 def test_a_plan_splits_failed_rows_into_four_lists_and_leaves_successes_alone():
     planned = retry_plan(
         [
-            {"id": "r1", "row_key": "retryable", "status": "failed", "attempts": 1,
-             "error": {"retryable": True, "code": "X"}, "next_retry_at": None},
-            {"id": "r2", "row_key": "terminal", "status": "failed", "attempts": 1,
-             "error": {"retryable": False, "code": "Y"}},
+            {
+                "id": "r1",
+                "row_key": "retryable",
+                "status": "failed",
+                "attempts": 1,
+                "error": {"retryable": True, "code": "X"},
+                "next_retry_at": None,
+            },
+            {
+                "id": "r2",
+                "row_key": "terminal",
+                "status": "failed",
+                "attempts": 1,
+                "error": {"retryable": False, "code": "Y"},
+            },
             {"id": "r3", "row_key": "done", "status": "succeeded", "attempts": 1},
         ],
         max_attempts=5,
@@ -1745,9 +1876,14 @@ def test_a_row_still_inside_its_backoff_is_scheduled_rather_than_drained():
     """Sending one early is the immediate retry that produces a second refusal."""
     planned = retry_plan(
         [
-            {"id": "r1", "row_key": "later", "status": "failed", "attempts": 1,
-             "error": {"retryable": True},
-             "next_retry_at": (NOW + timedelta(seconds=30)).isoformat()},
+            {
+                "id": "r1",
+                "row_key": "later",
+                "status": "failed",
+                "attempts": 1,
+                "error": {"retryable": True},
+                "next_retry_at": (NOW + timedelta(seconds=30)).isoformat(),
+            },
         ],
         max_attempts=5,
         now=NOW,
@@ -1761,7 +1897,15 @@ def test_a_row_still_inside_its_backoff_is_scheduled_rather_than_drained():
 
 def test_a_row_past_the_bound_is_expired_rather_than_queued():
     planned = retry_plan(
-        [{"id": "r1", "row_key": "tired", "status": "failed", "attempts": 5, "error": {"retryable": True}}],
+        [
+            {
+                "id": "r1",
+                "row_key": "tired",
+                "status": "failed",
+                "attempts": 5,
+                "error": {"retryable": True},
+            }
+        ],
         max_attempts=5,
         now=NOW,
     )
@@ -1773,14 +1917,30 @@ def test_a_row_past_the_bound_is_expired_rather_than_queued():
 
 def test_a_row_one_attempt_short_of_the_bound_still_drains():
     planned = retry_plan(
-        [{"id": "r1", "row_key": "k", "status": "failed", "attempts": 4, "error": {"retryable": True}}],
+        [
+            {
+                "id": "r1",
+                "row_key": "k",
+                "status": "failed",
+                "attempts": 4,
+                "error": {"retryable": True},
+            }
+        ],
         max_attempts=5,
         now=NOW,
     )
     assert planned["counts"]["drain"] == 1
 
     planned = retry_plan(
-        [{"id": "r1", "row_key": "k", "status": "failed", "attempts": 5, "error": {"retryable": True}}],
+        [
+            {
+                "id": "r1",
+                "row_key": "k",
+                "status": "failed",
+                "attempts": 5,
+                "error": {"retryable": True},
+            }
+        ],
         max_attempts=5,
         now=NOW,
     )
@@ -1817,7 +1977,10 @@ def test_recording_a_run_creates_one_audited_row_per_input_row(log, store, room)
             "hubspot",
             rows(hubspot_row(1), hubspot_row(2)),
             207,
-            {"numErrors": 1, "results": [hubspot_success("hs-t1", "901"), hubspot_failure("hs-t2", "bad")]},
+            {
+                "numErrors": 1,
+                "results": [hubspot_success("hs-t1", "901"), hubspot_failure("hs-t2", "bad")],
+            },
         ),
     )
 
@@ -1854,7 +2017,12 @@ def test_a_row_that_was_failed_and_then_accepted_becomes_resolved(log, room):
 
     log.retry_failed(
         first["run"]["id"],
-        {"vendor": {"status": 200, "body": {"results": [salesforce_result(True, record_id="003x")]}}},
+        {
+            "vendor": {
+                "status": 200,
+                "body": {"results": [salesforce_result(True, record_id="003x")]},
+            }
+        },
         actor="dana",
         source="POST test",
         now=NOW + timedelta(minutes=5),
@@ -1870,7 +2038,9 @@ def test_the_stored_row_records_what_was_sent_and_the_correlation_basis(log, sto
     record(
         log,
         room["id"],
-        run_payload("hubspot", rows(hubspot_row(1)), 207, {"results": [hubspot_failure("hs-t1", "bad")]}),
+        run_payload(
+            "hubspot", rows(hubspot_row(1)), 207, {"results": [hubspot_failure("hs-t1", "bad")]}
+        ),
     )
     stored = store.list(ROW_COLLECTION, room_id=room["id"])[0]["data"]
 
@@ -1992,14 +2162,24 @@ def test_the_sync_log_filters_by_every_value_it_stores(log, room):
             "hubspot",
             rows(hubspot_row(1), hubspot_row(2)),
             207,
-            {"numErrors": 1, "results": [hubspot_success("hs-t1"), hubspot_failure("hs-t2", "bad", field="lastname")]},
+            {
+                "numErrors": 1,
+                "results": [
+                    hubspot_success("hs-t1"),
+                    hubspot_failure("hs-t2", "bad", field="lastname"),
+                ],
+            },
         ),
     )
     record(
         log,
         room["id"],
-        run_payload("salesforce", rows(("s", "contact", "sf-1", {})), 403,
-                    {"errorCode": "REQUEST_LIMIT_EXCEEDED", "message": "no"}),
+        run_payload(
+            "salesforce",
+            rows(("s", "contact", "sf-1", {})),
+            403,
+            {"errorCode": "REQUEST_LIMIT_EXCEEDED", "message": "no"},
+        ),
     )
 
     assert log.sync_log(room["id"], connector="hubspot")["total"] == 2
@@ -2012,8 +2192,12 @@ def test_the_sync_log_filters_by_every_value_it_stores(log, room):
 
 def test_the_sync_log_is_scoped_to_its_room(log, store, room):
     other = store.create("room", {"name": "Contoso", "account": "Contoso"})
-    record(log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"}))
-    record(log, other["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"}))
+    record(
+        log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"})
+    )
+    record(
+        log, other["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"})
+    )
 
     assert log.sync_log(room["id"])["total"] == 1
     assert log.sync_log(other["id"])["total"] == 1
@@ -2032,10 +2216,22 @@ def test_an_unknown_disposition_filter_is_refused_with_the_values_it_serves(log,
 
 
 def test_listing_runs_reports_a_per_connector_breakdown_over_the_whole_set(log, room):
-    record(log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"}))
-    record(log, room["id"], run_payload("hubspot", rows(hubspot_row(2)), 200, {"status": "success"}))
-    record(log, room["id"], run_payload("salesforce", rows(("s", "contact", "t", {})), 200,
-                                        {"results": [salesforce_result(True)]}))
+    record(
+        log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"})
+    )
+    record(
+        log, room["id"], run_payload("hubspot", rows(hubspot_row(2)), 200, {"status": "success"})
+    )
+    record(
+        log,
+        room["id"],
+        run_payload(
+            "salesforce",
+            rows(("s", "contact", "t", {})),
+            200,
+            {"results": [salesforce_result(True)]},
+        ),
+    )
 
     body = log.list_runs(room_id=room["id"])
 
@@ -2046,9 +2242,13 @@ def test_listing_runs_reports_a_per_connector_breakdown_over_the_whole_set(log, 
 
 
 def test_a_run_is_ordered_newest_first(log, room):
-    first = record(log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"}))
+    first = record(
+        log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"})
+    )
     second = record(
-        log, room["id"], run_payload("hubspot", rows(hubspot_row(2)), 200, {"status": "success"}),
+        log,
+        room["id"],
+        run_payload("hubspot", rows(hubspot_row(2)), 200, {"status": "success"}),
         at=NOW + timedelta(minutes=10),
     )
 
@@ -2265,7 +2465,14 @@ def test_retry_sends_the_failed_rows_and_leaves_the_successes_out(log, room):
             "hubspot",
             rows(hubspot_row(1), hubspot_row(2), hubspot_row(3)),
             207,
-            {"numErrors": 1, "results": [hubspot_success("hs-t1"), hubspot_success("hs-t2"), hubspot_failure("hs-t3", "bad")]},
+            {
+                "numErrors": 1,
+                "results": [
+                    hubspot_success("hs-t1"),
+                    hubspot_success("hs-t2"),
+                    hubspot_failure("hs-t3", "bad"),
+                ],
+            },
         ),
     )
     before = log.sync_log(room["id"])["summary"]["succeeded"]
@@ -2288,14 +2495,22 @@ def test_retry_never_re_sends_a_succeeded_row_even_when_the_vendor_names_it(log,
             "hubspot",
             rows(hubspot_row(1), hubspot_row(2)),
             207,
-            {"numErrors": 1, "results": [hubspot_success("hs-t1"), hubspot_failure("hs-t2", "bad")]},
+            {
+                "numErrors": 1,
+                "results": [hubspot_success("hs-t1"), hubspot_failure("hs-t2", "bad")],
+            },
         ),
     )
     ok_row = next(r for r in log.sync_log(room["id"])["rows"] if r["row_key"] == "hs-1")
 
     log.retry_failed(
         result["run"]["id"],
-        {"vendor": {"status": 207, "body": {"results": [hubspot_success("hs-t1"), hubspot_success("hs-t2", "902")]}}},
+        {
+            "vendor": {
+                "status": 207,
+                "body": {"results": [hubspot_success("hs-t1"), hubspot_success("hs-t2", "902")]},
+            }
+        },
         actor="dana",
         source="POST test",
         now=NOW + timedelta(minutes=1),
@@ -2320,7 +2535,12 @@ def test_retry_applies_the_vendor_response_and_resolves_the_fixed_row(log, room)
 
     retry = log.retry_failed(
         result["run"]["id"],
-        {"vendor": {"status": 200, "body": {"results": [salesforce_result(True, record_id="003x")]}}},
+        {
+            "vendor": {
+                "status": 200,
+                "body": {"results": [salesforce_result(True, record_id="003x")]},
+            }
+        },
         actor="dana",
         source="POST test",
         now=NOW + timedelta(minutes=5),
@@ -2406,9 +2626,21 @@ def test_retrying_an_unknown_run_is_refused(log):
 
 
 def test_the_queue_separates_due_scheduled_expired_and_waiting(log, room):
-    record(log, room["id"], run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"}))
-    record(log, room["id"], run_payload("hubspot", rows(("b", "contact", "t2", {})), 207,
-                                        {"numErrors": 1, "results": [hubspot_failure("t2", "bad")]}))
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"}),
+    )
+    record(
+        log,
+        room["id"],
+        run_payload(
+            "hubspot",
+            rows(("b", "contact", "t2", {})),
+            207,
+            {"numErrors": 1, "results": [hubspot_failure("t2", "bad")]},
+        ),
+    )
 
     early = log.queue(room_id=room["id"], as_of=NOW.isoformat())
     later = log.queue(room_id=room["id"], as_of=(NOW + timedelta(hours=1)).isoformat())
@@ -2424,8 +2656,16 @@ def test_the_queue_separates_due_scheduled_expired_and_waiting(log, room):
 
 
 def test_a_drain_with_no_body_reports_the_batch_and_transports_nothing(log, store, room):
-    record(log, room["id"], run_payload("salesforce", rows(("a", "contact", "t1", {"email": "a@x.example"})),
-                                        429, {"message": "slow"}))
+    record(
+        log,
+        room["id"],
+        run_payload(
+            "salesforce",
+            rows(("a", "contact", "t1", {"email": "a@x.example"})),
+            429,
+            {"message": "slow"},
+        ),
+    )
 
     body = log.drain(actor="dana", source="POST test", now=NOW + timedelta(hours=1))
 
@@ -2439,8 +2679,16 @@ def test_a_drain_with_no_body_reports_the_batch_and_transports_nothing(log, stor
 
 
 def test_a_drain_applies_the_connector_response_through_the_same_normaliser(log, room):
-    record(log, room["id"], run_payload("salesforce", rows(("a", "contact", "sf-1", {})), 429, {"message": "slow"}))
-    record(log, room["id"], run_payload("salesforce", rows(("b", "contact", "sf-2", {})), 429, {"message": "slow"}))
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("a", "contact", "sf-1", {})), 429, {"message": "slow"}),
+    )
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("b", "contact", "sf-2", {})), 429, {"message": "slow"}),
+    )
 
     body = log.drain(
         {
@@ -2452,7 +2700,11 @@ def test_a_drain_applies_the_connector_response_through_the_same_normaliser(log,
                         salesforce_result(True, record_id="sf-1"),
                         salesforce_result(
                             False,
-                            {"statusCode": "403", "errorCode": "REQUEST_LIMIT_EXCEEDED", "message": "still no"},
+                            {
+                                "statusCode": "403",
+                                "errorCode": "REQUEST_LIMIT_EXCEEDED",
+                                "message": "still no",
+                            },
                             record_id="sf-2",
                         ),
                     ]
@@ -2504,7 +2756,11 @@ def test_a_row_past_the_bound_is_moved_out_of_the_automatic_queue(log, store, ro
 
 
 def test_a_drain_with_nothing_to_expire_writes_nothing(log, store, room):
-    record(log, room["id"], run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"}))
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"}),
+    )
     log.drain(actor="dana", source="POST test", now=NOW + timedelta(hours=1))
 
     before = len(store.audit(action="update", collection=ROW_COLLECTION))
@@ -2514,8 +2770,16 @@ def test_a_drain_with_nothing_to_expire_writes_nothing(log, store, room):
 
 
 def test_a_drain_spanning_two_connectors_is_refused_rather_than_guessed_at(log, room):
-    record(log, room["id"], run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "s"}))
-    record(log, room["id"], run_payload("hubspot", rows(("b", "contact", "t2", {})), 429, {"message": "s"}))
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "s"}),
+    )
+    record(
+        log,
+        room["id"],
+        run_payload("hubspot", rows(("b", "contact", "t2", {})), 429, {"message": "s"}),
+    )
 
     with pytest.raises(InvalidPayload) as raised:
         log.drain(
@@ -2529,8 +2793,16 @@ def test_a_drain_spanning_two_connectors_is_refused_rather_than_guessed_at(log, 
 
 
 def test_a_drain_can_be_narrowed_to_one_connector(log, room):
-    record(log, room["id"], run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "s"}))
-    record(log, room["id"], run_payload("hubspot", rows(("b", "contact", "t2", {})), 429, {"message": "s"}))
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "s"}),
+    )
+    record(
+        log,
+        room["id"],
+        run_payload("hubspot", rows(("b", "contact", "t2", {})), 429, {"message": "s"}),
+    )
 
     body = log.drain(
         {"vendor": {"status": 200, "body": {}}},
@@ -2544,8 +2816,16 @@ def test_a_drain_can_be_narrowed_to_one_connector(log, room):
 
 
 def test_the_drain_counts_the_successes_it_did_not_resent(log, room):
-    record(log, room["id"], run_payload("hubspot", rows(("a", "contact", "t1", {})), 200, {"status": "success"}))
-    record(log, room["id"], run_payload("salesforce", rows(("b", "contact", "t2", {})), 429, {"message": "s"}))
+    record(
+        log,
+        room["id"],
+        run_payload("hubspot", rows(("a", "contact", "t1", {})), 200, {"status": "success"}),
+    )
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("b", "contact", "t2", {})), 429, {"message": "s"}),
+    )
 
     body = log.drain(actor="dana", source="POST test", now=NOW + timedelta(hours=1))
 
@@ -2554,10 +2834,20 @@ def test_the_drain_counts_the_successes_it_did_not_resent(log, room):
 
 def test_a_drain_narrows_to_one_room_when_asked(log, store, room):
     other = store.create("room", {"name": "Contoso"})
-    record(log, room["id"], run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "s"}))
-    record(log, other["id"], run_payload("salesforce", rows(("b", "contact", "t2", {})), 429, {"message": "s"}))
+    record(
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "s"}),
+    )
+    record(
+        log,
+        other["id"],
+        run_payload("salesforce", rows(("b", "contact", "t2", {})), 429, {"message": "s"}),
+    )
 
-    body = log.drain(room_id=room["id"], actor="dana", source="POST test", now=NOW + timedelta(hours=1))
+    body = log.drain(
+        room_id=room["id"], actor="dana", source="POST test", now=NOW + timedelta(hours=1)
+    )
 
     assert [item["row_key"] for item in body["sent"]] == ["a"]
 
@@ -2597,7 +2887,9 @@ def test_a_refused_row_never_reaches_the_sync_log(log, room):
 
 
 def test_a_refused_row_is_not_something_the_retry_action_will_resend(log, room):
-    record(log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"}))
+    record(
+        log, room["id"], run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"})
+    )
     before = log.queue(room_id=room["id"], as_of=(NOW + timedelta(hours=1)).isoformat())["counts"]
     log.preflight(
         {"connector": "hubspot", "rows": [{"row_key": "a", "entity": "contact", "values": {}}]}
@@ -2644,7 +2936,9 @@ def test_a_row_with_no_key_is_refused_because_a_result_cannot_be_keyed_to_it(log
         record(
             log,
             room["id"],
-            run_payload("hubspot", [{"entity": "contact", "values": {}}], 200, {"status": "success"}),
+            run_payload(
+                "hubspot", [{"entity": "contact", "values": {}}], 200, {"status": "success"}
+            ),
         )
 
     assert "row_key" in str(raised.value)
@@ -2665,7 +2959,9 @@ def test_two_rows_sharing_a_key_are_refused(log, room):
 
 def test_a_row_whose_values_are_not_an_object_is_refused(log, room):
     with pytest.raises(InvalidPayload) as raised:
-        record(log, room["id"], run_payload("hubspot", [{"row_key": "a", "values": ["x"]}], 200, {}))
+        record(
+            log, room["id"], run_payload("hubspot", [{"row_key": "a", "values": ["x"]}], 200, {})
+        )
 
     assert "values must be a JSON object" in str(raised.value)
 
@@ -2697,7 +2993,9 @@ def test_an_unreadable_run_instant_is_refused(log, room):
 
 def test_a_run_dated_far_in_the_future_is_refused(log, room):
     far = (NOW + timedelta(days=FUTURE_TOLERANCE_SECONDS + 10)).isoformat()
-    payload = run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"}, started_at=far)
+    payload = run_payload(
+        "hubspot", rows(hubspot_row(1)), 200, {"status": "success"}, started_at=far
+    )
     with pytest.raises(InvalidPayload) as raised:
         log.record_run(payload, room_id=room["id"], actor="dana", source="POST test", now=NOW)
 
@@ -2778,7 +3076,9 @@ def test_a_first_attempt_is_not_truncated_history(log, room):
 
 def test_the_first_attempt_instant_is_kept_across_retries(log, room):
     result = record(
-        log, room["id"], run_payload("salesforce", rows(("a", "contact", "t", {})), 429, {"message": "s"})
+        log,
+        room["id"],
+        run_payload("salesforce", rows(("a", "contact", "t", {})), 429, {"message": "s"}),
     )
     first_seen = log.sync_log(room["id"])["rows"][0]["last_attempt_at"]
 
@@ -2853,7 +3153,9 @@ def test_the_judgement_calls_the_research_left_open_are_all_published(inference_
 
 def test_the_published_default_is_the_one_the_code_actually_applies():
     entry = next(e for e in INFERENCES if e["id"] == "unknown-codes-are-terminal")
-    retryable, basis, matched = classify(connector="hubspot", code="NEVER_SEEN_BEFORE", http_status=418)
+    retryable, basis, matched = classify(
+        connector="hubspot", code="NEVER_SEEN_BEFORE", http_status=418
+    )
 
     assert entry["value"]["default"] == "terminal"
     assert entry["value"]["matched_rule"] == matched == UNRECOGNISED
@@ -2904,7 +3206,9 @@ def test_the_published_hubspot_only_reconciliation_is_the_one_the_code_does():
 
     assert entry["value"]["reconciled_for"] == ["hubspot"]
     hubspot = normalise(
-        "hubspot", 207, {"numErrors": 1, "results": [hubspot_failure("t", "x")]},
+        "hubspot",
+        207,
+        {"numErrors": 1, "results": [hubspot_failure("t", "x")]},
         rows(("a", "contact", "t", {})),
     )
     dataverse = normalise("dataverse", 200, [dataverse_ok()], rows(("a", "task", "t", {})))
@@ -2947,7 +3251,17 @@ def test_rules_can_be_read_and_patched_over_http(http):
 
     patched = http.patch(
         f"{PREFIX}/rules",
-        json={"preflight": [{"id": "extra", "connector": "hubspot", "entity": "deal", "field": "amount", "kind": "required"}]},
+        json={
+            "preflight": [
+                {
+                    "id": "extra",
+                    "connector": "hubspot",
+                    "entity": "deal",
+                    "field": "amount",
+                    "kind": "required",
+                }
+            ]
+        },
         params={"actor": "dana"},
     )
 
@@ -2977,7 +3291,10 @@ def test_validate_over_http_reports_the_hold_without_writing(http, http_room):
 
     response = http.post(
         f"{PREFIX}/validate",
-        json={"connector": "hubspot", "rows": [{"row_key": "a", "entity": "contact", "values": {}}]},
+        json={
+            "connector": "hubspot",
+            "rows": [{"row_key": "a", "entity": "contact", "values": {}}],
+        },
     )
 
     assert response.status_code == 200
@@ -2988,7 +3305,8 @@ def test_validate_over_http_reports_the_hold_without_writing(http, http_room):
 
 def test_validate_with_an_unknown_connector_over_http_is_400(http):
     response = http.post(
-        f"{PREFIX}/validate", json={"connector": "pipedrive", "rows": [{"row_key": "a", "values": {}}]}
+        f"{PREFIX}/validate",
+        json={"connector": "pipedrive", "rows": [{"row_key": "a", "values": {}}]},
     )
 
     assert response.status_code == 400
@@ -3034,7 +3352,9 @@ def test_the_query_room_wins_over_the_body(http, http_room):
 
     response = http.post(
         f"{PREFIX}/runs",
-        json=run_payload("hubspot", rows(hubspot_row(1)), 200, {"status": "success"}, room_id=http_room["id"]),
+        json=run_payload(
+            "hubspot", rows(hubspot_row(1)), 200, {"status": "success"}, room_id=http_room["id"]
+        ),
         params={"room_id": other["id"]},
     )
 
@@ -3088,7 +3408,9 @@ def test_the_sync_log_route_returns_the_summary_and_the_filters(http, http_room)
     assert body["summary"]["succeeded"] == 1
     assert body["summary"]["failed"] == 1
 
-    failed_only = http.get(f"{PREFIX}/rooms/{http_room['id']}/sync-log", params={"status": "failed"})
+    failed_only = http.get(
+        f"{PREFIX}/rooms/{http_room['id']}/sync-log", params={"status": "failed"}
+    )
     assert failed_only.json()["total"] == 1
 
     bad = http.get(f"{PREFIX}/rooms/{http_room['id']}/sync-log", params={"status": "nope"})
@@ -3148,7 +3470,14 @@ def test_retrying_an_unknown_run_over_http_is_404(http):
 
 
 def test_the_queue_route_lists_the_two_researched_waiting_states(http, http_room):
-    post_run(http, http_room["id"], "salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"})
+    post_run(
+        http,
+        http_room["id"],
+        "salesforce",
+        rows(("a", "contact", "t1", {})),
+        429,
+        {"message": "slow"},
+    )
     post_run(
         http,
         http_room["id"],
@@ -3158,7 +3487,9 @@ def test_the_queue_route_lists_the_two_researched_waiting_states(http, http_room
         {"numErrors": 1, "results": [hubspot_failure("t2", "bad")]},
     )
 
-    body = http.get(f"{PREFIX}/queue", params={"room_id": http_room["id"], "as_of": an_hour_hence()}).json()
+    body = http.get(
+        f"{PREFIX}/queue", params={"room_id": http_room["id"], "as_of": an_hour_hence()}
+    ).json()
 
     assert body["counts"]["drain"] == 1
     assert body["counts"]["waiting"] == 1
@@ -3166,7 +3497,14 @@ def test_the_queue_route_lists_the_two_researched_waiting_states(http, http_room
 
 
 def test_a_row_inside_its_backoff_is_scheduled_and_not_drained(http, http_room):
-    post_run(http, http_room["id"], "salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"})
+    post_run(
+        http,
+        http_room["id"],
+        "salesforce",
+        rows(("a", "contact", "t1", {})),
+        429,
+        {"message": "slow"},
+    )
 
     body = http.post(f"{PREFIX}/queue/drain", json={}).json()
 
@@ -3176,7 +3514,14 @@ def test_a_row_inside_its_backoff_is_scheduled_and_not_drained(http, http_room):
 
 
 def test_the_queue_route_can_be_read_as_of_a_later_instant(http, http_room):
-    post_run(http, http_room["id"], "salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"})
+    post_run(
+        http,
+        http_room["id"],
+        "salesforce",
+        rows(("a", "contact", "t1", {})),
+        429,
+        {"message": "slow"},
+    )
     later = an_hour_hence()
 
     assert http.get(f"{PREFIX}/queue").json()["counts"]["scheduled"] == 1
@@ -3184,7 +3529,14 @@ def test_the_queue_route_can_be_read_as_of_a_later_instant(http, http_room):
 
 
 def test_the_drain_route_with_no_body_transports_nothing_and_writes_nothing(http, http_room):
-    post_run(http, http_room["id"], "salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"})
+    post_run(
+        http,
+        http_room["id"],
+        "salesforce",
+        rows(("a", "contact", "t1", {})),
+        429,
+        {"message": "slow"},
+    )
     before = http.get("/api/audit", params={"limit": 1000}).json()["count"]
 
     body = http.post(f"{PREFIX}/queue/drain", json={}, params={"as_of": an_hour_hence()}).json()
@@ -3194,12 +3546,24 @@ def test_the_drain_route_with_no_body_transports_nothing_and_writes_nothing(http
 
 
 def test_the_drain_route_applies_a_connector_response(http, http_room):
-    post_run(http, http_room["id"], "salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"})
+    post_run(
+        http,
+        http_room["id"],
+        "salesforce",
+        rows(("a", "contact", "t1", {})),
+        429,
+        {"message": "slow"},
+    )
 
     body = http.post(
         f"{PREFIX}/queue/drain",
-        json={"connector": "salesforce",
-              "vendor": {"status": 200, "body": {"results": [salesforce_result(True, record_id="003x")]}}},
+        json={
+            "connector": "salesforce",
+            "vendor": {
+                "status": 200,
+                "body": {"results": [salesforce_result(True, record_id="003x")]},
+            },
+        },
         params={"actor": "dana", "as_of": an_hour_hence()},
     ).json()
 
@@ -3210,7 +3574,14 @@ def test_the_drain_route_applies_a_connector_response(http, http_room):
 
 
 def test_a_drain_with_a_body_but_no_vendor_reports_the_batch_only(http, http_room):
-    post_run(http, http_room["id"], "salesforce", rows(("a", "contact", "t1", {})), 429, {"message": "slow"})
+    post_run(
+        http,
+        http_room["id"],
+        "salesforce",
+        rows(("a", "contact", "t1", {})),
+        429,
+        {"message": "slow"},
+    )
 
     body = http.post(
         f"{PREFIX}/queue/drain", json={"connector": "salesforce"}, params={"as_of": an_hour_hence()}
@@ -3223,7 +3594,16 @@ def test_a_drain_with_a_body_but_no_vendor_reports_the_batch_only(http, http_roo
 def test_every_route_is_documented_in_openapi(http):
     documented = set(http.get("/openapi.json").json()["paths"])
 
-    for path in ("/vocabulary", "/connectors", "/inferences", "/rules", "/validate", "/runs", "/queue", "/queue/drain"):
+    for path in (
+        "/vocabulary",
+        "/connectors",
+        "/inferences",
+        "/rules",
+        "/validate",
+        "/runs",
+        "/queue",
+        "/queue/drain",
+    ):
         assert f"{PREFIX}{path}" in documented
     assert f"{PREFIX}/runs/{{run_id}}" in documented
     assert f"{PREFIX}/runs/{{run_id}}/retry" in documented
@@ -3278,7 +3658,10 @@ def _matches_registered_route(source, routes):
         template = [segment for segment in route["path"].split("/") if segment]
         if len(template) != len(actual):
             continue
-        if all(expected.startswith("{") or expected == found for expected, found in zip(template, actual)):
+        if all(
+            expected.startswith("{") or expected == found
+            for expected, found in zip(template, actual, strict=False)
+        ):
             return True
     return False
 
@@ -3356,7 +3739,7 @@ def test_the_routes_that_write_are_exactly_the_ones_that_audit_a_write(http, htt
             continue
         # The only other shape is the retry route, whose audit row carries the run id.
         head, _, tail = path.partition(f"{PREFIX}/runs/")
-        assert head == "" and tail.endswith("/retry") and "/" not in tail[:-len("/retry")], path
+        assert head == "" and tail.endswith("/retry") and "/" not in tail[: -len("/retry")], path
     assert any(path.startswith(f"{PREFIX}/runs/") for path in paths)
 
 
@@ -3382,9 +3765,9 @@ def test_no_domain_module_hardcodes_a_literal_string_as_an_audit_source():
                 continue
             for keyword in node.keywords:
                 if keyword.arg == "source":
-                    assert not isinstance(
-                        keyword.value, ast.Constant
-                    ), f"{module.name} passes a literal string as source="
+                    assert not isinstance(keyword.value, ast.Constant), (
+                        f"{module.name} passes a literal string as source="
+                    )
 
 
 def test_the_domain_layer_imports_no_transport():
@@ -3442,8 +3825,11 @@ def _seed_once(tmp_path, room_ids, name="seed"):
     with AuditedDatabase(tmp_path / f"{name}.db", mirror_dir=tmp_path / f"{name}-audit") as db:
         for room_id, account in room_ids:
             db.create(
-                "room", {**ROOM, "name": account, "account": account},
-                record_id=room_id, actor="dana", source="seed",
+                "room",
+                {**ROOM, "name": account, "account": account},
+                record_id=room_id,
+                actor="dana",
+                source="seed",
             )
         summary = module.seed(db, {"room_ids": room_ids, "now": NOW, "rng": random.Random("wf040")})
         sync = SyncLog(RecordStore(db))
@@ -3479,7 +3865,11 @@ def test_the_demo_seeds_a_partial_failure_with_the_property_named(tmp_path):
 def test_the_demo_seeds_an_error_that_could_not_be_keyed_to_a_row(tmp_path):
     """A dropped error is a row nobody will ever fix, so the demo shows one."""
     seeded = _seed_once(tmp_path, DEMO_ROOMS)
-    run = next(r for r in seeded["runs"] if r["data"]["connector"] == "hubspot" and r["data"]["unattributed"])
+    run = next(
+        r
+        for r in seeded["runs"]
+        if r["data"]["connector"] == "hubspot" and r["data"]["unattributed"]
+    )
 
     assert len(run["data"]["unattributed"]) == 1
     assert run["data"]["unattributed"][0]["correlation"] == "hs-nw-unattributed"
@@ -3567,7 +3957,11 @@ def test_every_seeded_run_and_row_is_audited_to_the_seeder(tmp_path):
 
     assert seeded["runs"]
     assert seeded["rows"]
-    mine = [entry for entry in seeded["audit"] if entry["collection"] in (RUN_COLLECTION, ROW_COLLECTION)]
+    mine = [
+        entry
+        for entry in seeded["audit"]
+        if entry["collection"] in (RUN_COLLECTION, ROW_COLLECTION)
+    ]
     # One insert per run and per row, plus the drain's own updates. The point of the
     # assertion is the source, not the arithmetic.
     assert len(mine) >= len(seeded["runs"]) + len(seeded["rows"])
@@ -3721,8 +4115,16 @@ def test_adding_a_routing_rule_never_changes_which_rows_are_recorded(log, room):
     before = {row["row_key"] for row in log.sync_log(room["id"])["rows"]}
 
     log.save_rules(
-        {"routing": [{"id": "everything-retryable", "when": {"connector": "hubspot"},
-                      "then": {"retryable": True}, "basis": "a deliberately absurd rule, for the test"}]},
+        {
+            "routing": [
+                {
+                    "id": "everything-retryable",
+                    "when": {"connector": "hubspot"},
+                    "then": {"retryable": True},
+                    "basis": "a deliberately absurd rule, for the test",
+                }
+            ]
+        },
         actor="dana",
         source="PATCH test",
     )

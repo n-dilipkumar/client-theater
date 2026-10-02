@@ -34,11 +34,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.library import (
+    BlobStorageError,
     ContentLibrary,
     ValidationError,
     collision_name,
@@ -48,6 +47,7 @@ from dsr.library import (
     split_name,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 FEATURE_ID = "wf-007-content-library"
 PREFIX = "/api/library"
@@ -103,13 +103,21 @@ def post_document(
     data=None,
 ):
     """POST the multipart ingest: a metadata JSON part and a binary part."""
-    payload = {"name": Path(filename).name, "format": derive_format(filename), "parentFolderId": "root"}
+    payload = {
+        "name": Path(filename).name,
+        "format": derive_format(filename),
+        "parentFolderId": "root",
+    }
     if metadata is not None:
         payload = metadata
     form = {"metadata": json.dumps(payload)}
     if data:
         form.update(data)
-    upload = {"content": (filename, io.BytesIO(content), "application/octet-stream") if files is None else files}
+    upload = {
+        "content": (filename, io.BytesIO(content), "application/octet-stream")
+        if files is None
+        else files
+    }
     return client.post(
         f"{PREFIX}/rooms/{room_id}/documents",
         data=form,
@@ -422,7 +430,10 @@ def test_format_is_required_when_it_cannot_be_derived(client, room):
     # Neither the metadata nor the upload filename carries an extension, so
     # there is nothing to derive and the ingest must be refused.
     response = post_document(
-        client, room["id"], filename="untitled", metadata={"name": "Untitled", "parentFolderId": "root"}
+        client,
+        room["id"],
+        filename="untitled",
+        metadata={"name": "Untitled", "parentFolderId": "root"},
     )
 
     assert response.status_code == 400
@@ -432,7 +443,9 @@ def test_format_is_required_when_it_cannot_be_derived(client, room):
 def test_content_part_is_required(client, room):
     response = client.post(
         f"{PREFIX}/rooms/{room['id']}/documents",
-        data={"metadata": json.dumps({"name": "A.pptx", "format": "pptx", "parentFolderId": "root"})},
+        data={
+            "metadata": json.dumps({"name": "A.pptx", "format": "pptx", "parentFolderId": "root"})
+        },
     )
 
     assert response.status_code == 422
@@ -462,9 +475,7 @@ def test_unknown_parent_folder_is_rejected(client, room):
 
 def test_folder_from_another_room_is_rejected(client, room):
     other = client.post("/api/records/room", json={"name": "Other"}).json()
-    folder = client.post(
-        f"{PREFIX}/rooms/{other['id']}/folders", json={"name": "Q2 Decks"}
-    ).json()
+    folder = client.post(f"{PREFIX}/rooms/{other['id']}/folders", json={"name": "Q2 Decks"}).json()
 
     response = post_document(
         client,
@@ -509,7 +520,9 @@ def test_root_keyword_addresses_the_room_root(client, room):
 
 
 def test_folders_build_a_materialized_path(client, room):
-    parent = client.post(f"{PREFIX}/rooms/{room['id']}/folders", json={"name": "Sales Enablement"}).json()
+    parent = client.post(
+        f"{PREFIX}/rooms/{room['id']}/folders", json={"name": "Sales Enablement"}
+    ).json()
     child = client.post(
         f"{PREFIX}/rooms/{room['id']}/folders",
         json={"name": "Q2 Decks", "parentFolderId": parent["id"]},
@@ -647,7 +660,9 @@ def test_a_failed_binary_leaves_no_orphaned_draft(library, monkeypatch):
 
 def test_a_failed_binary_keeps_a_retryable_draft_when_rollback_is_off(library, monkeypatch):
     """rollbackOnError=false: the draft survives, marked failed, for a human."""
-    monkeypatch.setattr(library, "_write_blob", lambda key, content: (_ for _ in ()).throw(OSError("no space")))
+    monkeypatch.setattr(
+        library, "_write_blob", lambda key, content: (_ for _ in ()).throw(OSError("no space"))
+    )
 
     with pytest.raises(Exception) as caught:
         library.ingest(
@@ -680,7 +695,9 @@ def test_a_partial_blob_is_never_left_on_disk(library):
         return good(key, content)
 
     library._write_blob = fail_midway  # noqa: SLF001
-    with pytest.raises(Exception):
+    # BlobStorageError, not OSError: the ingest path settles a failed write and
+    # re-raises with the draft's fate in the message, chaining the OSError.
+    with pytest.raises(BlobStorageError):
         library.ingest(
             library._test_room_id,  # noqa: SLF001
             io.BytesIO(PAYLOAD),
@@ -692,8 +709,10 @@ def test_a_partial_blob_is_never_left_on_disk(library):
 
 
 def test_version_cannot_be_added_to_an_incomplete_document(library, monkeypatch):
-    monkeypatch.setattr(library, "_write_blob", lambda key, content: (_ for _ in ()).throw(OSError("no space")))
-    with pytest.raises(Exception):
+    monkeypatch.setattr(
+        library, "_write_blob", lambda key, content: (_ for _ in ()).throw(OSError("no space"))
+    )
+    with pytest.raises(BlobStorageError):
         library.ingest(
             library._test_room_id,  # noqa: SLF001
             io.BytesIO(PAYLOAD),
@@ -720,7 +739,9 @@ def test_put_adds_a_version_and_keeps_the_old_bytes(client, room):
 
     response = client.put(
         f"{PREFIX}/documents/{created['id']}",
-        files={"content": ("Q2 Sales Deck.pptx", io.BytesIO(PAYLOAD_V2), "application/octet-stream")},
+        files={
+            "content": ("Q2 Sales Deck.pptx", io.BytesIO(PAYLOAD_V2), "application/octet-stream")
+        },
     )
 
     assert response.status_code == 200
@@ -733,16 +754,21 @@ def test_put_adds_a_version_and_keeps_the_old_bytes(client, room):
     assert client.get(f"{PREFIX}/documents/{created['id']}/content").content == PAYLOAD_V2
     # ...and the previous version is still retrievable, which is the whole point
     # of an add-version operation rather than a replacement.
-    assert client.get(
-        f"{PREFIX}/documents/{created['id']}/content", params={"versionId": first_version_id}
-    ).content == PAYLOAD
+    assert (
+        client.get(
+            f"{PREFIX}/documents/{created['id']}/content", params={"versionId": first_version_id}
+        ).content
+        == PAYLOAD
+    )
 
 
 def test_adding_a_version_is_audited_as_a_put(client, room):
     created = post_document(client, room["id"]).json()
     client.put(
         f"{PREFIX}/documents/{created['id']}",
-        files={"content": ("Q2 Sales Deck.pptx", io.BytesIO(PAYLOAD_V2), "application/octet-stream")},
+        files={
+            "content": ("Q2 Sales Deck.pptx", io.BytesIO(PAYLOAD_V2), "application/octet-stream")
+        },
     )
 
     row = audit_rows(client, collection="document", action="update")[0]
@@ -753,11 +779,16 @@ def test_a_new_version_invalidates_the_thumbnail(client, room):
     created = post_document(client, room["id"]).json()
     client.post(f"{PREFIX}/documents/{created['id']}/thumbnail")
 
-    assert client.get(f"{PREFIX}/documents/{created['id']}").json()["data"]["thumbnailStatus"] == "ready"
+    assert (
+        client.get(f"{PREFIX}/documents/{created['id']}").json()["data"]["thumbnailStatus"]
+        == "ready"
+    )
 
     client.put(
         f"{PREFIX}/documents/{created['id']}",
-        files={"content": ("Q2 Sales Deck.pptx", io.BytesIO(PAYLOAD_V2), "application/octet-stream")},
+        files={
+            "content": ("Q2 Sales Deck.pptx", io.BytesIO(PAYLOAD_V2), "application/octet-stream")
+        },
     )
 
     data = client.get(f"{PREFIX}/documents/{created['id']}").json()["data"]
@@ -979,7 +1010,7 @@ def test_a_field_this_code_never_declared_needs_no_migration(client, room):
     ).json()
 
     assert created["data"]["wf011EscalationPolicy"] == {"reviewer": "sam", "slaHours": 48}
-    assert client.get(f"/api/collections").json()["collections"]  # no migration added a table
+    assert client.get("/api/collections").json()["collections"]  # no migration added a table
 
 
 # --------------------------------------------------------------------------- #

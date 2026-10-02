@@ -86,11 +86,23 @@ DATE = "date"
 COLUMNS: tuple[dict[str, Any], ...] = (
     # Dock's own workspace properties.
     {"key": "dock.name", "label": "Workspace", "group": DOCK_GROUP, "type": TEXT, "sourced": True},
-    {"key": "dock.account", "label": "Account", "group": DOCK_GROUP, "type": TEXT, "sourced": False},
+    {
+        "key": "dock.account",
+        "label": "Account",
+        "group": DOCK_GROUP,
+        "type": TEXT,
+        "sourced": False,
+    },
     {"key": "dock.owner", "label": "Owner", "group": DOCK_GROUP, "type": TEXT, "sourced": True},
     {"key": "dock.team", "label": "Team", "group": DOCK_GROUP, "type": TEXT, "sourced": True},
     {"key": "dock.stage", "label": "Stage", "group": DOCK_GROUP, "type": TEXT, "sourced": True},
-    {"key": "dock.type", "label": "Workspace type", "group": DOCK_GROUP, "type": TEXT, "sourced": True},
+    {
+        "key": "dock.type",
+        "label": "Workspace type",
+        "group": DOCK_GROUP,
+        "type": TEXT,
+        "sourced": True,
+    },
     {
         "key": "dock.created_at",
         "label": "Created",
@@ -154,8 +166,20 @@ COLUMNS: tuple[dict[str, Any], ...] = (
         "sourced": True,
     },
     # "Hubspot data: Deal Stage, Deal Type, Deal Closed Date, Deal Amount"
-    {"key": "hubspot.deal_stage", "label": "Deal Stage", "group": HUBSPOT_GROUP, "type": TEXT, "sourced": True},
-    {"key": "hubspot.deal_type", "label": "Deal Type", "group": HUBSPOT_GROUP, "type": TEXT, "sourced": True},
+    {
+        "key": "hubspot.deal_stage",
+        "label": "Deal Stage",
+        "group": HUBSPOT_GROUP,
+        "type": TEXT,
+        "sourced": True,
+    },
+    {
+        "key": "hubspot.deal_type",
+        "label": "Deal Type",
+        "group": HUBSPOT_GROUP,
+        "type": TEXT,
+        "sourced": True,
+    },
     {
         "key": "hubspot.deal_closed_date",
         "label": "Deal Closed Date",
@@ -163,9 +187,21 @@ COLUMNS: tuple[dict[str, Any], ...] = (
         "type": DATE,
         "sourced": True,
     },
-    {"key": "hubspot.deal_amount", "label": "Deal Amount", "group": HUBSPOT_GROUP, "type": NUMBER, "sourced": True},
+    {
+        "key": "hubspot.deal_amount",
+        "label": "Deal Amount",
+        "group": HUBSPOT_GROUP,
+        "type": NUMBER,
+        "sourced": True,
+    },
     # "Order forms: Status and Deal Type"
-    {"key": "order_form.status", "label": "Status", "group": ORDER_FORM_GROUP, "type": TEXT, "sourced": True},
+    {
+        "key": "order_form.status",
+        "label": "Status",
+        "group": ORDER_FORM_GROUP,
+        "type": TEXT,
+        "sourced": True,
+    },
     {
         "key": "order_form.deal_type",
         "label": "Deal Type",

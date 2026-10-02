@@ -44,12 +44,11 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from dsr.triage import filters as engine
-from dsr.triage import vocabulary as vocab
+from dsr.store import RecordStore
+from dsr.triage import filters as engine, vocabulary as vocab
 from dsr.triage.errors import TriageError
 from dsr.triage.fields import as_text, first_text, utcnow_iso
 from dsr.triage.rows import TEMPLATE_COLLECTION, JoinIndex, declared_sections
-from dsr.store import RecordStore
 
 # --------------------------------------------------------------------------- #
 # Collections
@@ -165,7 +164,9 @@ class TriageBoard:
         """
         wanted = as_text(visibility).lower() or None
         if wanted is not None and wanted not in vocab.VISIBILITIES:
-            raise TriageError(f"visibility must be one of {list(vocab.VISIBILITIES)}, got {visibility!r}")
+            raise TriageError(
+                f"visibility must be one of {list(vocab.VISIBILITIES)}, got {visibility!r}"
+            )
         rows = []
         for record in self.store.list(VIEW_COLLECTION, limit=LIST_LIMIT, order_by="created_at"):
             data = record.get("data") or {}
@@ -188,7 +189,9 @@ class TriageBoard:
             raise TriageError(f"view {view_id} not found")
         return self.describe(record)
 
-    def create_view(self, payload: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def create_view(
+        self, payload: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """**Add view.** Optionally starting from one of the five defaults.
 
         ``base`` (or the researched ``from``) names a default view. Its filters,
@@ -263,9 +266,7 @@ class TriageBoard:
         # conditions are stored as written - including any this build cannot
         # read - so the problem keeps being reported instead of being tidied
         # away at save time.
-        data["workspace_filters"] = engine.substitute_me_in_raw(
-            data["workspace_filters"], owner
-        )
+        data["workspace_filters"] = engine.substitute_me_in_raw(data["workspace_filters"], owner)
         data["workspace_domain_filters"] = engine.substitute_me_in_raw(
             data["workspace_domain_filters"], owner
         )
@@ -300,7 +301,9 @@ class TriageBoard:
                 # private becomes its owner. Otherwise a teammate could hide a
                 # team view by flipping one flag, and the original owner would
                 # lose sight of it.
-                patch["owner"] = as_text(payload.get("owner")) or as_text(actor) or data.get("owner")
+                patch["owner"] = (
+                    as_text(payload.get("owner")) or as_text(actor) or data.get("owner")
+                )
             elif "owner" in payload:
                 patch["owner"] = as_text(payload["owner"])
 
@@ -335,7 +338,9 @@ class TriageBoard:
         # arrive by a generic record write still means "mine".
         owner = as_text(patch.get("owner")) or as_text(data.get("owner"))
         existing_workspace = patch.get("workspace_filters", data.get("workspace_filters"))
-        existing_domain = patch.get("workspace_domain_filters", data.get("workspace_domain_filters"))
+        existing_domain = patch.get(
+            "workspace_domain_filters", data.get("workspace_domain_filters")
+        )
         patch["workspace_filters"] = engine.substitute_me_in_raw(existing_workspace, owner)
         patch["workspace_domain_filters"] = engine.substitute_me_in_raw(existing_domain, owner)
         patch["match"] = as_text(patch.get("match", data.get("match")), vocab.MATCH_ALL).lower()
@@ -344,7 +349,7 @@ class TriageBoard:
 
     def delete_view(self, view_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
         """Soft-delete a view. The definition and its history stay auditable."""
-        record = self._require_writable(view_id, actor)
+        self._require_writable(view_id, actor)
         return self.store.delete(view_id, actor=actor, source=source)
 
     def clone_view(
@@ -388,23 +393,23 @@ class TriageBoard:
             "base": origin.get("base"),
             "cloned_from": view_id,
             "match": as_text(match) if match is not None else origin["match"],
-            "workspace_filters": workspace if workspace is not None else origin["workspace_filters"],
+            "workspace_filters": workspace
+            if workspace is not None
+            else origin["workspace_filters"],
             "workspace_domain_filters": (
                 domain if domain is not None else origin["workspace_domain_filters"]
             ),
             "columns": columns,
-            "sort": engine.validate_sort(payload["sort"]) if payload.get("sort") else origin["sort"],
+            "sort": engine.validate_sort(payload["sort"])
+            if payload.get("sort")
+            else origin["sort"],
         }
-        data["workspace_filters"] = engine.substitute_me_in_raw(
-            data["workspace_filters"], owner
-        )
+        data["workspace_filters"] = engine.substitute_me_in_raw(data["workspace_filters"], owner)
         data["workspace_domain_filters"] = engine.substitute_me_in_raw(
             data["workspace_domain_filters"], owner
         )
 
-        return self.describe(
-            self.store.create(VIEW_COLLECTION, data, actor=actor, source=source)
-        )
+        return self.describe(self.store.create(VIEW_COLLECTION, data, actor=actor, source=source))
 
     # -- the dashboard ------------------------------------------------------ #
 
@@ -477,9 +482,7 @@ class TriageBoard:
             "problems": problems,
         }
 
-    def row_for_room(
-        self, room_id: str, properties: Sequence[str] | None = None
-    ) -> dict[str, Any]:
+    def row_for_room(self, room_id: str, properties: Sequence[str] | None = None) -> dict[str, Any]:
         """One workspace's joined row, honouring the researched ``properties``.
 
         The three envelope fields are always present, so a caller that narrowed
@@ -611,7 +614,11 @@ class TriageBoard:
         between "a rep chose Sales" and "nobody chose anything yet".
         """
         workspace = self.store.get(room_id)
-        if workspace is None or workspace.get("collection") != "room" or workspace.get("deleted_at"):
+        if (
+            workspace is None
+            or workspace.get("collection") != "room"
+            or workspace.get("deleted_at")
+        ):
             raise TriageError(f"room {room_id} not found")
         index = JoinIndex(self.store)
         value, source, template_id = index.effective_type(workspace.get("data") or {})
@@ -635,15 +642,17 @@ class TriageBoard:
         per-workspace decision is part of being able to make one.
         """
         workspace = self.store.get(room_id)
-        if workspace is None or workspace.get("collection") != "room" or workspace.get("deleted_at"):
+        if (
+            workspace is None
+            or workspace.get("collection") != "room"
+            or workspace.get("deleted_at")
+        ):
             raise TriageError(f"room {room_id} not found")
         if "type" not in payload:
-            raise TriageError("type is required; send {\"type\": null} to clear the override")
+            raise TriageError('type is required; send {"type": null} to clear the override')
         raw = payload.get("type")
         value = as_text(raw) or None
-        self.store.update(
-            room_id, {"type": value}, actor=actor, source=source
-        )
+        self.store.update(room_id, {"type": value}, actor=actor, source=source)
         return self.room_type(room_id)
 
     def list_templates(self) -> list[dict[str, Any]]:
@@ -660,7 +669,9 @@ class TriageBoard:
             data = workspace.get("data") or {}
             if first_text(data, ("type", "workspace_type", "workspaceType")):
                 continue
-            template_id = first_text(data, ("template_id", "template", "workspace_template", "template_ref"))
+            template_id = first_text(
+                data, ("template_id", "template", "workspace_template", "template_ref")
+            )
             if template_id:
                 counts[template_id] = counts.get(template_id, 0) + 1
         listed = []
@@ -688,10 +699,16 @@ class TriageBoard:
         no way to find it again.
         """
         record = self.store.get(template_id)
-        if record is None or record.get("collection") != TEMPLATE_COLLECTION or record.get("deleted_at"):
+        if (
+            record is None
+            or record.get("collection") != TEMPLATE_COLLECTION
+            or record.get("deleted_at")
+        ):
             raise TriageError(f"template {template_id} not found")
         if "type" not in payload:
-            raise TriageError("type is required; send {\"type\": null} to stop categorising new workspaces")
+            raise TriageError(
+                'type is required; send {"type": null} to stop categorising new workspaces'
+            )
         self.store.update(
             template_id, {"type": as_text(payload.get("type")) or None}, actor=actor, source=source
         )
@@ -720,7 +737,11 @@ class TriageBoard:
         it.
         """
         workspace = self.store.get(room_id)
-        if workspace is None or workspace.get("collection") != "room" or workspace.get("deleted_at"):
+        if (
+            workspace is None
+            or workspace.get("collection") != "room"
+            or workspace.get("deleted_at")
+        ):
             raise TriageError(f"room {room_id} not found")
 
         index = JoinIndex(self.store)
@@ -764,7 +785,9 @@ class TriageBoard:
                         "detail": "this section's rule could not be read; the section is left visible",
                     }
                 )
-                listed.append({**section, "visible": True, "reason": REASON_NO_RULE, "problems": local})
+                listed.append(
+                    {**section, "visible": True, "reason": REASON_NO_RULE, "problems": local}
+                )
                 continue
             visible = group.matches(row.values, context)
             listed.append(
@@ -793,11 +816,19 @@ class TriageBoard:
         user just removed.
         """
         workspace = self.store.get(room_id)
-        if workspace is None or workspace.get("collection") != "room" or workspace.get("deleted_at"):
+        if (
+            workspace is None
+            or workspace.get("collection") != "room"
+            or workspace.get("deleted_at")
+        ):
             raise TriageError(f"room {room_id} not found")
 
         requested = payload.get("sections")
-        if requested is None or not isinstance(requested, Sequence) or isinstance(requested, (str, bytes)):
+        if (
+            requested is None
+            or not isinstance(requested, Sequence)
+            or isinstance(requested, (str, bytes))
+        ):
             raise TriageError("sections must be a list of {section, visible_when} objects")
 
         declared = {section["key"] for section in declared_sections(workspace)}
@@ -822,22 +853,28 @@ class TriageBoard:
             problems: list[dict[str, Any]] = []
             group = engine.compile_group(engine.DOMAIN, entry.get("visible_when"), problems)
             if problems:
-                raise TriageError(f"section rule for {key} is not readable: {problems[0]['detail']}")
+                raise TriageError(
+                    f"section rule for {key} is not readable: {problems[0]['detail']}"
+                )
             prepared.append({"section": key, "visible_when": group.to_dict()})
 
-        for existing in self.store.list(
-            SECTION_RULE_COLLECTION, room_id=room_id, limit=LIST_LIMIT
-        ):
+        for existing in self.store.list(SECTION_RULE_COLLECTION, room_id=room_id, limit=LIST_LIMIT):
             self.store.delete(existing["id"], actor=actor, source=source)
         for rule in prepared:
-            self.store.create(SECTION_RULE_COLLECTION, rule, room_id=room_id, actor=actor, source=source)
+            self.store.create(
+                SECTION_RULE_COLLECTION, rule, room_id=room_id, actor=actor, source=source
+            )
         return self.sections(room_id)
 
     # -- internals ------------------------------------------------------------ #
 
     def _live_record(self, view_id: str) -> dict[str, Any] | None:
         record = self.store.get(view_id)
-        if record is None or record.get("collection") != VIEW_COLLECTION or record.get("deleted_at"):
+        if (
+            record is None
+            or record.get("collection") != VIEW_COLLECTION
+            or record.get("deleted_at")
+        ):
             return None
         return record
 

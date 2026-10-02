@@ -31,13 +31,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from dsr.market_intent import credits as credit_rules
-from dsr.market_intent import names, observations, table
-from dsr.market_intent import views as view_rules
+from dsr.market_intent import (
+    credits as credit_rules,
+    names,
+    observations,
+    table,
+    views as view_rules,
+)
 from dsr.market_intent.criteria import Criterion, derived_properties, qualify_view
-from dsr.market_intent.domains import is_valid_domain
-from dsr.market_intent.domains import resolve as resolve_domain
-from dsr.market_intent.domains import display_name
+from dsr.market_intent.domains import display_name, is_valid_domain, resolve as resolve_domain
 from dsr.market_intent.errors import (
     AlreadyExcluded,
     CreditsRequired,
@@ -45,10 +47,8 @@ from dsr.market_intent.errors import (
     EnrichmentPermissionRequired,
     InvalidAutomation,
     InvalidConfiguration,
-    InvalidSort,
     LifecycleStageRegression,
     UnknownCategory,
-    UnknownVocabularyValue,
 )
 from dsr.market_intent.timeframe import resolve_window
 from dsr.market_intent.vocabulary import (
@@ -178,7 +178,9 @@ class MarketIntentEngine:
         return {
             "scope": SETTINGS_ID,
             "credits_enabled": bool(data.get("credits_enabled", False)),
-            "enrichment_actors": sorted(str(value) for value in (data.get("enrichment_actors") or [])),
+            "enrichment_actors": sorted(
+                str(value) for value in (data.get("enrichment_actors") or [])
+            ),
             "enrichment_permission": ENRICHMENT_PERMISSION,
             "record_id": (record or {}).get("id"),
         }
@@ -201,7 +203,9 @@ class MarketIntentEngine:
                 granted = []
             if not isinstance(granted, (list, tuple, set)):
                 raise InvalidConfiguration("enrichment_actors must be a list of actor names")
-            updated["enrichment_actors"] = sorted({str(value).strip() for value in granted if str(value).strip()})
+            updated["enrichment_actors"] = sorted(
+                {str(value).strip() for value in granted if str(value).strip()}
+            )
         else:
             updated["enrichment_actors"] = current["enrichment_actors"]
 
@@ -277,7 +281,9 @@ class MarketIntentEngine:
         )
         return Criterion.from_record(record).to_dict()
 
-    def withdraw_criterion(self, criterion_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
+    def withdraw_criterion(
+        self, criterion_id: str, *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Withdraw a criterion, keeping the row.
 
         Soft delete, not removal, because the derived property it wrote onto
@@ -298,7 +304,11 @@ class MarketIntentEngine:
 
     def topics(self) -> list[dict[str, Any]]:
         return [
-            {**(row.get("data") or {}), "id": row["id"], "active": bool((row.get("data") or {}).get("active", True))}
+            {
+                **(row.get("data") or {}),
+                "id": row["id"],
+                "active": bool((row.get("data") or {}).get("active", True)),
+            }
             for row in self.store.list(names.TOPICS, limit=names.SCAN_LIMIT, order_by="created_at")
         ]
 
@@ -328,8 +338,12 @@ class MarketIntentEngine:
         if row is None or row.get("collection") != names.TOPICS:
             return {"topic_id": topic_id, "found": False, "withdrawn": False}
         updated = self.store.update(topic_id, {"active": False}, actor=actor, source=source)
-        return {"topic_id": topic_id, "found": True, "withdrawn": True,
-                "topic": {**(updated.get("data") or {}), "id": topic_id}}
+        return {
+            "topic_id": topic_id,
+            "found": True,
+            "withdrawn": True,
+            "topic": {**(updated.get("data") or {}), "id": topic_id},
+        }
 
     def markets(self) -> list[dict[str, Any]]:
         return [
@@ -344,8 +358,16 @@ class MarketIntentEngine:
         name = payload.get("name")
         if not isinstance(name, str) or not name.strip():
             raise InvalidConfiguration("a target market needs a name")
-        countries = [str(value).strip().upper() for value in (payload.get("countries") or []) if str(value).strip()]
-        industries = [str(value).strip().lower() for value in (payload.get("industries") or []) if str(value).strip()]
+        countries = [
+            str(value).strip().upper()
+            for value in (payload.get("countries") or [])
+            if str(value).strip()
+        ]
+        industries = [
+            str(value).strip().lower()
+            for value in (payload.get("industries") or [])
+            if str(value).strip()
+        ]
         if not countries and not industries:
             raise InvalidConfiguration(
                 f"target market {name!r} names neither countries nor industries, so every company "
@@ -366,8 +388,10 @@ class MarketIntentEngine:
     def _exclusion_keys(self) -> dict[str, dict[str, Any]]:
         rows = self.store.find(names.EXCLUSIONS, {}, limit=names.SCAN_LIMIT)
         return {
-            str((row.get("data") or {}).get("domain")): {"domain": (row.get("data") or {}).get("domain"),
-                                                        "at": row.get("created_at")}
+            str((row.get("data") or {}).get("domain")): {
+                "domain": (row.get("data") or {}).get("domain"),
+                "at": row.get("created_at"),
+            }
             for row in rows
             if (row.get("data") or {}).get("domain")
         }
@@ -455,9 +479,7 @@ class MarketIntentEngine:
                 if value:
                     by_contact[value] = key
 
-        def resolve_attribution(
-            ip: str, contact: str, declared: str
-        ) -> tuple[str | None, str]:
+        def resolve_attribution(ip: str, contact: str, declared: str) -> tuple[str | None, str]:
             if ip:
                 match = by_ip.get(ip.strip())
                 if match:
@@ -525,20 +547,24 @@ class MarketIntentEngine:
         companies = self.store.list(names.COMPANIES, limit=limit, order_by="created_at")
         contacts = self.store.list(names.CONTACTS, limit=limit, order_by="created_at")
         trackings = {
-            str((row.get("data") or {}).get("company_key")): {"company_key": (row.get("data") or {}).get("company_key"),
-                                                              "since": (row.get("data") or {}).get("since"),
-                                                              "period": (row.get("data") or {}).get("period"),
-                                                              "periods": (row.get("data") or {}).get("periods") or [],
-                                                              "last_charged_period": (row.get("data") or {}).get(
-                                                                  "last_charged_period")}
+            str((row.get("data") or {}).get("company_key")): {
+                "company_key": (row.get("data") or {}).get("company_key"),
+                "since": (row.get("data") or {}).get("since"),
+                "period": (row.get("data") or {}).get("period"),
+                "periods": (row.get("data") or {}).get("periods") or [],
+                "last_charged_period": (row.get("data") or {}).get("last_charged_period"),
+            }
             for row in self.store.list(names.TRACKING, limit=limit, order_by="created_at")
             if (row.get("data") or {}).get("company_key")
         }
         return table.Snapshot(
             visits=[row.get("data") or {} for row in visits],
             research=[row.get("data") or {} for row in research],
-            companies={str((row.get("data") or {}).get("root_domain")): row for row in companies
-                       if (row.get("data") or {}).get("root_domain")},
+            companies={
+                str((row.get("data") or {}).get("root_domain")): row
+                for row in companies
+                if (row.get("data") or {}).get("root_domain")
+            },
             contacts=[row.get("data") or {} for row in contacts],
             criteria=self.criteria(),
             topics=[row for row in self.topics() if row.get("active", True)],
@@ -548,7 +574,9 @@ class MarketIntentEngine:
             ],
             exclusions=self._exclusion_keys(),
             trackings=trackings,
-            enrolments=[row.get("data") or {} for row in self.store.list(names.ENROLMENTS, limit=limit)],
+            enrolments=[
+                row.get("data") or {} for row in self.store.list(names.ENROLMENTS, limit=limit)
+            ],
             truncated={
                 names.VISITS: len(visits) >= limit,
                 names.RESEARCH: len(research) >= limit,
@@ -583,7 +611,11 @@ class MarketIntentEngine:
         if filters is not None:
             match_dict = filters.as_match_dict()
             matched = [row for row in rows if table.matches_filters(row, match_dict, window=window)]
-        ordered = table.sort_rows(matched, key=filters.sort, direction=filters.direction) if filters else table.sort_rows(matched)
+        ordered = (
+            table.sort_rows(matched, key=filters.sort, direction=filters.direction)
+            if filters
+            else table.sort_rows(matched)
+        )
         return {
             "count": len(ordered),
             "total_before_filters": len(rows),
@@ -643,7 +675,9 @@ class MarketIntentEngine:
             known = patch.get("known_ips") or []
             if not isinstance(known, (list, tuple)):
                 raise InvalidConfiguration("known_ips must be a list of IP addresses")
-            updates["known_ips"] = sorted({str(value).strip() for value in known if str(value).strip()})
+            updates["known_ips"] = sorted(
+                {str(value).strip() for value in known if str(value).strip()}
+            )
         extra = patch.get("properties")
         if isinstance(extra, Mapping):
             updates["properties"] = {**(current.get("properties") or {}), **dict(extra)}
@@ -720,11 +754,7 @@ class MarketIntentEngine:
         snapshot = self._snapshot()
         criteria = snapshot.criteria
         newest_first = sorted(
-            [
-                visit
-                for visit in snapshot.visits
-                if str(visit.get("company_key") or "") == key
-            ],
+            [visit for visit in snapshot.visits if str(visit.get("company_key") or "") == key],
             key=lambda visit: str(visit.get("occurred_at") or ""),
             reverse=True,
         )
@@ -771,11 +801,15 @@ class MarketIntentEngine:
         return {
             "company_key": key,
             "count": len(rows),
-            "contacts": sorted(rows, key=lambda row: str(row.get("last_touch_at") or ""), reverse=True),
+            "contacts": sorted(
+                rows, key=lambda row: str(row.get("last_touch_at") or ""), reverse=True
+            ),
             "fields": ["last_touch_at", "last_engagement_at", "scheduled"],
         }
 
-    def research_tab(self, filters: view_rules.FilterSet | None = None, *, actor: str | None = None) -> dict[str, Any]:
+    def research_tab(
+        self, filters: view_rules.FilterSet | None = None, *, actor: str | None = None
+    ) -> dict[str, Any]:
         """The Research tab: who is researching a topic, and who is in the news.
 
         Two different things under one tab, reported separately so a company that
@@ -797,7 +831,11 @@ class MarketIntentEngine:
         for row in with_research:
             for evidence in row.get("research_evidence") or []:
                 bucket = topics if evidence.get("kind") == "topic" else news
-                label = str(evidence.get("topic_matched") or evidence.get("topic") or evidence.get("signal_type"))
+                label = str(
+                    evidence.get("topic_matched")
+                    or evidence.get("topic")
+                    or evidence.get("signal_type")
+                )
                 bucket[label] = bucket.get(label, 0) + 1
         return {
             "count": len(with_research),
@@ -823,16 +861,23 @@ class MarketIntentEngine:
 
     def views(self) -> list[dict[str, Any]]:
         rows = self.store.list(names.VIEWS, limit=names.SCAN_LIMIT, order_by="created_at")
-        return [{**(row.get("data") or {}), "id": row["id"], "created_at": row.get("created_at")} for row in rows]
+        return [
+            {**(row.get("data") or {}), "id": row["id"], "created_at": row.get("created_at")}
+            for row in rows
+        ]
 
     def view(self, view_id: str) -> dict[str, Any] | None:
         for row in self.store.list(names.VIEWS, limit=names.SCAN_LIMIT):
             if row["id"] == view_id:
-                return {**(row.get("data") or {}), "id": row["id"], "created_at": row.get("created_at")}
+                return {
+                    **(row.get("data") or {}),
+                    "id": row["id"],
+                    "created_at": row.get("created_at"),
+                }
         return None
 
     def save_view(self, payload: Any, *, actor: str | None, source: str) -> dict[str, Any]:
-        """"Click Save view to persist the filter set as a named view."
+        """ "Click Save view to persist the filter set as a named view."
 
         A name already in use is refused rather than overwritten: an automation
         is attached to a view, and two views under one name would make which one
@@ -859,7 +904,12 @@ class MarketIntentEngine:
             actor=actor,
             source=source,
         )
-        return {"id": record["id"], "name": trimmed, "filters": filters.to_dict(), "created_at": record["created_at"]}
+        return {
+            "id": record["id"],
+            "name": trimmed,
+            "filters": filters.to_dict(),
+            "created_at": record["created_at"],
+        }
 
     def withdraw_view(self, view_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
         """Remove a saved view and the automation attached to it.
@@ -926,14 +976,21 @@ class MarketIntentEngine:
                     bool(entry.entered_at and add_enabled_at and entry.entered_at > add_enabled_at)
                 ),
                 "entered_after_tracking": (
-                    bool(entry.entered_at and track_enabled_at and entry.entered_at > track_enabled_at)
+                    bool(
+                        entry.entered_at
+                        and track_enabled_at
+                        and entry.entered_at > track_enabled_at
+                    )
                 ),
                 "company": entry.row,
             }
             for entry in members
             if not entry.row.get("excluded")
         ]
-        rows.sort(key=lambda entry: (str(entry.get("entered_at") or ""), entry["company_key"]), reverse=True)
+        rows.sort(
+            key=lambda entry: (str(entry.get("entered_at") or ""), entry["company_key"]),
+            reverse=True,
+        )
         return {
             "view_id": view_id,
             "name": view.get("name"),
@@ -953,16 +1010,23 @@ class MarketIntentEngine:
 
     def automations(self) -> list[dict[str, Any]]:
         rows = self.store.list(names.AUTOMATIONS, limit=names.SCAN_LIMIT, order_by="created_at")
-        return [{**(row.get("data") or {}), "id": row["id"], "created_at": row.get("created_at")} for row in rows]
+        return [
+            {**(row.get("data") or {}), "id": row["id"], "created_at": row.get("created_at")}
+            for row in rows
+        ]
 
     def automation_for(self, view_id: str) -> dict[str, Any] | None:
         found = self.store.find(names.AUTOMATIONS, {"view_id": view_id}, limit=1)
         if not found:
             return None
-        return {**(found[0].get("data") or {}), "id": found[0]["id"], "created_at": found[0].get("created_at")}
+        return {
+            **(found[0].get("data") or {}),
+            "id": found[0]["id"],
+            "created_at": found[0].get("created_at"),
+        }
 
     def save_automation(self, payload: Any, *, actor: str | None, source: str) -> dict[str, Any]:
-        """"Toggle the switches on. At the bottom, click Save automation."
+        """ "Toggle the switches on. At the bottom, click Save automation."
 
         Switching a toggle on stamps *when* it was switched on, and that stamp is
         the watermark the researched note is about. Saving a toggle that is
@@ -996,10 +1060,12 @@ class MarketIntentEngine:
             # Only stamped on the transition to on. Never cleared: the researched
             # note is about when auto-add was *enabled*, and a toggle switched
             # off and on again must not add everything that arrived in between.
-            "add_enabled_at": at if add_on and not prior.get(AUTOMATION_ADD) else prior.get("add_enabled_at"),
-            "track_enabled_at": at if track_on and not prior.get(AUTOMATION_TRACK) else prior.get(
-                "track_enabled_at"
-            ),
+            "add_enabled_at": at
+            if add_on and not prior.get(AUTOMATION_ADD)
+            else prior.get("add_enabled_at"),
+            "track_enabled_at": at
+            if track_on and not prior.get(AUTOMATION_TRACK)
+            else prior.get("track_enabled_at"),
             "saved_at": at,
         }
         if existing is None:
@@ -1052,7 +1118,9 @@ class MarketIntentEngine:
 
             if add_on and not row.get("in_crm"):
                 if not add_enabled_at:
-                    held_back.append({**outcome, "action": AUTOMATION_ADD, "reason": "never_enabled"})
+                    held_back.append(
+                        {**outcome, "action": AUTOMATION_ADD, "reason": "never_enabled"}
+                    )
                 elif entered <= add_enabled_at:
                     held_back.append(
                         {
@@ -1076,7 +1144,9 @@ class MarketIntentEngine:
 
             if track_on and not row.get("tracked"):
                 if not track_enabled_at:
-                    held_back.append({**outcome, "action": AUTOMATION_TRACK, "reason": "never_enabled"})
+                    held_back.append(
+                        {**outcome, "action": AUTOMATION_TRACK, "reason": "never_enabled"}
+                    )
                 elif entered <= track_enabled_at:
                     held_back.append(
                         {
@@ -1103,7 +1173,10 @@ class MarketIntentEngine:
                 AUTOMATION_TRACK: track_on,
                 "labels": AUTOMATION_LABELS,
             },
-            "watermarks": {"add_enabled_at": add_enabled_at or None, "track_enabled_at": track_enabled_at or None},
+            "watermarks": {
+                "add_enabled_at": add_enabled_at or None,
+                "track_enabled_at": track_enabled_at or None,
+            },
             "window": table.describe_window(window),
             "matched": len(members),
             "added": added,
@@ -1142,7 +1215,9 @@ class MarketIntentEngine:
             for category_id in CATEGORY_IDS
         ]
 
-    def set_category(self, category_id: str, payload: Any, *, actor: str | None, source: str) -> dict[str, Any]:
+    def set_category(
+        self, category_id: str, payload: Any, *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Enable or disable one stock category, stamping when it was enabled."""
         if category_id not in CATEGORY_REQUIREMENTS:
             raise UnknownCategory(
@@ -1150,7 +1225,9 @@ class MarketIntentEngine:
                 f"{', '.join(CATEGORY_IDS)}"
             )
         if not isinstance(payload, Mapping):
-            raise InvalidConfiguration("a category toggle must be an object with enabled true or false")
+            raise InvalidConfiguration(
+                "a category toggle must be an object with enabled true or false"
+            )
         unexpected = sorted(set(payload) - {"enabled"})
         if unexpected:
             # The research enumerates the four and calls them stock. A caller
@@ -1366,7 +1443,12 @@ class MarketIntentEngine:
             source=source,
         )
         charge = credit_rules.charge(
-            self.store, company_key=key, action=credit_rules.ACTION_ADD, at=at, actor=actor, source=source
+            self.store,
+            company_key=key,
+            action=credit_rules.ACTION_ADD,
+            at=at,
+            actor=actor,
+            source=source,
         )
         return {
             "company_key": key,
@@ -1489,7 +1571,12 @@ class MarketIntentEngine:
             source=source,
         )
         charge = credit_rules.charge(
-            self.store, company_key=key, action=credit_rules.ACTION_TRACK, at=at, actor=actor, source=source
+            self.store,
+            company_key=key,
+            action=credit_rules.ACTION_TRACK,
+            at=at,
+            actor=actor,
+            source=source,
         )
         return {
             "company_key": key,
@@ -1536,7 +1623,9 @@ class MarketIntentEngine:
             changed += 1
         return changed
 
-    def enroll(self, company_key: str, payload: Any, *, actor: str | None, source: str) -> dict[str, Any]:
+    def enroll(
+        self, company_key: str, payload: Any, *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Manual "Enroll in workflow" from the Visitors tab.
 
         No watermark, because this is a person pointing at a company in front of
@@ -1551,14 +1640,18 @@ class MarketIntentEngine:
                 "enrolled; remove the exclusion first if that is what you meant"
             )
         if not isinstance(payload, Mapping):
-            raise InvalidConfiguration("an enrolment must name the workflow to enrol the company in")
+            raise InvalidConfiguration(
+                "an enrolment must name the workflow to enrol the company in"
+            )
         workflow = str(payload.get("workflow") or "").strip()
         if not workflow:
             raise InvalidConfiguration(
                 "an enrolment needs a workflow; the research's control is 'Enroll in workflow' "
                 "and enrolling a company in nothing is not a thing it can do"
             )
-        for row in self.store.find(names.ENROLMENTS, {"company_key": key, "workflow": workflow}, limit=1):
+        for row in self.store.find(
+            names.ENROLMENTS, {"company_key": key, "workflow": workflow}, limit=1
+        ):
             return {
                 "company_key": key,
                 "workflow": workflow,
@@ -1590,10 +1683,13 @@ class MarketIntentEngine:
 
     def tracked(self) -> list[dict[str, Any]]:
         rows = self.store.list(names.TRACKING, limit=names.SCAN_LIMIT, order_by="created_at")
-        return [{**(row.get("data") or {}), "id": row["id"], "created_at": row.get("created_at")} for row in rows]
+        return [
+            {**(row.get("data") or {}), "id": row["id"], "created_at": row.get("created_at")}
+            for row in rows
+        ]
 
     def renew(self, *, actor: str | None, source: str) -> dict[str, Any]:
-        """"After that initial charge, tracking continues to be charged monthly."
+        """ "After that initial charge, tracking continues to be charged monthly."
 
         One charge per tracked company per period, and a second call in the same
         period charges nothing - which falls out of the one-row-per-company-per-
@@ -1609,7 +1705,12 @@ class MarketIntentEngine:
                 continue
             periods = list(data.get("periods") or [])
             charge = credit_rules.charge(
-                self.store, company_key=key, action=credit_rules.ACTION_TRACK, at=at, actor=actor, source=source
+                self.store,
+                company_key=key,
+                action=credit_rules.ACTION_TRACK,
+                at=at,
+                actor=actor,
+                source=source,
             )
             if period not in periods:
                 periods.append(period)
@@ -1683,7 +1784,9 @@ class MarketIntentEngine:
         # yet - and it is reported as such rather than as an empty list a page
         # would have to guess about.
         return {
-            "companies_showing_research_intent": sum(1 for row in rows if row.get("research_intent")),
+            "companies_showing_research_intent": sum(
+                1 for row in rows if row.get("research_intent")
+            ),
             "companies_showing_visitor_intent": sum(1 for row in rows if row.get("visitor_intent")),
             "companies_converted_to_lifecycle_stage": sum(
                 1 for row in rows if row.get("in_crm") and row.get("lifecycle_stage")
@@ -1696,7 +1799,10 @@ class MarketIntentEngine:
             "unattributed_views": table.unattributed(snapshot),
             "excluded_domains": len(snapshot.exclusions),
             "credits": credit_rules.summarise(
-                [(row.get("data") or {}) for row in self.store.list(names.CREDITS, limit=names.SCAN_LIMIT)]
+                [
+                    (row.get("data") or {})
+                    for row in self.store.list(names.CREDITS, limit=names.SCAN_LIMIT)
+                ]
             ),
             "capabilities": self.capabilities(actor),
             "tab": "Overview",

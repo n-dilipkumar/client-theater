@@ -53,8 +53,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Mapping
 
-from dsr.meeting_reminders import conditions
-from dsr.meeting_reminders import vocabulary as vocab
+from dsr.meeting_reminders import conditions, vocabulary as vocab
 from dsr.meeting_reminders.errors import ReminderError
 
 
@@ -87,7 +86,9 @@ def _unit_count(unit: str, minutes: int) -> int:
     return -(-minutes // size)
 
 
-def cal_trigger(reminder: Mapping[str, Any], booking: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def cal_trigger(
+    reminder: Mapping[str, Any], booking: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     """Project the firing condition onto a Cal trigger.
 
     The offset's sign is carried by the *trigger*, not the number: Cal's
@@ -204,7 +205,9 @@ def cal_template(reminder: Mapping[str, Any]) -> str:
                 f"calTemplate must be one of {list(vocab.CAL_STEP_TEMPLATES)}; got {explicit!r}"
             )
         return explicit
-    composed = bool(str(reminder.get("subject") or "").strip() or str(reminder.get("body") or "").strip())
+    composed = bool(
+        str(reminder.get("subject") or "").strip() or str(reminder.get("body") or "").strip()
+    )
     if composed:
         return "custom"
     return vocab.CAL_TEMPLATE_DEFAULT[vocab.require_condition(reminder.get("condition"))]
@@ -226,7 +229,9 @@ def cal_step(reminder: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def activation(reminder: Mapping[str, Any], meeting_type_ids: list[str] | None = None) -> dict[str, Any]:
+def activation(
+    reminder: Mapping[str, Any], meeting_type_ids: list[str] | None = None
+) -> dict[str, Any]:
     """Cal's ``activation`` block, from the reminder's own reach.
 
     A reminder is "a reusable asset attachable to many Meeting Types" per the
@@ -331,7 +336,9 @@ def validate_workflow(payload: Mapping[str, Any]) -> dict[str, Any]:
         )
     steps = body.get("steps")
     if not isinstance(steps, list) or not steps:
-        problems.append({"field": "steps", "value": None, "message": "a workflow needs ordered steps"})
+        problems.append(
+            {"field": "steps", "value": None, "message": "a workflow needs ordered steps"}
+        )
         steps = []
 
     action_steps = 0
@@ -434,7 +441,9 @@ def offset_from_cal(offset: Mapping[str, Any]) -> dict[str, Any]:
     unit = str(offset.get("unit") or "hour").strip().lower()
     inverse = {value: key for key, value in vocab.CAL_UNIT_FROM.items()}
     if unit not in inverse:
-        raise ReminderError(f"offset unit must be one of {list(vocab.CAL_OFFSET_UNITS)}; got {unit!r}")
+        raise ReminderError(
+            f"offset unit must be one of {list(vocab.CAL_OFFSET_UNITS)}; got {unit!r}"
+        )
     return vocab.require_offset(offset.get("value", vocab.DEFAULT_OFFSET), inverse[unit])
 
 
@@ -457,7 +466,9 @@ def condition_from_cal(trigger_type: str, offset: Mapping[str, Any]) -> dict[str
     }
 
 
-def fire_time_matches(projected: Mapping[str, Any], reminder: Mapping[str, Any], booking: Mapping[str, Any]) -> bool:
+def fire_time_matches(
+    projected: Mapping[str, Any], reminder: Mapping[str, Any], booking: Mapping[str, Any]
+) -> bool:
     """Whether a projected workflow would fire at the same instant as this one.
 
     Used by the tests as the round-trip check: project, convert back, and compare

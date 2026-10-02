@@ -16,8 +16,6 @@ part-way must leave neither a record nor an audit row behind.
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -29,6 +27,7 @@ from dsr.room_templates import (
     slugify,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-001"
 CREATE_SOURCE = f"{PREFIX}/rooms"
@@ -111,8 +110,9 @@ def test_the_feature_did_not_fail_to_load():
 
 def test_the_feature_does_not_import_the_app():
     """Enforced for every feature by test_features.py; asserted here for this one."""
-    import dsr.features as host
     from pathlib import Path
+
+    import dsr.features as host
 
     module = Path(host.__file__).parent / "wf001_rooms.py"
     text = module.read_text(encoding="utf-8")
@@ -121,8 +121,9 @@ def test_the_feature_does_not_import_the_app():
 
 def test_the_domain_module_is_named_room_templates():
     """WF-005 owns ``dsr/rooms.py``. This workflow must not take the name."""
-    import dsr.features as host
     from pathlib import Path
+
+    import dsr.features as host
 
     package = Path(host.__file__).parent
     assert not (package.parent / "rooms.py").exists()
@@ -415,7 +416,7 @@ def test_the_two_writes_are_one_transaction_not_two_sequential_ones(store, monke
     transaction. If `create_room` ever stopped using the block, this would not
     fire - so the assertion is that using the handle is the only way it works.
     """
-    from dsr.db.audited import AuditError, AuditedWriter
+    from dsr.db.audited import AuditedWriter, AuditError
 
     seen = {"n": 0}
     original = AuditedWriter.create
@@ -425,7 +426,7 @@ def test_the_two_writes_are_one_transaction_not_two_sequential_ones(store, monke
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(AuditedWriter, "create", counting)
-    account = make_account(store)
+    make_account(store)
 
     with pytest.raises(AuditError, match="transaction\\(\\) block is open"):
         with store.db.transaction(actor="dana", source=CREATE_SOURCE) as tx:
@@ -507,7 +508,9 @@ def test_the_audit_mirror_is_not_written_for_a_rolled_back_room(tmp_path, monkey
         database.close()
 
     files = sorted(mirror.glob("*.jsonl")) if mirror.is_dir() else []
-    lines = [json_line for path in files for json_line in path.read_text(encoding="utf-8").splitlines()]
+    lines = [
+        json_line for path in files for json_line in path.read_text(encoding="utf-8").splitlines()
+    ]
     assert all('"collection": "room"' not in line for line in lines)
     assert all('"collection": "site"' not in line for line in lines)
 
@@ -537,7 +540,9 @@ def test_unknown_fields_are_stored_and_indexed_without_a_migration(store):
     assert data["requires_nda"] is True
     assert data["branding"]["theme"] == "dark"
     # Filterable through the dynamic index, dotted path and all.
-    assert [r["id"] for r in store.db.find("room", {"team_routing.queue": "enterprise"})] == [room["id"]]
+    assert [r["id"] for r in store.db.find("room", {"team_routing.queue": "enterprise"})] == [
+        room["id"]
+    ]
     assert [r["id"] for r in store.db.find("room", {"requires_nda": True})] == [room["id"]]
 
 
@@ -550,7 +555,11 @@ def test_extra_fields_cannot_overwrite_the_workflows_own_bindings(store):
         account_id=account["id"],
         template_id="tpl_standard",
         source=CREATE_SOURCE,
-        extra={"status": "archived", "account_id": "someone_elses_account", "template_id": "tpl_hijack"},
+        extra={
+            "status": "archived",
+            "account_id": "someone_elses_account",
+            "template_id": "tpl_hijack",
+        },
     )
 
     assert room["data"]["account_id"] == account["id"]
@@ -640,7 +649,9 @@ def test_a_room_can_be_created_from_a_store_supplied_template(store):
 
 def test_template_fields_the_catalogue_does_not_know_about_survive(store):
     """A team's own template field comes back untouched, like any other payload."""
-    store.create("template", {"template_id": "tpl_localised", "locale": "de-DE", "owner_team": "emea"})
+    store.create(
+        "template", {"template_id": "tpl_localised", "locale": "de-DE", "owner_team": "emea"}
+    )
 
     catalogue = {t["template_id"]: t for t in list_templates(store)}
 
@@ -713,7 +724,9 @@ def test_list_filters_by_account_and_template(store):
     create(store, name="A", account=northwind)
     create(store, name="B", account=contoso, template_id="tpl_technical_review")
 
-    assert [r["data"]["name"] for r in list_rooms(store, account_id=northwind["id"])["rooms"]] == ["A"]
+    assert [r["data"]["name"] for r in list_rooms(store, account_id=northwind["id"])["rooms"]] == [
+        "A"
+    ]
     assert [
         r["data"]["name"] for r in list_rooms(store, template_id="tpl_technical_review")["rooms"]
     ] == ["B"]
@@ -774,7 +787,11 @@ def test_post_rooms_creates_a_room_and_returns_it_with_its_site(client):
 
     response = client.post(
         f"{PREFIX}/rooms",
-        json={"name": "Acme Evaluation", "account_id": account["id"], "template_id": "tpl_standard"},
+        json={
+            "name": "Acme Evaluation",
+            "account_id": account["id"],
+            "template_id": "tpl_standard",
+        },
         params={"actor": "dana"},
     )
 
@@ -790,7 +807,11 @@ def test_post_rooms_appears_in_the_rooms_list(client):
     account = client.post("/api/records/account", json={"name": "Northwind Traders"}).json()
     client.post(
         f"{PREFIX}/rooms",
-        json={"name": "Acme Evaluation", "account_id": account["id"], "template_id": "tpl_standard"},
+        json={
+            "name": "Acme Evaluation",
+            "account_id": account["id"],
+            "template_id": "tpl_standard",
+        },
     )
 
     listed = client.get(f"{PREFIX}/rooms").json()
@@ -804,7 +825,11 @@ def test_post_rooms_is_audited_with_the_actor_and_the_route_that_served_it(clien
     account = client.post("/api/records/account", json={"name": "Northwind Traders"}).json()
     room = client.post(
         f"{PREFIX}/rooms",
-        json={"name": "Acme Evaluation", "account_id": account["id"], "template_id": "tpl_standard"},
+        json={
+            "name": "Acme Evaluation",
+            "account_id": account["id"],
+            "template_id": "tpl_standard",
+        },
         params={"actor": "dana"},
     ).json()
 
@@ -822,7 +847,11 @@ def test_post_rooms_writes_one_audit_row_per_record(client):
 
     room = client.post(
         f"{PREFIX}/rooms",
-        json={"name": "Acme Evaluation", "account_id": account["id"], "template_id": "tpl_standard"},
+        json={
+            "name": "Acme Evaluation",
+            "account_id": account["id"],
+            "template_id": "tpl_standard",
+        },
     ).json()
 
     after = client.get("/api/stats").json()["audit_entries"]
@@ -835,7 +864,11 @@ def test_post_rooms_shares_one_request_id_across_both_audit_rows(client):
     account = client.post("/api/records/account", json={"name": "Northwind Traders"}).json()
     room = client.post(
         f"{PREFIX}/rooms",
-        json={"name": "Acme Evaluation", "account_id": account["id"], "template_id": "tpl_standard"},
+        json={
+            "name": "Acme Evaluation",
+            "account_id": account["id"],
+            "template_id": "tpl_standard",
+        },
         params={"request_id": "req-42"},
     ).json()
 
@@ -866,7 +899,12 @@ def test_post_rooms_stores_unknown_fields_without_a_migration(client):
     # query arbitrary JSON paths: this feature's /rooms speaks only its own filters.
     found = client.get("/api/records/room", params={"where": '{"branding.theme":"dark"}'}).json()
     assert [r["id"] for r in found["records"]] == [room["id"]]
-    assert client.get("/api/records/room", params={"where": '{"branding.theme":"light"}'}).json()["count"] == 0
+    assert (
+        client.get("/api/records/room", params={"where": '{"branding.theme":"light"}'}).json()[
+            "count"
+        ]
+        == 0
+    )
 
 
 def test_post_rooms_with_unknown_account_is_404(client):
@@ -907,7 +945,12 @@ def test_post_rooms_with_missing_name_is_400(client):
 
 def test_post_rooms_with_taken_friendly_url_is_409(client):
     account = client.post("/api/records/account", json={"name": "Northwind Traders"}).json()
-    body = {"name": "Acme", "account_id": account["id"], "template_id": "tpl_standard", "friendly_url": "acme"}
+    body = {
+        "name": "Acme",
+        "account_id": account["id"],
+        "template_id": "tpl_standard",
+        "friendly_url": "acme",
+    }
     client.post(f"{PREFIX}/rooms", json=body)
 
     response = client.post(f"{PREFIX}/rooms", json=body)
@@ -935,11 +978,19 @@ def test_get_rooms_filters_by_status_and_query(client):
     account = client.post("/api/records/account", json={"name": "Northwind Traders"}).json()
     client.post(
         f"{PREFIX}/rooms",
-        json={"name": "Acme Evaluation", "account_id": account["id"], "template_id": "tpl_standard"},
+        json={
+            "name": "Acme Evaluation",
+            "account_id": account["id"],
+            "template_id": "tpl_standard",
+        },
     )
     archived = client.post(
         f"{PREFIX}/rooms",
-        json={"name": "Contoso Renewal", "account_id": account["id"], "template_id": "tpl_standard"},
+        json={
+            "name": "Contoso Renewal",
+            "account_id": account["id"],
+            "template_id": "tpl_standard",
+        },
     ).json()
     client.patch(f"/api/records/room/{archived['id']}", json={"status": "archived"})
 
@@ -974,7 +1025,9 @@ def test_room_templates_endpoint_includes_store_templates(client):
 
 
 def test_accounts_endpoint_returns_records_untouched(client):
-    client.post("/api/records/account", json={"name": "Northwind", "tier": "enterprise", "seats": 500})
+    client.post(
+        "/api/records/account", json={"name": "Northwind", "tier": "enterprise", "seats": 500}
+    )
 
     body = client.get(f"{PREFIX}/accounts").json()
 
@@ -984,7 +1037,9 @@ def test_accounts_endpoint_returns_records_untouched(client):
 
 def test_accounts_endpoint_searches_by_name_and_domain(client):
     client.post("/api/records/account", json={"name": "Northwind Traders"})
-    client.post("/api/records/account", json={"name": "Contoso Health", "domain": "contoso.example"})
+    client.post(
+        "/api/records/account", json={"name": "Contoso Health", "domain": "contoso.example"}
+    )
 
     assert client.get(f"{PREFIX}/accounts", params={"q": "north"}).json()["count"] == 1
     assert client.get(f"{PREFIX}/accounts", params={"q": "contoso.example"}).json()["count"] == 1

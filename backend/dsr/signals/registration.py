@@ -66,7 +66,6 @@ from dsr.signals import indicators, schema
 from dsr.signals.errors import RegistrationError, SignalError
 from dsr.signals.vocabulary import (
     ATTRIBUTION_TYPES,
-    DEFAULT_LOCALE,
     require_attribution_type,
     require_locale_map,
 )
@@ -106,7 +105,9 @@ FIELD_ALIASES: dict[str, str] = {
 #: product's own bookkeeping. Schema flexibility means a team can add a field to
 #: ``data``; it does not mean a payload can mark itself as a first-party
 #: registration or dictate its own warnings.
-RESERVED_FIELDS = frozenset({"id", "registration_id", "warnings", "revision", "created_at", "updated_at"})
+RESERVED_FIELDS = frozenset(
+    {"id", "registration_id", "warnings", "revision", "created_at", "updated_at"}
+)
 
 
 def canonical(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -238,7 +239,7 @@ def normalise_attribution(value: Any) -> list[str]:
             "Opportunity and Email Content as the possible choices"
         )
     seen: list[str] = []
-    for index, entry in enumerate(value):
+    for _index, entry in enumerate(value):
         key = require_attribution_type(entry)
         if key not in seen:
             seen.append(key)
@@ -322,7 +323,9 @@ def normalise_registration(payload: Mapping[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
-def amendment_findings(current: Mapping[str, Any], patch: Mapping[str, Any]) -> list[dict[str, str]]:
+def amendment_findings(
+    current: Mapping[str, Any], patch: Mapping[str, Any]
+) -> list[dict[str, str]]:
     """Every reason this patch would break the contract, as a list.
 
     Empty means the patch is additive and may be applied. The declared sets -
@@ -372,7 +375,9 @@ def amendment_findings(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         }
         proposed_raw = fields["indicators"]
         if not isinstance(proposed_raw, (list, tuple)):
-            findings.append({"path": "indicators", "change": "unusable", "detail": "must be a list"})
+            findings.append(
+                {"path": "indicators", "change": "unusable", "detail": "must be a list"}
+            )
             proposed_raw = []
         seen: set[str] = set()
         for index, entry in enumerate(proposed_raw):
@@ -399,7 +404,9 @@ def amendment_findings(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
             before = existing_indicators.get(key)
             if before is None:
                 continue
-            if "metadata_shape" in entry and entry["metadata_shape"] != before.get("metadata_shape"):
+            if "metadata_shape" in entry and entry["metadata_shape"] != before.get(
+                "metadata_shape"
+            ):
                 refuse(f"indicators.{key}.metadata_shape", "shape rewritten")
             if "description" in entry:
                 try:
@@ -425,13 +432,19 @@ def amendment_findings(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         proposed_shape = fields["data_shape"]
         if not isinstance(proposed_shape, Mapping):
             findings.append(
-                {"path": "data_shape", "change": "unusable", "detail": "must be a JSON Schema object"}
+                {
+                    "path": "data_shape",
+                    "change": "unusable",
+                    "detail": "must be a JSON Schema object",
+                }
             )
         else:
             before_shape = current.get("data_shape") or {}
             before_properties = before_shape.get("properties") or {}
             after_properties = proposed_shape.get("properties") or {}
-            if not isinstance(before_properties, Mapping) or not isinstance(after_properties, Mapping):
+            if not isinstance(before_properties, Mapping) or not isinstance(
+                after_properties, Mapping
+            ):
                 findings.append(
                     {
                         "path": "data_shape.properties",
@@ -444,15 +457,25 @@ def amendment_findings(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
                     if name in after_properties and after_properties[name] != shape:
                         refuse(f"data_shape.properties.{name}", "shape rewritten")
                 for key in ("minimum", "maximum", "additionalProperties"):
-                    if key in before_shape and key in proposed_shape and before_shape[key] != proposed_shape[key]:
+                    if (
+                        key in before_shape
+                        and key in proposed_shape
+                        and before_shape[key] != proposed_shape[key]
+                    ):
                         refuse(f"data_shape.{key}", "constraint rewritten")
             before_required = before_shape.get("required")
             after_required = proposed_shape.get("required")
             if after_required is not None and not isinstance(after_required, (list, tuple)):
                 findings.append(
-                    {"path": "data_shape.required", "change": "unusable", "detail": "required must be a list"}
+                    {
+                        "path": "data_shape.required",
+                        "change": "unusable",
+                        "detail": "required must be a list",
+                    }
                 )
-            elif isinstance(before_required, (list, tuple)) and isinstance(after_required, (list, tuple)):
+            elif isinstance(before_required, (list, tuple)) and isinstance(
+                after_required, (list, tuple)
+            ):
                 for name in sorted(set(after_required) - set(before_required)):
                     # Adding a requirement makes every already-conforming signal
                     # invalid: it now owes a field it did not owe before.

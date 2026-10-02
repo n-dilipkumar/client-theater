@@ -37,20 +37,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
-from dsr.partial_failures import retry as retry_module
-from dsr.partial_failures import rules as rules_module
-from dsr.partial_failures import validation
+from dsr.partial_failures import retry as retry_module, rules as rules_module, validation
 from dsr.partial_failures.errors import InvalidPayload, UnknownRoom, UnknownRow, UnknownRun
 from dsr.partial_failures.normalise import BatchOutcome, RowOutcome, normalise
 from dsr.partial_failures.timestamps import TIMESTAMP_KEYS, check_not_ahead, iso, parse_instant
 from dsr.partial_failures.vocabulary import (
     DISPOSITIONS,
+    ROOM_COLLECTION,
     ROW_COLLECTION,
     ROW_STATUSES,
-    ROOM_COLLECTION,
-    RUN_COLLECTION,
     RULES_COLLECTION,
     RULES_RECORD_ID,
+    RUN_COLLECTION,
     require_connector,
 )
 from dsr.store import RecordStore
@@ -104,7 +102,9 @@ class SyncLog:
     def rules(self) -> tuple[dict[str, Any], str]:
         """The rules in force, and whether they came from the defaults."""
         record = self.store.get(RULES_RECORD_ID)
-        data = record.get("data") if record and record.get("collection") == RULES_COLLECTION else None
+        data = (
+            record.get("data") if record and record.get("collection") == RULES_COLLECTION else None
+        )
         return rules_module.effective(data if isinstance(data, Mapping) else None)
 
     def rules_view(self) -> dict[str, Any]:
@@ -190,7 +190,9 @@ class SyncLog:
         rule is needed, and the run is where someone is already looking.
         """
         if not isinstance(payload, Mapping):
-            raise InvalidPayload(f"the run payload must be a JSON object; got {type(payload).__name__}")
+            raise InvalidPayload(
+                f"the run payload must be a JSON object; got {type(payload).__name__}"
+            )
 
         moment = now or datetime.now(timezone.utc)
         room = self.require_room(room_id or payload.get("room_id"))
@@ -199,7 +201,9 @@ class SyncLog:
         vendor = _require_vendor(payload)
         rules, origin = self.rules()
 
-        started = parse_instant(_first_present(payload, TIMESTAMP_KEYS) or payload.get("started_at") or moment)
+        started = parse_instant(
+            _first_present(payload, TIMESTAMP_KEYS) or payload.get("started_at") or moment
+        )
         finished = parse_instant(payload["finished_at"]) if payload.get("finished_at") else moment
         check_not_ahead(started, now=moment)
         check_not_ahead(finished, now=moment)
@@ -237,7 +241,9 @@ class SyncLog:
                 "rules_applied": before["rules_applied"],
             },
         }
-        run = self.store.create(RUN_COLLECTION, run_data, room_id=room["id"], actor=actor, source=source)
+        run = self.store.create(
+            RUN_COLLECTION, run_data, room_id=room["id"], actor=actor, source=source
+        )
 
         records = self._create_rows(
             run_id=run["id"],
@@ -274,7 +280,9 @@ class SyncLog:
 
         records, truncated = self._scan(RUN_COLLECTION, room_id=room_id)
         selected = [
-            record for record in records if not wanted or (record.get("data") or {}).get("connector") == wanted
+            record
+            for record in records
+            if not wanted or (record.get("data") or {}).get("connector") == wanted
         ]
         selected.sort(key=self._run_sort_key, reverse=True)
         capped = selected[: max(1, min(int(limit), 1000))]
@@ -282,7 +290,9 @@ class SyncLog:
         by_connector: dict[str, dict[str, int]] = {}
         for record in selected:
             name = str((record.get("data") or {}).get("connector") or "")
-            bucket = by_connector.setdefault(name, {"runs": 0, "rows": 0, "succeeded": 0, "failed": 0})
+            bucket = by_connector.setdefault(
+                name, {"runs": 0, "rows": 0, "succeeded": 0, "failed": 0}
+            )
             bucket["runs"] += 1
             bucket["rows"] += int((record.get("data") or {}).get("rows") or 0)
             bucket["succeeded"] += int((record.get("data") or {}).get("succeeded") or 0)
@@ -414,7 +424,9 @@ class SyncLog:
                 "property": field,
                 "property_source": data.get("field_basis"),
                 "sent": sent.get(field) if field else None,
-                "sent_length": len(sent[field]) if field and isinstance(sent.get(field), str) else None,
+                "sent_length": len(sent[field])
+                if field and isinstance(sent.get(field), str)
+                else None,
                 "expected": data.get("expected") or [],
                 "reason": error.get("message"),
                 "code": error.get("code"),
@@ -539,7 +551,9 @@ class SyncLog:
         wanted = require_connector(connector) if connector else None
         rules, origin = self.rules()
 
-        records, truncated = self._failed_rows(room_id=room_id, connector=wanted, limit=_MAX_RECORDS)
+        records, truncated = self._failed_rows(
+            room_id=room_id, connector=wanted, limit=_MAX_RECORDS
+        )
         by_id = {str(record["id"]): record for record in records}
         planned = retry_module.plan(
             [self._plan_row(record) for record in records],
@@ -630,12 +644,17 @@ class SyncLog:
         rules, origin = self.rules()
 
         records, _truncated = self._rows_for_run(run["id"], room_id=run["room_id"])
-        failed = [record for record in records if str((record.get("data") or {}).get("status")) == "failed"]
+        failed = [
+            record
+            for record in records
+            if str((record.get("data") or {}).get("status")) == "failed"
+        ]
         succeeded = [
-            record for record in records if str((record.get("data") or {}).get("status")) == "succeeded"
+            record
+            for record in records
+            if str((record.get("data") or {}).get("status")) == "succeeded"
         ]
         untouched = [(record.get("data") or {}).get("row_key") for record in succeeded]
-        by_id = {str(record["id"]): record for record in failed}
 
         base = {
             "run_id": run["id"],
@@ -657,7 +676,10 @@ class SyncLog:
                 "sent": [],
             }
 
-        sent = [self._send_row(record, {"attempts": (record.get("data") or {}).get("attempts")}) for record in failed]
+        sent = [
+            self._send_row(record, {"attempts": (record.get("data") or {}).get("attempts")})
+            for record in failed
+        ]
 
         vendor = _vendor_of(payload)
         if vendor is None:
@@ -716,17 +738,23 @@ class SyncLog:
             and (not connector or (record.get("data") or {}).get("connector") == connector)
         )
 
-    def _rows_for_run(self, run_id: str, *, room_id: str | None = None) -> tuple[list[dict[str, Any]], bool]:
+    def _rows_for_run(
+        self, run_id: str, *, room_id: str | None = None
+    ) -> tuple[list[dict[str, Any]], bool]:
         records, truncated = self._scan(ROW_COLLECTION, room_id=room_id)
         selected = [
-            record for record in records if str((record.get("data") or {}).get("run_id")) == str(run_id)
+            record
+            for record in records
+            if str((record.get("data") or {}).get("run_id")) == str(run_id)
         ]
         # Input order, which is the order the connector sent them in and the only
         # order a positional correlation can be read against.
         selected.sort(key=lambda record: int((record.get("data") or {}).get("position") or 0))
         return selected, truncated
 
-    def _scan(self, collection: str, *, room_id: str | None = None) -> tuple[list[dict[str, Any]], bool]:
+    def _scan(
+        self, collection: str, *, room_id: str | None = None
+    ) -> tuple[list[dict[str, Any]], bool]:
         """Every live record in a collection, paged on the id so nothing is skipped.
 
         Paged on the record id rather than on ``created_at``: ids are unique, so an
@@ -737,7 +765,12 @@ class SyncLog:
         offset = 0
         while len(records) < _MAX_RECORDS:
             page = self.store.list(
-                collection, room_id=room_id, limit=_PAGE, offset=offset, order_by="id", descending=False
+                collection,
+                room_id=room_id,
+                limit=_PAGE,
+                offset=offset,
+                order_by="id",
+                descending=False,
             )
             if not page:
                 break
@@ -796,7 +829,9 @@ class SyncLog:
                 moment=moment,
                 preflight=verdicts.get(item.row_key) or {},
             )
-            written.append(self.store.create(ROW_COLLECTION, data, room_id=room_id, actor=actor, source=source))
+            written.append(
+                self.store.create(ROW_COLLECTION, data, room_id=room_id, actor=actor, source=source)
+            )
         return written
 
     def _apply(
@@ -900,7 +935,9 @@ class SyncLog:
                 actor=actor,
                 source=source,
             )
-            moved.append({"row_id": record["id"], "row_key": (updated.get("data") or {}).get("row_key")})
+            moved.append(
+                {"row_id": record["id"], "row_key": (updated.get("data") or {}).get("row_key")}
+            )
         return moved
 
     def _row_data(
@@ -1037,7 +1074,9 @@ class SyncLog:
             "passed_preflight": data.get("passed_preflight"),
         }
 
-    def _run_view(self, data: Mapping[str, Any], records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    def _run_view(
+        self, data: Mapping[str, Any], records: Sequence[Mapping[str, Any]]
+    ) -> dict[str, Any]:
         rows = [self._row_view(record) for record in records]
         return {
             "id": data.get("id"),

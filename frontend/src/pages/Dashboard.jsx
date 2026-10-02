@@ -1,5 +1,5 @@
 import { api, relativeTime } from '../lib/api'
-import { Badge, Card, EmptyState, ErrorNote, JsonView, Spinner, StatCard, useAsync } from '../components/ui'
+import { Badge, Card, EmptyState, ErrorNote, Spinner, StatCard, useAsync } from '../components/ui'
 
 /**
  * Dashboard: the operational overview.

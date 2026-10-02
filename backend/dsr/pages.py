@@ -120,6 +120,7 @@ def _own_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
     """The parts of a payload this service does not own."""
     return {key: value for key, value in payload.items() if key not in _MANAGED_PAGE_KEYS}
 
+
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -194,13 +195,9 @@ class PageService:
         """
         room = self.require_room(room_id)
         data = room.get("data") or {}
-        collaborators = {
-            str(name)
-            for name in _as_list(data.get("collaborators"))
-        }
+        collaborators = {str(name) for name in _as_list(data.get("collaborators"))}
         roles = {
-            str(name): str(role).lower()
-            for name, role in _as_mapping(data.get("roles")).items()
+            str(name): str(role).lower() for name, role in _as_mapping(data.get("roles")).items()
         }
         granted = bool(collaborators or roles or _as_list(data.get("viewers")))
 
@@ -222,7 +219,11 @@ class PageService:
     @staticmethod
     def permission_source(room: Mapping[str, Any]) -> str:
         data = room.get("data") or {}
-        if _as_list(data.get("collaborators")) or _as_mapping(data.get("roles")) or _as_list(data.get("viewers")):
+        if (
+            _as_list(data.get("collaborators"))
+            or _as_mapping(data.get("roles"))
+            or _as_list(data.get("viewers"))
+        ):
             return "room"
         return "unconfigured"
 
@@ -273,14 +274,18 @@ class PageService:
             raise AuditError(f"fragment {key!r} already exists; a new fragment needs its own key")
         entry = normalise_fragment(payload, "custom")
         if not any(item["key"] == entry["set"] for item in catalogue["sets"]):
-            raise FragmentError(f"fragment {entry['key']!r} names set {entry['set']!r}, which does not exist")
+            raise FragmentError(
+                f"fragment {entry['key']!r} names set {entry['set']!r}, which does not exist"
+            )
         return self.store.create(FRAGMENT_COLLECTION, entry, actor=actor, source=source)
 
     # -- pages -------------------------------------------------------------- #
 
     def list_pages(self, room_id: str) -> list[dict[str, Any]]:
         self.require_room(room_id)
-        pages = self.store.list(PAGE_COLLECTION, room_id=room_id, limit=500, order_by="created_at", descending=False)
+        pages = self.store.list(
+            PAGE_COLLECTION, room_id=room_id, limit=500, order_by="created_at", descending=False
+        )
         return [self._decorate(room_id, page) for page in pages]
 
     def get_page(self, room_id: str, page_id: str) -> dict[str, Any]:
@@ -288,7 +293,9 @@ class PageService:
         return self._decorate(room_id, page)
 
     def find_page_by_slug(self, room_id: str, slug: str) -> dict[str, Any] | None:
-        for page in self.store.list(PAGE_COLLECTION, room_id=room_id, limit=500, order_by="created_at", descending=False):
+        for page in self.store.list(
+            PAGE_COLLECTION, room_id=room_id, limit=500, order_by="created_at", descending=False
+        ):
             if (page.get("data") or {}).get("slug") == slug:
                 return page
         return None
@@ -474,7 +481,11 @@ class PageService:
                 {**default_config(fragment), **(target.get("config") or {}), **_config_of(payload)},
                 document_ids=self.room_document_ids(room_id),
             )
-            target["fragment"], target["set"], target["config"] = fragment["key"], fragment["set"], merged
+            target["fragment"], target["set"], target["config"] = (
+                fragment["key"],
+                fragment["set"],
+                merged,
+            )
         elif "config" in payload:
             fragment = self._require_fragment(str(target.get("fragment")))
             target["config"] = normalise_config(
@@ -499,7 +510,11 @@ class PageService:
     ) -> dict[str, Any]:
         self.require_editor(room_id, actor)
         page = self._require_page(room_id, page_id)
-        blocks = [block for block in (page.get("data") or {}).get("blocks") or [] if block.get("id") != block_id]
+        blocks = [
+            block
+            for block in (page.get("data") or {}).get("blocks") or []
+            if block.get("id") != block_id
+        ]
         if len(blocks) == len((page.get("data") or {}).get("blocks") or []):
             raise RecordNotFound(block_id)
         return self._save_blocks(room_id, page, blocks, actor, expected_revision, source=source)
@@ -527,7 +542,12 @@ class PageService:
                 + (f"; unknown {unknown}" if unknown else "")
             )
         return self._save_blocks(
-            room_id, page, [by_id[block_id] for block_id in order], actor, expected_revision, source=source
+            room_id,
+            page,
+            [by_id[block_id] for block_id in order],
+            actor,
+            expected_revision,
+            source=source,
         )
 
     # -- publish ------------------------------------------------------------ #
@@ -559,9 +579,14 @@ class PageService:
         digest = digest_blocks(blocks)
         now = utcnow()
 
-        previous = [r for r in self.store.list(REVISION_COLLECTION, room_id=room_id, limit=1000)
-                    if (r.get("data") or {}).get("page_id") == page_id]
-        number = max((int((r.get("data") or {}).get("number") or 0) for r in previous), default=0) + 1
+        previous = [
+            r
+            for r in self.store.list(REVISION_COLLECTION, room_id=room_id, limit=1000)
+            if (r.get("data") or {}).get("page_id") == page_id
+        ]
+        number = (
+            max((int((r.get("data") or {}).get("number") or 0) for r in previous), default=0) + 1
+        )
 
         # Revision first, pointer second: see the module docstring. Both audit
         # rows name the route that served them, and each says which of the two
@@ -580,7 +605,9 @@ class PageService:
                 "note": str(note) if note else None,
                 "template_id": data.get("template_id"),
                 "template_version_id": data.get("template_version_id"),
-                "fragment_sets": sorted({str(block.get("set")) for block in blocks if block.get("set")}),
+                "fragment_sets": sorted(
+                    {str(block.get("set")) for block in blocks if block.get("set")}
+                ),
             },
             room_id=room_id,
             actor=actor,
@@ -634,7 +661,9 @@ class PageService:
         self._require_page(room_id, page_id)
         rows = self.store.list(REVISION_COLLECTION, room_id=room_id, limit=1000)
         found = [r for r in rows if (r.get("data") or {}).get("page_id") == page_id]
-        return sorted(found, key=lambda r: int((r.get("data") or {}).get("number") or 0), reverse=True)
+        return sorted(
+            found, key=lambda r: int((r.get("data") or {}).get("number") or 0), reverse=True
+        )
 
     # -- buyer-facing read -------------------------------------------------- #
 
@@ -643,7 +672,9 @@ class PageService:
         room = self.require_room(room_id)
         documents = self._documents_by_id(room_id)
         published: list[dict[str, Any]] = []
-        for page in self.store.list(PAGE_COLLECTION, room_id=room_id, limit=500, order_by="created_at", descending=False):
+        for page in self.store.list(
+            PAGE_COLLECTION, room_id=room_id, limit=500, order_by="created_at", descending=False
+        ):
             view = self._published_view(page, documents)
             if view is not None:
                 published.append(view)
@@ -666,7 +697,11 @@ class PageService:
 
     def _require_page(self, room_id: str, page_id: str) -> dict[str, Any]:
         page = self.store.get(page_id)
-        if page is None or page.get("collection") != PAGE_COLLECTION or page.get("room_id") != room_id:
+        if (
+            page is None
+            or page.get("collection") != PAGE_COLLECTION
+            or page.get("room_id") != room_id
+        ):
             raise RecordNotFound(page_id)
         return page
 
@@ -754,7 +789,9 @@ class PageService:
         ]
         if not rows:  # pragma: no cover - publish always writes one first
             raise RecordNotFound(f"no revision for page {page_id}")
-        newest = max(rows, key=lambda r: (int((r.get("data") or {}).get("number") or 0), r["created_at"]))
+        newest = max(
+            rows, key=lambda r: (int((r.get("data") or {}).get("number") or 0), r["created_at"])
+        )
         return str(newest["id"])
 
     def _documents_by_id(self, room_id: str) -> dict[str, dict[str, Any]]:
@@ -835,7 +872,11 @@ class PageService:
                     {
                         "id": document_id,
                         "resolved": document_id in documents,
-                        **(documents[document_id].get("data") or {} if document_id in documents else {}),
+                        **(
+                            documents[document_id].get("data") or {}
+                            if document_id in documents
+                            else {}
+                        ),
                     }
                     for document_id in ids
                 ]

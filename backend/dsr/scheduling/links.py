@@ -197,8 +197,10 @@ def state_for(
             booking=data,
         )
 
-    if kind == RESCHEDULE and expire_reschedule_link(meeting_type or {}) and has_happened(
-        data.get("start_at"), data.get("end_at"), now
+    if (
+        kind == RESCHEDULE
+        and expire_reschedule_link(meeting_type or {})
+        and has_happened(data.get("start_at"), data.get("end_at"), now)
     ):
         return LinkState(
             token=token,
@@ -255,9 +257,7 @@ def invite_body(
 
     data = dict(booking.get("data") or {})
     moment = now or utcnow()
-    states = {
-        kind: state_for(booking, kind, meeting_type, moment) for kind in TAG_FOR_KIND
-    }
+    states = {kind: state_for(booking, kind, meeting_type, moment) for kind in TAG_FOR_KIND}
     tags = {
         RESCHEDULE_URL_TAG: build_url(base, states[RESCHEDULE].token, path=path),
         CANCEL_URL_TAG: build_url(base, states[CANCEL].token, path=path),

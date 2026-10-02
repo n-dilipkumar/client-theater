@@ -263,8 +263,12 @@ FOCUS_PROBE_JS = r"""
 def bsk(*args: str, check: bool = False) -> str:
     exe = shutil.which("bsk") or BSK
     proc = subprocess.run(
-        [exe, *args], capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=180,
+        [exe, *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=180,
     )
     out = (proc.stdout or "").strip()
     if check and proc.returncode != 0:
@@ -278,8 +282,10 @@ def daemon_ok() -> str | None:
     except Exception as exc:  # noqa: BLE001 - any failure means no daemon
         return f"cannot reach the bsk daemon: {exc}"
     if not status.get("browsers"):
-        return ("the daemon is running but no browser is connected. Open the "
-                "browser-skill extension and enable the connection.")
+        return (
+            "the daemon is running but no browser is connected. Open the "
+            "browser-skill extension and enable the connection."
+        )
     return None
 
 
@@ -297,7 +303,11 @@ def evaluate(session: str, js: str) -> dict:
     payload = f"(() => {{ const __r = {js}; return __r; }})()"
     proc = subprocess.run(
         [shutil.which("bsk") or BSK, "evaluate", "--session", session, payload],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=180,
     )
     if proc.stderr.strip() and "evaluate threw" in proc.stderr:
         raise RuntimeError(f"JS failed: {proc.stderr.strip()[:300]}")
@@ -318,8 +328,10 @@ def self_check(session: str) -> tuple[bool, str]:
     if not res.get("exact"):
         return False, "canvas colour conversion disagrees with known sRGB values"
     if not res.get("skyIsBlue"):
-        return False, ("oklch(68.5% .169 237.323) did not resolve to a blue; "
-                       "colour conversion is unreliable, refusing to report contrast")
+        return False, (
+            "oklch(68.5% .169 237.323) did not resolve to a blue; "
+            "colour conversion is unreliable, refusing to report contrast"
+        )
     return True, "canvas colour conversion verified against known sRGB values"
 
 
@@ -351,28 +363,60 @@ def probe_route(session: str, base: str, route: str) -> dict:
             if tab["i"] > 0:
                 evaluate(session, f"({CLICK_NTH_JS})({tab['i']})")
                 time.sleep(0.7)
-            m = evaluate(session, MEASURE_JS
-                         .replace("__MIN_TAP__", str(MIN_TAP))
-                         .replace("__MIN_CONTRAST__", str(MIN_CONTRAST)))
+            m = evaluate(
+                session,
+                MEASURE_JS.replace("__MIN_TAP__", str(MIN_TAP)).replace(
+                    "__MIN_CONTRAST__", str(MIN_CONTRAST)
+                ),
+            )
             at = f"{w}x{h}"
             for t in m.get("tapUnderMin", []):
-                findings.append({"kind": "tap-target", "route": route, "tab": label,
-                                 "viewport": at,
-                                 "detail": f"{t['tag']}{'[' + t['type'] + ']' if t['type'] else ''} "
-                                           f"'{t['text']}' {t['w']}x{t['h']}"})
+                findings.append(
+                    {
+                        "kind": "tap-target",
+                        "route": route,
+                        "tab": label,
+                        "viewport": at,
+                        "detail": f"{t['tag']}{'[' + t['type'] + ']' if t['type'] else ''} "
+                        f"'{t['text']}' {t['w']}x{t['h']}",
+                    }
+                )
             for c in m.get("contrastFailing", []):
-                findings.append({"kind": "contrast", "route": route, "tab": label,
-                                 "viewport": at,
-                                 "detail": f"{c['ratio']}:1 (needs {c['need']}) '{c['text']}' {c['cls']}"})
+                findings.append(
+                    {
+                        "kind": "contrast",
+                        "route": route,
+                        "tab": label,
+                        "viewport": at,
+                        "detail": f"{c['ratio']}:1 (needs {c['need']}) '{c['text']}' {c['cls']}",
+                    }
+                )
             if m.get("emoji"):
-                findings.append({"kind": "emoji-as-icon", "route": route, "tab": label,
-                                 "viewport": at, "detail": "Extended_Pictographic in rendered text"})
+                findings.append(
+                    {
+                        "kind": "emoji-as-icon",
+                        "route": route,
+                        "tab": label,
+                        "viewport": at,
+                        "detail": "Extended_Pictographic in rendered text",
+                    }
+                )
             if m.get("overflow"):
-                findings.append({"kind": "horizontal-overflow", "route": route, "tab": label,
-                                 "viewport": at,
-                                 "detail": m.get("overflowDetail") or "document scrolls horizontally"})
-    return {"route": route, "findings": findings,
-            "tabs": len(tabs), "breakpoints": len(BREAKPOINTS)}
+                findings.append(
+                    {
+                        "kind": "horizontal-overflow",
+                        "route": route,
+                        "tab": label,
+                        "viewport": at,
+                        "detail": m.get("overflowDetail") or "document scrolls horizontally",
+                    }
+                )
+    return {
+        "route": route,
+        "findings": findings,
+        "tabs": len(tabs),
+        "breakpoints": len(BREAKPOINTS),
+    }
 
 
 def keyboard_probe(session: str) -> list[dict]:
@@ -392,14 +436,20 @@ def keyboard_probe(session: str) -> list[dict]:
         if not (step.get("outline") or step.get("ring")):
             out.append({"kind": "no-visible-focus", "detail": f"{step['tag']} '{step['text']}'"})
         if step.get("h", 99) < MIN_TAP - 0.5 or step.get("w", 999) < MIN_TAP - 0.5:
-            out.append({"kind": "tap-target",
-                        "detail": f"keyboard stop {step['tag']} '{step['text']}' "
-                                  f"{step.get('w')}x{step.get('h')}"})
+            out.append(
+                {
+                    "kind": "tap-target",
+                    "detail": f"keyboard stop {step['tag']} '{step['text']}' "
+                    f"{step.get('w')}x{step.get('h')}",
+                }
+            )
     return out
 
 
 def main(argv: list[str]) -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--feature", action="append", default=[], help="feature id; repeatable")
     p.add_argument("--all", action="store_true", help="every feature the host reports")
     p.add_argument("--base", default="http://127.0.0.1:8000")
@@ -448,8 +498,7 @@ def main(argv: list[str]) -> int:
         print(json.dumps(report, indent=2))
     else:
         loads = sum(r["tabs"] * r["breakpoints"] for r in report["routes"].values())
-        print(f"browser pass: {len(routes)} route(s), {loads} page loads, "
-              f"{total} finding(s)")
+        print(f"browser pass: {len(routes)} route(s), {loads} page loads, {total} finding(s)")
         print(f"self-check: {note}")
         for route, res in report["routes"].items():
             if not res["findings"]:
@@ -457,7 +506,9 @@ def main(argv: list[str]) -> int:
             else:
                 print(f"  FAIL {route}: {len(res['findings'])} finding(s)")
                 for f in res["findings"][:12]:
-                    print(f"         {f['kind']} [{f['viewport']}] tab '{f['tab']}': {f['detail'][:96]}")
+                    print(
+                        f"         {f['kind']} [{f['viewport']}] tab '{f['tab']}': {f['detail'][:96]}"
+                    )
         for f in report["keyboard"][:10]:
             print(f"  keyboard: {f['kind']}: {f['detail'][:90]}")
 

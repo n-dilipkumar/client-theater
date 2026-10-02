@@ -74,7 +74,12 @@ def require_payload_mode(mode: Any) -> str:
     # know this product's vocabulary to use it.
     if text in ("company", "company_only", "companyonly"):
         return PAYLOAD_COMPANY
-    if text in ("company_contacts", "companyandcontacts", "company_and_contacts", "companycontacts"):
+    if text in (
+        "company_contacts",
+        "companyandcontacts",
+        "company_and_contacts",
+        "companycontacts",
+    ):
         return PAYLOAD_COMPANY_CONTACTS
     raise LeadError(
         f"payload must be 'company' or 'company_contacts', not {mode!r}",
@@ -178,7 +183,7 @@ def keyword_hit(contact: Mapping[str, Any], keywords: Sequence[str]) -> dict[str
         haystack = " ".join(_flatten(value)).casefold()
         if not haystack:
             continue
-        for keyword, needle in zip(keywords, lowered):
+        for keyword, needle in zip(keywords, lowered, strict=True):
             if needle and needle in haystack:
                 return {"matched": True, "keyword": keyword, "field": field}
     return {"matched": False, "keyword": None, "field": None}
@@ -197,9 +202,7 @@ def _flatten(value: Any) -> list[str]:
     return [str(value)]
 
 
-def missing_required_fields(
-    contact: Mapping[str, Any], required: Sequence[str]
-) -> list[str]:
+def missing_required_fields(contact: Mapping[str, Any], required: Sequence[str]) -> list[str]:
     """The required fields this contact does not have, in the order asked for."""
     absent: list[str] = []
     for field in required:

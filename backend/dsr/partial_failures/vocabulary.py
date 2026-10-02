@@ -84,12 +84,12 @@ PER_RECORD_REQUEST: dict[str, dict[str, Any]] = {
     "dataverse": {
         "endpoint_scope": "$batch",
         "request_headers": {
-            "Prefer": "odata.continue-on-error, odata.include-annotations=\"*\"",
+            "Prefer": 'odata.continue-on-error, odata.include-annotations="*"',
         },
         "request_notes": [
             "odata.continue-on-error: the server keeps processing requests after an error, the batch "
             "answers 200 OK, and the individual errors arrive in the body.",
-            "odata.include-annotations=\"*\": the response carries the annotations that hold more "
+            'odata.include-annotations="*": the response carries the annotations that hold more '
             "detail about errors and a URL pointing at specific guidance.",
         ],
         "gap": (
@@ -190,7 +190,7 @@ DOC_LINK_SOURCE: dict[str, dict[str, Any]] = {
         "annotation": "@Microsoft.PowerApps.CDS.HelpLink",
         "sourced": True,
         "note": (
-            "Returned under Prefer: odata.include-annotations=\"*\": the annotations contain more "
+            'Returned under Prefer: odata.include-annotations="*": the annotations contain more '
             "detail about errors and a URL that might direct you to specific guidance."
         ),
     },
@@ -235,19 +235,19 @@ FIELD_SOURCE: dict[str, dict[str, Any]] = {
 #: research's own evidence block so the page can show them next to the claim.
 CONNECTOR_QUOTES: dict[str, str] = {
     "hubspot": (
-        "\"207 Multi-Status | Returned when there are different statuses (e.g., errors and "
+        '"207 Multi-Status | Returned when there are different statuses (e.g., errors and '
         "successes), which occurs when you've enabled multi-status error handling for the object "
-        "API batch create endpoints.\""
+        'API batch create endpoints."'
     ),
     "dataverse": (
-        "\"If you add the `Prefer: odata.continue-on-error` request header, you can specify that the "
+        '"If you add the `Prefer: odata.continue-on-error` request header, you can specify that the '
         "server processes more requests when errors occur. The batch request returns `200 OK`, and "
-        "individual response errors are included in the batch response body.\""
+        'individual response errors are included in the batch response body."'
     ),
     "salesforce": (
         "\"400 The request couldn't be understood, usually because the JSON or XML body contains an "
-        "error.\" / \"403 ... If the error code is REQUEST_LIMIT_EXCEEDED, you've exceeded API "
-        "request limits in your org.\""
+        'error." / "403 ... If the error code is REQUEST_LIMIT_EXCEEDED, you\'ve exceeded API '
+        'request limits in your org."'
     ),
 }
 
@@ -259,10 +259,10 @@ HUBSPOT_VALIDATION_ENFORCEMENT = {
     "api_version": "/2026-09/",
     "ga_date": "2026-09-08",
     "quote": (
-        "\"Starting with the GA release of API version `/2026-09/` on September 8, 2026, HubSpot will "
+        '"Starting with the GA release of API version `/2026-09/` on September 8, 2026, HubSpot will '
         "enforce admin-configured validation rules on all CRM API write paths. You can retrieve or "
         "manage your validation rules using the property validation API, or by reviewing rules via "
-        "the property settings page.\""
+        'the property settings page."'
     ),
     "consequence": (
         "A write the room could have refused locally now costs a CRM call and lands in the Sync log. "
@@ -315,8 +315,8 @@ AUTOMATION_QUOTE = (
 #: deployment adds a rule through.
 EXTENSIBILITY_QUOTE = (
     "The room's error model is the extension point - a connector maps vendor codes into "
-    "{retryable, field, code, message, docLink}. A deployment can add a rule (\"route records "
-    "missing `email` to a manual-review queue instead of retrying\") without changing the transport."
+    '{retryable, field, code, message, docLink}. A deployment can add a rule ("route records '
+    'missing `email` to a manual-review queue instead of retrying") without changing the transport.'
 )
 
 #: The five keys the room's error model is made of, in the research's order.

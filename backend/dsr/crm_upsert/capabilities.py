@@ -323,7 +323,11 @@ class ResolvedCapability:
     batch_size: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"capability": self.capability.to_dict(), "source": self.source, "batch_size": self.batch_size}
+        return {
+            "capability": self.capability.to_dict(),
+            "source": self.source,
+            "batch_size": self.batch_size,
+        }
 
 
 def _stored_capability(store: RecordStore | None, vendor: str) -> Capability | None:
@@ -490,9 +494,7 @@ def resolve_batch_size(capability: Capability, requested: int | None) -> int:
         return cap
     asked = int(requested)
     if asked < 1:
-        raise BatchTooLarge(
-            f"batch size must be at least 1, got {asked}"
-        )
+        raise BatchTooLarge(f"batch size must be at least 1, got {asked}")
     if asked > cap:
         raise BatchTooLarge(
             f"{capability.vendor} accepts at most {cap} records per upsert request, "

@@ -19,6 +19,7 @@ pair, and Jev answered `port_all_four_as_is` at 0.79. Two of them deliberately
 share the /api/library prefix and two share /api/publishing, which is safe
 precisely because their concrete paths differ - the case the host was built for.
 """
+
 import json
 import subprocess
 import sys
@@ -29,14 +30,30 @@ ROOT = Path(r"C:\Users\Dilip\orca\projects\client-theater\client-theater")
 REPO_ID = "id:8964203a-831a-425f-8fd7-ebc3a0fc2e46"
 
 SET2 = [
-    ("WF-007", "dsr-wf-007-content-library", "DSR WF-007 content library port",
-     "orchestration/ports/WF-007.md"),
-    ("WF-010", "dsr-wf-010-library-search", "DSR WF-010 library search port",
-     "orchestration/ports/WF-010.md"),
-    ("WF-009", "dsr-wf-009-publishing", "DSR WF-009 publishing port",
-     "orchestration/ports/WF-009.md"),
-    ("WF-011", "dsr-wf-011-room-handover", "DSR WF-011 room handover port",
-     "orchestration/ports/WF-011.md"),
+    (
+        "WF-007",
+        "dsr-wf-007-content-library",
+        "DSR WF-007 content library port",
+        "orchestration/ports/WF-007.md",
+    ),
+    (
+        "WF-010",
+        "dsr-wf-010-library-search",
+        "DSR WF-010 library search port",
+        "orchestration/ports/WF-010.md",
+    ),
+    (
+        "WF-009",
+        "dsr-wf-009-publishing",
+        "DSR WF-009 publishing port",
+        "orchestration/ports/WF-009.md",
+    ),
+    (
+        "WF-011",
+        "dsr-wf-011-room-handover",
+        "DSR WF-011 room handover port",
+        "orchestration/ports/WF-011.md",
+    ),
 ]
 
 POINTER = (
@@ -52,8 +69,15 @@ POINTER = (
 
 
 def orca_json(args, timeout=180):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         payload = json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -68,15 +92,38 @@ def main():
     for ticket, wt_name, title, brief in SET2:
         print(f"=== {ticket} ===")
 
-        res, err = orca_json(["orca", "worktree", "create", "--name", wt_name,
-                              "--setup", "skip", "--no-parent", "--json"])
+        res, err = orca_json(
+            [
+                "orca",
+                "worktree",
+                "create",
+                "--name",
+                wt_name,
+                "--setup",
+                "skip",
+                "--no-parent",
+                "--json",
+            ]
+        )
         if res is None:
             print(f"  worktree FAILED: {err}")
             continue
         wt_id = res["worktree"]["id"]
 
-        res2, err2 = orca_json(["orca", "terminal", "create", "--worktree", wt_id,
-                                "--title", title, "--command", "opencode", "--json"])
+        res2, err2 = orca_json(
+            [
+                "orca",
+                "terminal",
+                "create",
+                "--worktree",
+                wt_id,
+                "--title",
+                title,
+                "--command",
+                "opencode",
+                "--json",
+            ]
+        )
         if res2 is None:
             print(f"  terminal FAILED: {err2}")
             continue
@@ -84,19 +131,53 @@ def main():
 
         # A fresh TUI drops an early prompt. Wait for idle before sending.
         time.sleep(8)
-        orca_json(["orca", "terminal", "wait", "--terminal", handle,
-                   "--for", "tui-idle", "--timeout-ms", "45000", "--json"], timeout=70)
+        orca_json(
+            [
+                "orca",
+                "terminal",
+                "wait",
+                "--terminal",
+                handle,
+                "--for",
+                "tui-idle",
+                "--timeout-ms",
+                "45000",
+                "--json",
+            ],
+            timeout=70,
+        )
 
-        res3, err3 = orca_json(["orca", "terminal", "send", "--terminal", handle,
-                                "--text", POINTER.format(brief=brief), "--enter",
-                                "--wait-submit", "25", "--json"], timeout=100)
+        res3, err3 = orca_json(
+            [
+                "orca",
+                "terminal",
+                "send",
+                "--terminal",
+                handle,
+                "--text",
+                POINTER.format(brief=brief),
+                "--enter",
+                "--wait-submit",
+                "25",
+                "--json",
+            ],
+            timeout=100,
+        )
         if res3 is None:
             print(f"  send FAILED: {err3}")
             continue
         print(f"  tab {handle}  sent (accepted={res3.get('accepted')})")
 
-        launched.append({"ticket": ticket, "handle": handle, "worktree": wt_name,
-                         "worktree_id": wt_id, "title": title, "brief": brief})
+        launched.append(
+            {
+                "ticket": ticket,
+                "handle": handle,
+                "worktree": wt_name,
+                "worktree_id": wt_id,
+                "title": title,
+                "brief": brief,
+            }
+        )
 
     out = ROOT / "data" / "dispatched.json"
     existing = []

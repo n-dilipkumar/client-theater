@@ -72,13 +72,14 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from dsr.db.audited import utcnow
-from dsr.fieldmap import inferences as _inferences
-from dsr.fieldmap import metadata as _metadata
-from dsr.fieldmap import preview as _preview
-from dsr.fieldmap import sync_key as _sync_key
-from dsr.fieldmap import transforms as _transforms
-from dsr.fieldmap import validate as _validate
-from dsr.fieldmap import vocabulary as _vocabulary
+from dsr.fieldmap import (
+    inferences as _inferences,
+    preview as _preview,
+    sync_key as _sync_key,
+    transforms as _transforms,
+    validate as _validate,
+    vocabulary as _vocabulary,
+)
 from dsr.fieldmap.errors import (
     FieldMapError,
     InvalidMapping,
@@ -206,7 +207,10 @@ class FieldMapping:
         return {
             "registered": _transforms.describe(),
             "names": list(_transforms.REGISTRY.names()),
-            "versions": {name: list(_transforms.REGISTRY.versions_of(name)) for name in _transforms.REGISTRY.names()},
+            "versions": {
+                name: list(_transforms.REGISTRY.versions_of(name))
+                for name in _transforms.REGISTRY.names()
+            },
             "declared": declared,
         }
 
@@ -223,7 +227,10 @@ class FieldMapping:
             counts[key] = counts.get(key, 0) + 1
         return {
             "count": len(records),
-            "connections": [connection_view(record, mapping_count=counts.get(str(record["id"]), 0)) for record in records],
+            "connections": [
+                connection_view(record, mapping_count=counts.get(str(record["id"]), 0))
+                for record in records
+            ],
         }
 
     def read_connection(self, connection_id: str) -> dict[str, Any]:
@@ -353,7 +360,9 @@ class FieldMapping:
             "notes": list(metadata.notes),
         }
 
-    def _no_metadata(self, connection_id: str, crm_object: str, provider: str) -> MetadataUnavailable:
+    def _no_metadata(
+        self, connection_id: str, crm_object: str, provider: str
+    ) -> MetadataUnavailable:
         endpoints = _vocabulary.METADATA_ENDPOINTS.get(provider, ())
         return MetadataUnavailable(
             f"no property metadata has been recorded for {crm_object!r} on this connection. "
@@ -383,7 +392,9 @@ class FieldMapping:
                 mapping_view(
                     record,
                     rows=self.book.rows(record["id"]),
-                    metadata=self.book.metadata(str(data.get("connection_id") or ""), str(data.get("crm_object") or "")),
+                    metadata=self.book.metadata(
+                        str(data.get("connection_id") or ""), str(data.get("crm_object") or "")
+                    ),
                     last_validation=self.book.last_validation(record["id"]),
                 )
             )
@@ -535,9 +546,7 @@ class FieldMapping:
         data = dict(mapping)
         data["id"] = mapping_id
         metadata = self._metadata_for(connection_id, str(mapping.get("crm_object") or ""))
-        report = _validate.build_report(
-            data, self.book.rows(mapping_id), metadata, now=utcnow()
-        )
+        report = _validate.build_report(data, self.book.rows(mapping_id), metadata, now=utcnow())
         record: Mapping[str, Any] | None = None
         if bool((payload or {}).get("record")):
             record = self.book.record_validation(mapping_id, report, actor=actor, source=source)
@@ -577,7 +586,10 @@ class FieldMapping:
         """Every stored run for a mapping, newest first."""
         self.read_mapping(connection_id, mapping_id)
         records = self.book.validations(mapping_id)
-        return {"count": len(records), "validations": [validation_view(record) for record in records]}
+        return {
+            "count": len(records),
+            "validations": [validation_view(record) for record in records],
+        }
 
     def activate(
         self, connection_id: str, mapping_id: str, *, actor: str | None = None, source: str
@@ -607,7 +619,9 @@ class FieldMapping:
                 "Fix the rows they name and validate again.",
                 report=report,
             )
-        self.book.set_state(mapping_id, "active", extra={"activated_at": utcnow()}, actor=actor, source=source)
+        self.book.set_state(
+            mapping_id, "active", extra={"activated_at": utcnow()}, actor=actor, source=source
+        )
         return self.read_mapping(connection_id, mapping_id)
 
     def deactivate(
@@ -677,7 +691,9 @@ class FieldMapping:
         finding, because it cannot be fixed by editing a row.
         """
         self.read_mapping(connection_id, mapping_id)
-        metadata = self._metadata_for(connection_id, payload.get("crm_object") or self._crm_object(mapping_id))
+        metadata = self._metadata_for(
+            connection_id, payload.get("crm_object") or self._crm_object(mapping_id)
+        )
         pinned = _sync_key.pin(payload, metadata, now=utcnow())
         self.book.set_sync_key(mapping_id, pinned, actor=actor, source=source)
         self.book.clear_validation(mapping_id, actor=actor, source=source)
@@ -740,7 +756,9 @@ class FieldMapping:
         metadata = self._metadata_for(connection_id, str(mapping.get("crm_object") or ""))
         data = dict(mapping)
         data["mapping_id"] = mapping_id
-        return _preview.preview(data, self.book.rows(mapping_id), metadata, record, directions=directions)
+        return _preview.preview(
+            data, self.book.rows(mapping_id), metadata, record, directions=directions
+        )
 
     # -- summary ------------------------------------------------------------ #
 
@@ -760,7 +778,9 @@ class FieldMapping:
         pinned = 0
         for record in mappings:
             data = record["data"]
-            by_state[str(data.get("state") or "draft")] = by_state.get(str(data.get("state") or "draft"), 0) + 1
+            by_state[str(data.get("state") or "draft")] = (
+                by_state.get(str(data.get("state") or "draft"), 0) + 1
+            )
             provider = str(data.get("provider") or "")
             by_provider[provider] = by_provider.get(provider, 0) + 1
             if (data.get("sync_key") or {}).get("properties"):

@@ -121,7 +121,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "as absent: a buyer with no invite 'shows up by their email' rather than as a "
             "blank row."
         ),
-        "value": {"close_rate_with_no_closed_deals": None, "days_to_close_with_no_closed_deals": None},
+        "value": {
+            "close_rate_with_no_closed_deals": None,
+            "days_to_close_with_no_closed_deals": None,
+        },
         "why": (
             "0/0 is not 0%. Reporting 0% asserts that every deal was lost, which is a "
             "different and wrong claim, and a leadership report is read as a claim. null "

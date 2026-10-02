@@ -53,6 +53,7 @@ from fastapi import APIRouter, Body, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from dsr.crm_engagement import EngagementSync, EngagementSyncError, SyncBook
+from dsr.crm_engagement.delivery import CreateResult
 from dsr.crm_engagement.errors import (
     InvalidConnector,
     InvalidEventType,
@@ -60,7 +61,6 @@ from dsr.crm_engagement.errors import (
     SyncNotConfigured,
     UnknownRoom,
 )
-from dsr.crm_engagement.delivery import CreateResult
 from dsr.crm_engagement.inferences import describe as describe_inferences
 from dsr.crm_engagement.mapping import describe_transforms
 from dsr.crm_engagement.vocabulary import describe as describe_vocabulary
@@ -123,7 +123,9 @@ def _invalid_connector(request: Request, exc: InvalidConnector) -> JSONResponse:
 
 def _invalid_event_type(request: Request, exc: InvalidEventType) -> JSONResponse:
     """An event-catalogue row that cannot be saved as asked. 422."""
-    return JSONResponse(status_code=422, content={"error": "invalid_event_type", "detail": str(exc)})
+    return JSONResponse(
+        status_code=422, content={"error": "invalid_event_type", "detail": str(exc)}
+    )
 
 
 def _invalid_field_map(request: Request, exc: InvalidFieldMap) -> JSONResponse:
@@ -137,14 +139,13 @@ def _not_configured(request: Request, exc: SyncNotConfigured) -> JSONResponse:
     Distinct from 400 so a client can say "finish the setup" rather than "you got the
     request wrong" - the frontend's ``apiRequest`` carries the status for exactly this.
     """
-    return JSONResponse(
-        status_code=428, content={"error": "not_configured", "detail": str(exc)}
-    )
+    return JSONResponse(status_code=428, content={"error": "not_configured", "detail": str(exc)})
 
 
 def _unknown_room(request: Request, exc: UnknownRoom) -> JSONResponse:
     return JSONResponse(
-        status_code=404, content={"error": "not_found", "detail": f"not found: {exc}", "id": str(exc)}
+        status_code=404,
+        content={"error": "not_found", "detail": f"not found: {exc}", "id": str(exc)},
     )
 
 
@@ -252,7 +253,10 @@ def update_connector(
 ) -> dict[str, Any]:
     """Patch a connector: rotate the token, flip it off, change the object or preferences."""
     return sync.patch_connector(
-        connector_id, payload, actor=actor, source=f"PATCH {router.prefix}/connectors/{connector_id}"
+        connector_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/connectors/{connector_id}",
     )
 
 
@@ -325,7 +329,10 @@ def update_event_type(
     cannot be sent", and conflating them would make a switch-off look like a data loss.
     """
     return sync.patch_event_type(
-        event_type_id, payload, actor=actor, source=f"PATCH {router.prefix}/event-types/{event_type_id}"
+        event_type_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/event-types/{event_type_id}",
     )
 
 
@@ -396,7 +403,10 @@ def update_field_map(
     drain, not remembered.
     """
     return sync.patch_field_map(
-        field_map_id, payload, actor=actor, source=f"PATCH {router.prefix}/field-maps/{field_map_id}"
+        field_map_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/field-maps/{field_map_id}",
     )
 
 
@@ -577,7 +587,9 @@ def retry_queue_row(
     reason a second attempt happened is the first one.
     """
     sync.book.require_room(room_id)
-    return sync.retry(queue_id, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/queue/{queue_id}/retry")
+    return sync.retry(
+        queue_id, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/queue/{queue_id}/retry"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -677,7 +689,12 @@ HUBSPOT_MAP: Mapping[str, Any] = {
         {"source": "occurred_at", "target": "dsr_occurredat", "transform": "date.iso8601"},
         {"source": "asset", "target": "dsr_lastasset"},
         {"source": "dwell_seconds", "target": "dsr_dwellseconds", "transform": "number"},
-        {"source": "buyer_stage", "target": "lifecyclestage", "transform": "picklist.map", "options": {"Discovery": "lead", "Evaluation": "opportunity"}},
+        {
+            "source": "buyer_stage",
+            "target": "lifecyclestage",
+            "transform": "picklist.map",
+            "options": {"Discovery": "lead", "Evaluation": "opportunity"},
+        },
         {"source": "buyer_email", "target": "email", "transform": "email.normalize"},
     ],
     "sync_key": {"source": "id", "target_property": "dsr_engagement_id"},
@@ -727,7 +744,11 @@ SALESFORCE_MAPS: tuple[Mapping[str, Any], ...] = (
             {"source": "type", "target": "Name"},
             {"source": "occurred_at", "target": "DSR_Occurred_At__c", "transform": "date.iso8601"},
             {"source": "asset", "target": "DSR_Asset__c"},
-            {"source": "buyer_email", "target": "DSR_Buyer_Email__c", "transform": "email.normalize"},
+            {
+                "source": "buyer_email",
+                "target": "DSR_Buyer_Email__c",
+                "transform": "email.normalize",
+            },
         ],
         "sync_key": {"source": "id", "target_property": "DSR_Engagement_Id__c"},
     },
@@ -738,7 +759,11 @@ SALESFORCE_MAPS: tuple[Mapping[str, Any], ...] = (
             {"source": "type", "target": "DSR_Action__c"},
             {"source": "occurred_at", "target": "DSR_Occurred_At__c", "transform": "date.iso8601"},
             {"source": "asset", "target": "DSR_Asset__c"},
-            {"source": "buyer_email", "target": "DSR_Buyer_Email__c", "transform": "email.normalize"},
+            {
+                "source": "buyer_email",
+                "target": "DSR_Buyer_Email__c",
+                "transform": "email.normalize",
+            },
         ],
         "sync_key": {"source": "id", "target_property": "DSR_Engagement_Id__c"},
     },
@@ -839,7 +864,9 @@ class DemoTransport:
     def __init__(self) -> None:
         self.calls: dict[str, int] = {}
 
-    def post(self, url: str, body: bytes, headers: Mapping[str, str], timeout: float) -> CreateResult:
+    def post(
+        self, url: str, body: bytes, headers: Mapping[str, str], timeout: float
+    ) -> CreateResult:
         del headers, timeout
         self.calls[url] = self.calls.get(url, 0) + 1
         attempt = self.calls[url]
@@ -856,7 +883,9 @@ class DemoTransport:
             # [sourced] "`HTTP/1.1 204 No Content` … `OData-EntityId:
             # [Organization URI]/api/data/v9.2/accounts(00aa00aa-…)`" - the id is in the
             # header and the body is empty, which is the case a body-only parser misses.
-            if _body_field(body, "dsr_buyeremail") and "@" not in _body_field(body, "dsr_buyeremail"):
+            if _body_field(body, "dsr_buyeremail") and "@" not in _body_field(
+                body, "dsr_buyeremail"
+            ):
                 # A value the mapping flagged softly and shipped anyway, refused by the
                 # column. With `odata.include-annotations` on, the body says which.
                 return CreateResult(
@@ -914,7 +943,9 @@ class DemoTransport:
                 # and says so rather than marking the event synced.
                 return CreateResult(ok=True, status=201, body="", duration_ms=11.0)
             if attempt == 1:
-                return CreateResult(ok=False, status=429, body="", error="HTTP 429", duration_ms=6.0)
+                return CreateResult(
+                    ok=False, status=429, body="", error="HTTP 429", duration_ms=6.0
+                )
             return CreateResult(
                 ok=False,
                 status=403,
@@ -929,7 +960,9 @@ class DemoTransport:
                 error="HTTP 403",
                 duration_ms=8.0,
             )
-        return CreateResult(ok=False, status=404, body="", error=f"HTTP 404 for {url}", duration_ms=3.0)
+        return CreateResult(
+            ok=False, status=404, body="", error=f"HTTP 404 for {url}", duration_ms=3.0
+        )
 
 
 def _body_field(body: bytes, key: str) -> str:

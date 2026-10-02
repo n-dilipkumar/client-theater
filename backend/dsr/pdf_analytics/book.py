@@ -140,9 +140,7 @@ class AnalyticsBook:
         data = self._decorate(fields)
         if existing is not None:
             return self.store.update(existing["id"], data, actor=actor, source=source)
-        return self.store.create(
-            ASSET_COLLECTION, data, room_id=scope, actor=actor, source=source
-        )
+        return self.store.create(ASSET_COLLECTION, data, room_id=scope, actor=actor, source=source)
 
     def _decorate(self, fields: Mapping[str, Any]) -> dict[str, Any]:
         """Add the derived availability flags a client renders from.
@@ -185,7 +183,9 @@ class AnalyticsBook:
         needle = str(q or "").strip().lower()
         if needle:
             records = [r for r in records if needle in str(r["data"].get("name") or "").lower()]
-        return sorted(records, key=lambda r: (str(r["data"].get("name") or "").lower(), r["id"]))[:limit]
+        return sorted(records, key=lambda r: (str(r["data"].get("name") or "").lower(), r["id"]))[
+            :limit
+        ]
 
     # --------------------------------------------------------------- events -- #
 
@@ -219,9 +219,7 @@ class AnalyticsBook:
         record = self.resolve_asset(asset_ref)
         snapshot = body.get("asset") if isinstance(body.get("asset"), Mapping) else None
         if record is None and snapshot:
-            record = self.register_asset(
-                snapshot, room_id=scope, actor=actor, source=source
-            )
+            record = self.register_asset(snapshot, room_id=scope, actor=actor, source=source)
         if record is None:
             raise NotFound(f"asset {asset_ref!r} not found", asset=str(asset_ref or ""))
 
@@ -243,9 +241,7 @@ class AnalyticsBook:
         if body.get("metadata") is not None:
             data["metadata"] = body["metadata"]
 
-        return self.store.create(
-            EVENT_COLLECTION, data, room_id=scope, actor=actor, source=source
-        )
+        return self.store.create(EVENT_COLLECTION, data, room_id=scope, actor=actor, source=source)
 
     # ------------------------------------------------------------ telemetry -- #
 
@@ -302,7 +298,8 @@ class AnalyticsBook:
         for position, item in enumerate(items):
             if not isinstance(item, Mapping):
                 raise ValidationError(
-                    f"timings[{position}] must be an object, got {item!r}", field=f"timings[{position}]"
+                    f"timings[{position}] must be an object, got {item!r}",
+                    field=f"timings[{position}]",
                 )
             stamp = metrics.parse_ts(item.get("occurred_at") or item.get("occurredAt")) or base
             rows.append(
@@ -387,9 +384,7 @@ class AnalyticsBook:
         }
         if body.get("completed") is not None:
             data["completed"] = bool(body["completed"])
-        return self.store.create(
-            WATCH_COLLECTION, data, room_id=scope, actor=actor, source=source
-        )
+        return self.store.create(WATCH_COLLECTION, data, room_id=scope, actor=actor, source=source)
 
     # ----------------------------------------------------------------- reads -- #
 
@@ -453,9 +448,7 @@ class AnalyticsBook:
 
     # -- the three researched blocks ---------------------------------------- #
 
-    def pdf_analytics(
-        self, asset_ref: str, *, room_id: str | None = None
-    ) -> dict[str, Any]:
+    def pdf_analytics(self, asset_ref: str, *, room_id: str | None = None) -> dict[str, Any]:
         """**Advanced Analytics -> PDF Analytics**: time spent, and drop off.
 
         Time spent per page: the average amount of time that's spent per page.
@@ -498,9 +491,7 @@ class AnalyticsBook:
             "pages_never_read": [entry["page"] for entry in dwell if entry["reads"] == 0],
         }
 
-    def video_analytics(
-        self, asset_ref: str, *, room_id: str | None = None
-    ) -> dict[str, Any]:
+    def video_analytics(self, asset_ref: str, *, room_id: str | None = None) -> dict[str, Any]:
         """**Advanced Analytics -> Video Analytics**: the average watch time.
 
         "For self-hosted videos, we're able to show the average watch time of
@@ -609,9 +600,7 @@ class AnalyticsBook:
             "advanced_analytics": panels,
         }
 
-    def room_assets(
-        self, room_id: str, *, grain: str = "day"
-    ) -> dict[str, Any]:
+    def room_assets(self, room_id: str, *, grain: str = "day") -> dict[str, Any]:
         """The library assets shared into one room, with their engagement.
 
         Room-scoped because that is the question a seller working a deal asks:
@@ -630,9 +619,7 @@ class AnalyticsBook:
             "assets": [self._summary(asset, room_id=room["id"], grain=bucket) for asset in assets],
         }
 
-    def _summary(
-        self, asset: Mapping[str, Any], *, room_id: str, grain: str
-    ) -> dict[str, Any]:
+    def _summary(self, asset: Mapping[str, Any], *, room_id: str, grain: str) -> dict[str, Any]:
         """One row of the room's library list: the asset and its headline numbers.
 
         Deliberately a fixed set of the researched metrics rather than the full
