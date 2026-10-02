@@ -536,7 +536,13 @@ def save_block_to_library(
 SEED_VARIABLES: tuple[dict[str, Any], ...] = (
     {"name": "region", "label": "Region", "category": "text", "source": "account"},
     {"name": "seats", "label": "Seats", "category": "number", "source": "account"},
-    {"name": "segment", "label": "Segment", "category": "text", "source": "crm", "crm": "salesforce"},
+    {
+        "name": "segment",
+        "label": "Segment",
+        "category": "text",
+        "source": "crm",
+        "crm": "salesforce",
+    },
     {"name": "discount_code", "label": "Discount code", "category": "text", "source": "account"},
 )
 
@@ -605,7 +611,15 @@ def seed(db, context: dict[str, Any]) -> str:
                 },
             },
         ),
-        (1, {"title": "Security pack", "type": "pdf", "position": 1, "body": "Security documentation."}),
+        (
+            1,
+            {
+                "title": "Security pack",
+                "type": "pdf",
+                "position": 1,
+                "body": "Security documentation.",
+            },
+        ),
         (
             1,
             {
@@ -621,7 +635,15 @@ def seed(db, context: dict[str, Any]) -> str:
             },
         ),
         (2, {"title": "Renewal terms", "type": "text", "position": 1, "body": "Renewal detail."}),
-        (3, {"title": "Accept the proposal", "type": "accept", "position": 9, "body": "Accept and countersign."}),
+        (
+            3,
+            {
+                "title": "Accept the proposal",
+                "type": "accept",
+                "position": 9,
+                "body": "Accept and countersign.",
+            },
+        ),
     ]
 
     for index, spec in block_plan:

@@ -43,8 +43,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.crm import CRMSync
 from dsr.crm.automations import AutomationError, lint
@@ -74,6 +72,7 @@ from dsr.crm.vocabulary import (
 from dsr.db.audited import AuditedDatabase, RecordNotFound
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -197,8 +196,8 @@ def http(monkeypatch, transport):
     monkeypatch.setenv("DSR_AUDIT_DIR", str(Path(tmp.name) / "audit"))
     monkeypatch.setattr("dsr.api.FRONTEND_DIST", Path(tmp.name) / "absent-frontend")
     with TestClient(app) as client:
-        app.dependency_overrides[load_feature("wf016_crm_sync").get_crm] = (
-            lambda: engine(client.app.state.store, transport)
+        app.dependency_overrides[load_feature("wf016_crm_sync").get_crm] = lambda: engine(
+            client.app.state.store, transport
         )
         try:
             yield client
@@ -249,7 +248,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
     module = load_feature("wf016_crm_sync")
 
     assert module.FEATURE["id"] in text
-    assert f'id: {module.FEATURE["id"]!r}' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
 
 
 def test_feature_module_does_not_import_the_shared_app():
@@ -483,14 +482,18 @@ def test_delivery_carries_event_and_delivery_headers():
 
 def test_delivery_retries_a_rate_limited_endpoint():
     transport = FakeTransport(rate_limited(), rate_limited(), ok())
-    report = deliver(transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1")
+    report = deliver(
+        transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1"
+    )
     assert report.ok is True
     assert report.attempts == 3
 
 
 def test_delivery_gives_up_after_the_attempt_budget():
     transport = FakeTransport(*[server_error()] * 5)
-    report = deliver(transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1")
+    report = deliver(
+        transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1"
+    )
     assert report.ok is False
     assert report.attempts == 3
     assert report.needs_manual_update is False  # still retryable, not a human problem
@@ -498,7 +501,9 @@ def test_delivery_gives_up_after_the_attempt_budget():
 
 def test_delivery_does_not_retry_a_permanent_failure():
     transport = FakeTransport(not_found(), ok())
-    report = deliver(transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1")
+    report = deliver(
+        transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1"
+    )
     assert report.attempts == 1
     assert report.ok is False
     # This is the case the research calls "will need manual updating".
@@ -507,7 +512,9 @@ def test_delivery_does_not_retry_a_permanent_failure():
 
 def test_delivery_records_the_status_of_every_attempt():
     transport = FakeTransport(rate_limited(), ok())
-    report = deliver(transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1")
+    report = deliver(
+        transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1"
+    )
     assert [r.status for r in report.history] == [429, 200]
 
 
@@ -544,7 +551,9 @@ def test_the_report_carries_every_attempt_in_full():
 
 def test_a_chatty_endpoint_cannot_bloat_one_activity_row():
     transport = FakeTransport(DeliveryResult(ok=False, status=500, body="x" * 5000))
-    report = deliver(transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1")
+    report = deliver(
+        transport, "https://crm.example/hook", {}, event="pageViewed", delivery_id="d1"
+    )
 
     assert len(report.to_dict()["attempt_log"][0]["body"]) == BODY_SAMPLE
 
@@ -607,9 +616,7 @@ def test_only_the_subscribed_event_is_delivered(crm, transport, room):
 
 def test_a_room_scoped_subscription_skips_other_rooms(crm, transport, room, store):
     other = store.create("room", {"name": "Contoso"})
-    crm.subscribe(
-        "pageAccepted", "https://crm.example/hook", room_id=room["id"], source=SOURCE
-    )
+    crm.subscribe("pageAccepted", "https://crm.example/hook", room_id=room["id"], source=SOURCE)
 
     crm.record_event("pageAccepted", room_id=other["id"], source=SOURCE)
 
@@ -695,7 +702,10 @@ def test_create_automation_from_a_preset(crm):
 def test_automation_needs_a_name(crm):
     with pytest.raises(AutomationError):
         crm.create_automation(
-            {"trigger": {"event": "pageAccepted"}, "actions": [{"kind": "update_fields", "fields": {}}]},
+            {
+                "trigger": {"event": "pageAccepted"},
+                "actions": [{"kind": "update_fields", "fields": {}}],
+            },
             source=SOURCE,
         )
 
@@ -770,7 +780,9 @@ def test_an_automation_with_no_templates_applies_to_every_room(crm, store, room)
     other = store.create("room", {"name": "Contoso"})
     crm.create_automation(crm.presets()[0], source=SOURCE)
 
-    assert len(crm.record_event("pageAccepted", room_id=other["id"], source=SOURCE)["activity"]) == 1
+    assert (
+        len(crm.record_event("pageAccepted", room_id=other["id"], source=SOURCE)["activity"]) == 1
+    )
 
 
 def test_a_run_resolves_the_field_map_against_the_room(crm, room):
@@ -901,7 +913,7 @@ def test_every_activity_row_is_audited_too(crm, store, room):
 
 
 def test_an_event_outside_the_enum_is_refused_before_anything_is_written(crm, store):
-    with pytest.raises(Exception):
+    with pytest.raises(VocabularyError):
         crm.record_event("pageDeleted", source=SOURCE)
 
     assert store.stats()["records"] == 0
@@ -968,7 +980,9 @@ def test_presets_are_listed(http):
 def test_every_inference_is_named_and_traceable():
     for entry in INFERENCES:
         assert entry["id"], "an inference with no id cannot be argued with by name"
-        assert entry["basis"].strip(), f"{entry['id']} does not say what the research does or does not say"
+        assert entry["basis"].strip(), (
+            f"{entry['id']} does not say what the research does or does not say"
+        )
         assert entry["why"].strip(), f"{entry['id']} does not say why this value was chosen"
         assert entry["change_it"].strip(), f"{entry['id']} does not say how to change it"
         assert entry["blast_radius"].strip(), f"{entry['id']} does not say what it affects"
@@ -1031,9 +1045,7 @@ def test_the_declared_retry_policy_is_the_one_that_runs(crm, store, room):
 
 def test_the_declared_signature_matches_what_is_sent(crm, transport, room):
     declared = inferences_by_id("hmac-signature")["value"]
-    crm.subscribe(
-        "pageAccepted", "https://crm.example/hook", secret="s3cret", source=SOURCE
-    )
+    crm.subscribe("pageAccepted", "https://crm.example/hook", secret="s3cret", source=SOURCE)
 
     crm.record_event("pageAccepted", room_id=room["id"], source=SOURCE)
 
@@ -1074,9 +1086,7 @@ def test_the_debatable_status_inference_is_overridable_per_event(crm, transport,
     assert transport.calls[0]["body"]["status"] == declared["pagePreviewAccepted"]
 
     transport.calls.clear()
-    crm.record_event(
-        "pagePreviewAccepted", room_id=room["id"], status="accepted", source=SOURCE
-    )
+    crm.record_event("pagePreviewAccepted", room_id=room["id"], status="accepted", source=SOURCE)
     assert transport.calls[0]["body"]["status"] == "accepted"
 
 
@@ -1098,7 +1108,9 @@ def test_the_room_scope_inference_is_the_documented_one(crm, transport, room, st
     # Three deliveries: the unscoped one twice, the scoped one only for its room.
     assert len(transport.calls) == 3
     delivered_to_scoped = [
-        call for call in transport.calls if call["url"] and scoped["id"] in call["headers"]["X-DSR-Delivery"]
+        call
+        for call in transport.calls
+        if call["url"] and scoped["id"] in call["headers"]["X-DSR-Delivery"]
     ]
     assert len(delivered_to_scoped) == 1
 
@@ -1129,9 +1141,7 @@ def test_the_summary_inference_is_the_rule_that_runs(http, http_room):
     # the row that needs a human. Two rows in total, across both channels.
     http.post(f"{PREFIX}/events", json={"event": "pageViewed"}, params={"room_id": http_room["id"]})
     bare = http.post("/api/records/room", json={"name": "Unpaid"}).json()
-    http.post(
-        f"{PREFIX}/events", json={"event": "pageAccepted"}, params={"room_id": bare["id"]}
-    )
+    http.post(f"{PREFIX}/events", json={"event": "pageAccepted"}, params={"room_id": bare["id"]})
 
     everything = http.get(f"{PREFIX}/activity").json()
     only_webhooks = http.get(f"{PREFIX}/activity", params={"channel": "webhook"}).json()
@@ -1557,9 +1567,9 @@ def test_subscribing_cancelling_and_running_are_all_audited(http, http_room):
 
     actions = {
         entry["action"]
-        for entry in http.get(
-            "/api/audit", params={"collection": "crm_subscription"}
-        ).json()["entries"]
+        for entry in http.get("/api/audit", params={"collection": "crm_subscription"}).json()[
+            "entries"
+        ]
     }
     assert actions == {"insert", "update", "delete"}
     assert http.get("/api/audit", params={"collection": "crm_event"}).json()["count"] == 1
@@ -1568,9 +1578,7 @@ def test_subscribing_cancelling_and_running_are_all_audited(http, http_room):
 
 def test_crm_collections_appear_in_the_schema_discovery_endpoint(http, http_room):
     subscribe(http, event="pageViewed")
-    http.post(
-        f"{PREFIX}/events", json={"event": "pageViewed"}, params={"room_id": http_room["id"]}
-    )
+    http.post(f"{PREFIX}/events", json={"event": "pageViewed"}, params={"room_id": http_room["id"]})
 
     body = http.get("/api/collections").json()
     names = {entry["collection"] for entry in body["collections"]}
@@ -1602,7 +1610,7 @@ def _matches_registered_route(source: str, routes: list[dict]) -> bool:
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -1617,9 +1625,7 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http, http_room):
     """
     subscription = subscribe(http).json()
     http.post(f"{PREFIX}/fields", json={"name": "Deal_Value__c", "type": "currency"})
-    automation = http.post(
-        f"{PREFIX}/automations", json={"preset_id": "sync-page-urls"}
-    ).json()
+    automation = http.post(f"{PREFIX}/automations", json={"preset_id": "sync-page-urls"}).json()
     http.patch(f"{PREFIX}/automations/{automation['id']}", json={"description": "Renamed"})
     http.post(
         f"{PREFIX}/events", json={"event": "pageAccepted"}, params={"room_id": http_room["id"]}
@@ -1681,7 +1687,9 @@ def test_writes_do_not_record_the_pre_port_urls(http, http_room):
 
     assert not any("/api/crm/" in source for source in sources)
     assert not sources & internal
-    assert all(source.split(" ")[0] in {"POST", "PATCH", "DELETE", "PUT", "GET"} for source in sources)
+    assert all(
+        source.split(" ")[0] in {"POST", "PATCH", "DELETE", "PUT", "GET"} for source in sources
+    )
 
 
 # --------------------------------------------------------------------------- #

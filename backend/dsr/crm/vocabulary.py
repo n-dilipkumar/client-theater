@@ -303,7 +303,13 @@ def lint_mapping(
 
     def add(code: str, severity: str, message: str, target: str, field: Any = None) -> None:
         warnings.append(
-            {"code": code, "severity": severity, "target": target, "field": field, "message": message}
+            {
+                "code": code,
+                "severity": severity,
+                "target": target,
+                "field": field,
+                "message": message,
+            }
         )
 
     for target, source in fields.items():

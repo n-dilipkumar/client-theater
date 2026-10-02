@@ -56,7 +56,6 @@ from dsr.booking_crm.vocabulary import (
     VENDORS,
 )
 
-
 INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "node-order-is-checked-not-sorted",
@@ -88,7 +87,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "what the extra relation needs before it can happen",
         "basis": (
             f'[sourced] "All created Events will be related to the Contact or Lead by '
-            f'default. If we have found a contact, you can additionally relate the Event '
+            f"default. If we have found a contact, you can additionally relate the Event "
             f'to an **Account**, **Case**, **Opportunity**, or **Campaign**." The gate is '
             f'"{RELATED_REQUIRES_CONTACT_QUOTE}" - a contact, not a record.'
         ),
@@ -162,8 +161,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "case-candidates-must-be-open",
         "topic": "whether a Closed Case can win 'most recently created'",
         "basis": (
-            f'[sourced] "For **Cases**, we will relate with the most recently created '
-            f'Open one". The word Open is doing the work, and it is quoted as a filter.'
+            '[sourced] "For **Cases**, we will relate with the most recently created '
+            'Open one". The word Open is doing the work, and it is quoted as a filter.'
         ),
         "value": {
             "filter": f"status == {OPEN_STATUS!r}",
@@ -273,7 +272,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "delete-event-trigger",
         "topic": "what the researched 'Delete Event' behaviour fires on",
         "basis": (
-            '[sourced] the research names the setting once and never says what it does: '
+            "[sourced] the research names the setting once and never says what it does: "
             '"Optionally configures **Create child Event** per additional guest, and the '
             '**Delete Event** behaviour." There is no sentence anywhere in the research '
             "about a cancellation, a reschedule, or a re-sync."
@@ -359,7 +358,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "basis": (
             "[sourced] Cal exposes '``crmRecordOwnerFallbackMode`` (``relationship`` | "
             '``attributeRules``)" and "``routing.skipContactOwner`` (Whether to skip '
-            "contact owner assignment from CRM integration).\" The research names both "
+            'contact owner assignment from CRM integration)." The research names both '
             "values and defines neither."
         ),
         "value": {
@@ -389,7 +388,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "basis": (
             "[sourced] '**Sync Meeting Type to the CRM** … your Admins can define other "
             "behaviors to be taken when a meeting is booked' and 'your links will follow "
-            'this pre-defined behavior, as these settings are applied to all users in your '
+            "this pre-defined behavior, as these settings are applied to all users in your "
             "org'."
         ),
         "value": {
@@ -443,8 +442,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "event-details-need-a-global-connection",
         "topic": "what the global Salesforce connection actually gates",
         "basis": (
-            "[sourced] 'Global Salesforce connection required for Event details in "
-            "Events History'."
+            "[sourced] 'Global Salesforce connection required for Event details in Events History'."
         ),
         "value": {
             "gates": "the Event details on a history row",
@@ -567,12 +565,13 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "path-normalisation",
         "topic": "how a caller's spelling of a router path is read",
-        "basis": (
-            "[sourced] three names: 'scheduled / not-scheduled / disqualified'."
-        ),
+        "basis": ("[sourced] three names: 'scheduled / not-scheduled / disqualified'."),
         "value": {
             "accepted": list(PATHS),
-            "normalised": ["not-scheduled and 'not scheduled' -> not_scheduled", "disqualify -> disqualified"],
+            "normalised": [
+                "not-scheduled and 'not scheduled' -> not_scheduled",
+                "disqualify -> disqualified",
+            ],
             "refused": "anything else, with the three listed",
         },
         "why": (

@@ -347,7 +347,7 @@ METADATA_ENDPOINTS: dict[str, tuple[Mapping[str, Any], ...]] = {
 #: uses. Quoted in every such finding so the admin reading it is told the rule
 #: rather than only that their value was refused.
 ENUMERATION_HINT = (
-    "Enumeration values must be internal names, not labels. HubSpot: \"you must use "
+    'Enumeration values must be internal names, not labels. HubSpot: "you must use '
     "internal names to set values. The internal name stays the same even if you've changed "
     "a default value's label.\""
 )

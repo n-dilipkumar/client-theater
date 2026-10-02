@@ -28,9 +28,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
-from dsr.intent_stream import payloads as payload_module
-from dsr.intent_stream import segments as segment_module
-from dsr.intent_stream import tokens as token_module
+from dsr.intent_stream import (
+    payloads as payload_module,
+    segments as segment_module,
+    tokens as token_module,
+)
 from dsr.intent_stream.delivery import (
     Attempt,
     Transport,
@@ -60,10 +62,10 @@ from dsr.intent_stream.registry import (
 from dsr.intent_stream.vocabulary import (
     ALL_COLLECTIONS,
     DEFAULT_SEGMENT_MATCH,
-    DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_SEND_MODE,
-    DESTINATION_RECIPES,
+    DEFAULT_TIMEOUT_SECONDS,
     DELIVERY_STATES,
+    DESTINATION_RECIPES,
     EVIDENCE,
     FLOW,
     KEYWORD_FIELDS,
@@ -244,7 +246,9 @@ class IntentStream:
     # Saved Segments
     # ----------------------------------------------------------------------- #
 
-    def create_segment(self, payload: Mapping[str, Any], *, source: str, actor: str | None = None) -> dict[str, Any]:
+    def create_segment(
+        self, payload: Mapping[str, Any], *, source: str, actor: str | None = None
+    ) -> dict[str, Any]:
         name = _text(payload.get("name"))
         if not name:
             raise SegmentError(
@@ -252,7 +256,9 @@ class IntentStream:
                 remediation="Name it after the group it selects, e.g. 'Enterprise software, 1000+'.",
             )
         rules = segment_module.require_rules(payload.get("rules"))
-        match = segment_module.require_match(payload.get("match"), default=segment_module.DEFAULT_RULE_MATCH)
+        match = segment_module.require_match(
+            payload.get("match"), default=segment_module.DEFAULT_RULE_MATCH
+        )
         existing = self.books.segments.find({"name": name}, limit=1)
         if existing:
             raise SegmentError(
@@ -268,7 +274,9 @@ class IntentStream:
                 "description": _text(payload.get("description")),
                 "match": match,
                 "rules": rules,
-                "summary": segment_module.describe_segment({"name": name, "match": match, "rules": rules}),
+                "summary": segment_module.describe_segment(
+                    {"name": name, "match": match, "rules": rules}
+                ),
             },
             source=source,
             actor=actor,
@@ -301,9 +309,7 @@ class IntentStream:
                 if other["id"] != record["id"]
             ]
             if clash:
-                raise SegmentError(
-                    f"a Segment named {name!r} already exists", status=409
-                )
+                raise SegmentError(f"a Segment named {name!r} already exists", status=409)
             patch["name"] = name
         if "description" in payload:
             patch["description"] = _text(payload.get("description"))
@@ -324,7 +330,9 @@ class IntentStream:
         updated = self.books.segments.update(record["id"], patch, source=source, actor=actor)
         return {"segment": summarise_segment(updated), "updated": True}
 
-    def delete_segment(self, segment_id: str, *, source: str, actor: str | None = None) -> dict[str, Any]:
+    def delete_segment(
+        self, segment_id: str, *, source: str, actor: str | None = None
+    ) -> dict[str, Any]:
         record = self._require(self.books.segments, segment_id, "Segment")
         used_by = self.workflows_using_segment(segment_id)
         if used_by:
@@ -410,7 +418,16 @@ class IntentStream:
         data = {
             key: value
             for key, value in payload.items()
-            if key not in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at")
+            if key
+            not in (
+                "id",
+                "collection",
+                "room_id",
+                "revision",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            )
         }
         data.update(
             {
@@ -465,10 +482,21 @@ class IntentStream:
         patch = {
             key: value
             for key, value in payload.items()
-            if key not in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at")
+            if key
+            not in (
+                "id",
+                "collection",
+                "room_id",
+                "revision",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            )
         }
         if not patch:
-            raise LeadError("nothing to change", remediation="Send at least one field of the lead's data.")
+            raise LeadError(
+                "nothing to change", remediation="Send at least one field of the lead's data."
+            )
         updated = self.books.leads.update(record["id"], patch, source=source, actor=actor)
         return {"lead": summarise_lead(updated), "updated": True}
 
@@ -491,12 +519,24 @@ class IntentStream:
                 "a contact needs a name",
                 remediation="The payload sends 'contacts employed at the company', so name them.",
             )
-        if len(self._contact_records(lead_id, limit=MAX_CONTACTS_PER_LEAD)) >= MAX_CONTACTS_PER_LEAD:
+        if (
+            len(self._contact_records(lead_id, limit=MAX_CONTACTS_PER_LEAD))
+            >= MAX_CONTACTS_PER_LEAD
+        ):
             raise LeadError(f"this company already holds {MAX_CONTACTS_PER_LEAD} contacts")
         data = {
             key: value
             for key, value in payload.items()
-            if key not in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at")
+            if key
+            not in (
+                "id",
+                "collection",
+                "room_id",
+                "revision",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            )
         }
         data["leadId"] = lead["id"]
         data["companyId"] = lead["data"].get("companyId")
@@ -635,13 +675,19 @@ class IntentStream:
                     actor=actor,
                 )
             )
-        matched = sum(1 for outcome in outcomes if outcome["state"] in (STATE_DELIVERED, STATE_FAILED))
+        matched = sum(
+            1 for outcome in outcomes if outcome["state"] in (STATE_DELIVERED, STATE_FAILED)
+        )
         self.books.visits.update(
             visit["id"],
             {
                 "matchedWorkflows": matched,
                 "outcomes": [
-                    {"workflowId": o["workflowId"], "state": o["state"], "skipReason": o["skipReason"]}
+                    {
+                        "workflowId": o["workflowId"],
+                        "state": o["state"],
+                        "skipReason": o["skipReason"],
+                    }
                     for o in outcomes
                 ],
             },
@@ -674,7 +720,9 @@ class IntentStream:
         if room_id is not None:
             records = [row for row in records if row["room_id"] == room_id]
         if matched is not None:
-            records = [row for row in records if bool(row["data"].get("matchedWorkflows")) is matched]
+            records = [
+                row for row in records if bool(row["data"].get("matchedWorkflows")) is matched
+            ]
         return [summarise_visit(row) for row in records[:limit]]
 
     def read_visit(self, visit_id: str) -> dict[str, Any]:
@@ -711,8 +759,14 @@ class IntentStream:
         #    answer that is not silence.
         if not data.get("active", True):
             return self._record_skip(
-                record, lead, visit, SKIP_INACTIVE, f"workflow {data.get('name')!r} is paused",
-                source=source, actor=actor, room_id=room,
+                record,
+                lead,
+                visit,
+                SKIP_INACTIVE,
+                f"workflow {data.get('name')!r} is paused",
+                source=source,
+                actor=actor,
+                room_id=room,
             )
 
         # 2. Room scope, when the workflow narrowed its conditions to one room.
@@ -731,7 +785,7 @@ class IntentStream:
         # 3. The researched conditions: does the company match a saved Segment?
         wanted = list(conditions.get("segmentIds") or [])
         segments = [self._segment_data(sid) for sid in wanted]
-        missing = [sid for sid, data in zip(wanted, segments) if data is None]
+        missing = [sid for sid, data in zip(wanted, segments, strict=True) if data is None]
         if missing:
             # A Segment that was hard-deleted out from under a workflow. Refusing
             # loudly beats sending a payload nobody can explain.
@@ -857,7 +911,9 @@ class IntentStream:
             actor=actor,
         )
         if state == STATE_DELIVERED:
-            self._advance_state(workflow_id, lead, visit, delivery, send_count, source=source, actor=actor)
+            self._advance_state(
+                workflow_id, lead, visit, delivery, send_count, source=source, actor=actor
+            )
         return {
             **summarise_delivery(delivery),
             "payload": body,
@@ -926,10 +982,14 @@ class IntentStream:
         }
         if existing is None:
             patch["firstSentAt"] = delivery["data"].get("at")
-            self.books.states.create(patch, record_id=state_id, room_id=lead["room_id"], source=source, actor=actor)
+            self.books.states.create(
+                patch, record_id=state_id, room_id=lead["room_id"], source=source, actor=actor
+            )
             return
         merged = {**(existing.get("data") or {}), **patch}
-        merged["firstSentAt"] = (existing.get("data") or {}).get("firstSentAt") or delivery["data"].get("at")
+        merged["firstSentAt"] = (existing.get("data") or {}).get("firstSentAt") or delivery[
+            "data"
+        ].get("at")
         self.books.states.update(state_id, merged, source=source, actor=actor)
 
     def _workflow_state_for_lead(self, lead_id: str) -> list[dict[str, Any]]:
@@ -1086,7 +1146,9 @@ class IntentStream:
             )
         if len(set(cleaned)) != len(cleaned):
             raise WorkflowError("conditions.segmentIds repeats a Segment")
-        missing = [segment_id for segment_id in cleaned if self.books.segments.get(segment_id) is None]
+        missing = [
+            segment_id for segment_id in cleaned if self.books.segments.get(segment_id) is None
+        ]
         if missing:
             raise WorkflowError(
                 f"no such Segment: {', '.join(missing)}",
@@ -1099,7 +1161,8 @@ class IntentStream:
             "match": match,
             "roomId": scope_room,
             "summary": ", ".join(
-                _text(self.books.segments.get(segment_id)["data"].get("name")) for segment_id in cleaned
+                _text(self.books.segments.get(segment_id)["data"].get("name"))
+                for segment_id in cleaned
             ),
         }
 
@@ -1121,7 +1184,10 @@ class IntentStream:
         payload["data"] = {key: value for key, value in data.items() if key != "token"}
         payload["segments"] = [
             summarise_segment(row)
-            for row in (self._segment_data(segment_id) for segment_id in (data.get("conditions") or {}).get("segmentIds") or [])
+            for row in (
+                self._segment_data(segment_id)
+                for segment_id in (data.get("conditions") or {}).get("segmentIds") or []
+            )
             if row is not None
         ]
         payload["contactFilter"] = payload_module.contact_filter_summary(data.get("contactFilter"))
@@ -1129,7 +1195,8 @@ class IntentStream:
         payload["tokenHeader"] = TOKEN_HEADER
         payload["warnings"] = url_warnings(_text(data.get("url")))
         payload["recentDeliveries"] = [
-            summarise_delivery(row) for row in self.books.deliveries.find({"workflowId": workflow_id}, limit=10)
+            summarise_delivery(row)
+            for row in self.books.deliveries.find({"workflowId": workflow_id}, limit=10)
         ]
         payload["leads"] = [
             {
@@ -1182,9 +1249,13 @@ class IntentStream:
         if "payload" in payload:
             patch["payload"] = payload_module.require_payload_mode(payload.get("payload"))
         if "contactFilter" in payload:
-            patch["contactFilter"] = payload_module.require_contact_filter(payload.get("contactFilter"))
+            patch["contactFilter"] = payload_module.require_contact_filter(
+                payload.get("contactFilter")
+            )
         if "conditions" in payload:
-            patch["conditions"] = self._require_conditions(payload.get("conditions"), room_id=record["room_id"])
+            patch["conditions"] = self._require_conditions(
+                payload.get("conditions"), room_id=record["room_id"]
+            )
         if "token" in payload:
             raise WorkflowError(
                 "the token is generated by this product and cannot be set or replaced",
@@ -1202,7 +1273,9 @@ class IntentStream:
             "warnings": url_warnings(_text(updated["data"].get("url"))),
         }
 
-    def delete_workflow(self, workflow_id: str, *, source: str, actor: str | None = None) -> dict[str, Any]:
+    def delete_workflow(
+        self, workflow_id: str, *, source: str, actor: str | None = None
+    ) -> dict[str, Any]:
         record = self._require(self.books.workflows, workflow_id, "workflow")
         # Soft delete, so the delivery log outlives the workflow that produced it.
         # A hard delete would leave every delivery row naming a workflow nobody
@@ -1243,10 +1316,14 @@ class IntentStream:
         lead = self._require(self.books.leads, lead_id, "company lead")
         conditions = dict(data.get("conditions") or {})
         segments = [
-            row for row in (self._segment_data(sid) for sid in (conditions.get("segmentIds") or [])) if row is not None
+            row
+            for row in (self._segment_data(sid) for sid in (conditions.get("segmentIds") or []))
+            if row is not None
         ]
         verdict = segment_module.evaluate_conditions(
-            segments, dict(lead["data"]), match=str(conditions.get("match") or DEFAULT_SEGMENT_MATCH)
+            segments,
+            dict(lead["data"]),
+            match=str(conditions.get("match") or DEFAULT_SEGMENT_MATCH),
         )
         state_record = self.books.states.get(lead_state_id(workflow_id, lead_id))
         send_count = int((state_record or {}).get("data", {}).get("sendCount") or 0)
@@ -1300,7 +1377,12 @@ class IntentStream:
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         filters: dict[str, Any] = dict(where or {})
-        for key, value in (("workflowId", workflow_id), ("leadId", lead_id), ("state", state), ("skipReason", skip_reason)):
+        for key, value in (
+            ("workflowId", workflow_id),
+            ("leadId", lead_id),
+            ("state", state),
+            ("skipReason", skip_reason),
+        ):
             if value:
                 filters[key] = value
         if filters:
@@ -1323,7 +1405,9 @@ class IntentStream:
         payload["conditions"] = data.get("conditions")
         payload["contactFilter"] = data.get("contactFilter")
         payload["workflow"] = (
-            self._masked_workflow(row) if (row := self.books.workflows.get(str(data.get("workflowId")))) else None
+            self._masked_workflow(row)
+            if (row := self.books.workflows.get(str(data.get("workflowId"))))
+            else None
         )
         return payload
 
@@ -1367,7 +1451,9 @@ class IntentStream:
         # all with the data the operator is looking at.
         if lead is not None:
             contacts = [row["data"] for row in self._contact_records(lead["id"])]
-            conditions = dict(data.get("conditions") or {"matchedIds": [], "match": DEFAULT_SEGMENT_MATCH})
+            conditions = dict(
+                data.get("conditions") or {"matchedIds": [], "match": DEFAULT_SEGMENT_MATCH}
+            )
             state_record = self.books.states.get(lead_state_id(workflow["id"], lead["id"]))
             send_count = int((state_record or {}).get("data", {}).get("sendCount") or 0)
             body = payload_module.build_payload(
@@ -1469,17 +1555,23 @@ class IntentStream:
             "activeWorkflows": sum(1 for w in workflows if (w["data"] or {}).get("active", True)),
             "segments": len(segments),
             "leads": len(leads),
-            "leadsWithContacts": sum(1 for lead in leads if self._contact_records(lead["id"], limit=1)),
+            "leadsWithContacts": sum(
+                1 for lead in leads if self._contact_records(lead["id"], limit=1)
+            ),
             "visits": len(visits),
             "visitsMatching": sum(1 for visit in visits if visit["matchedWorkflows"]),
             "deliveries": len(deliveries),
             "byState": by_state,
             "bySkipReason": by_skip,
             "retryableFailures": sum(
-                1 for delivery in deliveries if delivery["state"] == STATE_FAILED and delivery["retryable"]
+                1
+                for delivery in deliveries
+                if delivery["state"] == STATE_FAILED and delivery["retryable"]
             ),
             "permanentFailures": sum(
-                1 for delivery in deliveries if delivery["state"] == STATE_FAILED and not delivery["retryable"]
+                1
+                for delivery in deliveries
+                if delivery["state"] == STATE_FAILED and not delivery["retryable"]
             ),
             "collections": list(ALL_COLLECTIONS),
         }

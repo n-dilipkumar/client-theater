@@ -271,14 +271,14 @@ def create_connector(
     then says the Event *details* are unavailable rather than refusing to show the
     timestamp or the error - both of which the research says it must show.
     """
-    created = engine.create_connector(payload, actor=actor, source=f"POST {router.prefix}/connectors")
+    created = engine.create_connector(
+        payload, actor=actor, source=f"POST {router.prefix}/connectors"
+    )
     return engine.connector_summary(created)
 
 
 @router.get("/rooms/{room_id}/meeting-types")
-def list_meeting_types(
-    room_id: str, engine: BookingWriteback = EngineDep
-) -> dict[str, Any]:
+def list_meeting_types(room_id: str, engine: BookingWriteback = EngineDep) -> dict[str, Any]:
     """A room's meeting types and, on each, whether it syncs to the CRM.
 
     [sourced] "**Sync Meeting Type to the CRM** … your Admins can define other
@@ -451,7 +451,10 @@ def delete_flow(
 ) -> Response:
     """Soft-delete a flow. Its runs stay, and keep the nodes they ran."""
     engine.delete_flow(
-        room_id, flow_id, actor=actor, source=f"DELETE {router.prefix}/rooms/{room_id}/flows/{flow_id}"
+        room_id,
+        flow_id,
+        actor=actor,
+        source=f"DELETE {router.prefix}/rooms/{room_id}/flows/{flow_id}",
     )
     return Response(status_code=204)
 
@@ -488,7 +491,7 @@ def validate_flow(
         from dsr.booking_crm.flow import describe_plan, normalise_nodes
 
         nodes = normalise_nodes(candidate, vendor=vendor)
-    except (WritebackError,) as exc:
+    except WritebackError as exc:
         report.update({"valid": False, "error": type(exc).__name__, "detail": str(exc)})
         return report
     report.update({"valid": True, "plan": describe_plan(nodes, vendor=vendor), "nodes": nodes})
@@ -960,8 +963,13 @@ DEMO_CRM_RECORDS: tuple[Mapping[str, Any], ...] = (
         "account_id": "acc-0001",
         "created_on": "2026-02-02",
     },
-    {"crm_id": "camp-0001", "vendor": "salesforce", "type": "Campaign",
-     "name": "Q4 Enterprise", "created_on": "2026-09-01"},
+    {
+        "crm_id": "camp-0001",
+        "vendor": "salesforce",
+        "type": "Campaign",
+        "name": "Q4 Enterprise",
+        "created_on": "2026-09-01",
+    },
     # -- HubSpot ------------------------------------------------------------ #
     {
         "crm_id": "hs-cnt-0001",
@@ -974,8 +982,14 @@ DEMO_CRM_RECORDS: tuple[Mapping[str, Any], ...] = (
         "fields": {"lifecyclestage": "salesqualifiedlead"},
         "created_on": "2026-05-20",
     },
-    {"crm_id": "comp-0001", "vendor": "hubspot", "type": "Company",
-      "name": "Contoso Health", "owner": "sam@acme.example", "created_on": "2026-05-01"},
+    {
+        "crm_id": "comp-0001",
+        "vendor": "hubspot",
+        "type": "Company",
+        "name": "Contoso Health",
+        "owner": "sam@acme.example",
+        "created_on": "2026-05-01",
+    },
     {
         "crm_id": "hs-deal-0001",
         "vendor": "hubspot",
@@ -1240,7 +1254,9 @@ DEMO_FLOWS: tuple[Mapping[str, Any], ...] = (
         },
         # A fault the real engine hits, so the demo's failed Event is a row this
         # workflow produced rather than one written by hand.
-        "faults": {"create:Event": "INSUFFICIENT_ACCESS: the integration user cannot create Events"},
+        "faults": {
+            "create:Event": "INSUFFICIENT_ACCESS: the integration user cannot create Events"
+        },
     },
     {
         "room": 3,
@@ -1281,7 +1297,11 @@ DEMO_FLOWS: tuple[Mapping[str, Any], ...] = (
                     "assign_to": "host",
                     "fallback_mode": "attributeRules",
                     "attribute_rules": [
-                        {"field": "lifecyclestage", "equals": "salesqualifiedlead", "owner": "dana@acme.example"},
+                        {
+                            "field": "lifecyclestage",
+                            "equals": "salesqualifiedlead",
+                            "owner": "dana@acme.example",
+                        },
                         {"field": "seats", "owner": "sam@acme.example"},
                     ],
                 },
@@ -1342,8 +1362,7 @@ def seed(db, context: dict[str, Any]) -> str:
 
     Returns a short description of what was added, which the seeder prints.
     """
-    from dsr.booking_crm import BookingWriteback as Engine
-    from dsr.booking_crm import LocalCrm as Crm
+    from dsr.booking_crm import BookingWriteback as Engine, LocalCrm as Crm
 
     store = RecordStore(db)
     engine = Engine(store)
@@ -1352,10 +1371,7 @@ def seed(db, context: dict[str, Any]) -> str:
 
     connectors = 0
     for spec in DEMO_CONNECTORS:
-        if not any(
-            row["data"].get("name") == spec["name"]
-            for row in engine.list_connectors()
-        ):
+        if not any(row["data"].get("name") == spec["name"] for row in engine.list_connectors()):
             engine.create_connector(spec, actor=actor, source=source)
             connectors += 1
 
@@ -1431,15 +1447,16 @@ def seed(db, context: dict[str, Any]) -> str:
         # Unconditionally, before the retry: a fault left on the client would leak
         # into the next spec that happens to land in this room, and a demo that
         # fails for a reason two specs back is a demo nobody can debug.
-        for key in (spec.get("faults") or {}):
+        for key in spec.get("faults") or {}:
             crm.faults.pop(key, None)
         if run["data"].get("ok"):
             runs_ok += 1
-        elif any(
-            step["reason"] == "meeting_type_sync_off" for step in run["data"]["steps"]
-        ):
+        elif any(step["reason"] == "meeting_type_sync_off" for step in run["data"]["steps"]):
             runs_skipped += 1
-        if any(step["reason"] == "nothing_matched_and_no_create_branch" for step in run["data"]["steps"]):
+        if any(
+            step["reason"] == "nothing_matched_and_no_create_branch"
+            for step in run["data"]["steps"]
+        ):
             no_record += 1
         events_created += len(run["data"].get("created_events") or [])
         events_failed += int((run["data"].get("counts") or {}).get("failed") or 0)

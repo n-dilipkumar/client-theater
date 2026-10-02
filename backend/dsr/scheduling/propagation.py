@@ -58,7 +58,9 @@ WEBHOOK_COLLECTION = "meeting_webhook"
 NOTIFICATION_COLLECTION = "meeting_notification"
 
 
-def calendar_event_id_for(booking: Mapping[str, Any], existing: Mapping[str, Any] | None = None) -> str:
+def calendar_event_id_for(
+    booking: Mapping[str, Any], existing: Mapping[str, Any] | None = None
+) -> str:
     """The ``event_id`` a meeting's calendar event has, or will have.
 
     Shared by the two places that need it - the seam that writes the row, and the
@@ -74,6 +76,7 @@ def calendar_event_id_for(booking: Mapping[str, Any], existing: Mapping[str, Any
         return str(existing["data"]["event_id"])
     booked = str(booking.get("calendar_event_id") or "")
     return booked or f"cal-{booking.get('uid') or ''}"
+
 
 #: A pushed webhook is recorded as delivered because this product has no
 #: downstream transport that could fail. Recorded as a field rather than assumed,
@@ -304,9 +307,7 @@ def propagate_crm_event(
             "record_id": existing["id"],
             "event_id": payload["event_id"],
         }
-    created = tx.create(
-        CRM_EVENT_COLLECTION, payload, room_id=room_id, actor=actor, source=source
-    )
+    created = tx.create(CRM_EVENT_COLLECTION, payload, room_id=room_id, actor=actor, source=source)
     return {
         "action": "created",
         "sobject": CRM_SOBJECT,

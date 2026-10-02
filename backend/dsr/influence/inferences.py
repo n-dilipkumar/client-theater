@@ -175,9 +175,7 @@ DEFINITIONS: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "a_room_scoped_report_is_a_different_division",
-        "question": (
-            "What does the same report mean when it is scoped to one workspace?"
-        ),
+        "question": ("What does the same report mean when it is scoped to one workspace?"),
         "decision": (
             "Two changes, both forced by coherence. A share made straight from the library "
             "has no workspace, so it is excluded. And the denominator becomes the assets "

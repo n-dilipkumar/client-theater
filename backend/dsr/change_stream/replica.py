@@ -180,54 +180,64 @@ def replica_findings(
     findings: list[dict[str, Any]] = []
     enriched_used = list(plan.get("enriched_fields_used") or [])
     if enriched_used:
-        findings.append({
-            "code": "values_from_enriched_fields",
-            "severity": "info",
-            "detail": (
-                f"{', '.join(enriched_used)} came from the channel's enriched fields, not from "
-                "this change. An update event does not carry the fields that did not change."
-            ),
-        })
+        findings.append(
+            {
+                "code": "values_from_enriched_fields",
+                "severity": "info",
+                "detail": (
+                    f"{', '.join(enriched_used)} came from the channel's enriched fields, not from "
+                    "this change. An update event does not carry the fields that did not change."
+                ),
+            }
+        )
     unmapped = list(plan.get("unmapped_crm_fields") or [])
     if unmapped:
-        findings.append({
-            "code": "unmapped_crm_fields",
-            "severity": "info",
-            "detail": (
-                f"the event carried {', '.join(unmapped)}, which field_map on channel "
-                f"{channel.get('name')!r} does not name. They are recorded, not dropped."
-            ),
-        })
+        findings.append(
+            {
+                "code": "unmapped_crm_fields",
+                "severity": "info",
+                "detail": (
+                    f"the event carried {', '.join(unmapped)}, which field_map on channel "
+                    f"{channel.get('name')!r} does not name. They are recorded, not dropped."
+                ),
+            }
+        )
     if plan["change_type"] == "UPDATE" and not plan.get("existed"):
-        findings.append({
-            "code": "update_for_unknown_record",
-            "severity": "warning",
-            "detail": (
-                f"this UPDATE was applied as an insert: no replica row held "
-                f"{plan['external_id']!r} before it. The room had not seen the create, which "
-                "usually means the channel was subscribed after the record was made."
-            ),
-        })
+        findings.append(
+            {
+                "code": "update_for_unknown_record",
+                "severity": "warning",
+                "detail": (
+                    f"this UPDATE was applied as an insert: no replica row held "
+                    f"{plan['external_id']!r} before it. The room had not seen the create, which "
+                    "usually means the channel was subscribed after the record was made."
+                ),
+            }
+        )
     if plan["change_type"] == "DELETE" and not plan.get("existed"):
-        findings.append({
-            "code": "delete_for_unknown_record",
-            "severity": "warning",
-            "detail": (
-                f"this DELETE was applied to a tombstone: no replica row held "
-                f"{plan['external_id']!r} before it. The record is remembered as gone so an "
-                "UNDELETE can find it."
-            ),
-        })
+        findings.append(
+            {
+                "code": "delete_for_unknown_record",
+                "severity": "warning",
+                "detail": (
+                    f"this DELETE was applied to a tombstone: no replica row held "
+                    f"{plan['external_id']!r} before it. The record is remembered as gone so an "
+                    "UNDELETE can find it."
+                ),
+            }
+        )
     if plan["change_type"] == "UNDELETE" and not plan.get("existed"):
-        findings.append({
-            "code": "undelete_for_unknown_record",
-            "severity": "warning",
-            "detail": (
-                f"this UNDELETE found no tombstone for {plan['external_id']!r}, so there was no "
-                "earlier state to restore and the row was written from the event. An undelete "
-                "event contains all the populated fields, so the row is complete either way."
-            ),
-        })
+        findings.append(
+            {
+                "code": "undelete_for_unknown_record",
+                "severity": "warning",
+                "detail": (
+                    f"this UNDELETE found no tombstone for {plan['external_id']!r}, so there was no "
+                    "earlier state to restore and the row was written from the event. An undelete "
+                    "event contains all the populated fields, so the row is complete either way."
+                ),
+            }
+        )
     return findings
 
 

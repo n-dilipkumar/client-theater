@@ -53,7 +53,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from dsr.crm_backfill import BackfillEngine, BackfillError, SimulatedHistory
@@ -259,13 +259,13 @@ def start_backfill(
     and no job: the other decisions are worth keeping, and a job opened without
     the grant would fail at the vendor after the fact.
     """
-    return engine.start(room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{{room_id}}/backfills")
+    return engine.start(
+        room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{{room_id}}/backfills"
+    )
 
 
 @router.get("/rooms/{room_id}/backfills/{run_id}")
-def read_backfill(
-    room_id: str, run_id: str, engine: BackfillEngine = EngineDep
-) -> dict[str, Any]:
+def read_backfill(room_id: str, run_id: str, engine: BackfillEngine = EngineDep) -> dict[str, Any]:
     """One run: its state, its progress percentage, its cursor and its counts."""
     return engine.run(room_id, run_id)
 
@@ -290,7 +290,10 @@ def read_log(
         "room_id": room_id,
         "run_id": run_id,
         "count": len(listed),
-        "events": [{"id": event["id"], "room_id": event.get("room_id"), **event["data"]} for event in listed],
+        "events": [
+            {"id": event["id"], "room_id": event.get("room_id"), **event["data"]}
+            for event in listed
+        ],
     }
 
 
@@ -315,7 +318,12 @@ def poll_backfill(
     of those is a fact about the run rather than an exception, because the
     researched flow ends with a log precisely so somebody can read what happened.
     """
-    return engine.poll(room_id, run_id, actor=actor, source=f"POST {router.prefix}/rooms/{{room_id}}/backfills/{{run_id}}/poll")
+    return engine.poll(
+        room_id,
+        run_id,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{{room_id}}/backfills/{{run_id}}/poll",
+    )
 
 
 @router.post("/rooms/{room_id}/backfills/{run_id}/resume")
@@ -337,7 +345,12 @@ def resume_backfill(
     make the research's promise untrue, so the error names the backfill to open
     instead.
     """
-    return engine.resume(room_id, run_id, actor=actor, source=f"POST {router.prefix}/rooms/{{room_id}}/backfills/{{run_id}}/resume")
+    return engine.resume(
+        room_id,
+        run_id,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{{room_id}}/backfills/{{run_id}}/resume",
+    )
 
 
 @router.post("/rooms/{room_id}/backfills/{run_id}/cancel")
@@ -397,9 +410,7 @@ def list_replica(
     here without a change to this route, which is the whole point of a
     schema-flexible store.
     """
-    listed = engine.replica(
-        room_id=room_id, connection_id=connection_id, where=where, limit=limit
-    )
+    listed = engine.replica(room_id=room_id, connection_id=connection_id, where=where, limit=limit)
     return {
         "room_id": room_id,
         "collection": "crm_replica",
@@ -610,25 +621,48 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # connection only ever reads its own account's things.
     history = SimulatedHistory(
         _history(
-            rng, count=BULK_BATCH, days=HISTORY_DAYS, title="Opportunity",
-            object_name="opportunity", prefix="006", now=base,
+            rng,
+            count=BULK_BATCH,
+            days=HISTORY_DAYS,
+            title="Opportunity",
+            object_name="opportunity",
+            prefix="006",
+            now=base,
         )
         + _history(
-            rng, count=RECENT_BATCH, days=RECENT_DAYS, title="Opportunity",
-            object_name="opportunity", prefix="recent", now=base,
+            rng,
+            count=RECENT_BATCH,
+            days=RECENT_DAYS,
+            title="Opportunity",
+            object_name="opportunity",
+            prefix="recent",
+            now=base,
         )
         + _history(
-            rng, count=ACCOUNT_BATCH, days=600, title="Account",
-            object_name="account", prefix="acc", now=base, with_key=False,
+            rng,
+            count=ACCOUNT_BATCH,
+            days=600,
+            title="Account",
+            object_name="account",
+            prefix="acc",
+            now=base,
+            with_key=False,
         )
         + _history(
-            rng, count=CONTACT_BATCH, days=400, title="Contact",
-            object_name="CONTACT", prefix="con", now=base,
+            rng,
+            count=CONTACT_BATCH,
+            days=400,
+            title="Contact",
+            object_name="CONTACT",
+            prefix="con",
+            now=base,
         )
     )
     engine = BackfillEngine(store, registry=default_registry(history), clock=lambda: base)
 
-    connections = [engine.create_connection(spec, actor="dana", source=source) for spec in DEMO_CONNECTIONS]
+    connections = [
+        engine.create_connection(spec, actor="dana", source=source) for spec in DEMO_CONNECTIONS
+    ]
     salesforce, dataverse, hubspot_blocked, hubspot_ok = connections
 
     if not rooms:
@@ -786,7 +820,8 @@ def _summarise(
     written = sum(int(run["counters"].get("rows_created") or 0) for run in first_room)
     rejected = sum(int(run["counters"].get("rows_rejected") or 0) for run in first_room)
     other_written = sum(
-        int(run["counters"].get("rows_written") or 0) for run in engine.runs(room_id=other_room, limit=50)
+        int(run["counters"].get("rows_written") or 0)
+        for run in engine.runs(room_id=other_room, limit=50)
     )
     findings = len(blocked["data"].get("findings") or [])
 

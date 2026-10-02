@@ -46,13 +46,12 @@ audit log names a route the host actually mounted.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
+from dsr.db.audited import AuditedDatabase
 from dsr.dedupe import (
     BLOCKED,
     CONNECTION_COLLECTION,
@@ -87,26 +86,26 @@ from dsr.dedupe import (
     decide,
     decisive,
     header_defaults,
+    inferences as dedupe_inferences,
     key_spec,
-    matched,
     match_rows,
+    matched,
     multiple,
     normalise_connection,
     normalise_domain,
     normalise_email,
     normalise_exact,
+    published_vocabulary,
     require_keys,
     require_policy,
     require_result,
     require_vendor,
-    published_vocabulary,
     serialise_duplicate_rule_header,
 )
-from dsr.dedupe import inferences as dedupe_inferences
 from dsr.dedupe.matching import EXACT_SCORE, SCOPE_ROW
-from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -154,12 +153,16 @@ def engine(store, clock):
 
 @pytest.fixture()
 def room(store):
-    return store.create("room", {"name": "Northwind — Enterprise Evaluation", "account": "Northwind"}, actor="dana")
+    return store.create(
+        "room", {"name": "Northwind — Enterprise Evaluation", "account": "Northwind"}, actor="dana"
+    )
 
 
 @pytest.fixture()
 def other_room(store):
-    return store.create("room", {"name": "Contoso — Security Review", "account": "Contoso"}, actor="sam")
+    return store.create(
+        "room", {"name": "Contoso — Security Review", "account": "Contoso"}, actor="sam"
+    )
 
 
 def connection(engine, name="SF", **overrides):
@@ -242,9 +245,11 @@ def source_names_a_mounted_route(source, routes):
         if mounted_method != method:
             continue
         parts = re.split(r"(\{[^}]+\})", template)
-        pattern = "^" + "".join(
-            r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts
-        ) + "$"
+        pattern = (
+            "^"
+            + "".join(r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts)
+            + "$"
+        )
         if re.match(pattern, path):
             return True
     return False
@@ -257,9 +262,7 @@ def source_names_a_mounted_route(source, routes):
 
 def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     """The routes resolve even though no shared file names this feature."""
-    entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID
-    )
+    entry = next(f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID)
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-041"
     assert entry["exception_handlers"] == ["DedupeError"]
@@ -308,7 +311,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
     )
     text = descriptor.read_text(encoding="utf-8")
     assert load_feature(MODULE).FEATURE["id"] in text
-    assert f'id: {FEATURE_ID!r}' in text
+    assert f"id: {FEATURE_ID!r}" in text
 
 
 def test_room_scoped_paths_are_room_scoped(http):
@@ -332,7 +335,7 @@ def test_the_header_has_exactly_the_three_researched_fields():
 
 
 def test_every_header_field_defaults_to_false():
-    """"The default value for all fields is `false`." """
+    """ "The default value for all fields is `false`." """
     assert DUPLICATE_RULE_HEADER_DEFAULTS == {
         "allowSave": False,
         "includeRecordDetails": False,
@@ -341,7 +344,7 @@ def test_every_header_field_defaults_to_false():
 
 
 def test_the_header_is_available_from_api_version_52():
-    """"This header is available in API version 52.0 and later." """
+    """ "This header is available in API version 52.0 and later." """
     assert DUPLICATE_RULE_API_VERSION == 52.0
 
 
@@ -436,7 +439,7 @@ def test_every_other_policy_asks_for_the_duplicate_record_details(policy):
 
 
 def test_run_as_current_user_is_a_connection_setting_not_a_policy_one():
-    """"use the current user's sharing rules" - visibility, not the decision."""
+    """ "use the current user's sharing rules" - visibility, not the decision."""
     assert build_duplicate_rule_header("block", run_as_current_user=True) == {
         "includeRecordDetails": True,
         "runAsCurrentUser": True,
@@ -523,7 +526,12 @@ def test_an_exact_email_match_is_found_case_insensitively():
 
 
 def test_a_different_email_does_not_match():
-    assert match_rows({"email": "other@example.com"}, [{"id": "a", "email": "a@example.com"}], ["email"]) == []
+    assert (
+        match_rows(
+            {"email": "other@example.com"}, [{"id": "a", "email": "a@example.com"}], ["email"]
+        )
+        == []
+    )
 
 
 def test_a_missing_field_is_not_a_zero_score_match():
@@ -596,7 +604,9 @@ def test_a_connection_can_require_exact_matches_and_silence_the_fuzzy_matcher():
     rows = [{"id": "a", "name": "Jose Ramirez", "domain": "northwind.example"}]
     inbound = {"name": "Jose A. Ramirez", "domain": "northwind.example"}
     assert [
-        m for m in match_rows(inbound, rows, ["domain"], min_score=1.0) if m.matcher == "fuzzy:domain_name"
+        m
+        for m in match_rows(inbound, rows, ["domain"], min_score=1.0)
+        if m.matcher == "fuzzy:domain_name"
     ] == []
 
 
@@ -644,7 +654,10 @@ def test_a_third_party_can_register_a_matcher():
         )
     )
     found = match_rows(
-        {"account_number": "X-4471"}, [{"id": "a", "account_number": "NW-4471"}], ["account_number"], registry
+        {"account_number": "X-4471"},
+        [{"id": "a", "account_number": "NW-4471"}],
+        ["account_number"],
+        registry,
     )
     assert [(m.matcher, m.record_id) for m in found] == [("custom:account_suffix", "a")]
 
@@ -652,7 +665,9 @@ def test_a_third_party_can_register_a_matcher():
 def test_registering_the_same_id_replaces_the_matcher():
     registry = MatcherRegistry()
     before = registry.get("exact:email")
-    registry.register(Matcher(id="exact:email", label="never", key="email", compare=lambda a, b: 0.0))
+    registry.register(
+        Matcher(id="exact:email", label="never", key="email", compare=lambda a, b: 0.0)
+    )
     assert registry.get("exact:email") is not before
     assert len([m for m in registry.all() if m.id == "exact:email"]) == 1
 
@@ -665,7 +680,9 @@ def test_a_matcher_that_raises_does_not_break_a_decision():
 
     registry = MatcherRegistry()
     registry.register(Matcher(id="bad", label="bad", key="email", compare=explode))
-    found = match_rows({"email": "a@example.com"}, [{"id": "a", "email": "a@example.com"}], ["email"], registry)
+    found = match_rows(
+        {"email": "a@example.com"}, [{"id": "a", "email": "a@example.com"}], ["email"], registry
+    )
     assert any(m.matcher == "exact:email" for m in found)
 
 
@@ -674,18 +691,24 @@ def test_a_matcher_returning_a_score_over_one_is_clamped():
     registry.register(
         Matcher(id="loud", label="loud", key="email", compare=lambda a, b: 4.2, threshold=1.0)
     )
-    found = match_rows({"email": "a@example.com"}, [{"id": "a", "email": "a@example.com"}], ["email"], registry)
+    found = match_rows(
+        {"email": "a@example.com"}, [{"id": "a", "email": "a@example.com"}], ["email"], registry
+    )
     assert [m.score for m in found if m.matcher == "loud"] == [1.0]
 
 
 def test_the_registry_refuses_a_matcher_for_an_unknown_key():
     with pytest.raises(DedupeError):
-        MatcherRegistry().register(Matcher(id="x", label="x", key="phone", compare=lambda a, b: 1.0))
+        MatcherRegistry().register(
+            Matcher(id="x", label="x", key="phone", compare=lambda a, b: 1.0)
+        )
 
 
 def test_the_registry_refuses_an_impossible_threshold():
     with pytest.raises(DedupeError):
-        MatcherRegistry().register(Matcher(id="x", label="x", key="email", compare=lambda a, b: 1.0, threshold=1.5))
+        MatcherRegistry().register(
+            Matcher(id="x", label="x", key="email", compare=lambda a, b: 1.0, threshold=1.5)
+        )
 
 
 def test_the_registry_refuses_a_matcher_with_no_id():
@@ -763,7 +786,9 @@ def test_two_keys_on_two_records_is_ambiguous():
 
 def test_the_highest_precedence_key_is_reported_for_one_record():
     """external_id is a value the connector wrote, so it outranks a domain."""
-    key, _ = decisive([match("domain", "a"), match("email", "a"), match("external_id", "a")], ALL_KEYS)
+    key, _ = decisive(
+        [match("domain", "a"), match("email", "a"), match("external_id", "a")], ALL_KEYS
+    )
     assert key == "external_id"
 
 
@@ -826,7 +851,7 @@ def test_allow_does_not_store_the_payloads_it_did_not_request():
 
 
 def test_a_unique_index_refuses_the_permissive_policy():
-    """"The Unique attribute prevents the creation of duplicates." """
+    """ "The Unique attribute prevents the creation of duplicates." """
     decision = decide(matched([row("a")], match_key="email"), "allow", unique_keys=["email"])
     assert decision.outcome == HARD_BLOCKED
     assert decision.hard_block is True
@@ -1127,7 +1152,9 @@ def test_a_disabled_connection_refuses_the_write_rather_than_skipping_the_check(
     """Evaluating with the rules off would write rows no rule had checked."""
     record = connection(engine, "SF", enabled=False)
     with pytest.raises(DedupeError) as caught:
-        engine.ingest(room["id"], {"email": "a@b.example"}, connection_id=record["id"], source=SOURCE)
+        engine.ingest(
+            room["id"], {"email": "a@b.example"}, connection_id=record["id"], source=SOURCE
+        )
     assert "disabled" in str(caught.value)
 
 
@@ -1250,7 +1277,9 @@ def test_the_allow_policy_creates_a_second_row_recorded_as_a_duplicate(engine, s
     existing = add_row(engine, email="a@b.example")
     conn = connection(engine, "HS", policy="allow", keys=["email"], unique_keys=[])
     before = crm_rows(store)
-    decision = engine.ingest(room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE)
+    decision = engine.ingest(
+        room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE
+    )
     assert decision["data"]["outcome"] == CREATED_DUPLICATE
     assert decision["data"]["acknowledged"] is True
     assert crm_rows(store) == before + 1
@@ -1263,7 +1292,9 @@ def test_a_unique_index_beats_the_allow_policy_and_writes_nothing(engine, store,
     add_row(engine, email="a@b.example")
     conn = connection(engine, "HS", policy="allow", keys=["email"], unique_keys=["email"])
     before = crm_rows(store)
-    decision = engine.ingest(room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE)
+    decision = engine.ingest(
+        room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE
+    )
     assert decision["data"]["outcome"] == HARD_BLOCKED
     assert crm_rows(store) == before
 
@@ -1272,7 +1303,9 @@ def test_the_merge_policy_writes_nothing_and_asks_for_a_person(engine, store, ro
     add_row(engine, email="a@b.example")
     conn = connection(engine, "DV", policy="merge", keys=["email"])
     before = crm_rows(store)
-    decision = engine.ingest(room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE)
+    decision = engine.ingest(
+        room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE
+    )
     assert decision["data"]["outcome"] == ESCALATED
     assert decision["data"]["needs_human"] is True
     assert crm_rows(store) == before
@@ -1298,7 +1331,9 @@ def test_the_300_names_both_matching_records(engine, room):
 def test_two_keys_matching_two_different_records_is_ambiguous_and_blocks(engine, store, room):
     add_row(engine, email="a@b.example", external_id="one")
     add_row(engine, email="z@b.example", external_id="two")
-    decision = engine.ingest(room["id"], {"email": "a@b.example", "external_id": "two"}, source=SOURCE)
+    decision = engine.ingest(
+        room["id"], {"email": "a@b.example", "external_id": "two"}, source=SOURCE
+    )
     assert decision["data"]["outcome"] == HARD_BLOCKED
     assert decision["data"]["match_key"] is None
     assert "no single matching record id" in decision["data"]["reason"]
@@ -1306,7 +1341,9 @@ def test_two_keys_matching_two_different_records_is_ambiguous_and_blocks(engine,
 
 def test_two_keys_matching_the_same_record_is_not_ambiguous(engine, room):
     existing = add_row(engine, email="a@b.example", domain="b.example")
-    decision = engine.ingest(room["id"], {"email": "a@b.example", "domain": "b.example"}, source=SOURCE)
+    decision = engine.ingest(
+        room["id"], {"email": "a@b.example", "domain": "b.example"}, source=SOURCE
+    )
     assert decision["data"]["outcome"] == BLOCKED
     assert decision["data"]["matched_ids"] == [existing["id"]]
 
@@ -1314,7 +1351,9 @@ def test_two_keys_matching_the_same_record_is_not_ambiguous(engine, room):
 def test_two_matchers_agreeing_on_one_record_is_not_a_multi_match(engine, room):
     """The bug this suite exists for: a match count is not a record count."""
     add_row(engine, name="Tomas Vela", email="t@b.example", domain="b.example")
-    decision = engine.ingest(room["id"], {"name": "Tomas Vela", "domain": "b.example"}, source=SOURCE)
+    decision = engine.ingest(
+        room["id"], {"name": "Tomas Vela", "domain": "b.example"}, source=SOURCE
+    )
     assert decision["data"]["outcome"] == BLOCKED
     assert len(decision["data"]["matched_ids"]) == 1
 
@@ -1476,7 +1515,9 @@ def test_decisions_filter_by_outcome_policy_and_room(engine, room, other_room):
     add_row(engine, email="c@d.example")
     update = connection(engine, "SF", policy="update", keys=["email"])
     engine.ingest(room["id"], {"email": "a@b.example"}, source=SOURCE)
-    engine.ingest(other_room["id"], {"email": "c@d.example"}, connection_id=update["id"], source=SOURCE)
+    engine.ingest(
+        other_room["id"], {"email": "c@d.example"}, connection_id=update["id"], source=SOURCE
+    )
     assert len(engine.decisions(room_id=room["id"])) == 1
     assert len(engine.decisions(outcome=BLOCKED)) == 1
     assert len(engine.decisions(outcome=UPDATED)) == 1
@@ -1652,17 +1693,17 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
 
     assert len(mine) >= 4, "the feature recorded fewer sources than it has write routes"
     for source in sorted(mine):
-        assert source.startswith(f"POST {PREFIX}") or source.startswith(f"PATCH {PREFIX}") or (
-            source.startswith(f"DELETE {PREFIX}")
+        assert (
+            source.startswith(f"POST {PREFIX}")
+            or source.startswith(f"PATCH {PREFIX}")
+            or (source.startswith(f"DELETE {PREFIX}"))
         ), f"{source!r} does not name a route under this feature's own prefix"
         assert source_names_a_mounted_route(source, routes), f"{source!r} names no mounted route"
 
 
 def test_a_decision_written_over_http_records_its_own_route(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    decision = http.post(
-        f"{PREFIX}/rooms/{room['id']}/ingest", json={"email": "new@b.example"}
-    ).json()
+    http.post(f"{PREFIX}/rooms/{room['id']}/ingest", json={"email": "new@b.example"}).json()
     store = RecordStore(client_store(http))
     sources = {row["source"] for row in store.audit(collection=DECISION_COLLECTION)}
     assert sources == {f"POST {PREFIX}/rooms/{room['id']}/ingest"}
@@ -1717,7 +1758,9 @@ def test_an_unknown_policy_over_http_is_a_400_naming_the_set(http):
 
 
 def test_the_header_preview_over_http(http):
-    body = http.get(f"{PREFIX}/header", params={"policy": "allow", "run_as_current_user": True}).json()
+    body = http.get(
+        f"{PREFIX}/header", params={"policy": "allow", "run_as_current_user": True}
+    ).json()
     assert body["options"] == {"allowSave": True, "runAsCurrentUser": True}
 
 
@@ -1730,7 +1773,10 @@ def test_the_connection_lifecycle_over_http(http):
 
     assert http.get(f"{PREFIX}/connections").json()["count"] == 1
     assert http.get(f"{PREFIX}/connections/{connection_id}").json()["data"]["policy"] == "block"
-    assert http.patch(f"{PREFIX}/connections/{connection_id}", json={"policy": "merge"}).status_code == 200
+    assert (
+        http.patch(f"{PREFIX}/connections/{connection_id}", json={"policy": "merge"}).status_code
+        == 200
+    )
     assert http.delete(f"{PREFIX}/connections/{connection_id}").status_code == 204
     assert http.get(f"{PREFIX}/connections/{connection_id}").status_code == 404
 
@@ -1817,7 +1863,9 @@ def test_the_room_annotation_is_404_for_an_unknown_room(http):
 
 
 def test_ingesting_to_an_unknown_room_is_a_404_over_http(http):
-    assert http.post(f"{PREFIX}/rooms/nope/ingest", json={"email": "a@b.example"}).status_code == 404
+    assert (
+        http.post(f"{PREFIX}/rooms/nope/ingest", json={"email": "a@b.example"}).status_code == 404
+    )
 
 
 def test_checking_an_unknown_room_is_a_404_over_http(http):
@@ -1826,7 +1874,9 @@ def test_checking_an_unknown_room_is_a_404_over_http(http):
 
 def test_a_rooms_decisions_are_listed_and_one_can_be_read(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    decision = http.post(f"{PREFIX}/rooms/{room['id']}/ingest", json={"email": "new@b.example"}).json()
+    decision = http.post(
+        f"{PREFIX}/rooms/{room['id']}/ingest", json={"email": "new@b.example"}
+    ).json()
 
     listed = http.get(f"{PREFIX}/rooms/{room['id']}/decisions").json()
     assert listed["count"] == 1
@@ -1840,7 +1890,9 @@ def test_a_rooms_decisions_are_listed_and_one_can_be_read(http):
 def test_a_decision_belonging_to_another_room_is_a_404(http):
     first = http.post("/api/records/room", json={"name": "One"}).json()
     second = http.post("/api/records/room", json={"name": "Two"}).json()
-    decision = http.post(f"{PREFIX}/rooms/{first['id']}/ingest", json={"email": "a@b.example"}).json()
+    decision = http.post(
+        f"{PREFIX}/rooms/{first['id']}/ingest", json={"email": "a@b.example"}
+    ).json()
     assert http.get(f"{PREFIX}/rooms/{second['id']}/decisions/{decision['id']}").status_code == 404
 
 
@@ -2005,9 +2057,9 @@ def test_the_vendor_inference_matches_the_engine(engine, room):
     for vendor in VENDORS:
         conn = connection(engine, vendor, vendor=vendor, policy="block", keys=["email"])
         outcomes.add(
-            engine.ingest(room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE)[
-                "data"
-            ]["outcome"]
+            engine.ingest(
+                room["id"], {"email": "a@b.example"}, connection_id=conn["id"], source=SOURCE
+            )["data"]["outcome"]
         )
     assert outcomes == {BLOCKED}
 
@@ -2108,9 +2160,7 @@ def test_the_seed_survives_being_run_with_no_rooms(db, seed_module):
 
 def test_the_seeded_rows_include_a_shared_external_id_for_the_300(db, seed_module):
     externals = [
-        spec.get("external_id")
-        for spec in seed_module.DEMO_RECORDS
-        if spec.get("external_id")
+        spec.get("external_id") for spec in seed_module.DEMO_RECORDS if spec.get("external_id")
     ]
     assert len(externals) > len(set(externals)), "no two seeded rows share an external ID"
 
@@ -2172,7 +2222,5 @@ def test_the_seeded_cases_reach_the_outcome_they_are_labelled_with(db, seed_modu
 
 def test_the_demo_labels_the_one_case_the_in_room_check_answers(db, seed_module):
     """crm_called is false there and true for every other block in the demo."""
-    case = next(
-        entry for entry in seed_module.DEMO_INGESTS if "in-room" in entry["label"]
-    )
+    case = next(entry for entry in seed_module.DEMO_INGESTS if "in-room" in entry["label"])
     assert "room_index" in case

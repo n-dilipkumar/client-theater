@@ -30,19 +30,20 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from dsr.db.audited import RecordNotFound
-from dsr.event_stream import backfill as backfill_module
-from dsr.event_stream import delivery as delivery_module
-from dsr.event_stream import payloads as payload_module
-from dsr.event_stream import signing
+from dsr.event_stream import (
+    backfill as backfill_module,
+    delivery as delivery_module,
+    payloads as payload_module,
+    signing,
+)
 from dsr.event_stream.backfill import RateLimiter
-from dsr.event_stream.delivery import DeliveryResult, Transport, UrllibTransport
+from dsr.event_stream.delivery import Transport, UrllibTransport
 from dsr.event_stream.errors import (
     DeliveryError,
     EventPayloadError,
     NotPermitted,
     TargetError,
 )
-from dsr.event_stream.filters import compile_filter
 from dsr.event_stream.registry import (
     DELIVERY_COLLECTION,
     EVENT_COLLECTION,
@@ -220,7 +221,9 @@ class EventStream:
             now=self.now,
         )
         if not report.ok:
-            raise verification_failure(url, report.result.status, report.result.error, report.result.body)
+            raise verification_failure(
+                url, report.result.status, report.result.error, report.result.body
+            )
         return {
             "state": report.state,
             "http_status": report.result.status,
@@ -250,7 +253,10 @@ class EventStream:
                     # omits `user`, and a verification POST has no user, so a
                     # test event is also the honest demonstration of that rule.
                 },
-                "metadata": {"kind": "verification" if index == 0 else "test-event", "index": index},
+                "metadata": {
+                    "kind": "verification" if index == 0 else "test-event",
+                    "index": index,
+                },
             },
             event_id=f"test-{index}",
             now=self.now,
@@ -258,7 +264,10 @@ class EventStream:
         )
 
     def list_webhooks(self, *, include_paused: bool = True) -> list[dict[str, Any]]:
-        return [summarise_webhook(record) for record in self.endpoints.list(include_paused=include_paused)]
+        return [
+            summarise_webhook(record)
+            for record in self.endpoints.list(include_paused=include_paused)
+        ]
 
     def read_webhook(self, webhook_id: str) -> dict[str, Any]:
         """One webhook, with its subscriptions.
@@ -413,7 +422,11 @@ class EventStream:
     ) -> dict[str, Any]:
         return summarise_subscription(
             self.subscriptions.update(
-                subscription_id, patch, actor=actor, source=source, now=now if now is not None else self.now
+                subscription_id,
+                patch,
+                actor=actor,
+                source=source,
+                now=now if now is not None else self.now,
             )
         )
 
@@ -443,10 +456,11 @@ class EventStream:
         """
         record = self.endpoints.require(webhook_id)
         subscriptions = [
-            sub
-            for sub in self.subscriptions.list(webhook_id=webhook_id, include_paused=False)
+            sub for sub in self.subscriptions.list(webhook_id=webhook_id, include_paused=False)
         ]
-        wanted = list(types) if types else sorted({t for sub in subscriptions for t in types_of(sub)})
+        wanted = (
+            list(types) if types else sorted({t for sub in subscriptions for t in types_of(sub)})
+        )
         if not wanted:
             raise DeliveryError(
                 f"webhook {webhook_id} has no active subscription to test",
@@ -576,13 +590,17 @@ class EventStream:
                 form_question_responses, questions, now=self.now
             )
 
-        record = self.store.create(EVENT_COLLECTION, data, room_id=room_id, actor=actor, source=source)
+        record = self.store.create(
+            EVENT_COLLECTION, data, room_id=room_id, actor=actor, source=source
+        )
         payload = payload_module.build_event_payload(data, event_id=record["id"], now=self.now)
         deliveries = self._fan_out(record, data, payload, actor=actor, source=source)
         record = self.store.update(
             record["id"],
-            {"deliveries": len([d for d in deliveries if d["attempted"]]),
-             "skipped": len([d for d in deliveries if not d["attempted"]])},
+            {
+                "deliveries": len([d for d in deliveries if d["attempted"]]),
+                "skipped": len([d for d in deliveries if not d["attempted"]]),
+            },
             actor=actor,
             source=source,
         )
@@ -635,7 +653,9 @@ class EventStream:
         record = self.store.get(event_id)
         if record is None or record["collection"] != EVENT_COLLECTION:
             raise RecordNotFound(event_id)
-        payload = payload_module.build_event_payload(record["data"], event_id=record["id"], now=self.now)
+        payload = payload_module.build_event_payload(
+            record["data"], event_id=record["id"], now=self.now
+        )
         return {"event": record, "payload": payload}
 
     # ----------------------------------------------------------------------- #
@@ -727,16 +747,19 @@ class EventStream:
             source=source,
         )
         self._fold_outcome(
-            stored, state=report.state, ok=report.ok, attempt_number=report.attempt, actor=actor, source=source
+            stored,
+            state=report.state,
+            ok=report.ok,
+            attempt_number=report.attempt,
+            actor=actor,
+            source=source,
         )
         if report.ok:
             # A successful delivery closes a key rotation overlap: the new
             # secret has demonstrably reached a subscriber that accepted it.
             confirm = signing.confirm_rotation(webhook["data"])
             if confirm:
-                self.store.update(
-                    webhook["id"], confirm, actor=actor, source=source
-                )
+                self.store.update(webhook["id"], confirm, actor=actor, source=source)
         return stored
 
     def _fan_out(
@@ -832,7 +855,12 @@ class EventStream:
                 source=source,
             )
             self._fold_outcome(
-                stored, state=report.state, ok=report.ok, attempt_number=1, actor=actor, source=source
+                stored,
+                state=report.state,
+                ok=report.ok,
+                attempt_number=1,
+                actor=actor,
+                source=source,
             )
             delivered.append(
                 self._delivery_view(

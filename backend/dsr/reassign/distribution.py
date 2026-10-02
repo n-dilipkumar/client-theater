@@ -104,7 +104,11 @@ def normalise_busy(value: Any, *, field: str = "busy") -> list[dict[str, str]]:
         if ends < starts:
             raise ReassignError(f"{field}[{index}] ends before it starts")
         blocks.append(
-            {"starts_at": format_instant(starts), "ends_at": format_instant(ends), "label": str(entry.get("label") or "")}
+            {
+                "starts_at": format_instant(starts),
+                "ends_at": format_instant(ends),
+                "label": str(entry.get("label") or ""),
+            }
         )
     return sorted(blocks, key=lambda block: (block["starts_at"], block["ends_at"]))
 
@@ -123,7 +127,9 @@ def normalise_distribution(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ReassignError("a distribution needs a name")
     team = str(payload.get("team") or "").strip()
     if not team:
-        raise ReassignError(f"distribution {name!r} needs a team; a team is the scope 'any team member' resolves to")
+        raise ReassignError(
+            f"distribution {name!r} needs a team; a team is the scope 'any team member' resolves to"
+        )
 
     members = payload.get("member_ids") or payload.get("members") or []
     if not isinstance(members, (list, tuple)):
@@ -161,7 +167,9 @@ def normalise_host(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ReassignError("a host needs a name; the invite carries it")
     email = str(payload.get("email") or "").strip().lower()
     if email and "@" not in email:
-        raise ReassignError(f"host {name!r} has an email that is not an address: {payload.get('email')!r}")
+        raise ReassignError(
+            f"host {name!r} has an email that is not an address: {payload.get('email')!r}"
+        )
 
     return {
         "name": name,
@@ -213,8 +221,10 @@ def normalise_meeting(payload: Mapping[str, Any]) -> dict[str, Any]:
 
     starts = parse_instant(payload.get("starts_at"), field="starts_at")
     raw_end = payload.get("ends_at")
-    ends = parse_instant(raw_end, field="ends_at") if raw_end not in (None, "") else starts + timedelta(
-        minutes=DEFAULT_DURATION_MINUTES
+    ends = (
+        parse_instant(raw_end, field="ends_at")
+        if raw_end not in (None, "")
+        else starts + timedelta(minutes=DEFAULT_DURATION_MINUTES)
     )
     if ends <= starts:
         raise ReassignError(f"meeting {title!r} ends at or before it starts")
@@ -238,7 +248,8 @@ def normalise_meeting(payload: Mapping[str, Any]) -> dict[str, Any]:
         # round-robin credit to the host who took the no-show. A later
         # reassignment must not move it a second time.
         "no_show_credit_back": bool(payload.get("no_show_credit_back", False)),
-        "no_show_credited_host_id": str(payload.get("no_show_credited_host_id") or "").strip() or None,
+        "no_show_credited_host_id": str(payload.get("no_show_credited_host_id") or "").strip()
+        or None,
     }
 
 
@@ -328,7 +339,9 @@ def evaluate_bounds(
     }
 
 
-def bounds_summary(distribution: Mapping[str, Any], starts_at: datetime, now: datetime) -> dict[str, Any]:
+def bounds_summary(
+    distribution: Mapping[str, Any], starts_at: datetime, now: datetime
+) -> dict[str, Any]:
     """The reassignment's record of what it ignored.
 
     Always reports the numbers it ignored them against, even when nothing was
@@ -381,11 +394,15 @@ def in_distribution_scope(
     setting with its own yes/no.
     """
     if kind == "team":
-        return bool(distribution.get("team")) and str(host.get("team") or "") == str(distribution.get("team"))
+        return bool(distribution.get("team")) and str(host.get("team") or "") == str(
+            distribution.get("team")
+        )
     if str(host.get("id") or "") in set(distribution.get("member_ids") or []):
         return True
     if distribution.get("allow_any_team_member"):
-        return bool(distribution.get("team")) and str(host.get("team") or "") == str(distribution.get("team"))
+        return bool(distribution.get("team")) and str(host.get("team") or "") == str(
+            distribution.get("team")
+        )
     return False
 
 
@@ -432,7 +449,9 @@ def candidates(
                 "in_scope": in_distribution_scope(host, distribution, kind=kind),
             }
         )
-    rows.sort(key=lambda row: (not row["eligible"], int(row["round_robin_credits"]), str(row["id"])))
+    rows.sort(
+        key=lambda row: (not row["eligible"], int(row["round_robin_credits"]), str(row["id"]))
+    )
     return rows
 
 
@@ -447,7 +466,9 @@ def auto_select(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any] | None:
     eligible = [row for row in rows if row.get("eligible")]
     if not eligible:
         return None
-    return min(eligible, key=lambda row: (int(row.get("round_robin_credits") or 0), str(row.get("id"))))
+    return min(
+        eligible, key=lambda row: (int(row.get("round_robin_credits") or 0), str(row.get("id")))
+    )
 
 
 # --------------------------------------------------------------------------- #

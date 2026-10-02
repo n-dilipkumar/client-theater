@@ -27,12 +27,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from dsr.signals import emission as emission_module
-from dsr.signals import feed as feed_module
-from dsr.signals import icume
-from dsr.signals import indicators as indicators_module
-from dsr.signals import registration as registration_module
-from dsr.signals import schema
+from dsr.signals import (
+    emission as emission_module,
+    feed as feed_module,
+    icume,
+    indicators as indicators_module,
+    registration as registration_module,
+    schema,
+)
 from dsr.signals.errors import (
     DuplicateSignalType,
     ImmutableContractError,
@@ -118,7 +120,9 @@ class SignalEngine:
         found = self.store.find(REGISTRATIONS, where, limit=1000)
         return found[0] if found else None
 
-    def register(self, payload: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def register(
+        self, payload: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         """Register a signal type, once per integration.
 
         The one-per-integration rule is a researched property, so the check is
@@ -248,6 +252,7 @@ class SignalEngine:
         merged = registration_module.apply_amendment(current, patch)
         updated = self.store.update(registration_id, merged, actor=actor, source=source)
         return self.present(updated)
+
     def withdraw(self, registration_id: str, *, actor: str | None, source: str) -> dict[str, Any]:
         """Withdraw a registration that has not been used.
 
@@ -300,7 +305,9 @@ class SignalEngine:
             type_name=type_name.strip(), integration_id=integration_id
         )
         if registration is None:
-            where = f" on integration {integration_id!r}" if integration_id else " on any integration"
+            where = (
+                f" on integration {integration_id!r}" if integration_id else " on any integration"
+            )
             raise UnregisteredSignalType(
                 f"no live signal registration of type {type_name.strip()!r}{where}. A signal "
                 "must follow the structure defined on its registration, and the research has "
@@ -409,7 +416,8 @@ class SignalEngine:
                 "qualifies": decision["qualifies"],
                 "reason": decision["reason"],
                 "meaning": indicators_module.QUALIFICATION_REASONS[decision["reason"]],
-                "checked": decision["reason"] not in (
+                "checked": decision["reason"]
+                not in (
                     "no_bound_claimed",
                     "bound_unresolvable",
                     "bound_unverifiable",
@@ -474,7 +482,9 @@ class SignalEngine:
             return None
         return self.store.get(room_id)
 
-    def present_signal(self, record: Mapping[str, Any], locale: str | None = None) -> dict[str, Any]:
+    def present_signal(
+        self, record: Mapping[str, Any], locale: str | None = None
+    ) -> dict[str, Any]:
         """A signal with its rendered sentence, for a single read.
 
         The stored ``data`` and the stored indicator array travel alongside the
@@ -560,7 +570,12 @@ class SignalEngine:
         return [self.present_signal(record, locale) for record in records[:capped]]
 
     def live_feed(
-        self, *, room_id: str | None, seller: str | None = None, locale: str | None = None, limit: int = 100
+        self,
+        *,
+        room_id: str | None,
+        seller: str | None = None,
+        locale: str | None = None,
+        limit: int = 100,
     ) -> dict[str, Any]:
         """The seller's Live Feed for one room."""
         records = (
@@ -572,7 +587,10 @@ class SignalEngine:
             record["id"]: self.present(record)
             for record in self.store.list(REGISTRATIONS, limit=1000, include_deleted=True)
         }
-        signals = [dict(record.get("data") or {}, id=record["id"], room_id=record.get("room_id")) for record in records]
+        signals = [
+            dict(record.get("data") or {}, id=record["id"], room_id=record.get("room_id"))
+            for record in records
+        ]
         rows = feed_module.build(
             signals,
             registrations,
@@ -584,7 +602,9 @@ class SignalEngine:
             "seller": seller,
             "count": len(rows),
             "urgent": sum(1 for row in rows if row["urgency"] == "high"),
-            "by_urgency": {name: sum(1 for row in rows if row["urgency"] == name) for name in URGENCIES},
+            "by_urgency": {
+                name: sum(1 for row in rows if row["urgency"] == name) for name in URGENCIES
+            },
             "actionable": 0,
             "actionability_note": ACTIONABILITY_NOTE,
             "entries": rows,
@@ -621,9 +641,7 @@ class SignalEngine:
             "live_feed": broadcast,
             "duplicates_dropped": sum(int(data.get("duplicate_attempts") or 0) for data in signals),
             "registrations": len(self.store.list(REGISTRATIONS, limit=1000)),
-            "by_type": [
-                {"type": name, "count": count} for name, count in sorted(types.items())
-            ],
+            "by_type": [{"type": name, "count": count} for name, count in sorted(types.items())],
             "by_seller": [
                 {"seller": name, "count": count} for name, count in sorted(sellers.items())
             ],
@@ -647,6 +665,4 @@ def _indicator_metadata(
     properties = shape.get("properties")
     if not isinstance(properties, Mapping):
         return {str(k): v for k, v in observations.items()}
-    return {
-        name: observations[name] for name in properties if name in observations
-    }
+    return {name: observations[name] for name in properties if name in observations}

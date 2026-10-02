@@ -108,21 +108,36 @@ def spawn(ticket: str, entry: dict) -> dict:
     slug = entry["slug"]
     name = ticket.lower()
 
-    code, out = orca("worktree", "create", "--repo", f"id:{REPO_ID}", "--name", name, "--no-parent", "--json")
+    code, out = orca(
+        "worktree", "create", "--repo", f"id:{REPO_ID}", "--name", name, "--no-parent", "--json"
+    )
     if code != 0:
         return {"ticket": ticket, "ok": False, "stage": "worktree", "error": out[-400:]}
 
     try:
         worktree = parse_json(out)["result"]["worktree"]
     except (ValueError, KeyError, TypeError) as exc:
-        return {"ticket": ticket, "ok": False, "stage": "worktree-parse", "error": f"{exc}: {out[-300:]}"}
+        return {
+            "ticket": ticket,
+            "ok": False,
+            "stage": "worktree-parse",
+            "error": f"{exc}: {out[-300:]}",
+        }
 
     selector = f"id:{REPO_ID}::{worktree['path']}"
     prompt = PROMPT.format(ticket=ticket, slug=slug)
-    command = f"opencode run -m {MODEL} --title {ticket} \"{prompt}\""
+    command = f'opencode run -m {MODEL} --title {ticket} "{prompt}"'
 
     code, out = orca(
-        "terminal", "create", "--worktree", selector, "--title", f"{ticket} agent", "--command", command, "--json"
+        "terminal",
+        "create",
+        "--worktree",
+        selector,
+        "--title",
+        f"{ticket} agent",
+        "--command",
+        command,
+        "--json",
     )
     if code != 0:
         return {
@@ -136,11 +151,24 @@ def spawn(ticket: str, entry: dict) -> dict:
     try:
         terminal = parse_json(out)["result"]["terminal"]
     except (ValueError, KeyError, TypeError) as exc:
-        return {"ticket": ticket, "ok": False, "stage": "terminal-parse", "error": f"{exc}: {out[-300:]}"}
+        return {
+            "ticket": ticket,
+            "ok": False,
+            "stage": "terminal-parse",
+            "error": f"{exc}: {out[-300:]}",
+        }
 
     # Record the work so status can be checked later without re-deriving ids.
     orca("worktree", "set", "--worktree", selector, "--workspace-status", "in-progress", "--json")
-    orca("worktree", "set", "--worktree", selector, "--comment", f"{ticket}: sub-agent implementing {entry['name']}", "--json")
+    orca(
+        "worktree",
+        "set",
+        "--worktree",
+        selector,
+        "--comment",
+        f"{ticket}: sub-agent implementing {entry['name']}",
+        "--json",
+    )
 
     return {
         "ticket": ticket,
@@ -160,7 +188,9 @@ def main() -> int:
         except (AttributeError, OSError):
             pass
 
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--from", dest="start", required=True, help="first ticket, e.g. WF-001")
     parser.add_argument("--to", dest="end", help="last ticket inclusive")
     parser.add_argument("--count", type=int, help="spawn this many tickets from --from")
@@ -197,7 +227,9 @@ def main() -> int:
         result = spawn(ticket, tickets[ticket])
         results.append(result)
         if result["ok"]:
-            print(f"  [ok]   {ticket}  {result['branch'].split('/')[-1]}  head={result['head']}  {result['handle']}")
+            print(
+                f"  [ok]   {ticket}  {result['branch'].split('/')[-1]}  head={result['head']}  {result['handle']}"
+            )
         else:
             print(f"  [FAIL] {ticket}  at {result['stage']}: {result.get('error', '')[:200]}")
         time.sleep(args.delay)

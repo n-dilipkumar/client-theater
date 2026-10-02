@@ -30,12 +30,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.access import PolicyError
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
+from fastapi.testclient import TestClient
 
 MODULE_NAME = "wf_015-identity-gate"
 PREFIX = "/api/wf-015-identity-gate"
@@ -104,7 +103,9 @@ def test_the_feature_did_not_collide_with_anything(client):
 
 def test_all_twelve_routes_are_registered(client):
     """The route table, so a dropped endpoint is a failing test and not a surprise."""
-    record = next(f for f in client.get("/api/features").json()["features"] if f["id"] == FRONTEND_ID)
+    record = next(
+        f for f in client.get("/api/features").json()["features"] if f["id"] == FRONTEND_ID
+    )
     served = {(method, route["path"]) for route in record["routes"] for method in route["methods"]}
 
     assert served == {
@@ -166,7 +167,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
     text = DESCRIPTOR.read_text(encoding="utf-8")
 
     assert module.FEATURE["id"] == FRONTEND_ID
-    assert f'id: {module.FEATURE["id"]!r}' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
 
 
 def test_the_frontend_intercepts_the_buyers_link_without_editing_app_jsx():
@@ -202,8 +203,12 @@ def test_policy_error_becomes_a_400_with_a_field_keyed_map_through_the_host(clie
 
     response = client.put(
         f"{PREFIX}/rooms/{room['id']}/access",
-        json={"mode": "identify", "collect_email": True, "domain_security": True,
-              "allowed_domains": "northwind.example"},
+        json={
+            "mode": "identify",
+            "collect_email": True,
+            "domain_security": True,
+            "allowed_domains": "northwind.example",
+        },
     )
 
     assert response.status_code == 400
@@ -216,8 +221,12 @@ def test_access_denied_becomes_a_403_naming_the_reason_and_the_session(client):
     room = make_room(client)
     client.put(
         f"{PREFIX}/rooms/{room['id']}/access",
-        json={"mode": "verify_email", "collect_email": True, "domain_security": True,
-              "allowed_domains": "northwind.example"},
+        json={
+            "mode": "verify_email",
+            "collect_email": True,
+            "domain_security": True,
+            "allowed_domains": "northwind.example",
+        },
     )
 
     response = client.post(
@@ -288,7 +297,10 @@ def test_every_write_audits_the_path_this_router_serves(client):
     rid = room["id"]
 
     client.put(f"{PREFIX}/rooms/{rid}/access", json={"mode": "verify_email", "collect_email": True})
-    client.put(f"{PREFIX}/templates/{template['id']}/access", json={"mode": "identify", "collect_name": True})
+    client.put(
+        f"{PREFIX}/templates/{template['id']}/access",
+        json={"mode": "identify", "collect_name": True},
+    )
     token = client.post(
         f"{PREFIX}/rooms/{rid}/access/sessions", json={"email": "alex@northwind.example"}
     ).json()["token"]
@@ -380,7 +392,9 @@ def test_the_emailed_link_redirects_into_the_room_the_app_serves(client):
     token = client.post(
         f"{PREFIX}/rooms/{rid}/access/sessions", json={"email": "alex@northwind.example"}
     ).json()["token"]
-    open_link = client.get(f"{PREFIX}/rooms/{rid}/access/outbox").json()["messages"][0]["data"]["open_link"]
+    open_link = client.get(f"{PREFIX}/rooms/{rid}/access/outbox").json()["messages"][0]["data"][
+        "open_link"
+    ]
 
     response = client.get(open_link.removeprefix("http://salesroom.test"), follow_redirects=False)
 
@@ -404,9 +418,7 @@ def test_a_team_can_add_its_own_field_to_a_policy_through_this_features_route(cl
     assert policy["legal_footer"] == "Confidential"
     assert policy["scoring"] == {"weight": 0.4}
     # ...and it is a record, so the generic surface and the dynamic index see it.
-    found = client.get(
-        "/api/records/access_policy", params={"where": "subject_kind=room"}
-    ).json()
+    found = client.get("/api/records/access_policy", params={"where": "subject_kind=room"}).json()
     assert found["count"] == 1
     assert found["records"][0]["data"]["scoring"] == {"weight": 0.4}
 
@@ -435,7 +447,9 @@ def test_seed_leaves_every_tier_and_every_session_state_visible():
             ]
             room_ids = [(room["id"], room["data"]["account"]) for room in rooms]
 
-            summary = module.seed(db, {"room_ids": room_ids, "now": now, "rng": random.Random("wf015")})
+            summary = module.seed(
+                db, {"room_ids": room_ids, "now": now, "rng": random.Random("wf015")}
+            )
 
             assert "2 room policies" in summary
             assert "1 queued message" in summary
@@ -458,7 +472,10 @@ def test_seed_leaves_every_tier_and_every_session_state_visible():
                 if record["data"].get("domain_security")
             ]
             assert len(restricted) == 1
-            assert restricted[0]["data"]["allowed_domains"] == ["northwind.example", "contoso.example"]
+            assert restricted[0]["data"]["allowed_domains"] == [
+                "northwind.example",
+                "contoso.example",
+            ]
 
             # A room inherits the template with nothing written to it. This is the
             # researched behaviour and the reason `level` exists at all.
@@ -485,7 +502,9 @@ def test_seed_leaves_every_tier_and_every_session_state_visible():
             # `excluded_bots` a real number rather than a hypothetical.
             statuses = {record["data"]["status"] for record in db.list("access_session", limit=50)}
             assert statuses == {"verified", "identified", "pending_verification", "refused"}
-            assert any(record["data"].get("likely_bot") for record in db.list("access_session", limit=50))
+            assert any(
+                record["data"].get("likely_bot") for record in db.list("access_session", limit=50)
+            )
             assert any(
                 record["data"].get("refusal_reason") == "domain_not_allowed"
                 for record in db.list("access_session", limit=50)
@@ -518,7 +537,9 @@ def test_seed_reports_when_there_is_nothing_to_attach_to():
     try:
         db = AuditedDatabase(str(Path(tmp.name) / "empty.db"), actor="seed")
         try:
-            assert module.seed(db, {"room_ids": [], "now": datetime.now(timezone.utc), "rng": random.Random("x")})
+            assert module.seed(
+                db, {"room_ids": [], "now": datetime.now(timezone.utc), "rng": random.Random("x")}
+            )
         finally:
             db.close()
     finally:

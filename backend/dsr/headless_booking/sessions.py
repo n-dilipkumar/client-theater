@@ -43,7 +43,7 @@ path, which is the shape the research says handoff callers use.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Mapping, Sequence
 
@@ -116,9 +116,7 @@ class Session:
     def is_open(self, now: datetime) -> bool:
         return self.state == "open" and not self.is_expired(now)
 
-    def consume(
-        self, now: datetime, state: str, detail: str = "", reason: str = ""
-    ) -> None:
+    def consume(self, now: datetime, state: str, detail: str = "", reason: str = "") -> None:
         """Move to a terminal state. Refuses a second transition.
 
         This is the single-use rule, and it is enforced in one place so there is
@@ -297,7 +295,9 @@ class Session:
             "busy_considered": self.busy_considered,
         }
 
-    def to_payload(self, record_id: str | None = None, room_id: str | None = None) -> dict[str, Any]:
+    def to_payload(
+        self, record_id: str | None = None, room_id: str | None = None
+    ) -> dict[str, Any]:
         """:meth:`to_dict` plus the response-only projections."""
         return {
             **self.to_dict(),
@@ -362,8 +362,7 @@ def parse_start_time(value: Any) -> str:
     """
     if value in (None, ""):
         raise HeadlessBookingError(
-            "startTime is required: pass back one of the start times under schedulingData, "
-            "verbatim"
+            "startTime is required: pass back one of the start times under schedulingData, verbatim"
         )
     return format_slot(parse_instant(value, field="startTime"))
 
@@ -394,7 +393,9 @@ def resolve_timeout(section: str, timeout_in_ms: Any, now: datetime) -> tuple[in
         try:
             resolved = int(timeout_in_ms)
         except (TypeError, ValueError) as exc:
-            raise HeadlessBookingError(f"timeoutInMS {timeout_in_ms!r} is not a number of milliseconds") from exc
+            raise HeadlessBookingError(
+                f"timeoutInMS {timeout_in_ms!r} is not a number of milliseconds"
+            ) from exc
         if not MIN_TTL_MS <= resolved <= MAX_TTL_MS:
             raise HeadlessBookingError(
                 f"timeoutInMS must be between {MIN_TTL_MS} and {MAX_TTL_MS}; a session is a hold on "

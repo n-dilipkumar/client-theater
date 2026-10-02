@@ -28,8 +28,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.features import load_feature
 from dsr.features.wf009_publishing_domain import (
@@ -39,6 +37,7 @@ from dsr.features.wf009_publishing_domain import (
     REJECTED,
     SCHEDULED_BATCH_LIMIT,
 )
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/publishing"
 FEATURE_ID = "wf-009-publishing"
@@ -208,9 +207,7 @@ def test_process_preserves_configured_button_labels(client):
 
 
 def test_process_steps_default_to_approve_and_reject_labels(client):
-    body = make_process(
-        client, {"name": "Bare", "steps": [{"label": "Review"}]}
-    ).json()
+    body = make_process(client, {"name": "Bare", "steps": [{"label": "Review"}]}).json()
 
     step = body["data"]["steps"][0]
     assert step["approve_button_label"] == "Approve"
@@ -620,9 +617,9 @@ def test_the_due_sweep_is_the_audited_source_of_a_scheduled_publish(client):
     )
     client.post(f"{PREFIX}/publications/due", json={"now": "2030-01-02T00:00:00Z"})
 
-    entries = client.get(
-        "/api/audit", params={"record_id": document["id"], "limit": 100}
-    ).json()["entries"]
+    entries = client.get("/api/audit", params={"record_id": document["id"], "limit": 100}).json()[
+        "entries"
+    ]
     assert entries[0]["source"] == f"POST {PREFIX}/publications/due"
 
 
@@ -816,7 +813,10 @@ def test_scheduled_publish_is_applied_once_the_instant_passes(client):
 
     assert body["count"] == 1
     assert body["applied"][0]["total_succeeded"] == 1
-    assert client.get(f"/api/records/document/{document['id']}").json()["data"]["status"] == "Published"
+    assert (
+        client.get(f"/api/records/document/{document['id']}").json()["data"]["status"]
+        == "Published"
+    )
 
 
 def test_due_sweep_leaves_a_future_publication_alone(client):
@@ -883,8 +883,11 @@ def test_unparseable_publish_at_is_rejected(client):
 def test_publish_notifies_subscribers_by_default(client):
     """`IsSendNotification` defaults to true."""
     room = make_room(client)
-    client.post(f"{PREFIX}/subscriptions", json={"subscriber": "buyer@example.com"},
-                params={"room_id": room["id"]})
+    client.post(
+        f"{PREFIX}/subscriptions",
+        json={"subscriber": "buyer@example.com"},
+        params={"room_id": room["id"]},
+    )
     document = make_document(client, room_id=room["id"])
 
     client.post(f"{PREFIX}/publish", json={"content": [document["id"]]})
@@ -896,8 +899,11 @@ def test_publish_notifies_subscribers_by_default(client):
 
 def test_publish_can_be_silent(client):
     room = make_room(client)
-    client.post(f"{PREFIX}/subscriptions", json={"subscriber": "buyer@example.com"},
-                params={"room_id": room["id"]})
+    client.post(
+        f"{PREFIX}/subscriptions",
+        json={"subscriber": "buyer@example.com"},
+        params={"room_id": room["id"]},
+    )
     document = make_document(client, room_id=room["id"])
 
     client.post(
@@ -907,7 +913,10 @@ def test_publish_can_be_silent(client):
 
     assert client.get("/api/records/notification").json()["count"] == 0
     # Still published: the silence is about notification, not publication.
-    assert client.get(f"/api/records/document/{document['id']}").json()["data"]["status"] == "Published"
+    assert (
+        client.get(f"/api/records/document/{document['id']}").json()["data"]["status"]
+        == "Published"
+    )
 
 
 def test_a_subscriber_that_does_not_resolve_yields_the_documented_warning(client):
@@ -965,9 +974,7 @@ def test_folder_requires_a_name_and_a_match_rule(client):
 
 
 def test_folder_rejects_a_rule_that_the_index_cannot_compare(client):
-    response = client.post(
-        f"{PREFIX}/folders", json={"name": "F", "matches": {"a": None}}
-    )
+    response = client.post(f"{PREFIX}/folders", json={"name": "F", "matches": {"a": None}})
 
     assert response.status_code == 400
     assert "dotted path" in response.json()["detail"]
@@ -992,7 +999,10 @@ def test_folder_requires_every_rule_to_match(client):
     document = make_document(client, metadata={"region": "emea", "audience": "internal"})
     client.post(
         f"{PREFIX}/folders",
-        json={"name": "EMEA external", "matches": {"metadata.region": "emea", "metadata.audience": "external"}},
+        json={
+            "name": "EMEA external",
+            "matches": {"metadata.region": "emea", "metadata.audience": "external"},
+        },
     )
 
     client.post(f"{PREFIX}/publish", json={"content": [document["id"]]})
@@ -1032,9 +1042,7 @@ def test_a_folder_rule_is_scoped_to_library_content(client):
 
 def test_a_document_lands_in_a_folder_only_once(client):
     document = make_document(client, metadata={"region": "emea"})
-    client.post(
-        f"{PREFIX}/folders", json={"name": "EMEA", "matches": {"metadata.region": "emea"}}
-    )
+    client.post(f"{PREFIX}/folders", json={"name": "EMEA", "matches": {"metadata.region": "emea"}})
 
     # Publish twice: the second attempt is an error, and must not duplicate.
     client.post(f"{PREFIX}/publish", json={"content": [document["id"]]})
@@ -1114,12 +1122,13 @@ def test_the_seed_hook_populates_every_panel_of_the_page(client):
     from datetime import datetime, timezone
 
     from dsr.db.audited import AuditedDatabase
-
     from dsr.features.wf009_publishing import seed
 
     tmp = tempfile.TemporaryDirectory()
     try:
-        db = AuditedDatabase(str(Path(tmp.name) / "seed.db"), mirror_dir=str(Path(tmp.name) / "audit"))
+        db = AuditedDatabase(
+            str(Path(tmp.name) / "seed.db"), mirror_dir=str(Path(tmp.name) / "audit")
+        )
         try:
             room = db.create("room", {"name": "Northwind"}, actor="dana", source="seed")
             summary = seed(

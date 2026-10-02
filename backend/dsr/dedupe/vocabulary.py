@@ -55,7 +55,9 @@ DUPLICATE_RULE_API_VERSION = 52.0
 DUPLICATE_RULE_HEADER: tuple[str, ...] = ("allowSave", "includeRecordDetails", "runAsCurrentUser")
 
 #: "The default value for all fields is `false`."
-DUPLICATE_RULE_HEADER_DEFAULTS: Mapping[str, bool] = {field: False for field in DUPLICATE_RULE_HEADER}
+DUPLICATE_RULE_HEADER_DEFAULTS: Mapping[str, bool] = {
+    field: False for field in DUPLICATE_RULE_HEADER
+}
 
 #: The header's own name, kept beside it so no caller hard-codes the string.
 DUPLICATE_RULE_HEADER_NAME = "Sforce-Duplicate-Rule-Header"
@@ -217,9 +219,7 @@ VENDOR_FEATURES: Mapping[str, tuple[str, ...]] = {
         "A property created with hasUniqueValue: true",
         "Settings > Duplicate management",
     ),
-    "dataverse": (
-        "Table > Keys (alternate keys)",
-    ),
+    "dataverse": ("Table > Keys (alternate keys)",),
 }
 
 #: The policy this build applies when a connection does not say. Named in the
@@ -275,7 +275,9 @@ def require_policy(policy: Any) -> str:
         return DEFAULT_POLICY
     text = str(policy).strip().casefold()
     if text not in POLICIES:
-        raise DedupeError(f"unknown dedupe policy {policy!r}; published policies are {', '.join(POLICIES)}")
+        raise DedupeError(
+            f"unknown dedupe policy {policy!r}; published policies are {', '.join(POLICIES)}"
+        )
     return text
 
 
@@ -284,14 +286,18 @@ def require_vendor(vendor: Any) -> str:
         return DEFAULT_VENDOR
     text = str(vendor).strip().casefold()
     if text not in VENDORS:
-        raise DedupeError(f"unknown CRM vendor {vendor!r}; published vendors are {', '.join(VENDORS)}")
+        raise DedupeError(
+            f"unknown CRM vendor {vendor!r}; published vendors are {', '.join(VENDORS)}"
+        )
     return text
 
 
 def require_result(result: Any) -> str:
     text = str(result).strip().casefold()
     if text not in CRM_RESULTS:
-        raise DedupeError(f"unknown CRM duplicate result {result!r}; published results are {', '.join(CRM_RESULTS)}")
+        raise DedupeError(
+            f"unknown CRM duplicate result {result!r}; published results are {', '.join(CRM_RESULTS)}"
+        )
     return text
 
 

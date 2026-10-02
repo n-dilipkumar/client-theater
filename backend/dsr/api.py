@@ -22,7 +22,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound
-from dsr.deps import FRONTEND_DIST, StoreDep, db_path as _db_path, get_store, mirror_dir as _mirror_dir
+from dsr.deps import (
+    FRONTEND_DIST,
+    StoreDep,
+    db_path as _db_path,
+    get_store,
+    mirror_dir as _mirror_dir,
+)
 from dsr.features import load_features
 from dsr.store import RecordStore, parse_where
 
@@ -66,7 +72,9 @@ app.add_middleware(
 
 @app.exception_handler(RecordNotFound)
 async def _not_found(request: Request, exc: RecordNotFound) -> JSONResponse:
-    return JSONResponse(status_code=404, content={"error": "not_found", "detail": str(exc), "id": str(exc)})
+    return JSONResponse(
+        status_code=404, content={"error": "not_found", "detail": str(exc), "id": str(exc)}
+    )
 
 
 @app.exception_handler(AuditError)
@@ -123,7 +131,9 @@ def create_record(
     """Create a record from an arbitrary JSON payload."""
     if not collection.strip():
         raise HTTPException(status_code=400, detail="collection is required")
-    return store.create(collection, payload, room_id=room_id, actor=actor, source=f"POST /api/records/{collection}")
+    return store.create(
+        collection, payload, room_id=room_id, actor=actor, source=f"POST /api/records/{collection}"
+    )
 
 
 @app.get("/api/records/{collection}", tags=["records"])
@@ -145,9 +155,7 @@ def list_records(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if filters:
-        records = store.find(
-            collection, filters, limit=limit, include_deleted=include_deleted
-        )
+        records = store.find(collection, filters, limit=limit, include_deleted=include_deleted)
     else:
         records = store.list(
             collection,

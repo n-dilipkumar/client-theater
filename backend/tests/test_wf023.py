@@ -48,10 +48,9 @@ from __future__ import annotations
 import tempfile
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -62,8 +61,8 @@ from dsr.salesimpact import (
     SalesImpact,
     UnknownWorkspace,
     parse_filters,
+    rollup,
 )
-from dsr.salesimpact import rollup
 from dsr.salesimpact.deals import DEAL_COLLECTION, DealBook
 from dsr.salesimpact.filters import BUCKETS, bucket_key, date_range
 from dsr.salesimpact.inferences import INFERENCES
@@ -83,6 +82,7 @@ from dsr.salesimpact.vocabulary import (
     pick,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated rather than imported so renaming the route fails
 #: here instead of following silently - which is what a test is for.
@@ -266,7 +266,9 @@ def seeded(http):
 def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     """The route resolves even though no shared file names this feature."""
     entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["id"] == "wf-023-relate-buyer-engagement-to-crm-pipelin"
+        f
+        for f in http.get("/api/features").json()["features"]
+        if f["id"] == "wf-023-relate-buyer-engagement-to-crm-pipelin"
     )
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-023"
@@ -297,7 +299,9 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
 
 def test_feature_module_does_not_import_the_shared_app():
     """A guard exists in test_features.py; this states the reason locally."""
-    source = Path(load_feature("wf023_relate_buyer_engagement_to_crm_pipelin").__file__).read_text(encoding="utf-8")
+    source = Path(load_feature("wf023_relate_buyer_engagement_to_crm_pipelin").__file__).read_text(
+        encoding="utf-8"
+    )
     assert "dsr.api" not in source
     assert "from dsr.deps import" in source
 
@@ -318,7 +322,12 @@ def test_the_prefix_is_ours_alone(http):
 
 def test_room_scoped_paths_stay_room_scoped(http):
     """The build brief is explicit about this, and a generic path would not be."""
-    paths = {route["path"] for route in http.get("/api/features/wf-023-relate-buyer-engagement-to-crm-pipelin").json()["routes"]}
+    paths = {
+        route["path"]
+        for route in http.get("/api/features/wf-023-relate-buyer-engagement-to-crm-pipelin").json()[
+            "routes"
+        ]
+    }
     assert f"{PREFIX}/report/rooms/{{room_id}}" in paths
     assert not any(path.startswith(f"{PREFIX}/rooms") for path in paths)
 
@@ -364,7 +373,7 @@ def test_both_documented_crm_spellings_of_a_loss_classify_as_lost(stage):
 
 
 def test_lost_is_tried_before_won_across_every_level():
-    """"won/lost" is a label a CRM really does use, and it has to land on lost.
+    """ "won/lost" is a label a CRM really does use, and it has to land on lost.
 
     Normalised it is "won lost": a *prefix* match for "won" claims it, while "lost" matches
     it only as a *substring*. Level-major ordering - exact, then startswith, then substring,
@@ -416,7 +425,14 @@ def test_a_none_workspace_type_is_not_compared_against_nothing():
 
 
 def test_normalisation_folds_every_separator_a_crm_uses():
-    for spelling in ("Closed_Won", "closed-won", "closed won", "CLOSED  WON", "closed.won", "closed/won"):
+    for spelling in (
+        "Closed_Won",
+        "closed-won",
+        "closed won",
+        "CLOSED  WON",
+        "closed.won",
+        "closed/won",
+    ):
         assert normalise(spelling) == "closed won"
 
 
@@ -473,11 +489,13 @@ def test_the_reserved_created_at_is_not_advertised_as_a_payload_spelling():
 
 
 def test_the_documented_api_constraints_are_served_not_claimed():
-    """"the 429 'Too many requests' rate-limit response and properties parameter are the
+    """ "the 429 'Too many requests' rate-limit response and properties parameter are the
     documented API constraints to design around" - so they are served, and no socket is
     opened anywhere in this feature."""
     assert "429" in API_CONSTRAINTS["rate_limit"]
-    assert "properties" in API_CONSTRAINTS["constraints"] if "constraints" in API_CONSTRAINTS else True
+    assert (
+        "properties" in API_CONSTRAINTS["constraints"] if "constraints" in API_CONSTRAINTS else True
+    )
     assert "properties" in API_CONSTRAINTS["properties"]
     assert "no request or response schema" in API_CONSTRAINTS["endpoints_named_but_undocumented"]
 
@@ -564,7 +582,9 @@ def test_an_undated_row_is_never_dropped_by_a_date_range():
 
 
 def test_the_applied_filter_comes_back_on_every_response():
-    parsed = parse_filters({"from": "2026-01-01", "stage": "won", "owner": "dana", "bucket": "week"})
+    parsed = parse_filters(
+        {"from": "2026-01-01", "stage": "won", "owner": "dana", "bucket": "week"}
+    )
     assert parsed.echo() == {
         "from": "2026-01-01",
         "to": None,
@@ -637,7 +657,7 @@ def test_an_absurd_span_is_refused_rather_than_enumerated():
 
 
 def test_a_workspace_needs_both_sales_type_and_an_attached_deal(store):
-    """"The Sales Impact report pulls in any workspace designated as a 'Sales' type that
+    """ "The Sales Impact report pulls in any workspace designated as a 'Sales' type that
     has a CRM opportunity." Two conditions, conjunctive, both tested."""
     sales = make_room(store, name="Sales room", type="Sales")
     bare = make_room(store, name="Bare room", type="Sales")
@@ -733,7 +753,7 @@ def _deal(**overrides):
 
 
 def test_the_close_rate_is_the_researched_fraction():
-    """"How many workspaces with deals/opportunities that have been closed won, divided by
+    """ "How many workspaces with deals/opportunities that have been closed won, divided by
     the total (closed won + closed lost)."
 
     The denominator is the researched one: closed won plus closed lost, with open deals in
@@ -822,7 +842,9 @@ def test_a_close_date_before_the_created_date_is_excluded_not_averaged_in():
 
 
 def test_a_closed_deal_with_no_close_date_is_excluded_from_the_average():
-    assert rollup.tiles([_deal(stage="Closed Won", created=date(2026, 1, 1))])["days_to_close"] is None
+    assert (
+        rollup.tiles([_deal(stage="Closed Won", created=date(2026, 1, 1))])["days_to_close"] is None
+    )
 
 
 def test_a_row_is_projected_exactly_once():
@@ -862,7 +884,9 @@ def test_a_deal_with_no_crm_creation_date_falls_back_to_the_recorded_one_and_say
     and ``data_warnings`` says the interval is measured from it, because "when we first
     recorded this" and "when the CRM created the opportunity" are different facts."""
     room = make_room(store, type="Sales")
-    record = make_deal(store, room_id=room["id"], crm_deal_id="NODATE", stage="Closed Won", amount=10)
+    record = make_deal(
+        store, room_id=room["id"], crm_deal_id="NODATE", stage="Closed Won", amount=10
+    )
     body = impact.report(parse_filters({}))
     codes = {row["code"] for row in body["data_warnings"]}
     assert "recorded_created_date" in codes
@@ -888,7 +912,12 @@ def test_money_is_summed_in_one_currency_and_the_split_is_returned():
     split = rollup.money_by_currency(deals, currency="USD")
     assert split == {
         "EUR": {"deals": 1.0, "pipeline_touched": 500.0, "active_pipeline": 0.0, "revenue": 500.0},
-        "USD": {"deals": 2.0, "pipeline_touched": 2000.0, "active_pipeline": 0.0, "revenue": 2000.0},
+        "USD": {
+            "deals": 2.0,
+            "pipeline_touched": 2000.0,
+            "active_pipeline": 0.0,
+            "revenue": 2000.0,
+        },
     }
 
 
@@ -914,8 +943,12 @@ def test_a_deal_with_no_currency_joins_the_report_currency():
 
 def test_mixed_currencies_produce_a_named_warning(store, impact):
     room = make_room(store, type="Sales")
-    make_deal(store, room_id=room["id"], crm_deal_id="U", stage="Closed Won", amount=10, currency="USD")
-    make_deal(store, room_id=room["id"], crm_deal_id="E", stage="Closed Won", amount=20, currency="EUR")
+    make_deal(
+        store, room_id=room["id"], crm_deal_id="U", stage="Closed Won", amount=10, currency="USD"
+    )
+    make_deal(
+        store, room_id=room["id"], crm_deal_id="E", stage="Closed Won", amount=20, currency="EUR"
+    )
     body = impact.report(parse_filters({}))
     assert "mixed_currency" in {row["code"] for row in body["warnings"]}
     assert body["currencies"] == ["EUR", "USD"]
@@ -928,7 +961,7 @@ def test_mixed_currencies_produce_a_named_warning(store, impact):
 
 
 def test_the_funnel_reconciles_with_the_tiles():
-    """"Deals By Owner" and the stage filter are the same deals, so a reader can check the
+    """ "Deals By Owner" and the stage filter are the same deals, so a reader can check the
     close rate against the funnel instead of taking it on trust."""
     deals = [
         _deal(stage="Closed Won", amount=100, currency="USD", id="1"),
@@ -1002,9 +1035,30 @@ def test_actions_include_views_and_the_two_counters_differ():
     """D8: the researched gloss of an action is interacting with a space, and clicking
     into a page is a view - so the action count is the larger one."""
     events = [
-        {"id": "1", "room_id": "r", "buyer": "a@x", "action": "viewed", "is_view": True, "occurred": date(2026, 2, 1)},
-        {"id": "2", "room_id": "r", "buyer": "a@x", "action": "downloaded", "is_view": False, "occurred": date(2026, 2, 2)},
-        {"id": "3", "room_id": "r", "buyer": "b@x", "action": "viewed", "is_view": True, "occurred": date(2026, 2, 2)},
+        {
+            "id": "1",
+            "room_id": "r",
+            "buyer": "a@x",
+            "action": "viewed",
+            "is_view": True,
+            "occurred": date(2026, 2, 1),
+        },
+        {
+            "id": "2",
+            "room_id": "r",
+            "buyer": "a@x",
+            "action": "downloaded",
+            "is_view": False,
+            "occurred": date(2026, 2, 2),
+        },
+        {
+            "id": "3",
+            "room_id": "r",
+            "buyer": "b@x",
+            "action": "viewed",
+            "is_view": True,
+            "occurred": date(2026, 2, 2),
+        },
     ]
     body = rollup.engagement(events, parse_filters({}), in_scope_rooms=1)
     assert body["buyer_views"] == 2
@@ -1015,10 +1069,32 @@ def test_actions_include_views_and_the_two_counters_differ():
 
 def test_average_buyers_divides_by_every_in_scope_room_not_only_engaged_ones():
     """Averaging over the rooms that were touched makes a thin pipeline look dense."""
-    events = [{"id": "1", "room_id": "r", "buyer": "a@x", "action": "viewed", "is_view": True, "occurred": date(2026, 2, 1)}]
-    assert rollup.engagement(events, parse_filters({}), in_scope_rooms=1)["average_buyers_per_workspace"] == 1.0
-    assert rollup.engagement(events, parse_filters({}), in_scope_rooms=5)["average_buyers_per_workspace"] == 0.2
-    assert rollup.engagement([], parse_filters({}), in_scope_rooms=0)["average_buyers_per_workspace"] is None
+    events = [
+        {
+            "id": "1",
+            "room_id": "r",
+            "buyer": "a@x",
+            "action": "viewed",
+            "is_view": True,
+            "occurred": date(2026, 2, 1),
+        }
+    ]
+    assert (
+        rollup.engagement(events, parse_filters({}), in_scope_rooms=1)[
+            "average_buyers_per_workspace"
+        ]
+        == 1.0
+    )
+    assert (
+        rollup.engagement(events, parse_filters({}), in_scope_rooms=5)[
+            "average_buyers_per_workspace"
+        ]
+        == 0.2
+    )
+    assert (
+        rollup.engagement([], parse_filters({}), in_scope_rooms=0)["average_buyers_per_workspace"]
+        is None
+    )
 
 
 def test_an_event_with_no_resolvable_buyer_is_skipped(store):
@@ -1026,17 +1102,62 @@ def test_an_event_with_no_resolvable_buyer_is_skipped(store):
     unnamed event under an empty key would rank it above every real buyer."""
     assert rollup.project_event({"id": "x", "data": {"action": "viewed"}}) is None
     assert rollup.project_event({"id": "x", "data": {"person": "  ", "action": "viewed"}}) is None
-    assert rollup.project_event({"id": "x", "data": {"person": "A@X", "action": "viewed"}})["buyer"] == "a@x"
+    assert (
+        rollup.project_event({"id": "x", "data": {"person": "A@X", "action": "viewed"}})["buyer"]
+        == "a@x"
+    )
 
 
 def test_the_buyer_ranking_is_ordered_by_actions_then_views_then_email():
     events = [
-        {"id": "1", "room_id": "r", "buyer": "z@x", "action": "viewed", "is_view": True, "occurred": date(2026, 2, 1)},
-        {"id": "2", "room_id": "r", "buyer": "a@x", "action": "viewed", "is_view": True, "occurred": date(2026, 2, 1)},
-        {"id": "3", "room_id": "r", "buyer": "a@x", "action": "viewed", "is_view": True, "occurred": date(2026, 2, 2)},
-        {"id": "4", "room_id": "r", "buyer": "m@x", "action": "downloaded", "is_view": False, "occurred": date(2026, 2, 2)},
-        {"id": "5", "room_id": "r", "buyer": "m@x", "action": "viewed", "is_view": True, "occurred": date(2026, 2, 3)},
-        {"id": "6", "room_id": "r", "buyer": "b@x", "action": "downloaded", "is_view": False, "occurred": date(2026, 2, 4)},
+        {
+            "id": "1",
+            "room_id": "r",
+            "buyer": "z@x",
+            "action": "viewed",
+            "is_view": True,
+            "occurred": date(2026, 2, 1),
+        },
+        {
+            "id": "2",
+            "room_id": "r",
+            "buyer": "a@x",
+            "action": "viewed",
+            "is_view": True,
+            "occurred": date(2026, 2, 1),
+        },
+        {
+            "id": "3",
+            "room_id": "r",
+            "buyer": "a@x",
+            "action": "viewed",
+            "is_view": True,
+            "occurred": date(2026, 2, 2),
+        },
+        {
+            "id": "4",
+            "room_id": "r",
+            "buyer": "m@x",
+            "action": "downloaded",
+            "is_view": False,
+            "occurred": date(2026, 2, 2),
+        },
+        {
+            "id": "5",
+            "room_id": "r",
+            "buyer": "m@x",
+            "action": "viewed",
+            "is_view": True,
+            "occurred": date(2026, 2, 3),
+        },
+        {
+            "id": "6",
+            "room_id": "r",
+            "buyer": "b@x",
+            "action": "downloaded",
+            "is_view": False,
+            "occurred": date(2026, 2, 4),
+        },
     ]
     ranked = rollup.engagement(events, parse_filters({}), in_scope_rooms=1)["most_engaged_buyers"]
     # a@x and m@x both have 2 actions; a@x has more views, so it ranks first. z@x and b@x
@@ -1062,7 +1183,9 @@ def test_engagement_is_counted_only_in_in_scope_workspaces(store, impact):
             make_event(store, room["id"], "buyer@x.example", "viewed", f"2026-02-0{day}")
 
     body = impact.report(parse_filters({}))
-    assert body["engagement"]["buyer_views"] == 5, "the out-of-scope room's five views are not counted"
+    assert body["engagement"]["buyer_views"] == 5, (
+        "the out-of-scope room's five views are not counted"
+    )
     assert body["engagement"]["average_buyers_per_workspace"] == 1.0
 
 
@@ -1070,7 +1193,14 @@ def test_an_in_scope_deal_with_no_engagement_is_still_in_the_pipeline(store, imp
     """Pipeline touched does not require engagement, and a report that dropped these
     would understate pipeline for exactly the deals nobody looked at."""
     room = make_room(store, type="Sales")
-    make_deal(store, room_id=room["id"], crm_deal_id="QUIET", stage="Negotiation", amount=500, currency="USD")
+    make_deal(
+        store,
+        room_id=room["id"],
+        crm_deal_id="QUIET",
+        stage="Negotiation",
+        amount=500,
+        currency="USD",
+    )
     body = impact.report(parse_filters({}))
     assert body["tiles"]["total_pipeline_touched"] == 500.0
     assert body["engagement"]["buyer_views"] == 0
@@ -1099,13 +1229,17 @@ def test_the_views_series_is_bucketed_and_zero_filled(store, impact):
         "page rather than a gap in the chart"
     )
 
-    weekly = impact.engagement(parse_filters({"from": "2026-02-01", "to": "2026-02-04", "bucket": "week"}))
+    weekly = impact.engagement(
+        parse_filters({"from": "2026-02-01", "to": "2026-02-04", "bucket": "week"})
+    )
     assert [row["date"] for row in weekly["buyer_views_over_time"]] == ["2026-01-26", "2026-02-02"]
     assert [row["views"] for row in weekly["buyer_views_over_time"]] == [1, 2], (
         "two views in the same week aggregate into one bar, and the week before keeps its own"
     )
 
-    monthly = impact.engagement(parse_filters({"from": "2026-02-01", "to": "2026-02-28", "bucket": "month"}))
+    monthly = impact.engagement(
+        parse_filters({"from": "2026-02-01", "to": "2026-02-28", "bucket": "month"})
+    )
     assert [row["date"] for row in monthly["buyer_views_over_time"]] == ["2026-02-01"]
     assert monthly["buyer_views_over_time"][0]["views"] == 3
 
@@ -1116,7 +1250,7 @@ def test_the_views_series_is_bucketed_and_zero_filled(store, impact):
 
 
 def test_coverage_names_the_rooms_the_research_warns_about(store, impact):
-    """"unless you are requiring reps attach a deal to each space, it's possible this
+    """ "unless you are requiring reps attach a deal to each space, it's possible this
     report is missing data" - a tile cannot say which rooms, so the panel names them."""
     make_room(store, name="Bare", type="Sales")
     make_room(store, name="Untyped", type="onboarding")
@@ -1140,7 +1274,9 @@ def test_a_report_answers_even_when_the_integration_is_off(store, impact):
     """S10 says the report is *incomplete*, not wrong. A refusal would hide the very rooms
     a reader needs in order to fix it."""
     room = make_room(store, type="Sales")
-    make_deal(store, room_id=room["id"], crm_deal_id="A", stage="Negotiation", amount=10, currency="USD")
+    make_deal(
+        store, room_id=room["id"], crm_deal_id="A", stage="Negotiation", amount=10, currency="USD"
+    )
     body = impact.report(parse_filters({}))
     assert body["coverage"]["crm_connected"] is False
     assert body["coverage"]["complete"] is False
@@ -1213,7 +1349,9 @@ def test_every_listing_carries_an_explicit_ordering_key(store, impact):
     )
     assert body["deals_created_over_time"][0]["deals"] == 3
     funnel_counts = [row["deals"] for row in body["funnel"]]
-    assert funnel_counts == sorted(funnel_counts, reverse=True), "the funnel is ordered by count then name"
+    assert funnel_counts == sorted(funnel_counts, reverse=True), (
+        "the funnel is ordered by count then name"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1243,7 +1381,10 @@ def test_the_inference_endpoint_serves_the_registry_beside_the_sourced_quotes():
 
     served = describe()
     assert served["count"] == len(INFERENCES)
-    assert "The Sales Impact report pulls in any workspace designated as a 'Sales' type" in served["sourced_quotes"]["inclusion"]
+    assert (
+        "The Sales Impact report pulls in any workspace designated as a 'Sales' type"
+        in served["sourced_quotes"]["inclusion"]
+    )
     assert served["sourced"]["close_rate_formula"] == "closed_won / (closed_won + closed_lost)"
 
 
@@ -1251,9 +1392,13 @@ def test_the_change_it_pointer_of_every_inference_names_a_real_file():
     """A pointer to a file that does not exist is worse than no pointer."""
     backend = Path(__file__).resolve().parents[1]
     for entry in INFERENCES:
-        for token in entry["change_it"].replace("(", " ").replace(")", " ").replace(",", " ").split():
+        for token in (
+            entry["change_it"].replace("(", " ").replace(")", " ").replace(",", " ").split()
+        ):
             if token.startswith("dsr/") and token.endswith(".py"):
-                assert (backend / token).is_file(), f"{entry['id']} points at {token}, which does not exist"
+                assert (backend / token).is_file(), (
+                    f"{entry['id']} points at {token}, which does not exist"
+                )
 
 
 # --------------------------------------------------------------------------- #
@@ -1279,7 +1424,9 @@ def test_only_one_of_a_crm_id_or_a_name_is_required(store, book):
 def test_re_registering_a_crm_id_is_a_conflict_that_names_the_existing_record(store, book):
     room = make_room(store, type="Sales")
     first = book.create_deal(
-        {"crm_deal_id": "DUP", "amount": 100, "stage": "Negotiation"}, room_id=room["id"], source=SOURCE
+        {"crm_deal_id": "DUP", "amount": 100, "stage": "Negotiation"},
+        room_id=room["id"],
+        source=SOURCE,
     )
     with pytest.raises(DealConflict) as excinfo:
         book.create_deal({"crm_deal_id": "DUP", "amount": 999}, room_id=room["id"], source=SOURCE)
@@ -1330,7 +1477,13 @@ def test_an_unknown_field_round_trips_untouched(store, book):
 def test_the_stage_amount_sync_is_a_shallow_merge(store, book):
     room = make_room(store, type="Sales")
     record = book.create_deal(
-        {"crm_deal_id": "S", "name": "Keep me", "stage": "Negotiation", "amount": 100, "nested": {"a": 1}},
+        {
+            "crm_deal_id": "S",
+            "name": "Keep me",
+            "stage": "Negotiation",
+            "amount": 100,
+            "nested": {"a": 1},
+        },
         room_id=room["id"],
         source=SOURCE,
     )
@@ -1339,14 +1492,18 @@ def test_the_stage_amount_sync_is_a_shallow_merge(store, book):
     )
     assert updated["data"]["stage"] == "Closed Won"
     assert updated["data"]["amount"] == 250
-    assert updated["data"]["name"] == "Keep me", "a merge patch does not clear what it does not name"
+    assert updated["data"]["name"] == "Keep me", (
+        "a merge patch does not clear what it does not name"
+    )
     assert updated["data"]["nested"] == {"b": 2}, "the patch is shallow, by the store's contract"
     assert updated["revision"] == 2
 
 
 def test_a_field_is_cleared_by_sending_json_null(store, book):
     room = make_room(store, type="Sales")
-    record = book.create_deal({"crm_deal_id": "N", "team": "enterprise"}, room_id=room["id"], source=SOURCE)
+    record = book.create_deal(
+        {"crm_deal_id": "N", "team": "enterprise"}, room_id=room["id"], source=SOURCE
+    )
     assert book.update_deal(record["id"], {"team": None}, source=SOURCE)["data"]["team"] is None
 
 
@@ -1366,8 +1523,13 @@ def test_derived_fields_are_computed_on_read_and_never_stored(store, impact):
     room = make_room(store, type="Sales")
     record = store.create(
         DEAL_COLLECTION,
-        {"crm_deal_id": "D", "stage": "Negotiation", "amount": 10, "created_date": "2026-01-01",
-         "closed_at": "2026-01-31"},
+        {
+            "crm_deal_id": "D",
+            "stage": "Negotiation",
+            "amount": 10,
+            "created_date": "2026-01-01",
+            "closed_at": "2026-01-31",
+        },
         room_id=room["id"],
         actor="dana",
         source="seed",
@@ -1446,13 +1608,19 @@ def test_the_engagement_collection_can_be_repointed_without_a_code_change(store,
 def test_a_stage_set_can_be_replaced_by_a_record(store, impact):
     """A team's own CRM spelling is a record, not a code change."""
     room = make_room(store, type="Sales")
-    make_deal(store, room_id=room["id"], crm_deal_id="A", stage="Gewonnen", amount=10, currency="USD")
-    make_deal(store, room_id=room["id"], crm_deal_id="B", stage="Verloren", amount=20, currency="USD")
+    make_deal(
+        store, room_id=room["id"], crm_deal_id="A", stage="Gewonnen", amount=10, currency="USD"
+    )
+    make_deal(
+        store, room_id=room["id"], crm_deal_id="B", stage="Verloren", amount=20, currency="USD"
+    )
     # Unconfigured, neither is classifiable - and in particular "Gewonnen" is not "won".
     assert impact.report(parse_filters({}))["tiles"]["revenue"] == 0.0
     assert impact.report(parse_filters({}))["tiles"]["close_rate"] is None
 
-    impact.set_config({"fields": {"stage": {"won": ["Gewonnen"], "lost": ["Verloren"]}}}, source=SOURCE)
+    impact.set_config(
+        {"fields": {"stage": {"won": ["Gewonnen"], "lost": ["Verloren"]}}}, source=SOURCE
+    )
     figures = impact.report(parse_filters({}))["tiles"]
     assert figures["revenue"] == 10.0
     assert figures["close_rate"] == 0.5
@@ -1472,7 +1640,7 @@ def test_a_configuration_patch_does_not_drop_overrides_it_does_not_name(store, i
 
 
 def test_the_report_returns_the_eight_researched_tiles(http, seeded):
-    """"Sales Impact (synced to your CRM): Total deals, Total pipeline touched, Active
+    """ "Sales Impact (synced to your CRM): Total deals, Total pipeline touched, Active
     deals, Active pipeline, Closed won deals, Revenue, Close rate, Days to close"."""
     body = http.get(f"{PREFIX}/report").json()
     assert set(body["tiles"]) == {
@@ -1498,7 +1666,7 @@ def test_the_report_returns_the_eight_researched_tiles(http, seeded):
 
 
 def test_the_report_returns_both_panels_and_the_engagement_half(http, seeded):
-    """"Deals Created Over Time" and "Deals By Owner", then "Buyer Views, Buyer Actions,
+    """ "Deals Created Over Time" and "Deals By Owner", then "Buyer Views, Buyer Actions,
     Buyer Views Over Time, Most Engaged Buyers"."""
     body = http.get(f"{PREFIX}/report").json()
     assert isinstance(body["deals_created_over_time"], list) and body["deals_created_over_time"]
@@ -1559,7 +1727,7 @@ def test_limit_pages_the_list_but_never_the_totals(http, seeded):
 
 
 def test_the_room_drill_in_reports_eligibility_with_a_reason_not_a_404(http, seeded):
-    """"To populate this report, remember to set the workspace type" - so the most likely
+    """ "To populate this report, remember to set the workspace type" - so the most likely
     reason to open this is "why is mine not in the numbers", and 404 says "no such
     room", which is a different and wrong answer."""
     body = http.get(f"{PREFIX}/report/rooms/{seeded['bare']['id']}").json()
@@ -1618,13 +1786,15 @@ def test_a_duplicate_crm_id_is_409_and_names_the_record_to_patch(http, seeded):
 
 
 def test_attaching_to_an_unknown_room_is_404_over_http(http, seeded):
-    response = http.post(f"{PREFIX}/deals", params={"room_id": "room_absent"}, json={"crm_deal_id": "Z"})
+    response = http.post(
+        f"{PREFIX}/deals", params={"room_id": "room_absent"}, json={"crm_deal_id": "Z"}
+    )
     assert response.status_code == 404
     assert response.json()["error"] == "unknown_workspace"
 
 
 def test_the_stage_sync_moves_the_report_over_http(http, seeded):
-    """"Deal stage/amount sync keeps the rollup fresh" - so a PATCH must change the tiles
+    """ "Deal stage/amount sync keeps the rollup fresh" - so a PATCH must change the tiles
     with no other call."""
     assert http.get(f"{PREFIX}/report").json()["tiles"]["revenue"] == 1000.0
     http.patch(
@@ -1716,7 +1886,9 @@ def test_an_unknown_field_round_trips_over_http(http, seeded):
     ).json()
     assert created["data"]["our_field"] == {"deep": [1, 2]}
     assert http.get(f"{PREFIX}/deals/{created['id']}").json()["data"]["renewal_probability"] == 0.42
-    assert http.get("/api/records/crm_deal", params={"where": "crm_deal_id=ODD"}).json()["count"] == 1
+    assert (
+        http.get("/api/records/crm_deal", params={"where": "crm_deal_id=ODD"}).json()["count"] == 1
+    )
 
 
 def test_a_team_can_filter_on_a_dotted_path_through_the_dynamic_index(http, seeded):
@@ -1780,7 +1952,7 @@ def _matches_registered_route(source: str, routes: list[dict[str, Any]]) -> bool
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -1792,12 +1964,18 @@ def test_every_write_is_audited(http, seeded):
         params={"room_id": seeded["sales"]["id"], "actor": "dana"},
         json={"crm_deal_id": "NEW-1", "amount": 1},
     )
-    http.patch(f"{PREFIX}/deals/{seeded['won']['id']}", params={"actor": "dana"}, json={"amount": 2})
+    http.patch(
+        f"{PREFIX}/deals/{seeded['won']['id']}", params={"actor": "dana"}, json={"amount": 2}
+    )
     http.delete(f"{PREFIX}/deals/{seeded['lost']['id']}", params={"actor": "sam"})
     http.patch(f"{PREFIX}/integration", params={"actor": "dana"}, json={"connected": False})
 
     entries = http.get("/api/audit", params={"limit": 1000}).json()["entries"]
-    ours = [entry for entry in entries if entry["source"] and entry["source"].split(" ")[1].startswith(PREFIX)]
+    ours = [
+        entry
+        for entry in entries
+        if entry["source"] and entry["source"].split(" ")[1].startswith(PREFIX)
+    ]
     assert {entry["action"] for entry in ours} == {"insert", "update", "delete"}
     assert {entry["source"] for entry in ours} == {
         f"POST {PREFIX}/deals",
@@ -1883,7 +2061,9 @@ def test_source_is_required_rather_than_defaulted():
     for name in ("create_deal", "update_deal", "delete_deal", "save_config"):
         signature = inspect.signature(getattr(book, name))
         parameter = signature.parameters["source"]
-        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, f"{name}: source must be keyword-only"
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (
+            f"{name}: source must be keyword-only"
+        )
         assert parameter.default is inspect.Parameter.empty, f"{name}: source must be required"
 
 
@@ -1895,15 +2075,16 @@ def test_source_is_required_rather_than_defaulted():
 def test_the_seeder_produces_the_states_the_research_says_matter(tmp_path):
     """Seeded through the real seeder path, so what the demo shows is what the report
     reads - not rows written by hand in a shape the workflow would not produce."""
-    from datetime import datetime, timezone
-
     import random
+    from datetime import datetime, timezone
 
     module = load_feature("wf023_relate_buyer_engagement_to_crm_pipelin")
     db = AuditedDatabase(tmp_path / "seed.db")
     rooms = [
         (
-            db.create("room", {"name": name, "account": account, "owner": owner}, source="seed")["id"],
+            db.create("room", {"name": name, "account": account, "owner": owner}, source="seed")[
+                "id"
+            ],
             account,
         )
         for name, account, owner in (

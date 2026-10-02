@@ -102,47 +102,63 @@ def field_map_findings(raw: Any) -> list[dict[str, Any]]:
     """
     findings: list[dict[str, Any]] = []
     if not isinstance(raw, Mapping):
-        return [{"code": "field_map_not_an_object", "severity": "error", "detail": (
-            f"field_map must be a JSON object; got {type(raw).__name__}"
-        )}]
+        return [
+            {
+                "code": "field_map_not_an_object",
+                "severity": "error",
+                "detail": (f"field_map must be a JSON object; got {type(raw).__name__}"),
+            }
+        ]
 
     fields = raw.get("fields")
     if not isinstance(fields, Mapping) or not fields:
-        return [{"code": "field_map_fields_missing", "severity": "error", "detail": (
-            "field_map.fields must be a non-empty object of CRM field name -> room field name"
-        )}]
+        return [
+            {
+                "code": "field_map_fields_missing",
+                "severity": "error",
+                "detail": (
+                    "field_map.fields must be a non-empty object of CRM field name -> room field name"
+                ),
+            }
+        ]
 
     sync_key = str(raw.get("sync_key") or "").strip()
     if not sync_key:
-        findings.append({
-            "code": "sync_key_missing",
-            "severity": "error",
-            "detail": (
-                "field_map.sync_key is the CRM field that resolves a record; without it an "
-                "update event cannot be matched to a replica row."
-            ),
-        })
+        findings.append(
+            {
+                "code": "sync_key_missing",
+                "severity": "error",
+                "detail": (
+                    "field_map.sync_key is the CRM field that resolves a record; without it an "
+                    "update event cannot be matched to a replica row."
+                ),
+            }
+        )
     elif sync_key not in fields:
-        findings.append({
-            "code": "sync_key_not_in_fields",
-            "severity": "info",
-            "detail": (
-                f"sync_key {sync_key!r} is not in field_map.fields. It still resolves records - "
-                f"it lands in {raw.get('sync_key_field') or DEFAULT_SYNC_KEY_FIELD!r} - but a "
-                "reader scanning fields will not see the mapping that matters most."
-            ),
-        })
+        findings.append(
+            {
+                "code": "sync_key_not_in_fields",
+                "severity": "info",
+                "detail": (
+                    f"sync_key {sync_key!r} is not in field_map.fields. It still resolves records - "
+                    f"it lands in {raw.get('sync_key_field') or DEFAULT_SYNC_KEY_FIELD!r} - but a "
+                    "reader scanning fields will not see the mapping that matters most."
+                ),
+            }
+        )
 
     if not str(raw.get("account_field") or "").strip():
-        findings.append({
-            "code": "account_field_missing",
-            "severity": "info",
-            "detail": (
-                "No account_field, so a committed change refreshes the deal panel without "
-                "naming which buyer it belongs to. The invalidation records resolved: false "
-                "rather than guessing."
-            ),
-        })
+        findings.append(
+            {
+                "code": "account_field_missing",
+                "severity": "info",
+                "detail": (
+                    "No account_field, so a committed change refreshes the deal panel without "
+                    "naming which buyer it belongs to. The invalidation records resolved: false "
+                    "rather than guessing."
+                ),
+            }
+        )
     return findings
 
 

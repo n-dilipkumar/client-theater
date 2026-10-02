@@ -128,7 +128,9 @@ class SalesImpact:
 
     # -- the report --------------------------------------------------------- #
 
-    def _inputs(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    def _inputs(
+        self,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
         """Load the three populations once, and the configuration that reads them.
 
         Loaded here rather than inside the rollup so that one request reads each
@@ -141,8 +143,13 @@ class SalesImpact:
             "won": tuple(config["stages"]["won"]) or None,
             "lost": tuple(config["stages"]["lost"]) or None,
         }
-        rooms = [rollup.project_room(record) for record in self.deals.rooms(config["collections"]["rooms"])]
-        deals = [rollup.project_deal(record, stage_sets=stage_sets) for record in self.deals.deals()]
+        rooms = [
+            rollup.project_room(record)
+            for record in self.deals.rooms(config["collections"]["rooms"])
+        ]
+        deals = [
+            rollup.project_deal(record, stage_sets=stage_sets) for record in self.deals.deals()
+        ]
         events = [
             projected
             for record in self.deals.events(config["collections"]["engagement"])
@@ -184,7 +191,9 @@ class SalesImpact:
         arriving here wants to know why their room is absent.
         """
         rooms, deals, events, context = self._inputs()
-        record = self.deals.require_room(room_id, collection=context["config"]["collections"]["rooms"])
+        record = self.deals.require_room(
+            room_id, collection=context["config"]["collections"]["rooms"]
+        )
         return rollup.room_report(
             rollup.project_room(record),
             rooms,
@@ -270,7 +279,7 @@ class SalesImpact:
     ) -> dict[str, Any]:
         """The researched stage/amount sync."""
         config = self.deals.config()
-        record = self.deals.update_deal(deal_id, patch, actor=actor, source=source)
+        self.deals.update_deal(deal_id, patch, actor=actor, source=source)
         return self.deal_view(deal_id, config=config, stage_sets=_stage_sets(config))
 
     def detach_deal(self, deal_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:

@@ -46,9 +46,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 from dsr.db.audited import new_id
-from dsr.headless_booking import assets as assets_mod
-from dsr.headless_booking import credentials as creds
-from dsr.headless_booking import sessions as sessions_mod
+from dsr.headless_booking import (
+    assets as assets_mod,
+    credentials as creds,
+    sessions as sessions_mod,
+)
 from dsr.headless_booking.availability import Busy, parse_calendar_block, parse_interval
 from dsr.headless_booking.errors import (
     HeadlessBookingError,
@@ -114,7 +116,9 @@ class HeadlessBooking:
     def now(self) -> datetime:
         moment = self._clock()
         if isinstance(moment, datetime) and moment.tzinfo is None:
-            raise HeadlessBookingError("the clock must return an aware datetime; a naive one has no instant")
+            raise HeadlessBookingError(
+                "the clock must return an aware datetime; a naive one has no instant"
+            )
         return moment
 
     # ------------------------------------------------------------------ #
@@ -182,7 +186,9 @@ class HeadlessBooking:
             record = self.store.get(str(credential_id))
             if record is None or record["collection"] != CREDENTIAL_COLLECTION:
                 raise NotFound(
-                    f"credential {credential_id} not found", resource="credential", record_id=str(credential_id)
+                    f"credential {credential_id} not found",
+                    resource="credential",
+                    record_id=str(credential_id),
                 )
             creds.require_scope(record["data"], section, permission)
             return record["id"], "credential_id", dict(record["data"])
@@ -251,7 +257,9 @@ class HeadlessBooking:
         record = self.store.get(credential_id)
         if record is None or record["collection"] != CREDENTIAL_COLLECTION:
             raise NotFound(
-                f"credential {credential_id} not found", resource="credential", record_id=credential_id
+                f"credential {credential_id} not found",
+                resource="credential",
+                record_id=credential_id,
             )
         return creds.public(record)
 
@@ -262,7 +270,9 @@ class HeadlessBooking:
         record = self.store.get(credential_id)
         if record is None or record["collection"] != CREDENTIAL_COLLECTION:
             raise NotFound(
-                f"credential {credential_id} not found", resource="credential", record_id=credential_id
+                f"credential {credential_id} not found",
+                resource="credential",
+                record_id=credential_id,
             )
         self.store.delete(credential_id, actor=actor, source=source)
         return {"id": credential_id, "revoked": True}
@@ -284,7 +294,9 @@ class HeadlessBooking:
         # store, and a payload field that quietly differs from it is a class of
         # bug this codebase has already had.
         spec.pop("room_id", None)
-        return self.store.create(ASSET_COLLECTION, spec, room_id=room_id, actor=actor, source=source)
+        return self.store.create(
+            ASSET_COLLECTION, spec, room_id=room_id, actor=actor, source=source
+        )
 
     def list_assets(
         self,
@@ -764,17 +776,21 @@ class HeadlessBooking:
                 "slot_taken",
                 f"slot {canonical} is no longer available: "
                 + ", ".join(
-                    part for part in (
+                    part
+                    for part in (
                         "the host's calendar has a block over it" if conflicts["busy"] else "",
                         "a meeting is already booked for the host" if conflicts["booked"] else "",
-                    ) if part
+                    )
+                    if part
                 )
                 + ". The researched remedy is a fresh session: re-run the discover or route call.",
             )
         guest = dict(payload.get("guest") or {})
-        guest_email = str(
-            guest.get("guestEmail") or payload.get("guest_email") or session.guest_email or ""
-        ).strip().lower()
+        guest_email = (
+            str(guest.get("guestEmail") or payload.get("guest_email") or session.guest_email or "")
+            .strip()
+            .lower()
+        )
         if not guest_email:
             # A booking with no guest has nobody to invite, and "Calendar invites
             # are sent immediately" is the documented consequence of committing.
@@ -799,7 +815,9 @@ class HeadlessBooking:
                 "written": True,
                 "mode": "recorded",
                 "object": str((raw_writeback or {}).get("object") or "Event"),
-                "fields": sorted((raw_writeback or {}).get("fields") or ["startTime", "guestEmail"]),
+                "fields": sorted(
+                    (raw_writeback or {}).get("fields") or ["startTime", "guestEmail"]
+                ),
             }
 
         with self.store.db.transaction(actor=actor or "api", source=source) as tx:
@@ -1076,7 +1094,9 @@ class HeadlessBooking:
     def get_meeting(self, meeting_id: str) -> dict[str, Any]:
         record = self.store.get(meeting_id)
         if record is None or record["collection"] != MEETING_COLLECTION:
-            raise NotFound(f"meeting {meeting_id} not found", resource="meeting", record_id=meeting_id)
+            raise NotFound(
+                f"meeting {meeting_id} not found", resource="meeting", record_id=meeting_id
+            )
         return {
             **record,
             "invites": self.store.find(INVITE_COLLECTION, {"meeting_id": meeting_id}, limit=100),
@@ -1110,9 +1130,9 @@ class HeadlessBooking:
             CALL_COLLECTION,
             {
                 "tool": tool,
-                "call": "discover_or_route" if tool and tool.endswith(("init", "route-by-slug")) else (
-                    "book" if tool else "discover_or_route"
-                ),
+                "call": "discover_or_route"
+                if tool and tool.endswith(("init", "route-by-slug"))
+                else ("book" if tool else "discover_or_route"),
                 "section": section,
                 "outcome": outcome,
                 "detail": detail,
@@ -1181,9 +1201,13 @@ class HeadlessBooking:
             # the records are written and say so. Reporting one number here
             # would invite a reader to believe invites went somewhere.
             "invites_sent": 0,
-            "invites_recorded": len(self.store.list(INVITE_COLLECTION, room_id=room_id, limit=1000)),
+            "invites_recorded": len(
+                self.store.list(INVITE_COLLECTION, room_id=room_id, limit=1000)
+            ),
             "webhooks_delivered": 0,
-            "webhooks_recorded": len(self.store.list(WEBHOOK_COLLECTION, room_id=room_id, limit=1000)),
+            "webhooks_recorded": len(
+                self.store.list(WEBHOOK_COLLECTION, room_id=room_id, limit=1000)
+            ),
         }
 
 
@@ -1261,9 +1285,13 @@ def instructions(
 
     init_path = INIT_ENDPOINTS[section]
     if section == "concierge":
-        init_path = init_path.replace("{routerSlug}", str(spec.get("router_slug") or "{routerSlug}"))
+        init_path = init_path.replace(
+            "{routerSlug}", str(spec.get("router_slug") or "{routerSlug}")
+        )
     if section == "handoff":
-        init_path = init_path.replace("{workspaceId}", str(spec.get("workspace_id") or "{workspaceId}"))
+        init_path = init_path.replace(
+            "{workspaceId}", str(spec.get("workspace_id") or "{workspaceId}")
+        )
         init_path = init_path.replace("{userId}", str(spec.get("booker_id") or "{userId}"))
 
     schedule_path = SCHEDULE_ENDPOINTS[section]

@@ -88,7 +88,9 @@ def main() -> int:
 
     # Stable ordering: domain in a deliberate reading order, then research number.
     domain_order = list(DOMAIN_TITLES)
-    kept.sort(key=lambda w: (domain_order.index(w.domain) if w.domain in domain_order else 99, w.number))
+    kept.sort(
+        key=lambda w: (domain_order.index(w.domain) if w.domain in domain_order else 99, w.number)
+    )
 
     OUT.mkdir(parents=True, exist_ok=True)
     wf_dir = OUT / "wf"
@@ -243,8 +245,7 @@ def main() -> int:
         lines += [
             f"## {title}",
             "",
-            f"_({len(domain_entries)} workflows, domain `{domain}`; "
-            f"{domain_critical} critical)_",
+            f"_({len(domain_entries)} workflows, domain `{domain}`; {domain_critical} critical)_",
             "",
             "| Ticket | Workflow | Critical | Sources | Merged |",
             "| --- | --- | --- | --- | --- |",
@@ -263,7 +264,9 @@ def main() -> int:
         lines.append("")
 
     (OUT / "INDEX.md").write_text("\n".join(lines), encoding="utf-8")
-    (OUT / "workflows.json").write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
+    (OUT / "workflows.json").write_text(
+        json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     print(f"distinct workflows : {len(entries)}")
     print(f"duplicates merged : {len(merged_away)}")

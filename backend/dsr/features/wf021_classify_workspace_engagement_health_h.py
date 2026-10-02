@@ -288,7 +288,9 @@ def list_events(
     room_id: str | None = Query(default=None),
     type: str | None = Query(default=None, description="One researched event shape"),
     audience: str | None = Query(default=None, description="external | internal"),
-    client_view: bool | None = Query(default=None, description="Only client views, or only the rest"),
+    client_view: bool | None = Query(
+        default=None, description="Only client views, or only the rest"
+    ),
     since: str | None = Query(default=None, description="ISO instant, inclusive"),
     until: str | None = Query(default=None, description="ISO instant, inclusive"),
     limit: int = Query(default=100, ge=1, le=1000),

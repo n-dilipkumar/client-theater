@@ -226,7 +226,9 @@ def register_asset(
     typed column, no new required field - the schema-flexibility rule is what
     lets a team add its own without coordinating with anyone.
     """
-    return book.register_asset(payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/assets")
+    return book.register_asset(
+        payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/assets"
+    )
 
 
 @router.get("/rooms/{room_id}/assets")
@@ -345,7 +347,11 @@ def record_event(
     not make a second call. A known asset is left alone.
     """
     return book.record_event(
-        asset_id, payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/assets/{asset_id}/events"
+        asset_id,
+        payload,
+        room_id=room_id,
+        actor=actor,
+        source=f"POST {router.prefix}/assets/{asset_id}/events",
     )
 
 
@@ -371,7 +377,11 @@ def record_timings(
     distinction this workflow exists to make.
     """
     return book.record_timings(
-        asset_id, payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/assets/{asset_id}/timings"
+        asset_id,
+        payload,
+        room_id=room_id,
+        actor=actor,
+        source=f"POST {router.prefix}/assets/{asset_id}/timings",
     )
 
 
@@ -390,7 +400,11 @@ def record_watch(
     can pause and come back.
     """
     return book.record_watch(
-        asset_id, payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/assets/{asset_id}/watch"
+        asset_id,
+        payload,
+        room_id=room_id,
+        actor=actor,
+        source=f"POST {router.prefix}/assets/{asset_id}/watch",
     )
 
 
@@ -455,10 +469,34 @@ _WATCHES: tuple[tuple[str, float, str], ...] = (
 #: ``(asset name, event, viewer, is_internal, days ago)``. The last four are the
 #: internal-only deck, which is where the researched exception is visible.
 _EVENTS: tuple[tuple[str, str, str, bool, int], ...] = (
-    ("Enterprise Security & Compliance Overview", "asset.viewed", "a.buyer@northwind.example", False, 21),
-    ("Enterprise Security & Compliance Overview", "asset.viewed", "a.buyer@northwind.example", False, 9),
-    ("Enterprise Security & Compliance Overview", "asset.viewed", "procurement@northwind.example", False, 6),
-    ("Enterprise Security & Compliance Overview", "asset.downloaded", "security@northwind.example", False, 4),
+    (
+        "Enterprise Security & Compliance Overview",
+        "asset.viewed",
+        "a.buyer@northwind.example",
+        False,
+        21,
+    ),
+    (
+        "Enterprise Security & Compliance Overview",
+        "asset.viewed",
+        "a.buyer@northwind.example",
+        False,
+        9,
+    ),
+    (
+        "Enterprise Security & Compliance Overview",
+        "asset.viewed",
+        "procurement@northwind.example",
+        False,
+        6,
+    ),
+    (
+        "Enterprise Security & Compliance Overview",
+        "asset.downloaded",
+        "security@northwind.example",
+        False,
+        4,
+    ),
     ("Platform Roadmap FY27", "asset.viewed", "a.buyer@northwind.example", False, 12),
     ("Platform Roadmap FY27", "asset.shared", "dana", True, 12),
     ("Commercial Terms One-Pager", "asset.viewed", "procurement@northwind.example", False, 3),
@@ -545,9 +583,9 @@ def _read(
             {
                 "page": page,
                 "seconds": seconds,
-                "occurred_at": (
-                    now - timedelta(days=3) + timedelta(seconds=elapsed)
-                ).isoformat(timespec="seconds"),
+                "occurred_at": (now - timedelta(days=3) + timedelta(seconds=elapsed)).isoformat(
+                    timespec="seconds"
+                ),
             }
         )
         elapsed += seconds + 3
@@ -599,7 +637,9 @@ def seed(db: AuditedDatabase, context: Mapping[str, Any]) -> str:
             primary,
         ),
         (
-            _asset(2, "Platform Roadmap FY27", "pdf", pageCount=12, tags=["product", "confidential"]),
+            _asset(
+                2, "Platform Roadmap FY27", "pdf", pageCount=12, tags=["product", "confidential"]
+            ),
             primary,
         ),
         (
@@ -663,9 +703,7 @@ def seed(db: AuditedDatabase, context: Mapping[str, Any]) -> str:
         if not asset_id:
             continue
         for viewer, pages_reached in readers:
-            readings += _read(
-                book, asset_id, name, viewer, pages_reached, room_id=primary, now=now
-            )
+            readings += _read(book, asset_id, name, viewer, pages_reached, room_id=primary, now=now)
 
     watches = 0
     video_id = assets.get("SSO Onboarding Walkthrough")

@@ -38,13 +38,13 @@ from typing import Any, Mapping, Sequence
 
 from dsr.panel_time.errors import ConstraintError
 from dsr.panel_time.slots import Evaluation
-from dsr.panel_time.timeutils import format_duration, format_instant
+from dsr.panel_time.timeutils import format_duration
 from dsr.panel_time.vocabulary import (
     EMPTY_BUSY_SUGGESTIONS,
     EMPTY_NONE,
-    EMPTY_NOT_ORGANIZER,
     EMPTY_NOT_ENOUGH_CALENDAR_FREE_TIME,
     EMPTY_NOT_ENOUGH_PEOPLE_FREE,
+    EMPTY_NOT_ORGANIZER,
     EMPTY_REASONS,
     SUGGESTION_REASON_ALL_FREE,
 )
@@ -152,7 +152,9 @@ def derive_empty_reason(
     An implementation that returned a single ``none`` for all of these would be
     the researched property with the researched advice hollowed out.
     """
-    if organizer_id is None or str(organizer_id) not in {str(calendar_id) for calendar_id in invited}:
+    if organizer_id is None or str(organizer_id) not in {
+        str(calendar_id) for calendar_id in invited
+    }:
         # [sourced] the research's step 5 creates the event *on the organizer's
         # calendar*, so a panel with no organizer - or one that does not invite
         # the organizer it names - cannot be committed at all. This is that
@@ -193,7 +195,6 @@ def retune_adjustments(
         EMPTY_NOT_ORGANIZER: (
             (
                 "invite_organizer",
-
                 "The panel does not invite its own organizer, so there is nobody to create "
                 "the event on. Add the organizer to the panel's calendars. No re-call fixes "
                 "this one: the searched parameters are correct and the attendee list is not.",

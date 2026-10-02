@@ -126,7 +126,13 @@ def require_object_shape(value: Any, what: str) -> dict[str, Any]:
     declared = value.get("type")
     if declared is None:
         return dict(value)
-    names = [declared] if isinstance(declared, str) else list(declared) if isinstance(declared, Sequence) else []
+    names = (
+        [declared]
+        if isinstance(declared, str)
+        else list(declared)
+        if isinstance(declared, Sequence)
+        else []
+    )
     if not names or any(not isinstance(name, str) for name in names):
         raise SignalError(f"{what}.type must be a type name or a list of type names")
     unknown = [name for name in names if name not in JSON_TYPES]
@@ -137,7 +143,7 @@ def require_object_shape(value: Any, what: str) -> dict[str, Any]:
         )
     if "object" not in names:
         raise SignalError(
-            f"{what}.type must be \"object\" because a {what.replace('_shape', '')} "
+            f'{what}.type must be "object" because a {what.replace("_shape", "")} '
             f"carries JSON object fields; got {declared!r}"
         )
     properties = value.get("properties")
@@ -174,7 +180,9 @@ def validate(shape: Mapping[str, Any], value: Any, path: str = "$") -> list[dict
     """
     findings: list[dict[str, str]] = []
     if not isinstance(shape, Mapping):
-        return [{"path": path, "keyword": "schema", "message": "the shape is not a JSON Schema object"}]
+        return [
+            {"path": path, "keyword": "schema", "message": "the shape is not a JSON Schema object"}
+        ]
 
     def fail(at: str, keyword: str, message: str) -> None:
         findings.append({"path": at, "keyword": keyword, "message": message})

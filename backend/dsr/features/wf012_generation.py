@@ -104,9 +104,7 @@ GeneratorDep = Depends(get_generator)
 
 def _generation_error(request: Request, exc: GenerationError) -> JSONResponse:
     """A malformed request. 400, because the caller can fix it and retry."""
-    return JSONResponse(
-        status_code=400, content={"error": "generation_error", "detail": str(exc)}
-    )
+    return JSONResponse(status_code=400, content={"error": "generation_error", "detail": str(exc)})
 
 
 def _unknown_template(request: Request, exc: UnknownTemplate) -> JSONResponse:
@@ -163,9 +161,7 @@ def declare_template(
     to create a new one (201). The declared ``variables`` list drives the
     generator UI and is advisory, never a validation gate.
     """
-    record = generator.declare(
-        payload, actor=actor, source=f"POST {router.prefix}/templates"
-    )
+    record = generator.declare(payload, actor=actor, source=f"POST {router.prefix}/templates")
     if payload.get("template_id"):
         response.status_code = 200
     return record
@@ -189,9 +185,7 @@ def preview_generation(
 
 
 @router.get("/templates/{template_id}")
-def read_template(
-    template_id: str, generator: TemplateGenerator = GeneratorDep
-) -> dict[str, Any]:
+def read_template(template_id: str, generator: TemplateGenerator = GeneratorDep) -> dict[str, Any]:
     return generator.template(template_id)
 
 
@@ -247,9 +241,7 @@ def create_generation(
     rather than started.
     """
     request = parse_request(payload)
-    return generator.generate(
-        request, actor=actor, source=f"POST {router.prefix}/generations"
-    )
+    return generator.generate(request, actor=actor, source=f"POST {router.prefix}/generations")
 
 
 @router.post("/generations/bulk", status_code=201)

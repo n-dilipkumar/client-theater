@@ -66,7 +66,9 @@ class RecordStore:
     def list(self, collection: str, **kwargs: Any) -> list[dict[str, Any]]:
         return self.db.list(collection, **kwargs)
 
-    def find(self, collection: str, where: Mapping[str, Any], **kwargs: Any) -> list[dict[str, Any]]:
+    def find(
+        self, collection: str, where: Mapping[str, Any], **kwargs: Any
+    ) -> list[dict[str, Any]]:
         return self.db.find(collection, where, **kwargs)
 
     def count_where(self, collection: str, where: Mapping[str, Any], **kwargs: Any) -> int:

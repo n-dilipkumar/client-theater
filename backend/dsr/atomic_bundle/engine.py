@@ -32,7 +32,6 @@ from typing import Any, Callable, Mapping
 
 from dsr.atomic_bundle.dialects import RenderOptions, render
 from dsr.atomic_bundle.errors import (
-    BundleError,
     BundleNotConfigured,
     BundleShapeError,
     NotFound,
@@ -56,7 +55,12 @@ CONNECTOR_COLLECTION = "crm_atomic_connector"
 BUNDLE_COLLECTION = "crm_atomic_bundle"
 RUN_COLLECTION = "crm_atomic_run"
 
-COLLECTIONS: tuple[str, ...] = (CONNECTOR_COLLECTION, BUNDLE_COLLECTION, RUN_COLLECTION, TARGET_COLLECTION)
+COLLECTIONS: tuple[str, ...] = (
+    CONNECTOR_COLLECTION,
+    BUNDLE_COLLECTION,
+    RUN_COLLECTION,
+    TARGET_COLLECTION,
+)
 
 #: The transport names a connector may ask for. ``local`` is the in-process CRM
 #: from :mod:`dsr.atomic_bundle.transport`; ``urllib`` is the real HTTP one.
@@ -130,7 +134,9 @@ class BundleCommitter:
         patch = _connector_payload(payload, require_base_url=False, partial=True)
         if not patch:
             return _connector_summary(record)
-        return _connector_summary(self.store.update(record["id"], patch, actor=actor, source=source))
+        return _connector_summary(
+            self.store.update(record["id"], patch, actor=actor, source=source)
+        )
 
     def delete_connector(
         self, connector_id: str, *, actor: str | None, source: str
@@ -246,9 +252,7 @@ class BundleCommitter:
             return _bundle_summary(record)
         merged = {**record["data"], **patch}
         patch["effective"] = self._validate(merged)
-        return _bundle_summary(
-            self.store.update(record["id"], patch, actor=actor, source=source)
-        )
+        return _bundle_summary(self.store.update(record["id"], patch, actor=actor, source=source))
 
     def delete_bundle(
         self, room_id: str, bundle_id: str, *, actor: str | None, source: str
@@ -545,9 +549,7 @@ def _connector_payload(
 
     dialect = data.get("dialect")
     if dialect is not None and str(dialect) not in DIALECTS:
-        raise BundleShapeError(
-            f"unknown dialect {dialect!r}; expected one of {list(DIALECTS)}"
-        )
+        raise BundleShapeError(f"unknown dialect {dialect!r}; expected one of {list(DIALECTS)}")
     policy = data.get("policy")
     if policy is not None and str(policy) not in POLICIES:
         raise BundleShapeError(
@@ -562,7 +564,9 @@ def _connector_payload(
         raise BundleNotConfigured("base_url is required")
 
     if partial:
-        return {key: value for key, value in data.items() if key not in ("id", "room_id", "revision")}
+        return {
+            key: value for key, value in data.items() if key not in ("id", "room_id", "revision")
+        }
 
     data.setdefault("dialect", DIALECTS[0])
     data.setdefault("policy", POLICIES[0])
@@ -591,9 +595,7 @@ def _bundle_payload(payload: Mapping[str, Any], *, partial: bool = False) -> dic
             )
     dialect = data.get("dialect")
     if dialect is not None and str(dialect) not in DIALECTS:
-        raise BundleShapeError(
-            f"unknown dialect {dialect!r}; expected one of {list(DIALECTS)}"
-        )
+        raise BundleShapeError(f"unknown dialect {dialect!r}; expected one of {list(DIALECTS)}")
     policy = data.get("policy")
     if policy is not None and str(policy) not in POLICIES:
         raise BundleShapeError(
@@ -633,9 +635,7 @@ def _resolve_choices(
     """
     data = bundle.get("data", bundle)
     connector = connector or {}
-    chosen_dialect = str(
-        dialect or data.get("dialect") or connector.get("dialect") or DIALECTS[0]
-    )
+    chosen_dialect = str(dialect or data.get("dialect") or connector.get("dialect") or DIALECTS[0])
     chosen_policy = str(policy or data.get("policy") or connector.get("policy") or POLICIES[0])
     collate = collate_subrequests
     if collate is None:
@@ -650,16 +650,16 @@ def _resolve_choices(
             "dialect": _precedence(dialect, data.get("dialect"), connector.get("dialect")),
             "policy": _precedence(policy, data.get("policy"), connector.get("policy")),
             "collate_subrequests": _precedence(
-                collate_subrequests, data.get("collate_subrequests"), connector.get("collate_subrequests")
+                collate_subrequests,
+                data.get("collate_subrequests"),
+                connector.get("collate_subrequests"),
             ),
         },
     }
 
 
 def _precedence(*candidates: Any) -> str:
-    for value, label in zip(
-        candidates, ("request", "bundle", "connector"), strict=False
-    ):
+    for value, label in zip(candidates, ("request", "bundle", "connector"), strict=False):
         if value is not None:
             return label
     return "default"
@@ -764,9 +764,7 @@ def _bundle_summary(record: Mapping[str, Any]) -> dict[str, Any]:
         "record_count": len(records),
         "records": records,
         "order": [
-            str(entry.get("reference_id"))
-            for entry in records
-            if isinstance(entry, Mapping)
+            str(entry.get("reference_id")) for entry in records if isinstance(entry, Mapping)
         ],
         "types": sorted(
             {
@@ -830,9 +828,7 @@ def _run_payload(
     }
 
 
-def _run_summary(
-    record: Mapping[str, Any], result: CommitResult | None = None
-) -> dict[str, Any]:
+def _run_summary(record: Mapping[str, Any], result: CommitResult | None = None) -> dict[str, Any]:
     data = record.get("data", {})
     summary = {
         "id": record.get("id"),

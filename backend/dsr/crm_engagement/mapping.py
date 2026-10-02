@@ -228,7 +228,9 @@ def _transform_iso8601(value: Any, spec: Mapping[str, Any]) -> Transformed:
     else:
         text = as_text(value)
         if not text:
-            return Transformed(None, [{"code": "no_value", "detail": "the source resolved to nothing"}])
+            return Transformed(
+                None, [{"code": "no_value", "detail": "the source resolved to nothing"}]
+            )
         candidate = text[:-1] + "+00:00" if text.endswith("Z") else text
         try:
             parsed = datetime.fromisoformat(candidate)
@@ -298,8 +300,7 @@ def _transform_picklist(value: Any, spec: Mapping[str, Any]) -> Transformed:
             {
                 "code": "unmapped_option",
                 "detail": (
-                    f"{text!r} is not in the option table "
-                    f"({', '.join(sorted(table)) or 'empty'})"
+                    f"{text!r} is not in the option table ({', '.join(sorted(table)) or 'empty'})"
                 ),
             }
         ],
@@ -451,7 +452,11 @@ def normalise_field_map(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise InvalidFieldMap("event_type is required: a field map says which event type it covers")
 
     raw_fields = payload.get("fields")
-    if not isinstance(raw_fields, Sequence) or isinstance(raw_fields, (str, bytes)) or not raw_fields:
+    if (
+        not isinstance(raw_fields, Sequence)
+        or isinstance(raw_fields, (str, bytes))
+        or not raw_fields
+    ):
         raise InvalidFieldMap("fields is required: a field map with no fields sends nothing")
 
     fields: list[dict[str, Any]] = []
@@ -526,7 +531,12 @@ def normalise_field_map(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _finding(code: str, detail: str, **extra: Any) -> dict[str, Any]:
-    return {"code": code, "detail": detail, "severity": "hard" if code in HARD_FINDINGS else "soft", **extra}
+    return {
+        "code": code,
+        "detail": detail,
+        "severity": "hard" if code in HARD_FINDINGS else "soft",
+        **extra,
+    }
 
 
 def map_event(event: Mapping[str, Any], field_map: Mapping[str, Any]) -> Mapped:
@@ -554,10 +564,17 @@ def map_event(event: Mapping[str, Any], field_map: Mapping[str, Any]) -> Mapped:
             if field_spec.get("default") is not None:
                 result.properties[target] = field_spec["default"]
                 result.findings.append(
-                    _finding("defaulted", f"used the field map's default for {target!r}", field=target, source=source)
+                    _finding(
+                        "defaulted",
+                        f"used the field map's default for {target!r}",
+                        field=target,
+                        source=source,
+                    )
                 )
                 continue
-            result.findings.append(_finding(code, detail, field=target, source=source, located=located))
+            result.findings.append(
+                _finding(code, detail, field=target, source=source, located=located)
+            )
             if field_spec.get("required"):
                 # A field the map says is required, with nothing to build it from. Named
                 # separately from the ordinary source finding because "this property is
@@ -604,12 +621,18 @@ def map_event(event: Mapping[str, Any], field_map: Mapping[str, Any]) -> Mapped:
     found, value, located = read_source(event, sync_source)
     reason = ""
     if not found or value is None or as_text(value) == "":
-        reason = f"the sync key {sync_property!r} reads {sync_source!r}, which this event does not carry"
+        reason = (
+            f"the sync key {sync_property!r} reads {sync_source!r}, which this event does not carry"
+        )
     else:
         transformed = run_transform(sync_spec.get("transform"), value, sync_spec)
         if transformed.usable:
             result.properties[sync_property] = transformed.value
-            result.sync_key = {"property": sync_property, "value": transformed.value, "source": located}
+            result.sync_key = {
+                "property": sync_property,
+                "value": transformed.value,
+                "source": located,
+            }
         else:
             reason = (
                 f"the sync key {sync_property!r} could not be built from {sync_source!r}: "
@@ -642,7 +665,9 @@ def describe_transforms() -> list[dict[str, Any]]:
                 "version": entry["version"],
                 "label": entry["label"],
                 "requires": entry.get("requires"),
-                "aliases": sorted(alias for alias, target in _TRANSFORM_ALIASES.items() if target == name),
+                "aliases": sorted(
+                    alias for alias, target in _TRANSFORM_ALIASES.items() if target == name
+                ),
             }
         )
     return rows

@@ -84,9 +84,7 @@ REJECTION_REASONS: dict[str, str] = {
         "the row has no value for the connection's key source field, and an upsert "
         "with no external id has nothing to key on"
     ),
-    "no_mapped_fields": (
-        "the row maps to no CRM fields, so there is nothing to write"
-    ),
+    "no_mapped_fields": ("the row maps to no CRM fields, so there is nothing to write"),
     "partial_upsert_unsupported": (
         "this vendor does not support a partial upsert with this idProperty, so a row "
         "that cannot supply the complete property set is refused rather than sent: "
@@ -210,7 +208,8 @@ def preflight_row(
     if not fields:
         raise RowRejected(
             "no_mapped_fields",
-            f"row {row.get('id', '?')} maps to no CRM field. " + REJECTION_REASONS["no_mapped_fields"],
+            f"row {row.get('id', '?')} maps to no CRM field. "
+            + REJECTION_REASONS["no_mapped_fields"],
         )
 
     if not partial_upserts_supported:
@@ -278,7 +277,7 @@ def _iter_field_names(node: Any) -> list[str]:
 
 
 def _assert_single_type(items: Sequence[Mapping[str, Any]], object_name: str) -> None:
-    """"The list can contain objects only of the type indicated in the request URI."
+    """ "The list can contain objects only of the type indicated in the request URI."
 
     A chunk that mixed two object types would be a request the vendor rejects as a
     whole, taking every other row in the chunk down with it. Refusing before the
@@ -309,9 +308,7 @@ def salesforce_item(
     }
 
 
-def hubspot_item(
-    fields: Mapping[str, Any], *, key_field: str, key_value_: str
-) -> dict[str, Any]:
+def hubspot_item(fields: Mapping[str, Any], *, key_field: str, key_value_: str) -> dict[str, Any]:
     """One HubSpot batch-upsert input.
 
     The research names the ``idProperty`` parameter; the ``inputs`` envelope
@@ -378,7 +375,9 @@ def build_payload(
         _assert_no_record_id(items, key_field)
         body: dict[str, Any] = {"records": items}
     elif style == "id_property":
-        items = [hubspot_item(fields, key_field=key_field, key_value_=value) for value, fields in entries]
+        items = [
+            hubspot_item(fields, key_field=key_field, key_value_=value) for value, fields in entries
+        ]
         # Only `properties` holds mapped fields; the envelope's own `id` is the
         # idProperty's value, which is the researched point of the call.
         _assert_no_record_id([item["properties"] for item in items], key_field)
@@ -443,9 +442,7 @@ def build_bulk_request(
     documented POST as a PATCH would be a 405 from a real CRM, so the verb is
     chosen per payload style rather than assumed from Salesforce alone.
     """
-    body = build_payload(
-        capability, object_name=object_name, key_field=key_field, entries=entries
-    )
+    body = build_payload(capability, object_name=object_name, key_field=key_field, entries=entries)
     path = _fill(
         capability.bulk_path,
         object=object_name,
@@ -516,7 +513,9 @@ def build_single_request(
         body = item
         _assert_no_record_id([body], key_field)
     else:
-        raise UpsertError(f"unknown payload style {capability.payload_style!r} for {capability.vendor}")
+        raise UpsertError(
+            f"unknown payload style {capability.payload_style!r} for {capability.vendor}"
+        )
 
     path = _fill(
         capability.single_path,

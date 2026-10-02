@@ -53,15 +53,12 @@ check every write against the route table the host actually reported.
 from __future__ import annotations
 
 import re
-import shutil
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import REGISTRY, load_feature
@@ -95,6 +92,7 @@ from dsr.market_intent import (
     is_valid_domain,
     matches_filters,
     midnight_utc,
+    names as collection_names,
     normalise_research,
     normalise_visit,
     parse_country,
@@ -107,7 +105,6 @@ from dsr.market_intent import (
     sort_rows,
     summarise,
 )
-from dsr.market_intent import names as collection_names
 from dsr.market_intent.criteria import PATH_OPERATOR_LABELS, PATH_OPERATORS, Criterion
 from dsr.market_intent.domains import MULTI_LABEL_SUFFIXES
 from dsr.market_intent.errors import InvalidObservation
@@ -115,6 +112,7 @@ from dsr.market_intent.inferences import INFERENCES, by_id
 from dsr.market_intent.observations import contact_domain, is_forward_only, mark_topics
 from dsr.market_intent.table import Snapshot, market_for, top_page_views
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -176,7 +174,10 @@ def _view_with_automation(
     moment is a parameter rather than a side effect of "now".
     """
     view = engine.save_view(
-        {"name": name or f"In market, last {days} days", "filters": {"days": days, "visitor_intent": True}},
+        {
+            "name": name or f"In market, last {days} days",
+            "filters": {"days": days, "visitor_intent": True},
+        },
         actor="sam",
         source="test:views",
     )
@@ -250,7 +251,9 @@ def configured(engine: MarketIntentEngine) -> MarketIntentEngine:
     same refusal.
     """
     engine.update_settings(
-        {"credits_enabled": True, "enrichment_actors": ["dana"]}, actor="sam", source="test:settings"
+        {"credits_enabled": True, "enrichment_actors": ["dana"]},
+        actor="sam",
+        source="test:settings",
     )
     engine.add_market(
         {"name": "ANZ enterprise software", "countries": ["AU", "NZ"], "industries": ["software"]},
@@ -349,13 +352,13 @@ def record_visit(
 
 
 def test_subdomains_roll_up_into_the_root_domain():
-    """"activity from subdomains is rolled up into the root domain"."""
+    """ "activity from subdomains is rolled up into the root domain"."""
     assert resolve("careers.northwind.com").root == "northwind.com"
     assert resolve("eu.shop.northwind.com").root == "northwind.com"
 
 
 def test_www_is_truncated_for_display():
-    """"truncates 'www' for display purposes"."""
+    """ "truncates 'www' for display purposes"."""
     info = resolve("https://www.northwind.com/pricing?x=1")
     assert info.root == "northwind.com"
     assert info.display == "northwind.com"
@@ -393,7 +396,9 @@ def test_a_three_octet_address_is_not_treated_as_a_domain():
 
 
 def test_a_port_and_a_path_are_stripped_from_a_url():
-    assert resolve("https://user:pw@www.northwind.com:8443/pricing?a=1#b").host == "www.northwind.com"
+    assert (
+        resolve("https://user:pw@www.northwind.com:8443/pricing?a=1#b").host == "www.northwind.com"
+    )
 
 
 def test_a_trailing_dot_and_uppercase_are_normalised():
@@ -438,14 +443,14 @@ def test_a_company_with_no_name_gets_a_readable_placeholder():
 
 
 def test_ninety_days_is_allowed_and_ninety_one_is_not():
-    """"You can only set timeframes within the last 90 days."""
+    """ "You can only set timeframes within the last 90 days."""
     assert resolve_window(now=NOW, days=MAX_DAYS).requested_days == 90
     with pytest.raises(TimeframeTooLong):
         resolve_window(now=NOW, days=MAX_DAYS + 1)
 
 
 def test_the_ninety_day_boundary_is_a_midnight_utc_line():
-    """"This timeframe is based on midnight UTC"."""
+    """ "This timeframe is based on midnight UTC"."""
     window = resolve_window(now=NOW, days=7)
     assert window.start == datetime(2026, 9, 20, 0, 0, tzinfo=timezone.utc)
     assert window.start.hour == 0 and window.start.minute == 0
@@ -454,7 +459,9 @@ def test_the_ninety_day_boundary_is_a_midnight_utc_line():
 def test_ninety_days_always_fits_even_late_in_the_day():
     """The cap must not make the documented maximum unusable for most of a day."""
     late = NOW.replace(hour=23, minute=59)
-    assert resolve_window(now=late, days=MAX_DAYS).start >= midnight_utc(late) - timedelta(days=MAX_DAYS)
+    assert resolve_window(now=late, days=MAX_DAYS).start >= midnight_utc(late) - timedelta(
+        days=MAX_DAYS
+    )
 
 
 def test_an_explicit_start_is_snapped_down_to_midnight_and_reports_the_move():
@@ -474,7 +481,7 @@ def test_an_explicit_start_older_than_ninety_days_is_refused():
 
 
 def test_a_naive_timestamp_is_refused_rather_than_assumed_utc():
-    """"This timeframe is based on midnight UTC", so a naive time has no place on it."""
+    """ "This timeframe is based on midnight UTC", so a naive time has no place on it."""
     with pytest.raises(InvalidTimeframe):
         resolve_window(now=NOW, start="2026-09-20T00:00:00")
 
@@ -575,7 +582,9 @@ def test_a_domain_on_a_page_filter_compares_roots():
 
 def test_a_page_filter_domain_must_be_a_registrable_domain():
     with pytest.raises(InvalidPathFilter):
-        FilterSet.parse({"page_filters": [{"operator": "eq", "path": "/p", "domain": "203.0.113.7"}]})
+        FilterSet.parse(
+            {"page_filters": [{"operator": "eq", "path": "/p", "domain": "203.0.113.7"}]}
+        )
 
 
 def test_several_page_filters_in_one_criterion_are_ored():
@@ -591,7 +600,7 @@ def test_several_page_filters_in_one_criterion_are_ored():
 
 
 def test_a_criterion_with_no_page_is_refused(configured):
-    """"intent criteria per page": an unfinished criterion, not a broad one."""
+    """ "intent criteria per page": an unfinished criterion, not a broad one."""
     with pytest.raises(InvalidConfiguration):
         configured.add_criterion({"name": "Anything"}, actor="sam", source="test:criteria")
 
@@ -627,7 +636,9 @@ def test_a_qualifying_page_view_names_the_filter_and_the_path(configured):
 
 
 def test_a_non_qualifying_page_view_tags_nothing(configured):
-    configured.record_visit(visit_payload(url="https://northwind.com/about"), actor="system", source="t")
+    configured.record_visit(
+        visit_payload(url="https://northwind.com/about"), actor="system", source="t"
+    )
     snapshot = configured._snapshot()
     assert qualify_view(snapshot.visits[0], snapshot.criteria) is None
 
@@ -646,7 +657,10 @@ def test_a_criterion_added_today_tags_a_visit_from_last_week(configured):
     snapshot = configured._snapshot()
     assert qualify_view(snapshot.visits[0], snapshot.criteria) is None
     configured.add_criterion(
-        {"name": "Product pricing", "page_filters": [{"operator": "starts_with", "path": "/product"}]},
+        {
+            "name": "Product pricing",
+            "page_filters": [{"operator": "starts_with", "path": "/product"}],
+        },
         actor="s",
         source="t",
     )
@@ -655,7 +669,10 @@ def test_a_criterion_added_today_tags_a_visit_from_last_week(configured):
 
 def test_a_withdrawn_criterion_stops_tagging(configured):
     criterion_id = configured.add_criterion(
-        {"name": "Product pricing", "page_filters": [{"operator": "starts_with", "path": "/product"}]},
+        {
+            "name": "Product pricing",
+            "page_filters": [{"operator": "starts_with", "path": "/product"}],
+        },
         actor="s",
         source="t",
     )["id"]
@@ -673,7 +690,7 @@ def test_a_withdrawn_criterion_stops_tagging(configured):
 
 
 def test_a_derived_property_can_go_back_to_false(configured):
-    """"meets or no longer meets" - so a value that can only be set is wrong."""
+    """ "meets or no longer meets" - so a value that can only be set is wrong."""
     criterion = Criterion.parse(
         {
             "name": "SMB Intent",
@@ -714,11 +731,13 @@ def test_a_criterion_scoped_to_a_site_ignores_another_site(configured):
 
 def test_a_page_view_needs_a_host():
     with pytest.raises(InvalidObservation):
-        normalise_visit({"url": "", "occurred_at": ago(days=1), "session_id": "s", "visitor_id": "v"})
+        normalise_visit(
+            {"url": "", "occurred_at": ago(days=1), "session_id": "s", "visitor_id": "v"}
+        )
 
 
 def test_a_page_view_needs_a_session_because_visits_are_counted_by_session():
-    """"the count of sessions of website visits from this company"."""
+    """ "the count of sessions of website visits from this company"."""
     with pytest.raises(InvalidObservation):
         normalise_visit(visit_payload(session_id=""))
 
@@ -730,7 +749,14 @@ def test_a_page_view_needs_a_visitor_because_unique_visitors_are_counted():
 
 def test_a_page_view_needs_a_path_beginning_with_a_slash():
     with pytest.raises(InvalidObservation):
-        normalise_visit({"host": "northwind.com", "occurred_at": ago(days=1), "session_id": "s", "visitor_id": "v"})
+        normalise_visit(
+            {
+                "host": "northwind.com",
+                "occurred_at": ago(days=1),
+                "session_id": "s",
+                "visitor_id": "v",
+            }
+        )
 
 
 def test_a_naive_occurrence_time_is_refused():
@@ -757,7 +783,7 @@ def test_a_path_is_derived_from_a_url_when_not_given():
 
 
 def test_a_page_view_is_stored_even_when_it_is_still_anonymous():
-    """"Buyer intent connects anonymous web visitors" - one it cannot connect is traffic."""
+    """ "Buyer intent connects anonymous web visitors" - one it cannot connect is traffic."""
     data = normalise_visit(visit_payload(company_domain=""))
     assert data["company_key"] is None
     assert data["attribution"] == "none"
@@ -767,7 +793,7 @@ def test_a_page_view_is_stored_even_when_it_is_still_anonymous():
 
 
 def test_a_news_signal_type_outside_the_researched_list_is_refused():
-    """"funding, executive hires, layoffs, product launches, and mergers"."""
+    """ "funding, executive hires, layoffs, product launches, and mergers"."""
     with pytest.raises(UnknownVocabularyValue):
         normalise_research(
             {
@@ -863,14 +889,16 @@ def test_contact_domain_reads_an_email_or_a_bare_domain():
 
 
 def test_a_visit_is_matched_by_a_known_companys_ip_address(configured, store):
-    """"Buyer intent connects anonymous web visitors to known companies' IP addresses"."""
+    """ "Buyer intent connects anonymous web visitors to known companies' IP addresses"."""
     store.create(
         collection_names.COMPANIES,
         {"root_domain": "northwind.com", "known_ips": ["198.51.100.9"], "name": "Northwind"},
         actor="sam",
         source="seed",
     )
-    result = configured.record_visit(visit_payload(ip="198.51.100.9", company_domain=""), actor="system", source="t")
+    result = configured.record_visit(
+        visit_payload(ip="198.51.100.9", company_domain=""), actor="system", source="t"
+    )
     assert result["company_key"] == "northwind.com"
     assert result["attribution"] == "ip"
     assert result["known"] is True
@@ -890,7 +918,9 @@ def test_a_visit_is_matched_by_a_known_contact(configured, store):
         source="seed",
     )
     result = configured.record_visit(
-        visit_payload(company_domain="", known_contact="dana@northwind.com"), actor="system", source="t"
+        visit_payload(company_domain="", known_contact="dana@northwind.com"),
+        actor="system",
+        source="t",
     )
     assert result["company_key"] == "northwind.com"
     assert result["attribution"] == "contact"
@@ -904,14 +934,16 @@ def test_a_known_contacts_email_domain_matches_a_company_with_no_ip_on_file(conf
         source="seed",
     )
     result = configured.record_visit(
-        visit_payload(company_domain="", known_contact="dana@northwind.com"), actor="system", source="t"
+        visit_payload(company_domain="", known_contact="dana@northwind.com"),
+        actor="system",
+        source="t",
     )
     assert result["company_key"] == "northwind.com"
     assert result["attribution"] == "email_domain"
 
 
 def test_a_declared_company_is_attributed_to_the_upstream_ip_match(configured):
-    """"company IP-to-company matching" - the pipeline's result, submitted with the visit."""
+    """ "company IP-to-company matching" - the pipeline's result, submitted with the visit."""
     result = configured.record_visit(
         visit_payload(company_domain="newco.example"), actor="system", source="t"
     )
@@ -927,7 +959,9 @@ def test_a_visit_from_a_known_address_beats_a_declared_company(configured, store
         source="seed",
     )
     result = configured.record_visit(
-        visit_payload(ip="198.51.100.9", company_domain="claimed.example"), actor="system", source="t"
+        visit_payload(ip="198.51.100.9", company_domain="claimed.example"),
+        actor="system",
+        source="t",
     )
     assert result["company_key"] == "known.example"
 
@@ -942,11 +976,13 @@ def test_an_unmatched_visit_is_stored_and_reported_as_anonymous(configured):
 
 
 def test_a_company_in_the_account_is_badged_for_the_hubspot_icon(configured, store):
-    """"Companies currently in your account will appear with a HubSpot icon"."""
+    """ "Companies currently in your account will appear with a HubSpot icon"."""
     store.create(
         collection_names.COMPANIES, {"root_domain": "northwind.com"}, actor="sam", source="seed"
     )
-    configured.record_visit(visit_payload(company_domain="northwind.com"), actor="system", source="t")
+    configured.record_visit(
+        visit_payload(company_domain="northwind.com"), actor="system", source="t"
+    )
     row = configured.companies()["companies"][0]
     assert row["in_crm"] is True
     assert row["crm_icon"] == "hubspot"
@@ -1058,8 +1094,18 @@ def test_a_company_with_no_name_gets_a_readable_placeholder_on_its_row(configure
 
 def _rows_for_sorting() -> list[dict[str, Any]]:
     return [
-        {"company_key": "a.example", "page_views": 1, "unique_visitors": 5, "last_visit_at": "2026-01-01"},
-        {"company_key": "b.example", "page_views": 5, "unique_visitors": 1, "last_visit_at": "2026-09-01"},
+        {
+            "company_key": "a.example",
+            "page_views": 1,
+            "unique_visitors": 5,
+            "last_visit_at": "2026-01-01",
+        },
+        {
+            "company_key": "b.example",
+            "page_views": 5,
+            "unique_visitors": 1,
+            "last_visit_at": "2026-09-01",
+        },
         {"company_key": "c.example", "page_views": 3, "unique_visitors": 3, "last_visit_at": None},
     ]
 
@@ -1073,7 +1119,9 @@ def test_page_views_sorts_by_the_page_view_count():
 
 
 def test_unique_visitors_sorts_by_the_distinct_visitor_count():
-    assert [row["company_key"] for row in sort_rows(_rows_for_sorting(), key="unique_visitors")] == [
+    assert [
+        row["company_key"] for row in sort_rows(_rows_for_sorting(), key="unique_visitors")
+    ] == [
         "a.example",
         "c.example",
         "b.example",
@@ -1089,13 +1137,18 @@ def test_last_visit_sorts_newest_first_and_puts_a_company_with_no_visit_last():
 
 
 def test_every_sort_key_works_in_both_directions():
-    """"(asc/desc)" - both directions are researched."""
+    """ "(asc/desc)" - both directions are researched."""
     for key, expected in (
         ("page_views", ["a.example", "c.example", "b.example"]),
         ("unique_visitors", ["b.example", "c.example", "a.example"]),
     ):
-        assert [row["company_key"] for row in sort_rows(_rows_for_sorting(), key=key, direction="asc")] == expected
-    assert [row["company_key"] for row in sort_rows(_rows_for_sorting(), key="last_visit", direction="asc")] == [
+        assert [
+            row["company_key"] for row in sort_rows(_rows_for_sorting(), key=key, direction="asc")
+        ] == expected
+    assert [
+        row["company_key"]
+        for row in sort_rows(_rows_for_sorting(), key="last_visit", direction="asc")
+    ] == [
         "a.example",
         "b.example",
         "c.example",
@@ -1124,7 +1177,9 @@ def test_showing_visitor_intent_off_is_unconstrained_rather_than_its_negation(co
     companies the seller was filtering out.
     """
     record_visit(configured, domain="northwind.com", path="/pricing", days_ago=2)
-    record_visit(configured, domain="south.example", path="/about", days_ago=1, session="s2", visitor="v2")
+    record_visit(
+        configured, domain="south.example", path="/about", days_ago=1, session="s2", visitor="v2"
+    )
     off = configured.companies(FilterSet.parse({"days": None}))
     on = configured.companies(FilterSet.parse({"days": None, "visitor_intent": True}))
     assert off["count"] == 2
@@ -1187,7 +1242,10 @@ def test_in_target_markets_matches_an_industry(configured):
         actor="system",
         source="t",
     )
-    assert configured.companies(FilterSet.parse({"days": None, "in_target_markets": True}))["count"] == 1
+    assert (
+        configured.companies(FilterSet.parse({"days": None, "in_target_markets": True}))["count"]
+        == 1
+    )
 
 
 def test_a_traffic_source_filter_narrows_the_table(configured):
@@ -1218,7 +1276,9 @@ def test_the_hubspot_crm_filters_read_the_company_record(configured, store):
         actor="sam",
         source="seed",
     )
-    assert configured.companies(FilterSet.parse({"lifecycle_stages": ["opportunity"]}))["count"] == 1
+    assert (
+        configured.companies(FilterSet.parse({"lifecycle_stages": ["opportunity"]}))["count"] == 1
+    )
     assert configured.companies(FilterSet.parse({"deal_stages": ["negotiation"]}))["count"] == 1
     assert configured.companies(FilterSet.parse({"owners": ["dana"]}))["count"] == 1
     assert configured.companies(FilterSet.parse({"lifecycle_stages": ["customer"]}))["count"] == 0
@@ -1229,7 +1289,9 @@ def test_a_page_filter_narrows_the_table_to_the_qualifying_companies(configured)
     record_visit(configured, path="/pricing", days_ago=2)
     record_visit(configured, domain="south.example", path="/about", days_ago=1)
     filters = FilterSet.parse({"page_filters": [{"operator": "starts_with", "path": "/pricing"}]})
-    assert [row["company_key"] for row in configured.companies(filters)["companies"]] == ["northwind.com"]
+    assert [row["company_key"] for row in configured.companies(filters)["companies"]] == [
+        "northwind.com"
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -1238,7 +1300,7 @@ def test_a_page_filter_narrows_the_table_to_the_qualifying_companies(configured)
 
 
 def test_the_exclusion_list_needs_hubspot_credits(engine):
-    """"To access buyer intent features like ... excluding companies, you need
+    """ "To access buyer intent features like ... excluding companies, you need
     HubSpot Credits"."""
     with pytest.raises(CreditsRequired) as caught:
         engine.exclusions()
@@ -1449,7 +1511,7 @@ def test_a_view_companies_response_says_whether_each_entered_after_the_switch(co
 
 
 def test_a_company_already_in_the_view_is_not_auto_added(configured):
-    """"It will not add all existing companies in your saved views"."""
+    """ "It will not add all existing companies in your saved views"."""
     record_visit(configured, days_ago=60)
     view = _view_with_automation(configured, days=90, add=True, track=False, enabled_days_ago=45)
     result = configured.run(view["automation_id"], actor="dana", source="t")
@@ -1536,7 +1598,9 @@ def test_an_automation_for_a_view_that_does_not_exist_is_refused(configured):
     from dsr.market_intent.errors import InvalidAutomation
 
     with pytest.raises(InvalidAutomation):
-        configured.save_automation({"view_id": "nope", AUTOMATION_ADD: True}, actor="sam", source="t")
+        configured.save_automation(
+            {"view_id": "nope", AUTOMATION_ADD: True}, actor="sam", source="t"
+        )
     with pytest.raises(InvalidAutomation):
         configured.save_automation({AUTOMATION_ADD: True}, actor="sam", source="t")
 
@@ -1586,7 +1650,9 @@ def test_an_added_company_carries_the_buyer_intent_record_source(configured):
     record_visit(configured, days_ago=1)
     view = _view_with_automation(configured, days=90, add=True, track=False, enabled_days_ago=45)
     configured.run(view["automation_id"], actor="dana", source="t")
-    record = configured.store.find(collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=1)[0]
+    record = configured.store.find(
+        collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=1
+    )[0]
     assert record["data"]["record_source"] == RECORD_SOURCE_BUYER_INTENT
     assert RECORD_SOURCE_BUYER_INTENT == "Buyer-Intent"
 
@@ -1608,7 +1674,7 @@ def test_a_company_already_in_the_account_does_not_carry_the_buyer_intent_record
 
 
 def test_adding_and_tracking_in_one_period_is_charged_once(configured):
-    """"you're only charged once for tracking (10 credits) - not for both actions
+    """ "you're only charged once for tracking (10 credits) - not for both actions
     separately"."""
     record_visit(configured, days_ago=1)
     view = _view_with_automation(configured, days=90, add=True, track=True, enabled_days_ago=45)
@@ -1627,8 +1693,12 @@ def test_adding_and_tracking_in_one_period_is_charged_once(configured):
 
 
 def test_adding_in_one_period_and_tracking_in_the_next_is_charged_twice(configured, store):
-    first = charge(store, company_key="n.example", action="add", at=ago(days=40), actor="dana", source="t")
-    second = charge(store, company_key="n.example", action="track", at=ago(days=1), actor="dana", source="t")
+    first = charge(
+        store, company_key="n.example", action="add", at=ago(days=40), actor="dana", source="t"
+    )
+    second = charge(
+        store, company_key="n.example", action="track", at=ago(days=1), actor="dana", source="t"
+    )
     assert first["charged"] == 10
     assert second["charged"] == 10
     assert summarise([entry["row"]["data"] for entry in (first, second)])["total_charged"] == 20
@@ -1646,7 +1716,9 @@ def test_one_ledger_row_per_company_per_period(configured, store):
 
 def test_repeating_an_action_in_a_period_does_not_inflate_the_saving(configured, store):
     charge(store, company_key="n.example", action="add", at=ago(days=2), actor="dana", source="t")
-    repeat = charge(store, company_key="n.example", action="add", at=ago(days=1), actor="dana", source="t")
+    repeat = charge(
+        store, company_key="n.example", action="add", at=ago(days=1), actor="dana", source="t"
+    )
     assert repeat["charged"] == 0
     assert repeat["waived"] == 0
     assert repeat["row"]["data"]["waived"] == 0
@@ -1713,14 +1785,23 @@ def test_adding_a_company_twice_is_reported_rather_than_duplicated(configured):
     configured.run(view["automation_id"], actor="dana", source="t")
     result = configured.run(view["automation_id"], actor="dana", source="t")
     assert result["added"] == []
-    assert len(configured.store.find(collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=5)) == 1
+    assert (
+        len(
+            configured.store.find(
+                collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=5
+            )
+        )
+        == 1
+    )
 
 
 def test_an_added_company_records_the_documented_crm_plan_rather_than_calling_it(configured):
     record_visit(configured, days_ago=1)
     view = _view_with_automation(configured, days=90, add=True, track=False, enabled_days_ago=45)
     configured.run(view["automation_id"], actor="dana", source="t")
-    record = configured.store.find(collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=1)[0]
+    record = configured.store.find(
+        collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=1
+    )[0]
     plan = record["data"]["crm_plan"]
     assert plan["executed"] is False
     assert plan["record_source"]["value"] == RECORD_SOURCE_BUYER_INTENT
@@ -1756,7 +1837,9 @@ def test_a_disabled_category_run_does_nothing_and_says_so(configured):
 
 def test_net_new_with_visitor_intent_requires_a_target_market_and_no_crm_record(configured):
     record_visit(configured, domain="in.example", country="AU", days_ago=1)
-    record_visit(configured, domain="out.example", country="BR", days_ago=1, session="s2", visitor="v2")
+    record_visit(
+        configured, domain="out.example", country="BR", days_ago=1, session="s2", visitor="v2"
+    )
     _enable_category(configured, "net_new_visitor_intent")
     result = configured.run_category("net_new_visitor_intent", actor="dana", source="t")
     # The company outside every target market is not even a match: "companies
@@ -1765,9 +1848,7 @@ def test_net_new_with_visitor_intent_requires_a_target_market_and_no_crm_record(
     assert [entry["company_key"] for entry in result["added"]] == ["in.example"]
 
 
-def test_in_crm_with_visitor_intent_enriches_rather_than_adding_a_second_record(
-    configured, store
-):
+def test_in_crm_with_visitor_intent_enriches_rather_than_adding_a_second_record(configured, store):
     store.create(
         collection_names.COMPANIES,
         {"root_domain": "northwind.com", "derived_properties": {}},
@@ -1780,7 +1861,9 @@ def test_in_crm_with_visitor_intent_enriches_rather_than_adding_a_second_record(
     assert result["added"] == []
     assert result["enriched"][0]["outcome"] == "enriched"
     assert result["enriched"][0]["changed"] == ["derived_properties"]
-    assert len(store.find(collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=5)) == 1
+    assert (
+        len(store.find(collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=5)) == 1
+    )
 
 
 def test_an_enrichment_that_changes_nothing_says_unchanged(configured, store):
@@ -1817,7 +1900,14 @@ def test_net_new_with_research_intent_matches_a_topic_searcher(configured):
 
 def test_net_new_with_both_intents_needs_both_signals(configured):
     record_visit(configured, domain="both.example", country="AU", days_ago=1)
-    record_visit(configured, domain="visitoronly.example", country="AU", days_ago=1, session="s2", visitor="v2")
+    record_visit(
+        configured,
+        domain="visitoronly.example",
+        country="AU",
+        days_ago=1,
+        session="s2",
+        visitor="v2",
+    )
     configured.record_research(
         {
             "kind": "topic",
@@ -1844,9 +1934,13 @@ def test_a_category_holds_back_a_company_last_seen_before_it_was_enabled(configu
 
 
 def test_a_category_cannot_redefine_its_own_predicate(configured):
-    """"stock" means the definition is fixed, not only the label."""
+    """ "stock" means the definition is fixed, not only the label."""
     with pytest.raises(InvalidConfiguration) as caught:
-        configured.set_category("net_new_visitor_intent", {"enabled": True, "requires_in_crm": True}, actor="s", source="t"
+        configured.set_category(
+            "net_new_visitor_intent",
+            {"enabled": True, "requires_in_crm": True},
+            actor="s",
+            source="t",
         )
     assert "requires_in_crm" in str(caught.value)
 
@@ -1861,11 +1955,17 @@ def test_every_category_predicate_matches_its_own_wording(configured):
         "in_crm": False,
     }
     in_crm_visitor = dict(in_market_visitor, in_target_markets=[], in_crm=True)
-    assert MarketIntentEngine.category_matches(in_market_visitor, CATEGORY_REQUIREMENTS["net_new_visitor_intent"])
-    assert not MarketIntentEngine.category_matches(in_crm_visitor, CATEGORY_REQUIREMENTS["net_new_visitor_intent"])
+    assert MarketIntentEngine.category_matches(
+        in_market_visitor, CATEGORY_REQUIREMENTS["net_new_visitor_intent"]
+    )
+    assert not MarketIntentEngine.category_matches(
+        in_crm_visitor, CATEGORY_REQUIREMENTS["net_new_visitor_intent"]
+    )
     # The research's wording for the in-CRM one omits the target market, and adding
     # the requirement to it would stop tracking every existing customer who visits.
-    assert MarketIntentEngine.category_matches(in_crm_visitor, CATEGORY_REQUIREMENTS["in_crm_visitor_intent"])
+    assert MarketIntentEngine.category_matches(
+        in_crm_visitor, CATEGORY_REQUIREMENTS["in_crm_visitor_intent"]
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1878,7 +1978,12 @@ def test_the_card_carries_exactly_the_four_researched_fields(configured):
     record_visit(configured, path="/smb", days_ago=2, session="s2", visitor="v2")
     card = configured.card("northwind.com")
     assert card["found"] is True
-    assert set(card["fields"]) == {"website_visits", "unique_visitors", "last_seen", "top_page_views"}
+    assert set(card["fields"]) == {
+        "website_visits",
+        "unique_visitors",
+        "last_seen",
+        "top_page_views",
+    }
     assert card["fields"]["website_visits"]["value"] == 2
     assert card["fields"]["unique_visitors"]["value"] == 2
     assert card["fields"]["last_seen"]["value"] == ago(days=1)
@@ -1919,7 +2024,9 @@ def test_the_contacts_tab_shows_last_touch_last_engagement_and_planned_meetings(
             "name": "Dana Kelly",
             "last_touch_at": ago(days=3),
             "last_engagement_at": ago(days=1),
-            "scheduled": [{"kind": "meeting", "title": "Commercial review", "starts_at": ago(days=-4)}],
+            "scheduled": [
+                {"kind": "meeting", "title": "Commercial review", "starts_at": ago(days=-4)}
+            ],
         },
         actor="sam",
         source="seed",
@@ -2005,10 +2112,17 @@ def test_a_second_run_reports_nothing_to_refresh(configured, store):
     record_visit(configured, path="/pricing", days_ago=1)
     view = _view_with_automation(configured, days=90, add=False, track=False)
     configured.run(view["automation_id"], actor="dana", source="t")
-    assert configured.run(view["automation_id"], actor="dana", source="t")["derived_properties_refreshed"] == 0
+    assert (
+        configured.run(view["automation_id"], actor="dana", source="t")[
+            "derived_properties_refreshed"
+        ]
+        == 0
+    )
 
 
-def test_an_enrichment_writes_a_derived_property_onto_a_company_already_in_the_crm(configured, store):
+def test_an_enrichment_writes_a_derived_property_onto_a_company_already_in_the_crm(
+    configured, store
+):
     store.create(
         collection_names.COMPANIES,
         {"root_domain": "northwind.com", "derived_properties": {}},
@@ -2035,7 +2149,9 @@ def test_a_lifecycle_stage_cannot_move_backwards(configured, store):
         source="seed",
     )
     with pytest.raises(LifecycleStageRegression) as caught:
-        configured.update_company("northwind.com", {"lifecycle_stage": "lead"}, actor="dana", source="t")
+        configured.update_company(
+            "northwind.com", {"lifecycle_stage": "lead"}, actor="dana", source="t"
+        )
     assert caught.value.status == 409
     assert "forward-only" in str(caught.value)
 
@@ -2080,7 +2196,9 @@ def test_is_forward_only_is_false_when_either_side_is_unknown():
 
 
 def test_an_arbitrary_property_can_be_written_without_a_migration(configured, store):
-    store.create(collection_names.COMPANIES, {"root_domain": "northwind.com"}, actor="sam", source="seed")
+    store.create(
+        collection_names.COMPANIES, {"root_domain": "northwind.com"}, actor="sam", source="seed"
+    )
     configured.update_company(
         "northwind.com",
         {"properties": {"renewal_risk": "high", "team": {"pod": "alpha"}}},
@@ -2090,11 +2208,16 @@ def test_an_arbitrary_property_can_be_written_without_a_migration(configured, st
     record = store.find(collection_names.COMPANIES, {"root_domain": "northwind.com"}, limit=1)[0]
     assert record["data"]["properties"]["renewal_risk"] == "high"
     # The dynamic index makes the new field queryable with no change anywhere.
-    assert len(store.find(collection_names.COMPANIES, {"properties.renewal_risk": "high"}, limit=5)) == 1
+    assert (
+        len(store.find(collection_names.COMPANIES, {"properties.renewal_risk": "high"}, limit=5))
+        == 1
+    )
 
 
 def test_known_ips_can_be_registered_so_the_ip_route_keeps_working(configured, store):
-    store.create(collection_names.COMPANIES, {"root_domain": "northwind.com"}, actor="sam", source="seed")
+    store.create(
+        collection_names.COMPANIES, {"root_domain": "northwind.com"}, actor="sam", source="seed"
+    )
     configured.update_company(
         "northwind.com", {"known_ips": ["203.0.113.5"]}, actor="dana", source="t"
     )
@@ -2106,7 +2229,12 @@ def test_known_ips_can_be_registered_so_the_ip_route_keeps_working(configured, s
 
 
 def test_updating_a_company_that_is_not_in_the_crm_says_so(configured):
-    assert configured.update_company("nope.example", {"segment": "x"}, actor="dana", source="t")["updated"] is False
+    assert (
+        configured.update_company("nope.example", {"segment": "x"}, actor="dana", source="t")[
+            "updated"
+        ]
+        is False
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -2117,7 +2245,11 @@ def test_updating_a_company_that_is_not_in_the_crm_says_so(configured):
 def test_the_overview_counts_the_five_researched_numbers(configured, store):
     store.create(
         collection_names.COMPANIES,
-        {"root_domain": "northwind.com", "lifecycle_stage": "opportunity", "derived_properties": {}},
+        {
+            "root_domain": "northwind.com",
+            "lifecycle_stage": "opportunity",
+            "derived_properties": {},
+        },
         actor="sam",
         source="seed",
     )
@@ -2174,7 +2306,12 @@ def test_the_overview_reports_an_excluded_domain_count(configured):
 
 def test_the_research_tab_separates_topics_from_news(configured):
     configured.record_research(
-        {"kind": "topic", "company_domain": "a.example", "topic": "cspm", "occurred_at": ago(days=2)},
+        {
+            "kind": "topic",
+            "company_domain": "a.example",
+            "topic": "cspm",
+            "occurred_at": ago(days=2),
+        },
         actor="system",
         source="t",
     )
@@ -2197,7 +2334,7 @@ def test_the_research_tab_separates_topics_from_news(configured):
 
 
 def test_news_counts_as_research_intent(configured):
-    """"broader intent signals beyond your website" - a funding round is one."""
+    """ "broader intent signals beyond your website" - a funding round is one."""
     configured.record_research(
         {
             "kind": "news",
@@ -2224,8 +2361,15 @@ def test_the_vocabulary_carries_the_five_operators_with_the_vendor_labels(config
     vocabulary = configured.vocabulary()
     assert [row["id"] for row in vocabulary["path_operators"]] == list(PATH_OPERATORS)
     assert vocabulary["path_operators"][0]["label"] == "Path is equal to"
-    assert [row["id"] for row in vocabulary["sort_keys"]] == ["page_views", "unique_visitors", "last_visit"]
-    assert [row["id"] for row in vocabulary["automation_toggles"]] == [AUTOMATION_ADD, AUTOMATION_TRACK]
+    assert [row["id"] for row in vocabulary["sort_keys"]] == [
+        "page_views",
+        "unique_visitors",
+        "last_visit",
+    ]
+    assert [row["id"] for row in vocabulary["automation_toggles"]] == [
+        AUTOMATION_ADD,
+        AUTOMATION_TRACK,
+    ]
     assert vocabulary["record_source"] == RECORD_SOURCE_BUYER_INTENT
     assert vocabulary["credit_cost_add"] == 10
     assert vocabulary["credit_cost_track"] == 10
@@ -2332,7 +2476,11 @@ def test_vocabulary_and_inferences_are_served_over_http(client):
 
 
 def http_enter_after_the_switch(
-    client: TestClient, *, domain: str = "northwind.com", path: str = "/pricing", seconds_ahead: int = 90
+    client: TestClient,
+    *,
+    domain: str = "northwind.com",
+    path: str = "/pricing",
+    seconds_ahead: int = 90,
 ) -> Any:
     """One page view that arrived *after* an automation was switched on.
 
@@ -2369,7 +2517,10 @@ def test_settings_and_capabilities_over_http(client):
     assert response.json()["credits_enabled"] is True
     capabilities = client.get(f"{PREFIX}/capabilities", params={"actor": "dana"}).json()
     assert capabilities["can_add_companies"] is True
-    assert client.get(f"{PREFIX}/capabilities", params={"actor": "nobody"}).json()["can_add_companies"] is False
+    assert (
+        client.get(f"{PREFIX}/capabilities", params={"actor": "nobody"}).json()["can_add_companies"]
+        is False
+    )
 
 
 def test_a_domain_refusal_is_mapped_by_the_features_own_handler(client):
@@ -2397,8 +2548,13 @@ def test_a_criterion_with_no_page_is_422_over_http(client):
 
 
 def test_a_topic_and_a_market_round_trip_over_http(client):
-    assert client.post(f"{PREFIX}/topics", json={"name": "CSPM", "terms": ["cspm"]}).status_code == 201
-    assert client.post(f"{PREFIX}/markets", json={"name": "ANZ", "countries": ["AU"]}).status_code == 201
+    assert (
+        client.post(f"{PREFIX}/topics", json={"name": "CSPM", "terms": ["cspm"]}).status_code == 201
+    )
+    assert (
+        client.post(f"{PREFIX}/markets", json={"name": "ANZ", "countries": ["AU"]}).status_code
+        == 201
+    )
     assert client.get(f"{PREFIX}/topics").json()["count"] == 1
     assert client.get(f"{PREFIX}/markets").json()["count"] == 1
 
@@ -2537,7 +2693,8 @@ def test_the_card_and_its_drilldowns_over_http(client):
 def test_a_company_can_be_patched_over_http(client):
     http_configure(client)
     view = client.post(
-        f"{PREFIX}/views", json={"name": "In market", "filters": {"days": None, "visitor_intent": True}}
+        f"{PREFIX}/views",
+        json={"name": "In market", "filters": {"days": None, "visitor_intent": True}},
     ).json()
     automation = client.post(
         f"{PREFIX}/automations", json={"view_id": view["id"], AUTOMATION_ADD: True}
@@ -2554,7 +2711,8 @@ def test_a_company_can_be_patched_over_http(client):
 def test_a_lifecycle_regression_is_409_over_http(client):
     http_configure(client)
     view = client.post(
-        f"{PREFIX}/views", json={"name": "In market", "filters": {"days": None, "visitor_intent": True}}
+        f"{PREFIX}/views",
+        json={"name": "In market", "filters": {"days": None, "visitor_intent": True}},
     ).json()
     automation = client.post(
         f"{PREFIX}/automations", json={"view_id": view["id"], AUTOMATION_ADD: True}
@@ -2562,9 +2720,7 @@ def test_a_lifecycle_regression_is_409_over_http(client):
     http_enter_after_the_switch(client)
     client.post(f"{PREFIX}/automations/{automation['id']}/run", params={"actor": "dana"})
     client.patch(f"{PREFIX}/companies/northwind.com", json={"lifecycle_stage": "customer"})
-    response = client.patch(
-        f"{PREFIX}/companies/northwind.com", json={"lifecycle_stage": "lead"}
-    )
+    response = client.patch(f"{PREFIX}/companies/northwind.com", json={"lifecycle_stage": "lead"})
     assert response.status_code == 409
     assert response.json()["error"] == "lifecycle_stage_regression"
 
@@ -2601,7 +2757,9 @@ def test_an_unknown_view_is_404_over_http(client):
 
 
 def test_saving_and_removing_a_view_over_http(client):
-    created = client.post(f"{PREFIX}/views", json={"name": "In market", "filters": {"days": 7}}).json()
+    created = client.post(
+        f"{PREFIX}/views", json={"name": "In market", "filters": {"days": 7}}
+    ).json()
     assert client.get(f"{PREFIX}/views").json()["count"] == 1
     assert client.get(f"{PREFIX}/views/{created['id']}").json()["found"] is True
     assert client.delete(f"{PREFIX}/views/{created['id']}").json()["removed"] is True
@@ -2659,7 +2817,12 @@ def test_the_categories_over_http(client):
     toggled = client.post(f"{PREFIX}/categories/net_new_visitor_intent", json={"enabled": True})
     assert toggled.status_code == 200
     assert toggled.json()["enabled"] is True
-    assert client.post(f"{PREFIX}/categories/net_new_visitor_intent/run", params={"actor": "dana"}).json()["enabled"] is True
+    assert (
+        client.post(
+            f"{PREFIX}/categories/net_new_visitor_intent/run", params={"actor": "dana"}
+        ).json()["enabled"]
+        is True
+    )
     assert client.post(f"{PREFIX}/categories/nope").status_code == 422
     assert client.post(f"{PREFIX}/categories/nope/run").status_code == 422
 
@@ -2725,7 +2888,8 @@ def test_the_exclusions_round_trip_over_http(client):
 def test_tracking_and_renewal_over_http(client):
     http_configure(client)
     view = client.post(
-        f"{PREFIX}/views", json={"name": "In market", "filters": {"days": None, "visitor_intent": True}}
+        f"{PREFIX}/views",
+        json={"name": "In market", "filters": {"days": None, "visitor_intent": True}},
     ).json()
     automation = client.post(
         f"{PREFIX}/automations", json={"view_id": view["id"], AUTOMATION_TRACK: True}
@@ -2781,7 +2945,9 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted():
     assert mounted, "the feature is not mounted; the check below would pass vacuously"
 
     feature = load_feature(MODULE)
-    sources = set(re.findall(r'source=(f?"[^"]*")', Path(feature.__file__).read_text(encoding="utf-8")))
+    sources = set(
+        re.findall(r'source=(f?"[^"]*")', Path(feature.__file__).read_text(encoding="utf-8"))
+    )
     assert sources, "the module records no source at all, which is a defect in itself"
 
     for literal in sources:
@@ -2815,7 +2981,8 @@ def test_every_audit_row_this_feature_wrote_names_this_features_prefix(client, d
         },
     )
     view = client.post(
-        f"{PREFIX}/views", json={"name": "In market", "filters": {"days": None, "visitor_intent": True}}
+        f"{PREFIX}/views",
+        json={"name": "In market", "filters": {"days": None, "visitor_intent": True}},
     ).json()
     automation = client.post(
         f"{PREFIX}/automations", json={"view_id": view["id"], AUTOMATION_ADD: True}
@@ -2839,9 +3006,7 @@ def test_every_audit_row_this_feature_wrote_names_this_features_prefix(client, d
 
 def test_the_audit_row_and_the_change_land_in_one_transaction(client, db_path: Path):
     """The product guarantee, exercised on one of this feature's own writes."""
-    client.patch(
-        f"{PREFIX}/settings", json={"credits_enabled": True}, params={"actor": "sam"}
-    )
+    client.patch(f"{PREFIX}/settings", json={"credits_enabled": True}, params={"actor": "sam"})
     database = AuditedDatabase(str(db_path), actor="reader")
     try:
         rows = database.audit(collection=collection_names.SETTINGS, limit=10)
@@ -2923,13 +3088,13 @@ def test_the_seed_produces_the_states_the_research_makes_interesting(db: Audited
     table_body = engine.companies()
     assert table_body["unattributed_views"] == 1
     keys = {row["company_key"] for row in table_body["companies"]}
-    assert "talent-insight-partners.example" not in keys, "the excluded agency is still in the table"
+    assert "talent-insight-partners.example" not in keys, (
+        "the excluded agency is still in the table"
+    )
     assert "contoso-health.com" in keys
 
     ledger = engine.credits()
-    combined = [
-        entry for entry in ledger["entries"] if entry.get("actions") == ["add", "track"]
-    ]
+    combined = [entry for entry in ledger["entries"] if entry.get("actions") == ["add", "track"]]
     assert combined, "no company was added and tracked in one billing period"
     assert combined[0]["amount"] == 10
     assert combined[0]["waived"] == 10
@@ -2964,7 +3129,9 @@ def test_the_seed_leaves_the_derived_property_of_a_stopped_company_false(db: Aud
     # Northwind was added by the stock category, not by the view automation.
     assert row["record_source"] == RECORD_SOURCE_BUYER_INTENT
     assert row["added_via"].startswith("auto-add:net_new_visitor_intent")
-    assert engine.company("tailspintoys.example")["derived_properties"]["showing_smb_intent"] is False
+    assert (
+        engine.company("tailspintoys.example")["derived_properties"]["showing_smb_intent"] is False
+    )
 
 
 def test_the_seed_holds_northwind_back_from_the_view_automation(db: AuditedDatabase):
@@ -3011,14 +3178,22 @@ def test_the_seed_is_reproducible(db_path: Path):
 def test_every_declared_route_answers(client):
     """A route the registry reports but the app does not serve is a reported failure."""
     http_configure(client)
-    feature = next(row for row in client.get("/api/features").json()["features"] if row["id"] == FEATURE_ID)
+    feature = next(
+        row for row in client.get("/api/features").json()["features"] if row["id"] == FEATURE_ID
+    )
     for shape in feature["routes"]:
         for method in shape["methods"]:
             if method in ("POST", "PATCH", "DELETE"):
                 continue
             path = shape["path"].replace("{company_key}", "northwind.com").replace("{view_id}", "x")
-            path = path.replace("{automation_id}", "x").replace("{category_id}", "net_new_visitor_intent")
-            path = path.replace("{criterion_id}", "x").replace("{topic_id}", "x").replace("{domain}", "x.example")
+            path = path.replace("{automation_id}", "x").replace(
+                "{category_id}", "net_new_visitor_intent"
+            )
+            path = (
+                path.replace("{criterion_id}", "x")
+                .replace("{topic_id}", "x")
+                .replace("{domain}", "x.example")
+            )
             response = client.get(path)
             assert response.status_code != 405, f"{method} {path} is mounted but not served"
             assert response.status_code < 500, f"{method} {path} failed with {response.status_code}"

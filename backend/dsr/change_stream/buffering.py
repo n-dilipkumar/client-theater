@@ -58,7 +58,7 @@ def sequence_gaps(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     if len(numbers) < 2:
         return []
     gaps: list[dict[str, Any]] = []
-    for previous, current in zip(numbers, numbers[1:]):
+    for previous, current in zip(numbers, numbers[1:], strict=False):
         if current > previous + 1:
             gaps.append({"after": previous, "before": current, "missing": current - previous - 1})
     return gaps
@@ -98,7 +98,11 @@ class TransactionBuffer:
         """
         sequence = int(event["sequence_number"])
         if sequence in self._seen:
-            return {"added": False, "reason": "duplicate_sequence_number", "sequence_number": sequence}
+            return {
+                "added": False,
+                "reason": "duplicate_sequence_number",
+                "sequence_number": sequence,
+            }
         self._seen.add(sequence)
         self.events.append(dict(event))
         return {"added": True, "sequence_number": sequence}
@@ -204,11 +208,15 @@ class BufferSet:
         return sum(len(buffer) for buffer in self._buffers.values())
 
     def buffer_bytes(self) -> int:
-        return sum(sum(_bytes_of(event) for event in buffer.events) for buffer in self._buffers.values())
+        return sum(
+            sum(_bytes_of(event) for event in buffer.events) for buffer in self._buffers.values()
+        )
 
     # -- mutation ----------------------------------------------------------- #
 
-    def accept(self, event: Mapping[str, Any]) -> tuple[TransactionBuffer, list[TransactionBuffer], dict[str, Any]]:
+    def accept(
+        self, event: Mapping[str, Any]
+    ) -> tuple[TransactionBuffer, list[TransactionBuffer], dict[str, Any]]:
         """Park one event and report which transactions that completed.
 
         Returns the buffer now filling, the list of buffers whose commit was

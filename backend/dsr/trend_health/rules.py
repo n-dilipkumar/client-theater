@@ -79,11 +79,15 @@ def merge(base: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
     for key, value in patch.items():
         if key in ("windows", "min_events"):
             if not isinstance(value, Mapping):
-                raise InvalidRules(f"{key} must be a JSON object of integers; got {type(value).__name__}")
+                raise InvalidRules(
+                    f"{key} must be a JSON object of integers; got {type(value).__name__}"
+                )
             unknown_sub = sorted(set(value) - set(merged[key]))
             if unknown_sub:
                 allowed = ", ".join(sorted(merged[key]))
-                raise InvalidRules(f"unknown {key} key(s) {', '.join(unknown_sub)}; expected {allowed}")
+                raise InvalidRules(
+                    f"unknown {key} key(s) {', '.join(unknown_sub)}; expected {allowed}"
+                )
             merged[key].update(value)
         else:
             merged[key] = value
@@ -107,7 +111,9 @@ def validate(rules: Mapping[str, Any]) -> dict[str, Any]:
 
     for key in WINDOW_KEYS:
         if key not in windows:
-            raise InvalidRules(f"windows.{key} is required; the researched windows are 7, 14 and 30 days")
+            raise InvalidRules(
+                f"windows.{key} is required; the researched windows are 7, 14 and 30 days"
+            )
         value = windows[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise InvalidRules(f"windows.{key} must be a number of days; got {value!r}")
@@ -172,8 +178,12 @@ def effective(record: Mapping[str, Any] | None) -> tuple[dict[str, Any], str]:
 
 def describe(rules: Mapping[str, Any], origin: str) -> dict[str, Any]:
     """The rules as the API serves them, next to where they came from."""
-    return {"rules": dict(rules), "source": origin, "record_id": RULES_RECORD_ID,
-            "collection": RULES_COLLECTION}
+    return {
+        "rules": dict(rules),
+        "source": origin,
+        "record_id": RULES_RECORD_ID,
+        "collection": RULES_COLLECTION,
+    }
 
 
 __all__ = [

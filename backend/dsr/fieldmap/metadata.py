@@ -38,7 +38,6 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from dsr.fieldmap.errors import InvalidMapping
 from dsr.fieldmap.vocabulary import (
-    DATAV_ATTRIBUTE_TYPES,
     DATAV_ELIGIBLE_KEY_TYPES,
     DATAV_OPTION_SETS,
     HUBSPOT_FIELD_TYPES_BY_TYPE,
@@ -95,7 +94,12 @@ class Property:
         """
         if self.options:
             return True
-        return self.value_type in ("enumeration", "PicklistAttributeMetadata", "Picklist", "MultiPicklist")
+        return self.value_type in (
+            "enumeration",
+            "PicklistAttributeMetadata",
+            "Picklist",
+            "MultiPicklist",
+        )
 
     @property
     def internal_values(self) -> tuple[str, ...]:
@@ -170,7 +174,11 @@ class Metadata:
 
     def suggest(self, name: str, limit: int = 3) -> tuple[str, ...]:
         """Property names close to a misspelling, for an ``unknown_property`` finding."""
-        return tuple(get_close_matches(str(name or ""), [p.name for p in self.properties], n=limit, cutoff=0.6))
+        return tuple(
+            get_close_matches(
+                str(name or ""), [p.name for p in self.properties], n=limit, cutoff=0.6
+            )
+        )
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -342,7 +350,9 @@ def _options_from(raw: Any) -> tuple[Option, ...]:
             options.append(
                 Option(
                     value=str(value),
-                    label=str(entry.get("label") if entry.get("label") not in (None, "") else value),
+                    label=str(
+                        entry.get("label") if entry.get("label") not in (None, "") else value
+                    ),
                     hidden=bool(entry.get("hidden")),
                 )
             )
@@ -432,7 +442,8 @@ def _normalise_dataverse(document: Mapping[str, Any], crm_object: str) -> Metada
             (
                 row
                 for row in rows
-                if isinstance(row, Mapping) and not (crm_object and str(row.get("SchemaName") or "") != crm_object)
+                if isinstance(row, Mapping)
+                and not (crm_object and str(row.get("SchemaName") or "") != crm_object)
             ),
             None,
         )
@@ -443,7 +454,9 @@ def _normalise_dataverse(document: Mapping[str, Any], crm_object: str) -> Metada
             )
         attributes = chosen.get("Attributes") or chosen.get("attributes") or []
         keys = tuple(
-            tuple(str(name) for name in (key.get("KeyAttributes") or key.get("key_attributes") or []))
+            tuple(
+                str(name) for name in (key.get("KeyAttributes") or key.get("key_attributes") or [])
+            )
             for key in (chosen.get("Keys") or chosen.get("keys") or [])
             if isinstance(key, Mapping)
         )
@@ -564,8 +577,10 @@ def normalise(provider: Any, document: Mapping[str, Any], crm_object: str = "") 
     # Dataverse is the one provider whose read can arrive unwrapped: a tool that
     # queries `EntityDefinitions` and hands over the array it got back should not
     # have to reshape it into the Web API envelope first.
-    a_bare_list_is_allowed = name == "dataverse" and isinstance(document, Sequence) and not isinstance(
-        document, (str, bytes)
+    a_bare_list_is_allowed = (
+        name == "dataverse"
+        and isinstance(document, Sequence)
+        and not isinstance(document, (str, bytes))
     )
     if not isinstance(document, Mapping) and not a_bare_list_is_allowed:
         raise InvalidMapping("a metadata document must be a JSON object")
@@ -603,5 +618,7 @@ def fixture(
         ),
         keys=tuple(tuple(str(name) for name in key) for key in keys),
         document="fixture",
-        notes=("Not a CRM read: this metadata was written by a seeder or a test, not by a connector.",),
+        notes=(
+            "Not a CRM read: this metadata was written by a seeder or a test, not by a connector.",
+        ),
     )

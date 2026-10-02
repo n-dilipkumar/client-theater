@@ -91,9 +91,7 @@ class SubscriptionBook:
             "last_status": None,
             "last_delivered_at": None,
         }
-        return self.store.create(
-            COLLECTION, payload, room_id=room_id, actor=actor, source=source
-        )
+        return self.store.create(COLLECTION, payload, room_id=room_id, actor=actor, source=source)
 
     def list(self, *, room_id: str | None = None) -> list[dict[str, Any]]:
         """List live subscriptions, newest first.
@@ -107,11 +105,7 @@ class SubscriptionBook:
         everything = self.store.list(COLLECTION, limit=200)
         if room_id is None:
             return everything
-        return [
-            record
-            for record in everything
-            if record["room_id"] in (None, room_id)
-        ]
+        return [record for record in everything if record["room_id"] in (None, room_id)]
 
     def get(self, subscription_id: str) -> dict[str, Any] | None:
         record = self.store.get(subscription_id)

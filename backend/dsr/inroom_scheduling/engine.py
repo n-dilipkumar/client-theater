@@ -44,6 +44,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping, Sequence
 
 from dsr.db.audited import RecordNotFound
+from dsr.inroom_scheduling.attendees import room_metadata, validate_metadata
 from dsr.inroom_scheduling.availability import (
     Occupancy,
     Selector,
@@ -54,7 +55,6 @@ from dsr.inroom_scheduling.availability import (
     selector_label,
     slot_grid,
 )
-from dsr.inroom_scheduling.attendees import room_metadata, validate_metadata
 from dsr.inroom_scheduling.bookings import (
     CANCELLED,
     INSTANT,
@@ -172,11 +172,7 @@ def _routed_event_type_ids(form: Mapping[str, Any]) -> list[str]:
     "None".
     """
     return [
-        *[
-            str(rule["eventTypeId"])
-            for rule in form.get("rules") or []
-            if rule.get("eventTypeId")
-        ],
+        *[str(rule["eventTypeId"]) for rule in form.get("rules") or [] if rule.get("eventTypeId")],
         str(form.get("fallbackEventTypeId")),
     ]
 
@@ -423,7 +419,9 @@ class SchedulingEngine:
             where = {"slug": selector.slug, "teamSlug": selector.team_slug}
         record = self._find_event_type_by(where)
         if record is None:
-            raise UnknownEventType(f"no event type matches {where}; a slot grid has to come from one")
+            raise UnknownEventType(
+                f"no event type matches {where}; a slot grid has to come from one"
+            )
         return (record, 1)
 
     def _hosts_for_usernames(self, usernames: Sequence[str]) -> list[dict[str, Any]]:
@@ -449,7 +447,9 @@ class SchedulingEngine:
                 continue
             # Several event types can share a host; the first working-hours
             # definition wins and the rest describe the same person's calendar.
-            candidates.sort(key=lambda entry: (str(entry.get("time_zone") or ""), str(entry.get("start"))))
+            candidates.sort(
+                key=lambda entry: (str(entry.get("time_zone") or ""), str(entry.get("start")))
+            )
             found.append(normalise_host(candidates[0], field=f"usernames[{name}]"))
             known.append(name)
         unknown = [name for name in usernames if name not in known]
@@ -612,13 +612,13 @@ class SchedulingEngine:
                     "an embed must name an eventTypeId, or a routingFormId whose fallback event type "
                     "is the one the room books against. Neither was given."
                 )
-            fallback = str(_as_mapping(self.require_form(form_id).get("data"))["fallbackEventTypeId"])
+            fallback = str(
+                _as_mapping(self.require_form(form_id).get("data"))["fallbackEventTypeId"]
+            )
             body = {**body, "eventTypeId": fallback}
 
         event_type = self.require_event_type(str(body["eventTypeId"]))
-        payload = normalise_embed(
-            body, event_type=_as_mapping(event_type.get("data"))
-        )
+        payload = normalise_embed(body, event_type=_as_mapping(event_type.get("data")))
         payload["clientId"] = body.get("clientId") or body.get("client_id")
         payload["horizon_days"] = self._horizon(body)
         payload["require_hold"] = bool(body.get("require_hold") or body.get("requireHold"))
@@ -1555,7 +1555,9 @@ class SchedulingEngine:
         if self.store.get(room_id) is None:
             raise RecordNotFound(room_id)
         records = self.store.list(BOOKING_COLLECTION, room_id=room_id, limit=1000)
-        rows = [{**_as_mapping(record.get("data")), "record_id": record["id"]} for record in records]
+        rows = [
+            {**_as_mapping(record.get("data")), "record_id": record["id"]} for record in records
+        ]
         if status is not None:
             rows = [row for row in rows if str(row.get("status")) == str(status)]
         return rows
@@ -1613,7 +1615,11 @@ class SchedulingEngine:
         records = self.store.list(EVENT_LOG_COLLECTION, room_id=room_id, limit=1000)
         if event is None:
             return records
-        return [record for record in records if str(_as_mapping(record.get("data")).get("event")) == str(event)]
+        return [
+            record
+            for record in records
+            if str(_as_mapping(record.get("data")).get("event")) == str(event)
+        ]
 
     def webhooks(self, room_id: str, *, status: str | None = None) -> list[dict[str, Any]]:
         """A room's webhook deliveries. See :meth:`bookings` on scoping."""
@@ -1623,7 +1629,9 @@ class SchedulingEngine:
         if status is None:
             return records
         return [
-            record for record in records if str(_as_mapping(record.get("data")).get("status")) == str(status)
+            record
+            for record in records
+            if str(_as_mapping(record.get("data")).get("status")) == str(status)
         ]
 
     # -- shared helpers ------------------------------------------------------ #
@@ -1703,14 +1711,21 @@ class SchedulingEngine:
         found: list[str] = []
         for record in self.store.list("room", limit=1000):
             body = _as_mapping(record.get("data")).get(ROOM_FIELD)
-            if isinstance(body, Mapping) and isinstance(body.get("embed"), Mapping) and body["embed"]:
+            if (
+                isinstance(body, Mapping)
+                and isinstance(body.get("embed"), Mapping)
+                and body["embed"]
+            ):
                 found.append(str(record["id"]))
         return found
 
     def _all_hold_views(self) -> list[dict[str, Any]]:
-        return [self.hold_view(record) for record in self.store.list(RESERVATION_COLLECTION, limit=1000)]
+        return [
+            self.hold_view(record) for record in self.store.list(RESERVATION_COLLECTION, limit=1000)
+        ]
 
     def _all_bookings(self) -> list[dict[str, Any]]:
         return [
-            _as_mapping(record.get("data")) for record in self.store.list(BOOKING_COLLECTION, limit=1000)
+            _as_mapping(record.get("data"))
+            for record in self.store.list(BOOKING_COLLECTION, limit=1000)
         ]

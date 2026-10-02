@@ -21,6 +21,7 @@ Each agent is sent a short pointer to its committed brief rather than the brief
 itself. The brief is in git, so the agent reads the same text a reviewer can
 read, and there is no multi-kilobyte prompt for a shell to mangle.
 """
+
 import json
 import subprocess
 import sys
@@ -39,12 +40,24 @@ REPO_ID = "id:8964203a-831a-425f-8fd7-ebc3a0fc2e46"
 # and what the agent is doing. A board full of tabs called "OpenCode" cannot be
 # navigated.
 DISPATCH = [
-    ("WF-002", "dsr-wf-002-buyer-pages", "DSR WF-002 buyer pages port",
-     "orchestration/ports/WF-002.md"),
-    ("WF-003", "dsr-wf-003-doc-library", "DSR WF-003 document library port",
-     "orchestration/ports/WF-003.md"),
-    ("WF-012", "dsr-wf-012-room-generation", "DSR WF-012 room generation port",
-     "orchestration/ports/WF-012.md"),
+    (
+        "WF-002",
+        "dsr-wf-002-buyer-pages",
+        "DSR WF-002 buyer pages port",
+        "orchestration/ports/WF-002.md",
+    ),
+    (
+        "WF-003",
+        "dsr-wf-003-doc-library",
+        "DSR WF-003 document library port",
+        "orchestration/ports/WF-003.md",
+    ),
+    (
+        "WF-012",
+        "dsr-wf-012-room-generation",
+        "DSR WF-012 room generation port",
+        "orchestration/ports/WF-012.md",
+    ),
 ]
 
 POINTER = (
@@ -148,10 +161,19 @@ def main():
     for ticket, wt_name, title, brief in DISPATCH:
         print(f"=== {ticket} ===")
 
-        res, err = orca_json([
-            "orca", "worktree", "create", "--name", wt_name,
-            "--setup", "skip", "--no-parent", "--json",
-        ])
+        res, err = orca_json(
+            [
+                "orca",
+                "worktree",
+                "create",
+                "--name",
+                wt_name,
+                "--setup",
+                "skip",
+                "--no-parent",
+                "--json",
+            ]
+        )
         if res is None:
             print(f"  worktree create FAILED: {err}")
             continue
@@ -161,10 +183,20 @@ def main():
         # The agent goes in the FIRST terminal via the worktree's own command
         # path, then the tab is renamed. `--command opencode` rather than
         # `--agent opencode` because the latter is gated by a disabled flag.
-        res2, err2 = orca_json([
-            "orca", "terminal", "create", "--worktree", wt_id,
-            "--title", title, "--command", "opencode", "--json",
-        ])
+        res2, err2 = orca_json(
+            [
+                "orca",
+                "terminal",
+                "create",
+                "--worktree",
+                wt_id,
+                "--title",
+                title,
+                "--command",
+                "opencode",
+                "--json",
+            ]
+        )
         if res2 is None:
             print(f"  terminal create FAILED: {err2}")
             continue
@@ -173,10 +205,21 @@ def main():
         # A fresh TUI needs a moment before input is accepted; the guide is
         # explicit that a prompt typed into a starting TUI is lost.
         time.sleep(6)
-        res3, err3 = orca_json([
-            "orca", "terminal", "wait", "--terminal", handle,
-            "--for", "tui-idle", "--timeout-ms", "40000", "--json",
-        ], timeout=60)
+        res3, err3 = orca_json(
+            [
+                "orca",
+                "terminal",
+                "wait",
+                "--terminal",
+                handle,
+                "--for",
+                "tui-idle",
+                "--timeout-ms",
+                "40000",
+                "--json",
+            ],
+            timeout=60,
+        )
         satisfied = (res3 or {}).get("satisfied")
         print(f"  tab {handle} '{title}'  tui-idle={satisfied}")
         if satisfied is False:
@@ -184,10 +227,22 @@ def main():
             continue
 
         prompt = POINTER.format(brief=brief)
-        res4, err4 = orca_json([
-            "orca", "terminal", "send", "--terminal", handle,
-            "--text", prompt, "--enter", "--wait-submit", "20", "--json",
-        ], timeout=90)
+        res4, err4 = orca_json(
+            [
+                "orca",
+                "terminal",
+                "send",
+                "--terminal",
+                handle,
+                "--text",
+                prompt,
+                "--enter",
+                "--wait-submit",
+                "20",
+                "--json",
+            ],
+            timeout=90,
+        )
         if res4 is None:
             print(f"  send FAILED: {err4}")
             continue
@@ -195,8 +250,9 @@ def main():
         stages = [s.get("stage") for s in (res4.get("stages") or [])]
         print(f"  sent: accepted={accepted} stages={stages}")
 
-        launched.append({"ticket": ticket, "handle": handle, "worktree": wt_id,
-                         "title": title, "brief": brief})
+        launched.append(
+            {"ticket": ticket, "handle": handle, "worktree": wt_id, "title": title, "brief": brief}
+        )
 
     print()
     print(f"=== launched {len(launched)} agent tab(s) ===")

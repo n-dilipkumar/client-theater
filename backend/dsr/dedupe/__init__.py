@@ -76,11 +76,11 @@ from dsr.dedupe.vocabulary import (
     normalise_domain,
     normalise_email,
     normalise_exact,
+    published_vocabulary,
     require_keys,
     require_policy,
     require_result,
     require_vendor,
-    published_vocabulary,
     serialise_duplicate_rule_header,
 )
 

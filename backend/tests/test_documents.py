@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from dsr.db.audited import AuditedDatabase
 from dsr.documents import (
     FOLDER,
@@ -106,7 +105,9 @@ def test_unknown_room_is_reported_not_guessed(library):
 
 def test_row_reports_name_status_and_last_modifier(library):
     row = add(library)
-    library.update_document(library.room["id"], row["id"], {"title": "Revised"}, **COLLABORATOR, source=SOURCE)
+    library.update_document(
+        library.room["id"], row["id"], {"title": "Revised"}, **COLLABORATOR, source=SOURCE
+    )
 
     refreshed = library.get_document(library.room["id"], row["id"])
     # Sourced: each document shows "who last modified it, and its workflow
@@ -124,8 +125,11 @@ def test_thumbnail_is_pending_until_a_url_exists(library):
     assert pending["library"]["thumbnail"] == {"state": "pending", "url": None}
 
     ready = library.update_document(
-        library.room["id"], pending["id"], {"thumbnail_url": "https://cdn/x.png"},
-        **CONTRIBUTOR, source=SOURCE,
+        library.room["id"],
+        pending["id"],
+        {"thumbnail_url": "https://cdn/x.png"},
+        **CONTRIBUTOR,
+        source=SOURCE,
     )
     assert ready["library"]["thumbnail"]["state"] == "ready"
     assert ready["library"]["thumbnail"]["url"] == "https://cdn/x.png"
@@ -141,7 +145,9 @@ def test_format_is_guessed_from_the_file_name_and_can_be_overridden(library):
 
 def test_document_without_a_name_is_rejected(library):
     with pytest.raises(InvalidDocument):
-        library.add_document(library.room["id"], {"description": "no name"}, **CONTRIBUTOR, source=SOURCE)
+        library.add_document(
+            library.room["id"], {"description": "no name"}, **CONTRIBUTOR, source=SOURCE
+        )
 
 
 # -- expiry ------------------------------------------------------------------ #
@@ -184,7 +190,9 @@ def test_new_documents_start_as_draft(library):
 
 def test_draft_can_be_published(library):
     row = add(library)
-    published = library.set_status(library.room["id"], row["id"], "published", **CONTRIBUTOR, source=SOURCE)
+    published = library.set_status(
+        library.room["id"], row["id"], "published", **CONTRIBUTOR, source=SOURCE
+    )
     assert published["library"]["status"] == "published"
 
 
@@ -207,8 +215,10 @@ def test_a_teams_own_status_is_accepted_and_rendered(library):
     # The status column is free-form: a team adds a state without a migration
     # and without asking us to extend the vocabulary.
     row = library.add_document(
-        library.room["id"], {"name": "MSA.pdf", "status": "legal_review"},
-        **CONTRIBUTOR, source=SOURCE,
+        library.room["id"],
+        {"name": "MSA.pdf", "status": "legal_review"},
+        **CONTRIBUTOR,
+        source=SOURCE,
     )
     assert row["library"]["status"] == "legal_review"
     assert row["library"]["status_known"] is False
@@ -220,10 +230,14 @@ def test_a_teams_own_status_is_accepted_and_rendered(library):
 def test_an_unknown_current_status_may_move_anywhere(library):
     # We police our own state machine, not a team's.
     row = library.add_document(
-        library.room["id"], {"name": "MSA.pdf", "status": "legal_review"},
-        **CONTRIBUTOR, source=SOURCE,
+        library.room["id"],
+        {"name": "MSA.pdf", "status": "legal_review"},
+        **CONTRIBUTOR,
+        source=SOURCE,
     )
-    moved = library.set_status(library.room["id"], row["id"], "published", **CONTRIBUTOR, source=SOURCE)
+    moved = library.set_status(
+        library.room["id"], row["id"], "published", **CONTRIBUTOR, source=SOURCE
+    )
     assert moved["library"]["status"] == "published"
 
 
@@ -302,7 +316,9 @@ def test_instance_admin_can_delete_anyones_document(library):
 
 def test_a_document_from_another_room_cannot_be_deleted_through_this_one(library):
     other = library.store.create("room", {"name": "Contoso"}, actor="sam")
-    foreign = library.add_document(other["id"], {"name": "Secret.pdf"}, **CONTRIBUTOR, source=SOURCE)
+    foreign = library.add_document(
+        other["id"], {"name": "Secret.pdf"}, **CONTRIBUTOR, source=SOURCE
+    )
     with pytest.raises(DocumentNotFound):
         library.remove_document(library.room["id"], foreign["id"], **CONTRIBUTOR, source=SOURCE)
 
@@ -333,8 +349,10 @@ def test_a_team_field_needs_no_migration_and_is_queryable(library):
 
 def test_the_row_returns_the_raw_payload_untouched(library):
     row = library.add_document(
-        library.room["id"], {"name": "X.pdf", "vendor": {"name": "Globex"}},
-        **CONTRIBUTOR, source=SOURCE,
+        library.room["id"],
+        {"name": "X.pdf", "vendor": {"name": "Globex"}},
+        **CONTRIBUTOR,
+        source=SOURCE,
     )
     assert row["data"]["vendor"] == {"name": "Globex"}
     assert row["library"]["name"] == "X.pdf"
@@ -370,9 +388,7 @@ def test_search_and_status_compose(library):
     library.set_status(library.room["id"], first["id"], "published", **CONTRIBUTOR, source=SOURCE)
     add(library, name="Draft-Roadmap.pdf")
 
-    found = library.list_documents(
-        library.room["id"], search="proposal", status="published"
-    )
+    found = library.list_documents(library.room["id"], search="proposal", status="published")
     assert [d["id"] for d in found["documents"]] == [first["id"]]
 
 
@@ -384,13 +400,17 @@ def test_gallery_block_takes_at_most_four_documents(library):
 
     with pytest.raises(InvalidDocument):
         library.save_gallery(
-            library.room["id"], {"documents": [r["id"] for r in rows]},
-            **CONTRIBUTOR, source=SOURCE,
+            library.room["id"],
+            {"documents": [r["id"] for r in rows]},
+            **CONTRIBUTOR,
+            source=SOURCE,
         )
 
     block = library.save_gallery(
-        library.room["id"], {"documents": [r["id"] for r in rows[:GALLERY_SLOTS]]},
-        **CONTRIBUTOR, source=SOURCE,
+        library.room["id"],
+        {"documents": [r["id"] for r in rows[:GALLERY_SLOTS]]},
+        **CONTRIBUTOR,
+        source=SOURCE,
     )
     assert len(block["documents"]) == GALLERY_SLOTS
     assert block["empty_slots"] == 0
@@ -398,10 +418,14 @@ def test_gallery_block_takes_at_most_four_documents(library):
 
 def test_gallery_only_accepts_documents_from_the_same_room(library):
     other = library.store.create("room", {"name": "Contoso"}, actor="sam")
-    foreign = library.add_document(other["id"], {"name": "Foreign.pdf"}, **CONTRIBUTOR, source=SOURCE)
+    foreign = library.add_document(
+        other["id"], {"name": "Foreign.pdf"}, **CONTRIBUTOR, source=SOURCE
+    )
 
     with pytest.raises(DocumentNotFound):
-        library.save_gallery(library.room["id"], {"documents": [foreign["id"]]}, **CONTRIBUTOR, source=SOURCE)
+        library.save_gallery(
+            library.room["id"], {"documents": [foreign["id"]]}, **CONTRIBUTOR, source=SOURCE
+        )
 
 
 def test_gallery_rejects_documents_stored_outside_the_folder(library):
@@ -412,14 +436,18 @@ def test_gallery_rejects_documents_stored_outside_the_folder(library):
         actor="dana",
     )
     with pytest.raises(InvalidDocument):
-        library.save_gallery(library.room["id"], {"documents": [outside["id"]]}, **CONTRIBUTOR, source=SOURCE)
+        library.save_gallery(
+            library.room["id"], {"documents": [outside["id"]]}, **CONTRIBUTOR, source=SOURCE
+        )
 
 
 def test_gallery_block_is_replaced_in_place_and_audited(library):
     rows = [add(library, name=f"D{i}.pdf") for i in range(3)]
     block = library.save_gallery(
-        library.room["id"], {"label": "Overview", "documents": [r["id"] for r in rows]},
-        **CONTRIBUTOR, source=SOURCE,
+        library.room["id"],
+        {"label": "Overview", "documents": [r["id"] for r in rows]},
+        **CONTRIBUTOR,
+        source=SOURCE,
     )
     updated = library.save_gallery(
         library.room["id"],
@@ -441,8 +469,10 @@ def test_gallery_block_is_replaced_in_place_and_audited(library):
 def test_gallery_skips_duplicate_and_blank_selectors(library):
     row = add(library)
     block = library.save_gallery(
-        library.room["id"], {"documents": [row["id"], "", row["id"]]},
-        **CONTRIBUTOR, source=SOURCE,
+        library.room["id"],
+        {"documents": [row["id"], "", row["id"]]},
+        **CONTRIBUTOR,
+        source=SOURCE,
     )
     assert [d["id"] for d in block["documents"]] == [row["id"]]
 
@@ -450,7 +480,9 @@ def test_gallery_skips_duplicate_and_blank_selectors(library):
 def test_gallery_documents_open_in_a_new_tab(library):
     # Sourced: the buyer opens the document "in a new tab".
     row = add(library)
-    block = library.save_gallery(library.room["id"], {"documents": [row["id"]]}, **CONTRIBUTOR, source=SOURCE)
+    block = library.save_gallery(
+        library.room["id"], {"documents": [row["id"]]}, **CONTRIBUTOR, source=SOURCE
+    )
     assert block["open_in_new_tab"] is True
 
 
@@ -472,8 +504,12 @@ def test_list_response_carries_the_caller_capabilities(library):
 
 def test_row_permissions_reflect_who_owns_the_document(library):
     row = add(library, who=COLLABORATOR)
-    as_owner = library.get_document(library.room["id"], row["id"], role=CONTENT_CONTRIBUTOR, actor="dana")
-    as_other = library.get_document(library.room["id"], row["id"], role=CONTENT_CONTRIBUTOR, actor="sam")
+    as_owner = library.get_document(
+        library.room["id"], row["id"], role=CONTENT_CONTRIBUTOR, actor="dana"
+    )
+    as_other = library.get_document(
+        library.room["id"], row["id"], role=CONTENT_CONTRIBUTOR, actor="sam"
+    )
     assert as_owner["permissions"]["can_delete"] is True
     assert as_other["permissions"]["can_delete"] is False
 

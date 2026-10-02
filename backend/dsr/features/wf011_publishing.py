@@ -87,8 +87,8 @@ from dsr.publishing import (
     EVENT_STATUS_CHANGED,
     EVENT_TYPES,
     STATUSES,
-    PublishingService,
     PublishConflict,
+    PublishingService,
 )
 from dsr.store import RecordStore
 
@@ -136,9 +136,7 @@ def _publish_conflict(request: Request, exc: PublishConflict) -> JSONResponse:
     here. These are decisions the domain made deliberately, not malformed
     requests, so they are not 400.
     """
-    return JSONResponse(
-        status_code=409, content={"error": "publish_conflict", "detail": str(exc)}
-    )
+    return JSONResponse(status_code=409, content={"error": "publish_conflict", "detail": str(exc)})
 
 
 EXCEPTION_HANDLERS = {PublishConflict: _publish_conflict}
@@ -161,7 +159,9 @@ def list_rooms(
         description=f"Comma-separated statuses to include. One of: {', '.join(STATUSES)}",
     ),
     tag: str | None = Query(default=None, description="Exact tag match, case sensitive"),
-    q: str | None = Query(default=None, description="Case-insensitive match on name, account or id"),
+    q: str | None = Query(
+        default=None, description="Case-insensitive match on name, account or id"
+    ),
     owner: str | None = Query(default=None),
     include_archived: bool = Query(default=False),
     limit: int = Query(default=200, ge=1, le=1000),
@@ -230,7 +230,9 @@ def share_link(room_id: str, service: PublishingService = ServiceDep) -> dict[st
     return service.share_link(room_id)
 
 
-@router.patch("/rooms/{room_id}/access", summary="Link expiry, view limit, password, identity check")
+@router.patch(
+    "/rooms/{room_id}/access", summary="Link expiry, view limit, password, identity check"
+)
 def set_access(
     room_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -308,7 +310,9 @@ def cancel_subscription(
     subscription_id: str, service: PublishingService = ServiceDep
 ) -> dict[str, Any]:
     """Cancel a subscription. The history stays, so a past delivery is auditable."""
-    return service.cancel(subscription_id, source=f"DELETE {router.prefix}/webhooks/{{subscription_id}}")
+    return service.cancel(
+        subscription_id, source=f"DELETE {router.prefix}/webhooks/{{subscription_id}}"
+    )
 
 
 @router.get("/webhooks/{subscription_id}/deliveries", summary="Recent delivery attempts")

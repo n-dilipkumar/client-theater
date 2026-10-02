@@ -77,7 +77,9 @@ def _clean_duration(value: Any) -> int:
     try:
         minutes = int(value)
     except (TypeError, ValueError) as exc:
-        raise MeetingChangeError(f"duration_minutes must be a whole number of minutes; got {value!r}") from exc
+        raise MeetingChangeError(
+            f"duration_minutes must be a whole number of minutes; got {value!r}"
+        ) from exc
     if minutes < MIN_DURATION_MINUTES or minutes > MAX_DURATION_MINUTES:
         raise MeetingChangeError(
             f"duration_minutes must be between {MIN_DURATION_MINUTES} and {MAX_DURATION_MINUTES}; got {minutes}"
@@ -234,7 +236,9 @@ def _clean_offsets(value: Any) -> list[int]:
         try:
             offset = int(raw)
         except (TypeError, ValueError) as exc:
-            raise MeetingChangeError(f"reminder offset must be a whole number of minutes; got {raw!r}") from exc
+            raise MeetingChangeError(
+                f"reminder offset must be a whole number of minutes; got {raw!r}"
+            ) from exc
         if offset < 0:
             raise MeetingChangeError(
                 f"reminder offset must be zero or positive minutes before the meeting; got {offset}"

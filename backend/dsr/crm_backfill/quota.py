@@ -107,9 +107,7 @@ def report(connection: Mapping[str, Any], used: Mapping[str, Any], now: datetime
         "time_zone_offset_hours": offset,
         "window_started_at": started.isoformat(),
         "resets_at": next_reset(now, offset).isoformat(),
-        "hours_to_reset": round(
-            (next_reset(now, offset) - now).total_seconds() / 3600.0, 3
-        ),
+        "hours_to_reset": round((next_reset(now, offset) - now).total_seconds() / 3600.0, 3),
         "quote": "The **daily** limit resets at midnight based on your time zone setting.",
     }
 

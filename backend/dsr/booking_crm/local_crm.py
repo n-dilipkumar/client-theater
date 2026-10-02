@@ -241,7 +241,12 @@ class LocalCrm:
     # -- writes ------------------------------------------------------------- #
 
     def create(
-        self, record_type: str, fields: Mapping[str, Any], *, source: str, vendor: str = "salesforce"
+        self,
+        record_type: str,
+        fields: Mapping[str, Any],
+        *,
+        source: str,
+        vendor: str = "salesforce",
     ) -> dict[str, Any]:
         """Create one CRM record and return it.
 
@@ -275,12 +280,14 @@ class LocalCrm:
             if not identifier.startswith(prefix):
                 continue
             try:
-                highest = max(highest, int(identifier[len(prefix):]))
+                highest = max(highest, int(identifier[len(prefix) :]))
             except ValueError:
                 continue
         return f"{prefix}{highest + 1:04d}"
 
-    def update(self, crm_id: str, patch: Mapping[str, Any], *, source: str) -> dict[str, Any] | None:
+    def update(
+        self, crm_id: str, patch: Mapping[str, Any], *, source: str
+    ) -> dict[str, Any] | None:
         """Patch one record by vendor id, or return ``None`` if it is not there."""
         row = self.get(crm_id)
         if row is None:
@@ -299,7 +306,9 @@ class LocalCrm:
             return None
         return self.store.delete(row["id"], actor="crm", source=source)
 
-    def seed(self, rows: Iterable[Mapping[str, Any]], *, source: str = "seed") -> list[dict[str, Any]]:
+    def seed(
+        self, rows: Iterable[Mapping[str, Any]], *, source: str = "seed"
+    ) -> list[dict[str, Any]]:
         """Put vendor rows in place, for a demo or a test.
 
         The rows go through the same store as everything else, so a seeded CRM is
@@ -414,6 +423,7 @@ class LocalCrm:
             dated = [row for row in candidates if parse_date(row["data"].get("close_date"))]
             considered = list(dated)
             if on is not None and dated:
+
                 def gap(row: Mapping[str, Any]) -> tuple[int, date]:
                     close = parse_date(row["data"].get("close_date"))
                     assert close is not None  # narrowed by the filter above

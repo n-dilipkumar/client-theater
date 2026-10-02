@@ -45,8 +45,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -94,6 +92,7 @@ from dsr.trend_health.vocabulary import (
     require_audience,
     require_event_type,
 )
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Written out here rather than imported, so a renamed
 #: prefix fails a test instead of following silently.
@@ -179,12 +178,23 @@ def events_at(ages, *, event_type=CLIENT_VIEW_EVENT, external=True, now=NOW):
 
 
 def trend_of(ages, *, rules=None, event_type=CLIENT_VIEW_EVENT, external=True, now=NOW):
-    return classify(events_at(ages, event_type=event_type, external=external, now=now), rules or DEFAULT_RULES, now)[
-        "trend"
-    ]
+    return classify(
+        events_at(ages, event_type=event_type, external=external, now=now),
+        rules or DEFAULT_RULES,
+        now,
+    )["trend"]
 
 
-def record(health, room_id, *, days_ago=1.0, event_type=CLIENT_VIEW_EVENT, audience="external", now=NOW, **extra):
+def record(
+    health,
+    room_id,
+    *,
+    days_ago=1.0,
+    event_type=CLIENT_VIEW_EVENT,
+    audience="external",
+    now=NOW,
+    **extra,
+):
     payload = {
         "type": event_type,
         "occurred_at": (now - timedelta(days=days_ago)).isoformat(timespec="seconds"),
@@ -210,9 +220,7 @@ def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
 
 def test_the_mounted_route_set_is_exactly_the_one_this_suite_expects(http):
     entry = next(f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID)
-    served = {
-        (method, route["path"]) for route in entry["routes"] for method in route["methods"]
-    }
+    served = {(method, route["path"]) for route in entry["routes"] for method in route["methods"]}
     assert served == {(method, f"{PREFIX}{path}") for method, path in ROUTES}
 
 
@@ -271,7 +279,10 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
 
 def test_the_room_scoped_route_takes_its_room_in_the_path():
     """The brief asks for room-scoped paths to stay room-scoped."""
-    paths = {route.path for route in load_feature("wf021_classify_workspace_engagement_health_h").router.routes}
+    paths = {
+        route.path
+        for route in load_feature("wf021_classify_workspace_engagement_health_h").router.routes
+    }
 
     assert f"{PREFIX}/rooms/{{room_id}}/trend" in paths
     # No path reaches into another resource while carrying a room id, which is
@@ -296,8 +307,14 @@ def test_every_trend_carries_its_sourced_sentence(value):
 
 def test_the_sourced_quote_is_carried_verbatim():
     """The quotation the whole workflow rests on, so it cannot be paraphrased away."""
-    assert "Hot = workspaces that have tons of recent engagement within the last 7 days" in SOURCED_QUOTE
-    assert "Cooling = workspaces that previously had engagement, but none within the last 14 days" in SOURCED_QUOTE
+    assert (
+        "Hot = workspaces that have tons of recent engagement within the last 7 days"
+        in SOURCED_QUOTE
+    )
+    assert (
+        "Cooling = workspaces that previously had engagement, but none within the last 14 days"
+        in SOURCED_QUOTE
+    )
     assert "Cold = workspace with no engagement within the last month" in SOURCED_QUOTE
 
 
@@ -366,7 +383,12 @@ def test_vocabulary_endpoint_serves_every_published_name(http):
 
     assert body["trend_values"] == list(TREND_VALUES)
     assert body["decay_path"] == ["hot", "warm", "cooling", "cold"]
-    assert body["trend_labels"] == {"hot": "Hot", "warm": "Warm", "cooling": "Cooling", "cold": "Cold"}
+    assert body["trend_labels"] == {
+        "hot": "Hot",
+        "warm": "Warm",
+        "cooling": "Cooling",
+        "cold": "Cold",
+    }
     assert body["engagement_event_types"] == list(ENGAGEMENT_EVENT_TYPES)
     assert body["client_view_event"] == CLIENT_VIEW_EVENT
     assert body["audiences"] == list(AUDIENCES)
@@ -478,14 +500,28 @@ def test_bucket_of_never_raises_on_any_bucket_count():
 
 def test_the_hottest_matching_bucket_wins():
     """Hot is checked before Warm: a busy week is Hot, not Warm."""
-    assert bucket_of(
-        {"hot": {"qualifying": 5}, "warm": {"qualifying": 9}, "cold": {"qualifying": 9, "events": 9}},
-        DEFAULT_RULES,
-    ) == "hot"
-    assert bucket_of(
-        {"hot": {"qualifying": 0}, "warm": {"qualifying": 9}, "cold": {"qualifying": 9, "events": 9}},
-        DEFAULT_RULES,
-    ) == "warm"
+    assert (
+        bucket_of(
+            {
+                "hot": {"qualifying": 5},
+                "warm": {"qualifying": 9},
+                "cold": {"qualifying": 9, "events": 9},
+            },
+            DEFAULT_RULES,
+        )
+        == "hot"
+    )
+    assert (
+        bucket_of(
+            {
+                "hot": {"qualifying": 0},
+                "warm": {"qualifying": 9},
+                "cold": {"qualifying": 9, "events": 9},
+            },
+            DEFAULT_RULES,
+        )
+        == "warm"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -587,7 +623,7 @@ def test_mixed_activity_counts_only_the_external_half():
 
 
 def test_a_workspace_decays_hot_warm_cooling_cold_with_no_new_activity():
-    """"Buckets are time-window based, so a workspace decays from Hot -> Warm ->
+    """ "Buckets are time-window based, so a workspace decays from Hot -> Warm ->
     Cooling -> Cold without any new activity." A room with a full hot week and
     nothing after it must pass through every state, in that order, and stop."""
     events = events_at([0.0] * 6)
@@ -730,7 +766,9 @@ def test_a_naive_datetime_is_read_as_utc():
     assert parse_timestamp(datetime(2026, 9, 27, 12, 0)) == parse_timestamp("2026-09-27T12:00:00Z")
 
 
-@pytest.mark.parametrize("value", ["yesterday", "", "  ", None, True, False, "2026-13-45T99:99:99Z", -5])
+@pytest.mark.parametrize(
+    "value", ["yesterday", "", "  ", None, True, False, "2026-13-45T99:99:99Z", -5]
+)
 def test_an_unreadable_timestamp_is_refused_with_the_value_it_saw(value):
     with pytest.raises(InvalidTimestamp):
         parse_timestamp(value)
@@ -808,7 +846,10 @@ def test_a_patch_can_retune_the_windows():
 
 
 def test_a_retuned_window_actually_moves_the_boundary():
-    rules = merge(DEFAULT_RULES, {"windows": {"hot": 3, "warm": 5, "cold": 10}, "min_events": {"hot": 1, "warm": 1}})
+    rules = merge(
+        DEFAULT_RULES,
+        {"windows": {"hot": 3, "warm": 5, "cold": 10}, "min_events": {"hot": 1, "warm": 1}},
+    )
     assert trend_of([3.5], rules=rules) == "warm"
     assert trend_of([5.5], rules=rules) == "cooling"
     assert trend_of([10.5], rules=rules) == "cold"
@@ -858,12 +899,20 @@ def test_a_complete_rules_mapping_must_name_all_three_windows(windows):
 
 def test_a_stored_rule_this_version_does_not_know_about_is_ignored_not_fatal():
     """A record written by a future version must not break this version's reads."""
-    assert validate({**DEFAULT_RULES, "extra_knob": 7})["windows"] == {"hot": 7, "warm": 14, "cold": 30}
+    assert validate({**DEFAULT_RULES, "extra_knob": 7})["windows"] == {
+        "hot": 7,
+        "warm": 14,
+        "cold": 30,
+    }
 
 
 def test_a_partial_window_patch_is_legal_because_it_merges():
     """Retuning one window must not force the caller to restate the other two."""
-    assert merge(DEFAULT_RULES, {"windows": {"hot": 3}})["windows"] == {"hot": 3, "warm": 14, "cold": 30}
+    assert merge(DEFAULT_RULES, {"windows": {"hot": 3}})["windows"] == {
+        "hot": 3,
+        "warm": 14,
+        "cold": 30,
+    }
 
 
 @pytest.mark.parametrize("floor", [0, -1, "5", "many", True, 2.5])
@@ -897,7 +946,10 @@ def test_effective_with_no_record_is_the_defaults():
 
 def test_the_ladder_stays_total_under_any_legal_window_ordering():
     """Ordering is enforced for the reader's sake, not for correctness - prove it."""
-    rules = merge(DEFAULT_RULES, {"windows": {"hot": 1, "warm": 2, "cold": 3}, "min_events": {"hot": 2, "warm": 2}})
+    rules = merge(
+        DEFAULT_RULES,
+        {"windows": {"hot": 1, "warm": 2, "cold": 3}, "min_events": {"hot": 2, "warm": 2}},
+    )
     for age in (0, 1, 2, 3, 4, 10, 40):
         assert trend_of([age], rules=rules) in TREND_VALUES
 
@@ -1085,7 +1137,10 @@ def test_the_client_view_flag_is_derived_from_the_event_type(health, room, store
 
 def test_a_missing_timestamp_is_stamped_on_arrival_and_says_it_was_defaulted(health, room, store):
     health.record_event(
-        {"type": CLIENT_VIEW_EVENT, "room_id": room["id"]}, actor="dana", source="POST test", now=NOW
+        {"type": CLIENT_VIEW_EVENT, "room_id": room["id"]},
+        actor="dana",
+        source="POST test",
+        now=NOW,
     )
 
     stored = store.list(ENGAGEMENT_COLLECTION, room_id=room["id"])[0]["data"]
@@ -1109,7 +1164,11 @@ def test_a_supplied_timestamp_is_kept_exactly_and_not_marked_defaulted(health, r
 def test_an_event_far_in_the_future_is_refused(health, room):
     with pytest.raises(InvalidTimestamp):
         health.record_event(
-            {"type": CLIENT_VIEW_EVENT, "room_id": room["id"], "occurredAt": "2027-01-01T00:00:00Z"},
+            {
+                "type": CLIENT_VIEW_EVENT,
+                "room_id": room["id"],
+                "occurredAt": "2027-01-01T00:00:00Z",
+            },
             actor="dana",
             source="POST test",
             now=NOW,
@@ -1136,13 +1195,20 @@ def test_an_unreadable_audience_is_refused(health, room, bad):
 
 def test_an_internal_flag_is_accepted_as_the_audience(health, room, store):
     health.record_event(
-        {"type": CLIENT_VIEW_EVENT, "room_id": room["id"], "internal": True, "occurred_at": NOW.isoformat()},
+        {
+            "type": CLIENT_VIEW_EVENT,
+            "room_id": room["id"],
+            "internal": True,
+            "occurred_at": NOW.isoformat(),
+        },
         actor="dana",
         source="POST test",
         now=NOW,
     )
 
-    assert store.list(ENGAGEMENT_COLLECTION, room_id=room["id"])[0]["data"]["audience"] == "internal"
+    assert (
+        store.list(ENGAGEMENT_COLLECTION, room_id=room["id"])[0]["data"]["audience"] == "internal"
+    )
 
 
 def test_audience_normalisation_defaults_to_external():
@@ -1193,7 +1259,9 @@ def test_events_can_be_filtered_by_audience(health, room):
     record(health, room["id"], audience="external")
     record(health, room["id"], audience="internal")
 
-    assert [row["data"]["audience"] for row in health.list_events(audience="internal")] == ["internal"]
+    assert [row["data"]["audience"] for row in health.list_events(audience="internal")] == [
+        "internal"
+    ]
 
 
 def test_events_can_be_filtered_to_client_views(health, room):
@@ -1333,7 +1401,11 @@ def test_the_stored_event_flag_is_not_required_for_classification(health, store,
     """A row written by hand through the generic API still counts."""
     store.create(
         ENGAGEMENT_COLLECTION,
-        {"type": CLIENT_VIEW_EVENT, "occurred_at": (NOW - timedelta(days=1)).isoformat(), "audience": "external"},
+        {
+            "type": CLIENT_VIEW_EVENT,
+            "occurred_at": (NOW - timedelta(days=1)).isoformat(),
+            "audience": "external",
+        },
         room_id=room["id"],
         actor="dana",
         source="POST test",
@@ -1359,7 +1431,9 @@ def portfolio(health, store):
         ("Tailspin", "", (), "cold"),
     ]
     for name, owner, ages, expected in plan:
-        room = store.create("room", {**ROOM, "name": name, "owner": owner, "team": "EMEA"}, actor=owner or "dana")
+        room = store.create(
+            "room", {**ROOM, "name": name, "owner": owner, "team": "EMEA"}, actor=owner or "dana"
+        )
         for age in ages:
             record(health, room["id"], days_ago=age)
         rooms.append({"id": room["id"], "name": name, "owner": owner, "expected": expected})
@@ -1461,11 +1535,19 @@ def test_scoping_to_an_unknown_room_is_refused(health):
 def test_a_room_with_no_client_view_sorts_last_in_both_directions(health, store):
     """A missing value is the coldest thing in the column, not the newest."""
     viewed = store.create("room", {**ROOM, "name": "Viewed"}, actor="dana")
-    silent = store.create("room", {**ROOM, "name": "Silent"}, actor="dana")
+    store.create("room", {**ROOM, "name": "Silent"}, actor="dana")
     record(health, viewed["id"], event_type=CLIENT_VIEW_EVENT)
 
-    ascending = [row["name"] for row in health.dashboard(sort="last_client_view", as_of=NOW.isoformat())["rows"]]
-    descending = [row["name"] for row in health.dashboard(sort="last_client_view", order="desc", as_of=NOW.isoformat())["rows"]]
+    ascending = [
+        row["name"]
+        for row in health.dashboard(sort="last_client_view", as_of=NOW.isoformat())["rows"]
+    ]
+    descending = [
+        row["name"]
+        for row in health.dashboard(sort="last_client_view", order="desc", as_of=NOW.isoformat())[
+            "rows"
+        ]
+    ]
 
     assert ascending[-1] == "Silent"
     assert descending[-1] == "Silent"
@@ -1502,9 +1584,9 @@ def test_sorting_by_engagement_respects_the_direction(health, store):
     def order(direction):
         return [
             row["name"]
-            for row in health.dashboard(
-                sort="engagement", order=direction, as_of=NOW.isoformat()
-            )["rows"]
+            for row in health.dashboard(sort="engagement", order=direction, as_of=NOW.isoformat())[
+                "rows"
+            ]
         ]
 
     assert order("desc") == ["Busy", "Middling", "Quiet"]
@@ -1524,7 +1606,9 @@ def test_the_dashboard_limit_is_applied_and_reported(health, portfolio):
 
 
 def test_a_dashboard_row_carries_the_numbers_and_the_next_change(health, portfolio):
-    row = next(r for r in health.dashboard(as_of=NOW.isoformat())["rows"] if r["name"] == "Northwind")
+    row = next(
+        r for r in health.dashboard(as_of=NOW.isoformat())["rows"] if r["name"] == "Northwind"
+    )
 
     assert row["trend"] == "hot"
     assert row["events"]["qualifying_in_7_days"] == 6
@@ -1613,13 +1697,20 @@ def test_saving_rules_creates_one_row_and_audits_it(health, store):
 
 def test_saving_rules_twice_updates_the_same_row(health, store):
     health.save_rules({"min_events": {"hot": 3}}, actor="dana", source="PATCH /api/wf-021/rules")
-    health.save_rules({"windows": {"hot": 3, "warm": 6, "cold": 20}}, actor="dana", source="PATCH /api/wf-021/rules")
+    health.save_rules(
+        {"windows": {"hot": 3, "warm": 6, "cold": 20}},
+        actor="dana",
+        source="PATCH /api/wf-021/rules",
+    )
 
     assert len(store.list(RULES_COLLECTION)) == 1
     assert store.get(RULES_RECORD_ID)["data"]["windows"]["hot"] == 3
     assert store.get(RULES_RECORD_ID)["data"]["min_events"]["hot"] == 3
     # The audit log is newest first, so the update is the row the reader meets.
-    assert [entry["action"] for entry in store.audit(collection=RULES_COLLECTION)] == ["update", "insert"]
+    assert [entry["action"] for entry in store.audit(collection=RULES_COLLECTION)] == [
+        "update",
+        "insert",
+    ]
 
 
 def test_an_invalid_patch_writes_nothing(health, store):
@@ -1656,7 +1747,9 @@ def test_inferences_is_a_read_with_no_store(http):
 def test_rules_can_be_read_and_patched(http):
     assert http.get(f"{PREFIX}/rules").json()["source"] == "defaults"
 
-    patched = http.patch(f"{PREFIX}/rules", json={"min_events": {"hot": 3}}, params={"actor": "dana"})
+    patched = http.patch(
+        f"{PREFIX}/rules", json={"min_events": {"hot": 3}}, params={"actor": "dana"}
+    )
     assert patched.status_code == 200
     assert patched.json()["rules"]["min_events"] == {"hot": 3, "warm": 2}
     assert http.get(f"{PREFIX}/rules").json()["source"] == "override"
@@ -1684,7 +1777,11 @@ def test_a_summary_over_an_empty_database_is_empty_not_an_error(http):
 def test_recording_an_event_over_http_creates_one_audited_row(http, http_room):
     response = http.post(
         f"{PREFIX}/events",
-        json={"type": CLIENT_VIEW_EVENT, "occurredAt": "2026-09-26T09:00:00Z", "workspaceId": http_room["id"]},
+        json={
+            "type": CLIENT_VIEW_EVENT,
+            "occurredAt": "2026-09-26T09:00:00Z",
+            "workspaceId": http_room["id"],
+        },
         params={"actor": "dana"},
     )
 
@@ -1712,7 +1809,9 @@ def test_an_unknown_event_type_over_http_is_400_and_writes_nothing(http, http_ro
 
 
 def test_an_event_for_an_unknown_room_is_404_over_http(http):
-    response = http.post(f"{PREFIX}/events", json={"type": CLIENT_VIEW_EVENT, "room_id": "room_nope"})
+    response = http.post(
+        f"{PREFIX}/events", json={"type": CLIENT_VIEW_EVENT, "room_id": "room_nope"}
+    )
 
     assert response.status_code == 404
     assert response.json()["error"] == "UnknownRoom"
@@ -1720,7 +1819,8 @@ def test_an_event_for_an_unknown_room_is_404_over_http(http):
 
 def test_an_unreadable_timestamp_over_http_is_400(http, http_room):
     response = http.post(
-        f"{PREFIX}/events", json={"type": CLIENT_VIEW_EVENT, "room_id": http_room["id"], "occurredAt": "yesterday"}
+        f"{PREFIX}/events",
+        json={"type": CLIENT_VIEW_EVENT, "room_id": http_room["id"], "occurredAt": "yesterday"},
     )
     assert response.status_code == 400
     assert response.json()["error"] == "InvalidTimestamp"
@@ -1753,7 +1853,9 @@ def test_the_dashboard_over_http_returns_rows(http, http_room):
 
 
 def test_the_room_trend_route_returns_the_badge(http, http_room):
-    response = http.get(f"{PREFIX}/rooms/{http_room['id']}/trend", params={"as_of": NOW.isoformat()})
+    response = http.get(
+        f"{PREFIX}/rooms/{http_room['id']}/trend", params={"as_of": NOW.isoformat()}
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -1770,7 +1872,9 @@ def test_an_unknown_room_on_the_trend_route_is_404(http):
 
 def test_the_events_route_lists_what_was_recorded(http, http_room):
     http.post(f"{PREFIX}/events", json={"type": CLIENT_VIEW_EVENT, "room_id": http_room["id"]})
-    http.post(f"{PREFIX}/events", json={"type": "workspace.link.clicked", "room_id": http_room["id"]})
+    http.post(
+        f"{PREFIX}/events", json={"type": "workspace.link.clicked", "room_id": http_room["id"]}
+    )
 
     body = http.get(f"{PREFIX}/events", params={"room_id": http_room["id"]}).json()
 
@@ -1781,7 +1885,9 @@ def test_the_events_route_lists_what_was_recorded(http, http_room):
 
 def test_the_events_route_filters_to_client_views(http, http_room):
     http.post(f"{PREFIX}/events", json={"type": CLIENT_VIEW_EVENT, "room_id": http_room["id"]})
-    http.post(f"{PREFIX}/events", json={"type": "workspace.link.clicked", "room_id": http_room["id"]})
+    http.post(
+        f"{PREFIX}/events", json={"type": "workspace.link.clicked", "room_id": http_room["id"]}
+    )
 
     assert http.get(f"{PREFIX}/events", params={"client_view": True}).json()["count"] == 1
 
@@ -1833,7 +1939,10 @@ def _matches_registered_route(source: str, routes: list[dict]) -> bool:
         template = [segment for segment in route["path"].split("/") if segment]
         if len(template) != len(actual):
             continue
-        if all(expected.startswith("{") or expected == found for expected, found in zip(template, actual)):
+        if all(
+            expected.startswith("{") or expected == found
+            for expected, found in zip(template, actual, strict=False)
+        ):
             return True
     return False
 
@@ -1999,7 +2108,11 @@ def test_every_seeded_event_is_audited_to_the_seeder(tmp_path):
     seeded = _seed_once(tmp_path, rooms)
 
     assert seeded["events"], "the demo seeded nothing"
-    assert all(entry["source"] == "seed" for entry in seeded["audit"] if entry["collection"] == ENGAGEMENT_COLLECTION)
+    assert all(
+        entry["source"] == "seed"
+        for entry in seeded["audit"]
+        if entry["collection"] == ENGAGEMENT_COLLECTION
+    )
     assert len(seeded["events"]) == 15
 
 
@@ -2028,18 +2141,27 @@ def test_the_demo_is_deterministic(tmp_path):
     assert first == second
 
 
-def test_an_event_stamped_a_few_minutes_ahead_is_stored_but_one_stamped_a_day_ahead_is_not(tmp_path):
+def test_an_event_stamped_a_few_minutes_ahead_is_stored_but_one_stamped_a_day_ahead_is_not(
+    tmp_path,
+):
     """The real clock skew, on the real intake path.
 
     Found by reading the running app: a probe that stamped an event "now" while
     the server's own clock was a couple of hours behind it got a 400, which is the
     refusal working. This asserts both sides of the tolerance deliberately.
     """
-    rooms = [("room_northwind", "northwind"), ("room_contoso", "contoso"), ("room_fabrikam", "fabrikam"), ("room_adventure", "adventure")]
+    rooms = [
+        ("room_northwind", "northwind"),
+        ("room_contoso", "contoso"),
+        ("room_fabrikam", "fabrikam"),
+        ("room_adventure", "adventure"),
+    ]
     module = load_feature("wf021_classify_workspace_engagement_health_h")
     with AuditedDatabase(tmp_path / "skew.db", mirror_dir=tmp_path / "skew-audit") as db:
         for room_id, account in rooms:
-            db.create("room", {**ROOM, "name": account}, record_id=room_id, actor="dana", source="seed")
+            db.create(
+                "room", {**ROOM, "name": account}, record_id=room_id, actor="dana", source="seed"
+            )
         health = TrendHealth(RecordStore(db))
 
         for offset, expected in (

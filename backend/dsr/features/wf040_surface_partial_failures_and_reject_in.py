@@ -373,7 +373,9 @@ def retry_run(
 def read_queue(
     room_id: str | None = Query(default=None, description="One room; omitted means every room"),
     connector: str | None = Query(default=None, description=f"One of {', '.join(CONNECTORS)}"),
-    as_of: str | None = Query(default=None, description="ISO instant to evaluate the queue against"),
+    as_of: str | None = Query(
+        default=None, description="ISO instant to evaluate the queue against"
+    ),
     limit: int = Query(default=1000, ge=1, le=1000),
     log: SyncLog = LogDep,
 ) -> dict[str, Any]:
@@ -395,7 +397,9 @@ def drain_queue(
     payload: dict[str, Any] = Body(default_factory=dict),
     room_id: str | None = Query(default=None, description="One room; omitted means every room"),
     connector: str | None = Query(default=None, description=f"One of {', '.join(CONNECTORS)}"),
-    as_of: str | None = Query(default=None, description="ISO instant to evaluate the queue against"),
+    as_of: str | None = Query(
+        default=None, description="ISO instant to evaluate the queue against"
+    ),
     actor: str | None = Query(default=None),
     log: SyncLog = LogDep,
 ) -> dict[str, Any]:
@@ -417,7 +421,11 @@ def drain_queue(
     guessed at: a HubSpot response cannot be applied to a Dataverse row.
     """
     return log.drain(
-        payload, room_id=room_id, connector=connector, actor=actor, as_of=as_of,
+        payload,
+        room_id=room_id,
+        connector=connector,
+        actor=actor,
+        as_of=as_of,
         source=f"POST {router.prefix}/queue/drain",
     )
 
@@ -510,12 +518,24 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
         "label": "Contact sync — Northwind",
         "minutes_ago": 55,
         "rows": [
-            {"row_key": "northwind-1", "entity": "contact", "trace_id": "hs-nw-1",
-             "values": {"email": "a.buyer@northwind.example", "lastname": "Ashworth"}},
-            {"row_key": "northwind-2", "entity": "contact", "trace_id": "hs-nw-2",
-             "values": {"email": "b.buyer@northwind.example", "lastname": "Byrne"}},
-            {"row_key": "northwind-3", "entity": "contact", "trace_id": "hs-nw-3",
-             "values": {"email": "c.buyer@northwind.example", "lastname": "Cruz"}},
+            {
+                "row_key": "northwind-1",
+                "entity": "contact",
+                "trace_id": "hs-nw-1",
+                "values": {"email": "a.buyer@northwind.example", "lastname": "Ashworth"},
+            },
+            {
+                "row_key": "northwind-2",
+                "entity": "contact",
+                "trace_id": "hs-nw-2",
+                "values": {"email": "b.buyer@northwind.example", "lastname": "Byrne"},
+            },
+            {
+                "row_key": "northwind-3",
+                "entity": "contact",
+                "trace_id": "hs-nw-3",
+                "values": {"email": "c.buyer@northwind.example", "lastname": "Cruz"},
+            },
         ],
         "vendor": {
             "status": 207,
@@ -523,16 +543,22 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
                 "status": "error",
                 "numErrors": 2,
                 "results": [
-                    {"id": "901", "status": "success",
-                     "context": {"objectWriteTraceId": ["hs-nw-1"]}},
+                    {
+                        "id": "901",
+                        "status": "success",
+                        "context": {"objectWriteTraceId": ["hs-nw-1"]},
+                    },
                     {
                         "status": "error",
                         "category": "VALIDATION_ERROR",
                         "message": "The value supplied for property 'lastname' is not valid.",
                         "context": {"objectWriteTraceId": ["hs-nw-2"]},
                         "errors": [
-                            {"message": "lastname is required by the admin rule",
-                             "code": "INVALID_VALUE", "in": "lastname"},
+                            {
+                                "message": "lastname is required by the admin rule",
+                                "code": "INVALID_VALUE",
+                                "in": "lastname",
+                            },
                         ],
                     },
                     {
@@ -541,8 +567,10 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
                         "message": "This record could not be validated.",
                         "context": {"objectWriteTraceId": ["hs-nw-unattributed"]},
                         "errors": [
-                            {"message": "the owning portal is not reachable for this write",
-                             "code": "UNKNOWN"},
+                            {
+                                "message": "the owning portal is not reachable for this write",
+                                "code": "UNKNOWN",
+                            },
                         ],
                     },
                 ],
@@ -556,12 +584,24 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
         "label": "Task sync — Contoso",
         "minutes_ago": 40,
         "rows": [
-            {"row_key": "contoso-1", "entity": "task", "trace_id": "dv-ct-1",
-             "values": {"subject": "Security review kickoff"}},
-            {"row_key": "contoso-2", "entity": "task", "trace_id": "dv-ct-2",
-             "values": {"subject": "Follow-up: " + ("A" * 260)}},
-            {"row_key": "contoso-3", "entity": "task", "trace_id": "dv-ct-3",
-             "values": {"subject": "Pricing walkthrough"}},
+            {
+                "row_key": "contoso-1",
+                "entity": "task",
+                "trace_id": "dv-ct-1",
+                "values": {"subject": "Security review kickoff"},
+            },
+            {
+                "row_key": "contoso-2",
+                "entity": "task",
+                "trace_id": "dv-ct-2",
+                "values": {"subject": "Follow-up: " + ("A" * 260)},
+            },
+            {
+                "row_key": "contoso-3",
+                "entity": "task",
+                "trace_id": "dv-ct-3",
+                "values": {"subject": "Pricing walkthrough"},
+            },
         ],
         "vendor": {
             "status": 200,
@@ -586,8 +626,12 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
                 },
                 {
                     "status": 412,
-                    "body": {"error": {"code": "ConcurrencyVersionMismatch",
-                                       "message": "The record changed after it was read."}},
+                    "body": {
+                        "error": {
+                            "code": "ConcurrencyVersionMismatch",
+                            "message": "The record changed after it was read.",
+                        }
+                    },
                 },
             ],
         },
@@ -599,10 +643,18 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
         "label": "Contact sync — Fabrikam",
         "minutes_ago": 25,
         "rows": [
-            {"row_key": "fabrikam-1", "entity": "contact", "trace_id": "sf-fb-1",
-             "values": {"email": "ops@fabrikam.example"}},
-            {"row_key": "fabrikam-2", "entity": "contact", "trace_id": "sf-fb-2",
-             "values": {"email": "renewals@fabrikam.example"}},
+            {
+                "row_key": "fabrikam-1",
+                "entity": "contact",
+                "trace_id": "sf-fb-1",
+                "values": {"email": "ops@fabrikam.example"},
+            },
+            {
+                "row_key": "fabrikam-2",
+                "entity": "contact",
+                "trace_id": "sf-fb-2",
+                "values": {"email": "renewals@fabrikam.example"},
+            },
         ],
         "vendor": {
             "status": 403,
@@ -619,20 +671,34 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
         "label": "Contact sync — Adventure Works",
         "minutes_ago": 12,
         "rows": [
-            {"row_key": "adventure-1", "entity": "contact", "trace_id": "hs-aw-1",
-             "values": {"email": "lead@adventure.example"}},
-            {"row_key": "adventure-2", "entity": "contact", "trace_id": "hs-aw-2",
-             "values": {"email": "coordinator@adventure.example"}},
+            {
+                "row_key": "adventure-1",
+                "entity": "contact",
+                "trace_id": "hs-aw-1",
+                "values": {"email": "lead@adventure.example"},
+            },
+            {
+                "row_key": "adventure-2",
+                "entity": "contact",
+                "trace_id": "hs-aw-2",
+                "values": {"email": "coordinator@adventure.example"},
+            },
         ],
         "vendor": {
             "status": 200,
             "body": {
                 "status": "success",
                 "results": [
-                    {"id": "7701", "status": "success",
-                     "context": {"objectWriteTraceId": ["hs-aw-1"]}},
-                    {"id": "7702", "status": "success",
-                     "context": {"objectWriteTraceId": ["hs-aw-2"]}},
+                    {
+                        "id": "7701",
+                        "status": "success",
+                        "context": {"objectWriteTraceId": ["hs-aw-1"]},
+                    },
+                    {
+                        "id": "7702",
+                        "status": "success",
+                        "context": {"objectWriteTraceId": ["hs-aw-2"]},
+                    },
                 ],
             },
         },
@@ -644,8 +710,12 @@ DEMO_RUNS: tuple[dict[str, Any], ...] = (
         "label": "Contact sync — Adventure Works (after the integration role changed)",
         "minutes_ago": 6,
         "rows": [
-            {"row_key": "adventure-3", "entity": "contact", "trace_id": "hs-aw-3",
-             "values": {"email": "newcontact@adventure.example"}},
+            {
+                "row_key": "adventure-3",
+                "entity": "contact",
+                "trace_id": "hs-aw-3",
+                "values": {"email": "newcontact@adventure.example"},
+            },
         ],
         "vendor": {
             "status": 207,

@@ -178,8 +178,10 @@ def resolve_window(
             )
         floor = midnight_utc(now) - timedelta(days=requested_days)
     else:
-        floor = midnight_utc(require_utc(start, what="start")) if start is not None else (
-            midnight_utc(now) - timedelta(days=requested_days)
+        floor = (
+            midnight_utc(require_utc(start, what="start"))
+            if start is not None
+            else (midnight_utc(now) - timedelta(days=requested_days))
         )
         if days is None and start is None:
             requested_days = default_days

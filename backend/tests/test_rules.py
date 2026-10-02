@@ -16,7 +16,6 @@ The module under test is pure, so nothing here touches a database.
 from __future__ import annotations
 
 import pytest
-
 from dsr import rules
 from dsr.rules import MAX_OR_CONDITIONS, RuleError
 
@@ -26,7 +25,13 @@ def text(variable="region", modifier="is", value="Australia", **extra):
 
 
 def number(variable="seats", modifier="is_more_than", value=10, **extra):
-    return {"variable": variable, "category": "number", "modifier": modifier, "value": value, **extra}
+    return {
+        "variable": variable,
+        "category": "number",
+        "modifier": modifier,
+        "value": value,
+        **extra,
+    }
 
 
 def anycond(variable="discount", modifier="has_any_value", **extra):
@@ -141,7 +146,7 @@ def test_number_modifiers(modifier, observed, expected, want):
 
 
 def test_number_compares_numerically_not_lexically():
-    """"9" > "10" is true as text and false as a number. It must be the latter."""
+    """ "9" > "10" is true as text and false as a number. It must be the latter."""
     result = rules.evaluate_rule(rule(number(value=10)), {"seats": "9"})
     assert shown(result) is False
 
@@ -223,7 +228,7 @@ def test_a_numeric_zero_supplied_against_a_text_zero_matches():
 
 
 def test_string_zero_counts_as_having_a_value():
-    """"0" is a value, so 'has any value' must be satisfied by it."""
+    """ "0" is a value, so 'has any value' must be satisfied by it."""
     result = rules.evaluate_rule(rule(anycond()), {"discount": "0"})
     assert shown(result) is True
 
@@ -355,7 +360,9 @@ def test_and_conditions_are_not_limited():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("block_type", ["accept", "Accept", "Accept Block", "accept-block", "ACCEPT_BLOCK"])
+@pytest.mark.parametrize(
+    "block_type", ["accept", "Accept", "Accept Block", "accept-block", "ACCEPT_BLOCK"]
+)
 def test_an_accept_block_cannot_carry_a_rule(block_type):
     with pytest.raises(RuleError, match="Accept Block"):
         rules.validate_rule(rule(text()), block={"type": block_type})
@@ -430,7 +437,10 @@ def test_a_non_object_rule_is_rejected():
 def test_the_category_is_inferred_from_the_modifier_when_omitted():
     """A client should not have to repeat the category the modifier implies."""
     normalised = rules.validate_rule(
-        {"join": "and", "conditions": [{"variable": "seats", "modifier": "is_more_than", "value": 10}]}
+        {
+            "join": "and",
+            "conditions": [{"variable": "seats", "modifier": "is_more_than", "value": 10}],
+        }
     )
     assert normalised["conditions"][0]["category"] == "number"
 
@@ -459,7 +469,10 @@ def test_a_modifier_and_category_are_matched_case_insensitively():
 
 def test_an_upper_case_category_is_accepted():
     normalised = rules.validate_rule(
-        {"join": "and", "conditions": [{"variable": "r", "category": "TEXT", "modifier": "IS", "value": "x"}]}
+        {
+            "join": "and",
+            "conditions": [{"variable": "r", "category": "TEXT", "modifier": "IS", "value": "x"}],
+        }
     )
     assert normalised["conditions"][0]["category"] == "text"
 
@@ -482,7 +495,9 @@ def test_unknown_condition_keys_survive_validation():
 
 
 def test_text_comparison_is_case_insensitive_by_default():
-    result = rules.evaluate_rule(rule(text(modifier="is", value="Australia")), {"region": "AUSTRALIA"})
+    result = rules.evaluate_rule(
+        rule(text(modifier="is", value="Australia")), {"region": "AUSTRALIA"}
+    )
     assert shown(result) is True
 
 

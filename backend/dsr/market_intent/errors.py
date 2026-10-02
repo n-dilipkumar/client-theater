@@ -79,7 +79,7 @@ class UnknownVocabularyValue(InvalidConfiguration):
 
 
 class TimeframeTooLong(MarketIntentError):
-    """"You can only set timeframes within the last 90 days."
+    """ "You can only set timeframes within the last 90 days."
 
     422 rather than 400: the request is well formed and the refusal is a bound
     the research states as a product rule, not a syntax problem. The message
@@ -164,7 +164,7 @@ class UnknownCategory(MarketIntentError):
 
 
 class CreditsRequired(MarketIntentError):
-    """"To access buyer intent features like filtering by segments and
+    """ "To access buyer intent features like filtering by segments and
     excluding companies, you need HubSpot Credits."
 
     402 rather than 403, because the remedy is buying credits rather than being
@@ -182,7 +182,7 @@ class CreditsRequired(MarketIntentError):
 
 
 class EnrichmentPermissionRequired(MarketIntentError):
-    """"To add and enrich companies from buyer intent, Super Admin must assign
+    """ "To add and enrich companies from buyer intent, Super Admin must assign
     users with Data enrichment permissions."
 
     Raised for the add, the enrich, and the manual enrol, because all three

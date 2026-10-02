@@ -64,9 +64,9 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "registration-is-not-activation",
         "topic": "whether a Play creates tasks the moment it is registered",
         "basis": (
-            "The research separates the two moments explicitly: \"After registration, the "
+            'The research separates the two moments explicitly: "After registration, the '
             "registered Play must be enabled in the Salesloft UI. You can do so by going to "
-            f"Settings -> Workflow -> Plays -> Edit Play.\" It says the Play must be enabled, "
+            'Settings -> Workflow -> Plays -> Edit Play." It says the Play must be enabled, '
             "which is only a requirement if registration does not enable it."
         ),
         "value": {
@@ -91,10 +91,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "buyer-engagement-score-is-supplied",
         "topic": "where the Buyer Engagement Score that decides task assignment comes from",
         "basis": (
-            "The researched assignment table says \"The most engaged Person on the Account in "
+            'The researched assignment table says "The most engaged Person on the Account in '
             "the Last 30 days (Highest Buyer Engagement Score)\", and the research's own gaps "
             "appendix records: \"Salesloft references a 'Buyer Engagement Score' as a "
-            "tie-breaker for task assignment but does not document how it is computed.\" The "
+            'tie-breaker for task assignment but does not document how it is computed." The '
             "score's purpose and its window are sourced; its formula is a documented gap."
         ),
         "value": {
@@ -121,7 +121,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "assignment-may-be-unresolved",
         "topic": "what happens to a task whose assignment cannot be resolved",
         "basis": (
-            "The research says Salesloft \"creates the task ... and assigns it\", so creation "
+            'The research says Salesloft "creates the task ... and assigns it", so creation '
             "and assignment are two steps. It does not say what a task is when the assignment "
             "fails, and the four objects it names are Person, Account, User and Content - "
             "records this product does not hold."
@@ -167,7 +167,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "cadence-identifier-is-unsourced",
         "topic": "how a Play knows which cadence to add a buyer to",
         "basis": (
-            "\"These are the available Play task types: Call, Email, Add Person to a Cadence.\" "
+            '"These are the available Play task types: Call, Email, Add Person to a Cadence." '
             "The researched attributes list is task_type, task_subject, task_reminder_hours, "
             "email_subject, email_template. None of them identifies a cadence."
         ),
@@ -193,8 +193,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "dynamic-fields-are-checked-by-placement-not-by-name",
         "topic": "where a dynamic field is allowed, and which ones",
         "basis": (
-            "\"At this time, Dynamic Fields are not supported outside of email templates. The "
-            "only exception here is that task_subject supports name.\" The sentence states a "
+            '"At this time, Dynamic Fields are not supported outside of email templates. The '
+            'only exception here is that task_subject supports name." The sentence states a '
             "placement rule and names one field; it does not enumerate the fields an email "
             "template may use."
         ),
@@ -218,11 +218,14 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "destroy-requires-disable",
         "topic": "whether an enabled Play can be destroyed outright",
         "basis": (
-            "The researched endpoints include \".../plays/{id} (update/destroy)\". The "
+            'The researched endpoints include ".../plays/{id} (update/destroy)". The '
             "research says nothing about destroying a live Play, and separately says a "
             "registered Play must be enabled for it to do anything."
         ),
-        "value": {"destroy_while_enabled": "refused with 409", "route_order": "disable, then destroy"},
+        "value": {
+            "destroy_while_enabled": "refused with 409",
+            "route_order": "disable, then destroy",
+        },
         "why": (
             "An enabled Play is a running automation that creates tasks with no human in the "
             "loop. Removing it while it runs is not something to do by accident, and the "
@@ -237,8 +240,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "which fields of a Play can be changed once it has created a task",
         "basis": (
             "The research gives Plays an update endpoint and states no constraint on it. Its "
-            "sibling constraint - \"Globally installed signals ... only additive changes will "
-            "be allowed\" - is about signal registrations, not Plays, and is not borrowed here."
+            'sibling constraint - "Globally installed signals ... only additive changes will '
+            'be allowed" - is about signal registrations, not Plays, and is not borrowed here.'
         ),
         "value": {
             "frozen_when_tasks_exist": [
@@ -264,8 +267,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "registration-must-exist",
         "topic": "whether a Play can be registered against a signal registration that does not exist",
         "basis": (
-            "\"After registering a signal (see #12), register a Play\" states an order, and "
-            "\"When a matching signal arrives, Salesloft creates the task\" means the signals "
+            '"After registering a signal (see #12), register a Play" states an order, and '
+            '"When a matching signal arrives, Salesloft creates the task" means the signals '
             "that arrive follow a registration. The research does not say what a Play naming "
             "no registration does."
         ),
@@ -327,10 +330,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "one-off-is-enforced-per-play-and-signal",
         "topic": "what stops a repeated signal creating a second task",
         "basis": (
-            "\"A Play is an automation that generates a one-off action in response to an "
-            "internal or external signal.\" The researched first-one-wins rule is stated for "
-            "signals (\"If we receive two signals with the same idempotency_key one of them "
-            "will be dropped\"), which happens where the signal is emitted."
+            '"A Play is an automation that generates a one-off action in response to an '
+            'internal or external signal." The researched first-one-wins rule is stated for '
+            'signals ("If we receive two signals with the same idempotency_key one of them '
+            'will be dropped"), which happens where the signal is emitted.'
         ),
         "value": {
             "dedupe_key": "play_id + the signal's record id or idempotency_key",
@@ -349,8 +352,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "delivery-success-is-2xx",
         "topic": "what counts as a delivered webhook",
         "basis": (
-            "\"A failing webhook is retried three additional times, spaced 15 seconds apart, "
-            "before being marked as failed.\" The sentence does not define failing."
+            '"A failing webhook is retried three additional times, spaced 15 seconds apart, '
+            'before being marked as failed." The sentence does not define failing.'
         ),
         "value": {
             "delivered": "2xx",
@@ -369,7 +372,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "retry-spacing-is-enforced",
         "topic": "whether an early retry attempt is accepted",
-        "basis": "\"spaced 15 seconds apart\" is a stated spacing, and a fixed one rather than a backoff.",
+        "basis": '"spaced 15 seconds apart" is a stated spacing, and a fixed one rather than a backoff.',
         "value": {
             "additional_attempts": WEBHOOK_RETRY_ATTEMPTS,
             "spacing_seconds": WEBHOOK_RETRY_SPACING_SECONDS,
@@ -386,7 +389,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     {
         "id": "account-tie-break",
         "topic": "how two people on one Account with the same engagement score are ordered",
-        "basis": "\"Highest Buyer Engagement Score\" names a maximum and says nothing about a tie.",
+        "basis": '"Highest Buyer Engagement Score" names a maximum and says nothing about a tie.',
         "value": {"order": ["most recent engagement", "lowest person id"]},
         "why": (
             "Without a tie-break the same Account on the same day can resolve to two different "
@@ -400,11 +403,13 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "one-off-task-needs-a-signal-identity",
         "topic": "what a dispatch requires of the signal it is about",
         "basis": (
-            "The researched signal carries idempotency_key, and \"the first one wins\" is what "
+            'The researched signal carries idempotency_key, and "the first one wins" is what '
             "makes a repeated signal a fact rather than an event. A Play's one-off property is "
             "stated but no key is named for it."
         ),
-        "value": {"required": ["a stored signal's record id", "an inline signal's idempotency_key"]},
+        "value": {
+            "required": ["a stored signal's record id", "an inline signal's idempotency_key"]
+        },
         "why": (
             "Without either there is no way to tell a new signal from a repeat, and a Play that "
             "cannot tell the difference creates a task for both. Refusing is better than "

@@ -77,14 +77,17 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
-from dsr.dedupe import ROOM_ANNOTATION_LIMIT
-from dsr.dedupe import DedupeEngine, DedupeError
-from dsr.dedupe import inferences as dedupe_inferences
-from dsr.dedupe import matching as dedupe_matching
-from dsr.dedupe import policy as dedupe_policy
-from dsr.dedupe import rules as dedupe_rules
-from dsr.dedupe import vocabulary as dedupe_vocab
 from dsr.db.audited import AuditedDatabase
+from dsr.dedupe import (
+    ROOM_ANNOTATION_LIMIT,
+    DedupeEngine,
+    DedupeError,
+    inferences as dedupe_inferences,
+    matching as dedupe_matching,
+    policy as dedupe_policy,
+    rules as dedupe_rules,
+    vocabulary as dedupe_vocab,
+)
 from dsr.deps import StoreDep
 from dsr.store import RecordStore
 
@@ -281,7 +284,9 @@ def create_connection(
     Validated before the row is created, so a bad policy or a unique key that is
     not a configured key cannot leave a half-configured connection behind.
     """
-    return dedupe.create_connection(payload, actor=actor, source=f"POST {router.prefix}/connections")
+    return dedupe.create_connection(
+        payload, actor=actor, source=f"POST {router.prefix}/connections"
+    )
 
 
 @router.get("/connections/{connection_id}", summary="Read one connection")
@@ -306,7 +311,10 @@ def update_connection(
     whose ``unique_keys`` names a key it no longer matches on.
     """
     return dedupe.update_connection(
-        connection_id, payload, actor=actor, source=f"PATCH {router.prefix}/connections/{connection_id}"
+        connection_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/connections/{connection_id}",
     )
 
 
@@ -362,7 +370,9 @@ def create_record(
     Needs at least one matching key - an email, an external ID, an account number
     or a domain - because a row that cannot be matched on cannot be a duplicate.
     """
-    return dedupe.create_record(payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/records")
+    return dedupe.create_record(
+        payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/records"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -425,7 +435,9 @@ def read_decision(
     """One decision, with the header it sent and the match detail it recorded."""
     record = dedupe.get_decision(decision_id)
     if record is None or record.get("room_id") != room_id:
-        raise HTTPException(status_code=404, detail=f"decision {decision_id} not found on room {room_id}")
+        raise HTTPException(
+            status_code=404, detail=f"decision {decision_id} not found on room {room_id}"
+        )
     return record
 
 

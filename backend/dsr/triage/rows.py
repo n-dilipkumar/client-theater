@@ -35,6 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dataclass_field
 from typing import Any, Iterable, Mapping
 
+from dsr.store import RecordStore
 from dsr.triage import vocabulary as vocab
 from dsr.triage.fields import (
     ACTIVITY_ACTION_PATHS,
@@ -61,7 +62,6 @@ from dsr.triage.fields import (
     normalise_provider,
     to_list,
 )
-from dsr.store import RecordStore
 
 # --------------------------------------------------------------------------- #
 # Collections
@@ -239,11 +239,15 @@ class JoinIndex:
         self.templates: dict[str, dict[str, Any]] = {
             record["id"]: record for record in _all(store, TEMPLATE_COLLECTION)
         }
-        self.crm_links: dict[str, list[dict[str, Any]]] = _group_by_room(_all(store, CRM_LINK_COLLECTION))
+        self.crm_links: dict[str, list[dict[str, Any]]] = _group_by_room(
+            _all(store, CRM_LINK_COLLECTION)
+        )
         self.order_forms: dict[str, list[dict[str, Any]]] = _group_by_room(
             _all(store, ORDER_FORM_COLLECTION)
         )
-        self.engagement: dict[str, Engagement] = _engagement_by_room(_all(store, ACTIVITY_COLLECTION))
+        self.engagement: dict[str, Engagement] = _engagement_by_room(
+            _all(store, ACTIVITY_COLLECTION)
+        )
 
     def crm_link(self, room_id: str) -> dict[str, Any] | None:
         links = self.crm_links.get(room_id) or []
@@ -316,7 +320,9 @@ class JoinIndex:
         if template_id:
             template = self.templates.get(template_id)
             if template is not None:
-                inherited = first_text(template.get("data") or {}, ("type", "workspace_type", "workspaceType"))
+                inherited = first_text(
+                    template.get("data") or {}, ("type", "workspace_type", "workspaceType")
+                )
                 if inherited:
                     return inherited, "template", template_id
         return None, None, template_id

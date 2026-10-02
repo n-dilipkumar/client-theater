@@ -333,7 +333,9 @@ def update_webhook(
     route, so the overlap rules apply; a PATCH that quietly dropped half its body
     would leave a rep believing they had changed the target.
     """
-    return stream.update_webhook(webhook_id, payload, actor=actor, source=_source("PATCH", f"/webhooks/{webhook_id}"))
+    return stream.update_webhook(
+        webhook_id, payload, actor=actor, source=_source("PATCH", f"/webhooks/{webhook_id}")
+    )
 
 
 @router.delete("/webhooks/{webhook_id}", status_code=204, summary="Retire a webhook")
@@ -347,7 +349,9 @@ def delete_webhook(
     204, and a soft delete, so the cancellation is audited and the record of
     what was sent where outlives the unsubscribe.
     """
-    stream.retire_webhook(webhook_id, actor=actor, source=_source("DELETE", f"/webhooks/{webhook_id}"))
+    stream.retire_webhook(
+        webhook_id, actor=actor, source=_source("DELETE", f"/webhooks/{webhook_id}")
+    )
     return Response(status_code=204)
 
 
@@ -416,13 +420,13 @@ def list_webhook_subscriptions(
     stream: EventStream = StreamDep,
 ) -> dict[str, Any]:
     """The Subscriptions page for one webhook."""
-    subscriptions = stream.list_subscriptions(
-        webhook_id=webhook_id, include_paused=include_paused
-    )
+    subscriptions = stream.list_subscriptions(webhook_id=webhook_id, include_paused=include_paused)
     return {"webhook_id": webhook_id, "count": len(subscriptions), "subscriptions": subscriptions}
 
 
-@router.post("/webhooks/{webhook_id}/subscriptions", status_code=201, summary="Create a subscription")
+@router.post(
+    "/webhooks/{webhook_id}/subscriptions", status_code=201, summary="Create a subscription"
+)
 def create_subscription(
     webhook_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -494,7 +498,10 @@ def update_subscription(
     subscription to stop the traffic, and the counters survive the pause.
     """
     return stream.update_subscription(
-        subscription_id, payload, actor=actor, source=_source("PATCH", f"/subscriptions/{subscription_id}")
+        subscription_id,
+        payload,
+        actor=actor,
+        source=_source("PATCH", f"/subscriptions/{subscription_id}"),
     )
 
 
@@ -520,7 +527,9 @@ def delete_subscription(
 def list_events(
     room_id: str | None = Query(default=None),
     event: str | None = Query(default=None),
-    known: bool | None = Query(default=None, description="false for a type outside the published set"),
+    known: bool | None = Query(
+        default=None, description="false for a type outside the published set"
+    ),
     anonymous: bool | None = Query(default=None, description="true when the activity had no user"),
     where: str | None = Query(default=None, description='JSON object or "k=v,k2=v2"'),
     limit: int = Query(default=100, ge=1, le=1000),
@@ -607,7 +616,9 @@ def list_deliveries(
     subscription_id: str | None = Query(default=None),
     webhook_id: str | None = Query(default=None),
     event: str | None = Query(default=None),
-    state: str | None = Query(default=None, description="delivered | retrying | failed | skipped | tested"),
+    state: str | None = Query(
+        default=None, description="delivered | retrying | failed | skipped | tested"
+    ),
     where: str | None = Query(default=None, description='JSON object or "k=v,k2=v2"'),
     limit: int = Query(default=100, ge=1, le=1000),
     stream: EventStream = StreamDep,
@@ -661,7 +672,9 @@ def retry_delivery(
     Refuses anything that is not ``retrying``. Retrying a delivered payload is
     how a warehouse gets the same row twice.
     """
-    return stream.retry_delivery(delivery_id, actor=actor, source=_source("POST", f"/deliveries/{delivery_id}/retry"))
+    return stream.retry_delivery(
+        delivery_id, actor=actor, source=_source("POST", f"/deliveries/{delivery_id}/retry")
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -953,7 +966,9 @@ class DemoTransport:
 
         self.calls[url] = self.calls.get(url, 0) + 1
         if self._is_test(body):
-            return DeliveryResult(ok=True, status=202, body="verification accepted", duration_ms=6.0)
+            return DeliveryResult(
+                ok=True, status=202, body="verification accepted", duration_ms=6.0
+            )
 
         self.real_calls[url] = self.real_calls.get(url, 0) + 1
         if url == DEMO_RETIRED_TARGET:
@@ -1031,7 +1046,11 @@ def seed(db, context: dict[str, Any]) -> str:
     for form_id, account, questions, answers in DEMO_FORM_RESPONSES:
         room_id = second_room
         upload = next(
-            (a["value"] for a in answers if isinstance(a.get("value"), dict) and "url" in a["value"]),
+            (
+                a["value"]
+                for a in answers
+                if isinstance(a.get("value"), dict) and "url" in a["value"]
+            ),
             None,
         )
         responses.append(
@@ -1121,9 +1140,7 @@ def seed(db, context: dict[str, Any]) -> str:
         actor="dana",
         source=source,
     )
-    stream.update_subscription(
-        loud["id"], {"active": False}, actor="dana", source=source
-    )
+    stream.update_subscription(loud["id"], {"active": False}, actor="dana", source=source)
 
     # 3. The retired hook: permanent 404, so the log has a row that needs a person.
     retired = stream.create_webhook(
@@ -1144,7 +1161,9 @@ def seed(db, context: dict[str, Any]) -> str:
         source=source,
     )
 
-    def objects(workspace: str, account: str, user: str | None = None, **extra: Any) -> dict[str, Any]:
+    def objects(
+        workspace: str, account: str, user: str | None = None, **extra: Any
+    ) -> dict[str, Any]:
         built: dict[str, Any] = {"workspace": {"id": workspace}, "account": {"id": account}}
         if user:
             built["user"] = {"id": user, "email": f"{user}@northwind.example"}
@@ -1169,7 +1188,10 @@ def seed(db, context: dict[str, Any]) -> str:
         room_id=room0,
         account=account0,
         associated_objects=objects(
-            room0, account0, "b.buyer", workspacePage={"id": "page_security", "title": "Security review"}
+            room0,
+            account0,
+            "b.buyer",
+            workspacePage={"id": "page_security", "title": "Security review"},
         ),
         actor="dana",
         source=source,
@@ -1257,7 +1279,10 @@ def seed(db, context: dict[str, Any]) -> str:
             room_id=room1,
             account=account1,
             associated_objects=objects(
-                room1, account1, "procurement", workspacePlanTask={"id": tasks[0]["id"], "title": tasks[0]["data"]["title"]}
+                room1,
+                account1,
+                "procurement",
+                workspacePlanTask={"id": tasks[0]["id"], "title": tasks[0]["data"]["title"]},
             ),
             actor="dana",
             source=source,

@@ -285,7 +285,9 @@ def assert_no_token_in_url(url: str, token: str) -> None:
         )
 
 
-def _token_response_from(result: HttpResult, vendor: str, org_id_keys: tuple[str, ...]) -> TokenResponse:
+def _token_response_from(
+    result: HttpResult, vendor: str, org_id_keys: tuple[str, ...]
+) -> TokenResponse:
     """Turn a token endpoint's answer into a :class:`TokenResponse`, or refuse."""
     if result.status in (0,) and not result.ok:
         raise VendorRequestError(
@@ -302,8 +304,10 @@ def _token_response_from(result: HttpResult, vendor: str, org_id_keys: tuple[str
             or result.error
             or "no detail given"
         )
-        message = f"{vendor} refused the request: {error_code}: {detail}" if error_code else (
-            f"{vendor} refused the request: {detail}"
+        message = (
+            f"{vendor} refused the request: {error_code}: {detail}"
+            if error_code
+            else (f"{vendor} refused the request: {detail}")
         )
         raise TokenExchangeError(message, vendor_status=result.status, vendor_body=result.sample)
 
@@ -483,7 +487,9 @@ class _BaseConnector:
             )
         path = str(request.path or "")
         url = f"{base}/{path.lstrip('/')}" if path else base
-        pairs = [(key, str(value)) for key, value in request.query.items() if value not in (None, "")]
+        pairs = [
+            (key, str(value)) for key, value in request.query.items() if value not in (None, "")
+        ]
         if pairs:
             url = f"{url}{'&' if urlsplit(url).query else '?'}{urlencode(pairs)}"
         return url
@@ -541,9 +547,7 @@ class SalesforceConnector(_BaseConnector):
                 "An external client app in Setup → External Client Apps, or an "
                 "existing connected app.",
             ),
-            advisory=(
-                SOURCED_QUOTES["connected_apps_restricted_spring_26"]["quote"],
-            ),
+            advisory=(SOURCED_QUOTES["connected_apps_restricted_spring_26"]["quote"],),
             docs="https://developer.salesforce.com/docs/platform/api-rest/guide/intro-oauth-and-connected-apps.html",
             researched=(
                 "salesforce_needs_an_authorization",
@@ -589,15 +593,15 @@ class SalesforceConnector(_BaseConnector):
 
     def authorize_endpoint(self, request: AuthorizeRequest) -> str:
         environment = str(request.extra.get("environment") or "production")
-        return self.info.environment_hosts.get(environment, self.info.environment_hosts["production"]) + (
-            "/services/oauth2/authorize"
-        )
+        return self.info.environment_hosts.get(
+            environment, self.info.environment_hosts["production"]
+        ) + ("/services/oauth2/authorize")
 
     def token_endpoint(self, request: TokenRequest) -> str:
         environment = str(request.extra.get("environment") or "production")
-        return self.info.environment_hosts.get(environment, self.info.environment_hosts["production"]) + (
-            "/services/oauth2/token"
-        )
+        return self.info.environment_hosts.get(
+            environment, self.info.environment_hosts["production"]
+        ) + ("/services/oauth2/token")
 
     def resolve_org_id(self, response: TokenResponse) -> str:
         """The ``instance_url`` host is the org, when the vendor sent one."""
@@ -708,8 +712,7 @@ class DataverseConnector(_BaseConnector):
             org_id_keys=("resource", "instance_url"),
             requires_org=True,
             grant_requirements=(
-                "An Azure AD app registration the admin consents to for the "
-                "environment's org.",
+                "An Azure AD app registration the admin consents to for the environment's org.",
             ),
             advisory=(
                 "No Dataverse authentication page was read for this research, so "
@@ -781,7 +784,9 @@ def register(connector: CrmConnector, *, replace: bool = False) -> CrmConnector:
         if not callable(getattr(connector, name, None)):
             raise ValueError(f"connector {vendor!r} does not implement {name}()")
     if vendor in _REGISTRY and not replace:
-        raise ValueError(f"a connector for {vendor!r} is already registered; pass replace=True to swap it")
+        raise ValueError(
+            f"a connector for {vendor!r} is already registered; pass replace=True to swap it"
+        )
     _REGISTRY[vendor] = connector
     info = getattr(connector, "info", None)
     if isinstance(info, VendorInfo):
@@ -801,7 +806,9 @@ def connector(vendor: str) -> CrmConnector:
         return _REGISTRY[str(vendor or "")]
     except KeyError:
         known = ", ".join(registered_vendors()) or "none"
-        raise UnknownVendorError(f"no connector is registered for {vendor!r}; known vendors: {known}") from None
+        raise UnknownVendorError(
+            f"no connector is registered for {vendor!r}; known vendors: {known}"
+        ) from None
 
 
 def registered_vendors() -> tuple[str, ...]:
@@ -823,7 +830,9 @@ def vendor_info(vendor: str) -> VendorInfo:
             token_endpoint="",
             api_base_url="",
             probe_path="",
-            inferences=("registered at runtime without a VendorInfo; nothing is claimed about its endpoints",),
+            inferences=(
+                "registered at runtime without a VendorInfo; nothing is claimed about its endpoints",
+            ),
         )
     return info
 

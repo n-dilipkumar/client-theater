@@ -144,7 +144,9 @@ class PolicyError(ValueError):
 
     def __init__(self, errors: Mapping[str, str]) -> None:
         self.errors = dict(errors)
-        super().__init__("; ".join(f"{field_name}: {message}" for field_name, message in self.errors.items()))
+        super().__init__(
+            "; ".join(f"{field_name}: {message}" for field_name, message in self.errors.items())
+        )
 
 
 class AccessDenied(PermissionError):
@@ -204,7 +206,9 @@ def normalize_domains(raw: Any) -> list[str]:
     elif isinstance(raw, (list, tuple, set)):
         parts = raw
     else:
-        raise PolicyError({"allowed_domains": "must be a comma-separated string or a list of strings"})
+        raise PolicyError(
+            {"allowed_domains": "must be a comma-separated string or a list of strings"}
+        )
 
     seen: dict[str, None] = {}
     for part in parts:
@@ -214,7 +218,9 @@ def normalize_domains(raw: Any) -> list[str]:
         if not text:
             continue
         if not _DOMAIN_RE.match(text):
-            raise PolicyError({"allowed_domains": f"{part.strip()!r} is not a domain (try 'example.com')"})
+            raise PolicyError(
+                {"allowed_domains": f"{part.strip()!r} is not a domain (try 'example.com')"}
+            )
         seen.setdefault(text, None)
     return list(seen)
 
@@ -274,7 +280,9 @@ def validate_policy(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     if domain_security and not allowed_domains:
         # An empty allowlist means "refuse everybody", which is never what a
         # checkbox means.
-        errors["allowed_domains"] = "at least one approved domain is required when Domain Security is on"
+        errors["allowed_domains"] = (
+            "at least one approved domain is required when Domain Security is on"
+        )
     if mode == MODE_VERIFY_EMAIL and not collect_email:
         errors["collect_email"] = "Email Verification needs the buyer's email address"
     if mode == MODE_IDENTIFY and not (collect_name or collect_email):
@@ -404,14 +412,18 @@ class AccessGate:
 
         return ResolvedPolicy(policy=dict(DEFAULT_POLICY), level="default", subject=None)
 
-    def _resolve_template(self, template_id: str, *, fallback_subject: str | None) -> ResolvedPolicy:
+    def _resolve_template(
+        self, template_id: str, *, fallback_subject: str | None
+    ) -> ResolvedPolicy:
         record = self._policy_for("template", template_id)
         if record is None:
             return ResolvedPolicy(
                 policy=dict(DEFAULT_POLICY),
                 level="default",
                 subject=fallback_subject,
-                errors={"template_id": f"template {template_id} has no access policy; the room is open"},
+                errors={
+                    "template_id": f"template {template_id} has no access policy; the room is open"
+                },
             )
         return self._validated(record, dict(record["data"]))
 
@@ -516,7 +528,9 @@ class AccessGate:
 
     # -- sessions ----------------------------------------------------------- #
 
-    def _store_session(self, data: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def _store_session(
+        self, data: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         # The room association goes in the envelope's `room_id` column, never in
         # `data`: room_id is reserved vocabulary that AuditedDatabase strips from
         # the payload, so putting it in the JSON would silently vanish.
@@ -530,7 +544,9 @@ class AccessGate:
             source=source,
         )
 
-    def _touch(self, record: Mapping[str, Any], patch: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def _touch(
+        self, record: Mapping[str, Any], patch: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         return self.store.update(record["id"], patch, actor=actor, source=source)
 
     def open_session(
@@ -588,7 +604,10 @@ class AccessGate:
         # The account-login path is sourced as "log in with their existing
         # account to populate their name and email", so it is an alternative to
         # typing rather than a different privilege: same tier, same rules.
-        if method == METHOD_ACCOUNT_LOGIN and not self.requirements(room_id)["allows_account_login"]:
+        if (
+            method == METHOD_ACCOUNT_LOGIN
+            and not self.requirements(room_id)["allows_account_login"]
+        ):
             method = METHOD_IDENTIFIED
 
         for name_field in required_fields(policy):
@@ -647,7 +666,9 @@ class AccessGate:
                 source=source,
             )
             raise AccessDenied(
-                REFUSAL_BOT, session_id=record["id"], message="This request does not look like a browser."
+                REFUSAL_BOT,
+                session_id=record["id"],
+                message="This request does not look like a browser.",
             )
 
         pending = mode == MODE_VERIFY_EMAIL
@@ -688,10 +709,17 @@ class AccessGate:
             }
 
         delivery = (
-            self._queue_verification(record, base_url=base_url, api_prefix=api_prefix, source=source)
+            self._queue_verification(
+                record, base_url=base_url, api_prefix=api_prefix, source=source
+            )
             if deliver
-            else {"delivered_via": "suppressed", "status": "suppressed", "message_id": None, "link": None,
-                  "open_link": None}
+            else {
+                "delivered_via": "suppressed",
+                "status": "suppressed",
+                "message_id": None,
+                "link": None,
+                "open_link": None,
+            }
         )
         return {
             "status": STATUS_PENDING,
@@ -710,7 +738,11 @@ class AccessGate:
 
     def _identity(self, record: Mapping[str, Any]) -> dict[str, Any]:
         data = record["data"]
-        return {"name": data.get("name"), "email": data.get("email"), "email_domain": data.get("email_domain")}
+        return {
+            "name": data.get("name"),
+            "email": data.get("email"),
+            "email_domain": data.get("email_domain"),
+        }
 
     def _queue_verification(
         self, session: Mapping[str, Any], *, base_url: str | None, api_prefix: str, source: str
@@ -788,16 +820,20 @@ class AccessGate:
         if attempts > MAX_VERIFY_ATTEMPTS:
             self._touch(
                 record,
-                {"status": STATUS_REFUSED, "refusal_reason": "too_many_attempts", "attempts": attempts},
+                {
+                    "status": STATUS_REFUSED,
+                    "refusal_reason": "too_many_attempts",
+                    "attempts": attempts,
+                },
                 actor="gate",
                 source=source,
             )
-            raise AccessDenied("too_many_attempts", session_id=token, message="This verification link was retired.")
+            raise AccessDenied(
+                "too_many_attempts", session_id=token, message="This verification link was retired."
+            )
 
         # Recorded on every presentation, verified or not.
-        record = self._touch(
-            record, {"attempts": attempts}, actor="gate", source=source
-        )
+        record = self._touch(record, {"attempts": attempts}, actor="gate", source=source)
         data = dict(record["data"])
 
         if status == STATUS_REFUSED:
@@ -814,7 +850,9 @@ class AccessGate:
                 actor="gate",
                 source=source,
             )
-            raise AccessDenied(REFUSAL_EXPIRED, session_id=token, message="This verification link has expired.")
+            raise AccessDenied(
+                REFUSAL_EXPIRED, session_id=token, message="This verification link has expired."
+            )
 
         if status == STATUS_VERIFIED:
             return {
@@ -837,7 +875,9 @@ class AccessGate:
                     source=source,
                 )
                 raise AccessDenied(
-                    REFUSAL_DOMAIN, session_id=token, message="This room is restricted to a different email domain."
+                    REFUSAL_DOMAIN,
+                    session_id=token,
+                    message="This room is restricted to a different email domain.",
                 )
 
         updated = self._touch(
@@ -861,9 +901,7 @@ class AccessGate:
         }
 
     def _mark_outbox_sent(self, token: str, room_id: str, *, source: str) -> None:
-        for message in self.store.find(
-            OUTBOX_COLLECTION, {"session_id": token}, limit=10
-        ):
+        for message in self.store.find(OUTBOX_COLLECTION, {"session_id": token}, limit=10):
             if message["data"].get("status") != "sent":
                 self.store.update(
                     message["id"],
@@ -949,7 +987,9 @@ class AccessGate:
             "owed": [],
         }
 
-    def _record_view(self, session: Mapping[str, Any], room_id: str, *, source: str) -> dict[str, Any]:
+    def _record_view(
+        self, session: Mapping[str, Any], room_id: str, *, source: str
+    ) -> dict[str, Any]:
         """Stamp the first view and emit exactly one analytics row for it.
 
         The research ties the identity to the *view*, not to the verification:
@@ -987,7 +1027,9 @@ class AccessGate:
 
     # -- seller views ------------------------------------------------------- #
 
-    def sessions(self, room_id: str, *, include_bots: bool = False, include_refused: bool = True) -> dict[str, Any]:
+    def sessions(
+        self, room_id: str, *, include_bots: bool = False, include_refused: bool = True
+    ) -> dict[str, Any]:
         """Who has been let in, and who has been turned away.
 
         Bot-flagged attempts are excluded from the identity list by default: the

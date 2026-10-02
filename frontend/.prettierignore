@@ -1,0 +1,50 @@
+# Prettier ignores.
+#
+# Why this file exists, in one paragraph: this repository was hand-formatted,
+# not Prettier-formatted. Measured across frontend/src, 1751 source lines exceed
+# 100 characters and the longest is 349. Running Prettier at any printWidth
+# rewrites 155-170 of the 252 source files, and the rewrite is not a whitespace
+# adjustment - it collapses hand-wrapped import lists and rewraps long lines
+# throughout the tree.
+#
+# docs/FEATURE-CONTRACT.md is why that matters. A feature branch owns its own
+# folder under src/features/** and no other branch may edit it. Landing a commit
+# that reformats all 48 feature folders at once would make every in-flight
+# feature branch conflict on every file simultaneously, which is the precise
+# failure the plugin host exists to prevent.
+#
+# So: Prettier is configured, and it runs on the files a branch legitimately
+# owns. It is deliberately NOT run as a one-off reformat over the existing tree.
+# Feature and page files are listed below, so `npm run format` is a no-op on
+# them rather than a 152-file rewrite. Each is formatted by the branch that owns
+# it, when that branch next touches the file.
+#
+# Consequence, stated plainly: `npm run format:check` is expected to report
+# these files as unformatted. That is a known, accepted state, not a CI failure.
+# The pre-commit hook does not run format:check.
+
+dist
+coverage
+node_modules
+
+# --- The shared host files -------------------------------------------------
+# Every feature branch must leave these byte-identical (check_feature_diff.py),
+# so a formatter has no business rewriting them. These three are the remaining
+# files Prettier would change; the rest of the host already matches.
+src/App.jsx
+src/components/ui.jsx
+src/lib/api.js
+
+# --- Existing feature folders ----------------------------------------------
+# Contract-protected. Reformatting them here would collide with every feature
+# branch in flight.
+src/features/
+
+# --- Existing pages and test fixtures --------------------------------------
+# Same reasoning as the feature folders: hand-authored, contract-adjacent, and
+# not this branch's to rewrite wholesale.
+src/pages/
+src/test/
+
+# Generated at build time.
+src/**/*.css

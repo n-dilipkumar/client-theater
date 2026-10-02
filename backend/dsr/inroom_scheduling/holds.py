@@ -178,9 +178,7 @@ def read_hold(record: Mapping[str, Any], *, now: datetime) -> HoldView:
     )
 
 
-def live_holds(
-    records: list[Mapping[str, Any]], *, now: datetime
-) -> dict[str, HoldView]:
+def live_holds(records: list[Mapping[str, Any]], *, now: datetime) -> dict[str, HoldView]:
     """Every hold that still protects its slot, keyed by the slot's start.
 
     Keyed by start rather than by uid because that is the question being asked:

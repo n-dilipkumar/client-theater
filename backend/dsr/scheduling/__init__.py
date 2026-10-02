@@ -62,7 +62,6 @@ from dsr.scheduling.errors import (
     MeetingNotFound,
 )
 from dsr.scheduling.links import (
-    CANCEL_URL_TAG,
     LINK_PATH,
     RESCHEDULE_URL_TAG,
     TAG_FOR_KIND,
@@ -103,17 +102,18 @@ from dsr.scheduling.propagation import (
 from dsr.scheduling.timeutil import UTC, has_happened, iso, overlaps, parse, slot_end, utcnow
 from dsr.scheduling.vocabulary import (
     ACTOR_KIND_NAMES,
-    BOOKING_STATUSES,
+    BOOKED,
     BOOKING_CANCELLED,
     BOOKING_LOCATION_UPDATED,
     BOOKING_NO_SHOW_UPDATED,
     BOOKING_RESCHEDULED,
-    BOOKED,
+    BOOKING_STATUSES,
+    CALENDAR_EVENT,
     CANCEL,
-    CANCELLED,
     CANCEL_SCOPE_NAMES,
     CANCEL_SCOPES,
     CANCEL_URL_TAG,
+    CANCELLED,
     CHANGE_CANCELLED,
     CHANGE_LOCATION_UPDATED,
     CHANGE_RESCHEDULE_REQUESTED,
@@ -121,7 +121,6 @@ from dsr.scheduling.vocabulary import (
     CHANGE_TYPE_NAMES,
     CHANGE_TYPES,
     CHILICAL_HOME,
-    CALENDAR_EVENT,
     CRM_SOBJECT,
     HOST,
     INTENT_NAMES,

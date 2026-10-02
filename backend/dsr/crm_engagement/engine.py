@@ -199,7 +199,9 @@ class EngagementSync:
             raise EngagementSyncError(f"event type {event_type_id} not found")
         return row
 
-    def field_maps(self, event_type: str | None = None, connector_id: str | None = None) -> list[dict[str, Any]]:
+    def field_maps(
+        self, event_type: str | None = None, connector_id: str | None = None
+    ) -> list[dict[str, Any]]:
         return self.book.field_maps(event_type=event_type, connector_id=connector_id)
 
     def field_map(self, field_map_id: str) -> dict[str, Any]:
@@ -297,7 +299,9 @@ class EngagementSync:
         row = self.book.update_connector(connector_id, patch, actor=actor, source=source)
         return self.book.connector_view(row)
 
-    def delete_connector(self, connector_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def delete_connector(
+        self, connector_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         return self.book.delete_connector(connector_id, actor=actor, source=source)
 
     def add_event_type(
@@ -315,7 +319,9 @@ class EngagementSync:
     ) -> dict[str, Any]:
         return self.book.update_event_type(event_type_id, patch, actor=actor, source=source)
 
-    def delete_event_type(self, event_type_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def delete_event_type(
+        self, event_type_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         return self.book.delete_event_type(event_type_id, actor=actor, source=source)
 
     def add_field_map(
@@ -333,7 +339,9 @@ class EngagementSync:
     ) -> dict[str, Any]:
         return self.book.update_field_map(field_map_id, patch, actor=actor, source=source)
 
-    def delete_field_map(self, field_map_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def delete_field_map(
+        self, field_map_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         return self.book.delete_field_map(field_map_id, actor=actor, source=source)
 
     # -- step 1 and 2: the buyer acts, the room records and enqueues --------- #
@@ -360,7 +368,9 @@ class EngagementSync:
         :meth:`drain`.
         """
         self.book.require_room(room_id)
-        engagement = self.book.record_engagement(payload, room_id=room_id, actor=actor, source=source)
+        engagement = self.book.record_engagement(
+            payload, room_id=room_id, actor=actor, source=source
+        )
         queue_row = self.book.enqueue(engagement, actor=actor, source=source)
         queue_id = str(queue_row["id"])
         engagement_id = str(engagement["id"])
@@ -463,7 +473,9 @@ class EngagementSync:
         data = dict(queue_row.get("data") or {})
         engagement_id = str(data.get("engagement_id") or "")
         engagement = self.book.engagement(engagement_id)
-        event_type = as_text((engagement or {}).get("data", {}).get("type")) or as_text(data.get("type"))
+        event_type = as_text((engagement or {}).get("data", {}).get("type")) or as_text(
+            data.get("type")
+        )
 
         plan = Plan(
             queue_id=queue_id,
@@ -519,7 +531,11 @@ class EngagementSync:
         if not plan.sendable:
             assert plan.blocked is not None
             self.book.mark_blocked(
-                plan.queue_id, block_reason=plan.blocked, resolution=plan.resolution, actor=actor, source=source
+                plan.queue_id,
+                block_reason=plan.blocked,
+                resolution=plan.resolution,
+                actor=actor,
+                source=source,
             )
             return {"queue_id": plan.queue_id, "state": "blocked", "reason": plan.blocked}
 
@@ -687,9 +703,7 @@ class EngagementSync:
                 counts[str(plan["blocked"])] = counts.get(str(plan["blocked"]), 0) + 1
         return {"room_id": str(room_id), "counts": counts, "plans": plans}
 
-    def retry(
-        self, queue_id: str, *, actor: str | None = None, source: str
-    ) -> dict[str, Any]:
+    def retry(self, queue_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
         """Fire one row by hand, and say what happened.
 
         For the rows a drain will not touch: a failure, and a block. Both are re-planned
@@ -752,9 +766,15 @@ class EngagementSync:
                     "occurred_at": as_text(occurred[1]),
                     "occurred_at_field": occurred[2],
                     "asset": as_text(_read(engagement=data, row=row, source="asset")[1]),
-                    "dwell_seconds": _number(_read(engagement=data, row=row, source="dwell_seconds")[1]),
-                    "buyer_email": as_text(_read(engagement=data, row=row, source="buyer_email")[1]),
-                    "buyer_crm_id": as_text(_read(engagement=data, row=row, source="buyer_crm_id")[1]),
+                    "dwell_seconds": _number(
+                        _read(engagement=data, row=row, source="dwell_seconds")[1]
+                    ),
+                    "buyer_email": as_text(
+                        _read(engagement=data, row=row, source="buyer_email")[1]
+                    ),
+                    "buyer_crm_id": as_text(
+                        _read(engagement=data, row=row, source="buyer_crm_id")[1]
+                    ),
                     CRM_RECORD_ID_FIELD: data.get(CRM_RECORD_ID_FIELD),
                     # Where the id came from, and whether the research says so. Three
                     # vendors answer this question differently and one of the differences
@@ -813,7 +833,8 @@ class EngagementSync:
             "queue": queue_rows,
             "sync_log": log,
             "crm_record_id": (engagement.get("data") or {}).get(CRM_RECORD_ID_FIELD),
-            "sync_state": as_text((engagement.get("data") or {}).get(SYNC_STATE_FIELD)) or "pending",
+            "sync_state": as_text((engagement.get("data") or {}).get(SYNC_STATE_FIELD))
+            or "pending",
         }
 
     def sync_log(
@@ -894,13 +915,17 @@ def _tally(values: Any) -> dict[str, int]:
     return counts
 
 
-def _read(*, engagement: Mapping[str, Any], row: Mapping[str, Any], source: str) -> tuple[bool, Any, str]:
+def _read(
+    *, engagement: Mapping[str, Any], row: Mapping[str, Any], source: str
+) -> tuple[bool, Any, str]:
     """Resolve one canonical field on a stored engagement row.
 
     The row is re-shaped into the ``{envelope, data}`` form :func:`read_source` expects, so
     the feed resolves a field the same way a field map does.
     """
-    return read_source({"id": row.get("id"), "room_id": row.get("room_id"), "data": dict(engagement)}, source)
+    return read_source(
+        {"id": row.get("id"), "room_id": row.get("room_id"), "data": dict(engagement)}, source
+    )
 
 
 def _number(value: Any) -> float | int | None:

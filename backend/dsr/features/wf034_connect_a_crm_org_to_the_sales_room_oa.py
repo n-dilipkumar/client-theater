@@ -79,6 +79,7 @@ from dsr.crm_oauth.vocabulary import VENDOR_IDS
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
 from dsr.store import RecordStore
+
 FEATURE = {
     "id": "wf-034-connect-a-crm-org-to-the-sales-room-oa",
     "ticket": "WF-034",
@@ -151,7 +152,9 @@ def _vendor_request_error(request: Request, exc: VendorRequestError) -> JSONResp
     was wrong, and a sweep that treats an unreachable vendor as a caller error
     would stop checking connections it could still have checked.
     """
-    return JSONResponse(status_code=502, content={"error": "vendor_unreachable", "detail": str(exc)})
+    return JSONResponse(
+        status_code=502, content={"error": "vendor_unreachable", "detail": str(exc)}
+    )
 
 
 def _not_connected(request: Request, exc: NotConnectedError) -> JSONResponse:
@@ -170,7 +173,9 @@ def _connection_disabled(request: Request, exc: ConnectionDisabledError) -> JSON
     over ``_not_connected`` for the same exception and a page can say "turn it
     on" rather than "finish setting it up".
     """
-    return JSONResponse(status_code=428, content={"error": "connection_disabled", "detail": str(exc)})
+    return JSONResponse(
+        status_code=428, content={"error": "connection_disabled", "detail": str(exc)}
+    )
 
 
 def _vault_sealed(request: Request, exc: VaultSealedError) -> JSONResponse:
@@ -186,13 +191,15 @@ def _vault_sealed(request: Request, exc: VaultSealedError) -> JSONResponse:
 
 def _connection_not_found(request: Request, exc: ConnectionNotFoundError) -> JSONResponse:
     return JSONResponse(
-        status_code=404, content={"error": "not_found", "detail": str(exc), "id": str(exc).split()[-1]}
+        status_code=404,
+        content={"error": "not_found", "detail": str(exc), "id": str(exc).split()[-1]},
     )
 
 
 def _unknown_room(request: Request, exc: UnknownRoomError) -> JSONResponse:
     return JSONResponse(
-        status_code=404, content={"error": "not_found", "detail": f"room {exc} not found", "id": str(exc)}
+        status_code=404,
+        content={"error": "not_found", "detail": f"room {exc} not found", "id": str(exc)},
     )
 
 
@@ -290,7 +297,9 @@ def summary(connections: CrmOAuthConnections = ConnectionsDep) -> dict[str, Any]
 def list_connections(
     room_id: str | None = Query(default=None),
     vendor: str | None = Query(default=None, description=" | ".join(VENDOR_IDS)),
-    status: str | None = Query(default=None, description="pending_authorization | authorized | expired"),
+    status: str | None = Query(
+        default=None, description="pending_authorization | authorized | expired"
+    ),
     tenant: str | None = Query(default=None),
     scope: str = Query(default="all", description="all | room | tenant"),
     limit: int = Query(default=200, ge=1, le=1000),
@@ -339,7 +348,9 @@ def create_connection(
     reports every field that is missing rather than this route refusing the
     create and leaving the admin with a form and no list.
     """
-    return connections.create_connection(payload, actor=actor, source=f"POST {router.prefix}/connections")
+    return connections.create_connection(
+        payload, actor=actor, source=f"POST {router.prefix}/connections"
+    )
 
 
 @router.get("/connections/{connection_id}")
@@ -362,7 +373,10 @@ def update_connection(
     every route that would use it answers 428 rather than spending a token.
     """
     return connections.update_connection(
-        connection_id, payload, actor=actor, source=f"PATCH {router.prefix}/connections/{connection_id}"
+        connection_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/connections/{connection_id}",
     )
 
 
@@ -394,7 +408,9 @@ def disconnect_connection(
 @router.get("/connections/{connection_id}/authorize-url")
 def authorize_url(
     connection_id: str,
-    scope: str | None = Query(default=None, description="space-separated, overrides the connection's scopes"),
+    scope: str | None = Query(
+        default=None, description="space-separated, overrides the connection's scopes"
+    ),
     actor: str | None = Query(default=None),
     connections: CrmOAuthConnections = ConnectionsDep,
 ) -> dict[str, Any]:
@@ -410,7 +426,10 @@ def authorize_url(
     """
     scopes = [part for part in (scope or "").replace(",", " ").split() if part] or None
     return connections.begin_authorization(
-        connection_id, scopes=scopes, actor=actor, source=f"GET {router.prefix}/connections/{connection_id}/authorize-url"
+        connection_id,
+        scopes=scopes,
+        actor=actor,
+        source=f"GET {router.prefix}/connections/{connection_id}/authorize-url",
     )
 
 
@@ -481,7 +500,9 @@ def cancel_grant(
     lying around, and a grant that is still live can be completed long after the
     admin stopped caring.
     """
-    connections.cancel_grant(grant_id, actor=actor, source=f"DELETE {router.prefix}/grants/{grant_id}")
+    connections.cancel_grant(
+        grant_id, actor=actor, source=f"DELETE {router.prefix}/grants/{grant_id}"
+    )
     return Response(status_code=204)
 
 
@@ -504,7 +525,9 @@ def refresh_connection(
     could set.
     """
     return connections.refresh_now(
-        connection_id, actor=actor, source=f"POST {router.prefix}/connections/{connection_id}/refresh"
+        connection_id,
+        actor=actor,
+        source=f"POST {router.prefix}/connections/{connection_id}/refresh",
     )
 
 
@@ -566,7 +589,9 @@ def connection_health(
 @router.get("/connections/{connection_id}/token-events")
 def token_events(
     connection_id: str,
-    kind: str | None = Query(default=None, description="authorize | issued | refreshed | tested | …"),
+    kind: str | None = Query(
+        default=None, description="authorize | issued | refreshed | tested | …"
+    ),
     limit: int = Query(default=100, ge=1, le=1000),
     connections: CrmOAuthConnections = ConnectionsDep,
 ) -> dict[str, Any]:
@@ -627,7 +652,9 @@ def readiness(room_id: str, connections: CrmOAuthConnections = ConnectionsDep) -
 @router.post("/rooms/{room_id}/health-check")
 def health_check(
     room_id: str,
-    force: bool = Query(default=False, description="check every connection, not only the ones that are due"),
+    force: bool = Query(
+        default=False, description="check every connection, not only the ones that are due"
+    ),
     actor: str | None = Query(default=None),
     connections: CrmOAuthConnections = ConnectionsDep,
 ) -> dict[str, Any]:
@@ -644,7 +671,10 @@ def health_check(
     other tenant too.
     """
     return connections.health_check(
-        room_id, force=force, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/health-check"
+        room_id,
+        force=force,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/health-check",
     )
 
 
@@ -798,7 +828,13 @@ class DemoTransport:
         timeout: float = 10.0,
     ) -> HttpResult:
         self.calls.append(
-            {"method": method, "url": url, "body": body, "headers": dict(headers or {}), "timeout": timeout}
+            {
+                "method": method,
+                "url": url,
+                "body": body,
+                "headers": dict(headers or {}),
+                "timeout": timeout,
+            }
         )
         fields = self._fields(body)
         grant_type = fields.get("grant_type", "")
@@ -824,7 +860,10 @@ class DemoTransport:
                     ok=False,
                     status=400,
                     body=json.dumps(
-                        {"error": "invalid_grant", "error_description": "refresh token is not valid"}
+                        {
+                            "error": "invalid_grant",
+                            "error_description": "refresh token is not valid",
+                        }
                     ),
                     duration_ms=11.0,
                 )
@@ -847,7 +886,9 @@ class DemoTransport:
             return HttpResult(
                 ok=False, status=401, body='{"message": "expired access token"}', duration_ms=7.0
             )
-        return HttpResult(ok=False, status=status, body='{"error": "upstream unavailable"}', duration_ms=31.0)
+        return HttpResult(
+            ok=False, status=status, body='{"error": "upstream unavailable"}', duration_ms=31.0
+        )
 
 
 #: The connections the demo registers, one per org plus one that is deliberately
@@ -991,7 +1032,8 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
             "scopes": list(spec.get("scopes") or []),
             "org_id": spec.get("org_id") or org.get("host") or "",
             "environment": "production",
-            "policy": spec.get("policy") or ("external_client_app" if vendor == "salesforce" else ""),
+            "policy": spec.get("policy")
+            or ("external_client_app" if vendor == "salesforce" else ""),
             "environment_url": spec.get("environment_url") or "",
             "notes": spec.get("note") or org.get("note") or "",
         }
@@ -1036,7 +1078,9 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     # One authorization left in flight, so the page shows an admin who is on the
     # vendor's consent screen right now.
-    healthy = engine.list_connections(room_id=rooms[0][0], vendor="hubspot", status="authorized", limit=10)
+    healthy = engine.list_connections(
+        room_id=rooms[0][0], vendor="hubspot", status="authorized", limit=10
+    )
     if healthy:
         engine.begin_authorization(healthy[0]["id"], actor=actor, source=source)
         pending_grant = 1

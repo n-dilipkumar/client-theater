@@ -38,8 +38,8 @@ from dsr.crm_backfill.errors import (
     QuotaExceeded,
     RunNotFound,
     RunStateError,
-    UnknownConnection,
     UnkeyedRow,
+    UnknownConnection,
     UnsupportedVendor,
 )
 from dsr.crm_backfill.inferences import describe as describe_inferences
@@ -199,7 +199,9 @@ class BackfillEngine:
     def connection(self, connection_id: str) -> dict[str, Any]:
         return self.connection_view(self._connection_record(connection_id))
 
-    def connection_view(self, record: Mapping[str, Any], now: datetime | None = None) -> dict[str, Any]:
+    def connection_view(
+        self, record: Mapping[str, Any], now: datetime | None = None
+    ) -> dict[str, Any]:
         """A connection as the wizard reads it: what it can do, and what is left of today."""
         moment = now or self.now()
         data = record.get("data") or {}
@@ -629,7 +631,9 @@ class BackfillEngine:
             expiry = _expiry_days(connection) if connection is not None else None
             verdict = cursors.describe(data, now, expiry)
             verdict["connection_known"] = connection is not None
-            listed.append({"id": record["id"], "room_id": record.get("room_id"), **data, "expiry": verdict})
+            listed.append(
+                {"id": record["id"], "room_id": record.get("room_id"), **data, "expiry": verdict}
+            )
         return listed
 
     def replica(
@@ -723,7 +727,10 @@ class BackfillEngine:
         source: str,
     ) -> dict[str, Any]:
         data = dict(record["data"])
-        counters = {**(data.get("counters") or new_counters()), "polls": int((data.get("counters") or {}).get("polls") or 0) + 1}
+        counters = {
+            **(data.get("counters") or new_counters()),
+            "polls": int((data.get("counters") or {}).get("polls") or 0) + 1,
+        }
         record = self._patch(record, {"counters": counters}, actor=actor, source=source)
 
         plan = self._plan(record)
@@ -739,7 +746,9 @@ class BackfillEngine:
                 self._stall(record, str(exc), actor=actor, source=source)
                 raise
 
-        spent = self._spend(connection, record, moment, reason="page.read", actor=actor, source=source)
+        spent = self._spend(
+            connection, record, moment, reason="page.read", actor=actor, source=source
+        )
         if spent is not None:
             return spent
 
@@ -778,7 +787,9 @@ class BackfillEngine:
                 return self._not_ready(record, page, job, actor=actor, source=source)
             return self._complete(record, job, counters, actor=actor, source=source)
 
-        return self._land(record, connection, adapter, page, job, counters, actor=actor, source=source)
+        return self._land(
+            record, connection, adapter, page, job, counters, actor=actor, source=source
+        )
 
     def _land(
         self,
@@ -793,13 +804,11 @@ class BackfillEngine:
         source: str,
     ) -> dict[str, Any]:
         """Write one page of rows, then advance the cursor. In that order."""
-        data = dict(record["data"])
+        dict(record["data"])
         room_id = str(record.get("room_id") or "")
         plan = self._plan(record)
         at = self._at()
-        key_field = str(
-            connection["data"].get("replica_key_field") or transform.DEFAULT_KEY_FIELD
-        )
+        key_field = str(connection["data"].get("replica_key_field") or transform.DEFAULT_KEY_FIELD)
 
         counters = {**counters, "pages": int(counters.get("pages") or 0) + 1}
         counters["rows_seen"] = int(counters.get("rows_seen") or 0) + len(page.rows)
@@ -875,7 +884,9 @@ class BackfillEngine:
         counters["rows_updated"] = int(counters.get("rows_updated") or 0) + len(updates)
         counters["rows_unchanged"] = int(counters.get("rows_unchanged") or 0) + unchanged
         counters["rows_rejected"] = int(counters.get("rows_rejected") or 0) + len(rejected)
-        counters["rows_written"] = int(counters.get("rows_written") or 0) + len(created) + len(updates)
+        counters["rows_written"] = (
+            int(counters.get("rows_written") or 0) + len(created) + len(updates)
+        )
         counters["api_calls"] = int(counters.get("api_calls") or 0) + 1
 
         more = bool(page.more)
@@ -975,11 +986,16 @@ class BackfillEngine:
         """
         data = dict(record["data"])
         plan = self._plan(record)
-        counters = {**(data.get("counters") or new_counters()), "polls": int((data.get("counters") or {}).get("polls") or 0) + 1}
+        counters = {
+            **(data.get("counters") or new_counters()),
+            "polls": int((data.get("counters") or {}).get("polls") or 0) + 1,
+        }
         record = self._patch(record, {"counters": counters}, actor=actor, source=source)
         job = dict(data.get("job") or {})
 
-        spent = self._spend(connection, record, moment, reason="page.submit", actor=actor, source=source)
+        spent = self._spend(
+            connection, record, moment, reason="page.submit", actor=actor, source=source
+        )
         if spent is not None:
             return spent
 
@@ -1009,12 +1025,20 @@ class BackfillEngine:
         except Exception as exc:
             return self._vendor_broke(record, exc, actor=actor, source=source)
 
-        counters = {**counters, "pages": page_number, "api_calls": int(counters.get("api_calls") or 0) + 1}
+        counters = {
+            **counters,
+            "pages": page_number,
+            "api_calls": int(counters.get("api_calls") or 0) + 1,
+        }
         counters["rows_seen"] = offset + len(rows)
         counters["rows_written"] = int(counters.get("rows_written") or 0) + len(rows)
         if counters.get("rows_total") is None:
-            counters["rows_total"] = len(self.replica(room_id=str(record.get("room_id") or ""), limit=1000))
-        next_poll = (moment + timedelta(seconds=int(plan.get("poll_interval_seconds") or 0))).isoformat()
+            counters["rows_total"] = len(
+                self.replica(room_id=str(record.get("room_id") or ""), limit=1000)
+            )
+        next_poll = (
+            moment + timedelta(seconds=int(plan.get("poll_interval_seconds") or 0))
+        ).isoformat()
         more = len(stored) == page_size
         page = vendors.VendorPage(
             cursor=str(counters["rows_seen"]),
@@ -1152,7 +1176,8 @@ class BackfillEngine:
                     "job": job,
                     "state": "running",
                     "next_poll_at": (
-                        self.now() + timedelta(seconds=int(attempt_plan.get("poll_interval_seconds") or 0))
+                        self.now()
+                        + timedelta(seconds=int(attempt_plan.get("poll_interval_seconds") or 0))
                     ).isoformat(),
                 },
                 actor=actor,
@@ -1190,7 +1215,10 @@ class BackfillEngine:
                         "findings": list(record["data"].get("findings") or []) + [why["detail"]],
                         "counters": {
                             **(record["data"].get("counters") or {}),
-                            "replans": int((record["data"].get("counters") or {}).get("replans") or 0) + 1,
+                            "replans": int(
+                                (record["data"].get("counters") or {}).get("replans") or 0
+                            )
+                            + 1,
                         },
                     },
                     actor=actor,
@@ -1255,7 +1283,11 @@ class BackfillEngine:
         ).isoformat()
         record = self._patch(
             record,
-            {"job": {**job, "state": page.job_state}, "next_poll_at": next_poll, "state": "running"},
+            {
+                "job": {**job, "state": page.job_state},
+                "next_poll_at": next_poll,
+                "state": "running",
+            },
             actor=actor,
             source=source,
         )
@@ -1521,9 +1553,7 @@ class BackfillEngine:
                 "detail": "the vendor's daily limit is spent; the poller will try again after the reset",
             }
         charged = {"window_started_at": started.isoformat(), "calls": calls + 1}
-        self.store.update(
-            str(connection["id"]), {"quota": charged}, actor=actor, source=source
-        )
+        self.store.update(str(connection["id"]), {"quota": charged}, actor=actor, source=source)
         self.log(
             record,
             "quota_charged",
@@ -1585,8 +1615,12 @@ class BackfillEngine:
         batch = 1000
         while remaining:
             rows = self.store.list(
-                REPLICA, room_id=room_id or None, order_by="id", descending=False,
-                limit=batch, offset=offset,
+                REPLICA,
+                room_id=room_id or None,
+                order_by="id",
+                descending=False,
+                limit=batch,
+                offset=offset,
             )
             if not rows:
                 break
@@ -1786,16 +1820,16 @@ def _connection_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
         )
     name = str(payload.get("name") or vendor)
     if not name.strip():
-        raise PlanError("a connection needs a name; the vendor's own name is enough, but empty is not")
+        raise PlanError(
+            "a connection needs a name; the vendor's own name is enough, but empty is not"
+        )
     return {
         "name": name,
         "vendor": vendor,
         "auth": str(payload.get("auth") or "oauth"),
         "granted_scopes": [str(scope) for scope in (payload.get("granted_scopes") or [])],
         "standard_objects": [str(item) for item in (payload.get("standard_objects") or [])],
-        "replica_key_field": str(
-            payload.get("replica_key_field") or transform.DEFAULT_KEY_FIELD
-        ),
+        "replica_key_field": str(payload.get("replica_key_field") or transform.DEFAULT_KEY_FIELD),
         "object_name": payload.get("object_name"),
         "daily_limit": _optional_int(payload.get("daily_limit"), "daily_limit"),
         "quota_timezone_offset_hours": _optional_int(

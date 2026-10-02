@@ -52,13 +52,13 @@ from dsr.fieldmap.errors import (
     UnknownMapping,
 )
 from dsr.fieldmap.metadata import Metadata
+from dsr.fieldmap.transforms import REGISTRY
 from dsr.fieldmap.vocabulary import (
     default_mapping,
     default_mapping_object,
     direction_of,
     normalise_provider,
 )
-from dsr.fieldmap.transforms import REGISTRY
 from dsr.store import RecordStore
 
 CONNECTION_COLLECTION = "crm_connection"
@@ -116,7 +116,9 @@ class MappingBook:
             raise UnknownConnection(f"connection {connection_id!r} not found")
         return record
 
-    def connections(self, *, room_id: str | None = None, include_global: bool = True) -> list[dict[str, Any]]:
+    def connections(
+        self, *, room_id: str | None = None, include_global: bool = True
+    ) -> list[dict[str, Any]]:
         """Connections, newest first, optionally filtered to a room.
 
         ``include_global`` is what makes a room-scoped page useful: a connection
@@ -157,16 +159,16 @@ class MappingBook:
             )
         name = str(payload.get("name") or "").strip()
         if not name:
-            raise InvalidMapping("name is required: a connection a reader cannot name is not reviewable")
+            raise InvalidMapping(
+                "name is required: a connection a reader cannot name is not reviewable"
+            )
         # Everything the caller sent is stored, and the fields this workflow reads
         # are then normalised over it. The allowlist was tried first and dropped a
         # deployment's own keys on the floor, which is schema flexibility in name
         # only: a team that keeps its portal id beside the vendor org would have
         # had to ask for a migration to add it.
         data: dict[str, Any] = {
-            key: value
-            for key, value in payload.items()
-            if key not in _ENVELOPE_KEYS
+            key: value for key, value in payload.items() if key not in _ENVELOPE_KEYS
         }
         data.update(
             {
@@ -181,7 +183,9 @@ class MappingBook:
                 "property_group": str(payload.get("property_group") or ""),
             }
         )
-        return self.store.create(CONNECTION_COLLECTION, data, room_id=room_id, actor=actor, source=source)
+        return self.store.create(
+            CONNECTION_COLLECTION, data, room_id=room_id, actor=actor, source=source
+        )
 
     def patch_connection(
         self,
@@ -205,7 +209,15 @@ class MappingBook:
                         "connection instead."
                     )
                 continue
-            if key in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at"):
+            if key in (
+                "id",
+                "collection",
+                "room_id",
+                "revision",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            ):
                 continue
             merged[key] = value
         return self.store.update(str(connection_id), merged, actor=actor, source=source)
@@ -288,14 +300,18 @@ class MappingBook:
         records = self.store.list(MAPPING_COLLECTION, limit=1000)
         if connection_id is not None:
             records = [
-                record for record in records if str(record["data"].get("connection_id") or "") == str(connection_id)
+                record
+                for record in records
+                if str(record["data"].get("connection_id") or "") == str(connection_id)
             ]
         if room_id is not None:
             records = [
                 record for record in records if str(record.get("room_id") or "") == str(room_id)
             ]
         if state:
-            records = [record for record in records if str(record["data"].get("state") or "") == str(state)]
+            records = [
+                record for record in records if str(record["data"].get("state") or "") == str(state)
+            ]
         return records
 
     def create_mapping(
@@ -417,12 +433,23 @@ class MappingBook:
                 "a mapping's state moves through activation, not through a patch: an active "
                 "mapping must have a clean validation behind it."
             )
-        if "connection_id" in patch and str(patch["connection_id"]) != str(data.get("connection_id") or ""):
+        if "connection_id" in patch and str(patch["connection_id"]) != str(
+            data.get("connection_id") or ""
+        ):
             raise InvalidMapping("a mapping cannot be moved to another connection")
         merged = {
             key: value
             for key, value in patch.items()
-            if key not in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at")
+            if key
+            not in (
+                "id",
+                "collection",
+                "room_id",
+                "revision",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            )
         }
         return self.store.update(mapping_id, merged, actor=actor, source=source)
 
@@ -487,7 +514,10 @@ class MappingBook:
         for row in self.rows(mapping_id):
             self.store.delete(row["id"], actor=actor, source=source)
             removed.append(row["id"])
-        return {**self.store.delete(mapping_id, actor=actor, source=source), "rows_removed": len(removed)}
+        return {
+            **self.store.delete(mapping_id, actor=actor, source=source),
+            "rows_removed": len(removed),
+        }
 
     # -- grid rows ---------------------------------------------------------- #
 
@@ -519,7 +549,9 @@ class MappingBook:
         """
         by_id = {
             str(record["id"])
-            for record in self.store.find(ROW_COLLECTION, {"mapping_id": str(mapping_id)}, limit=1000)
+            for record in self.store.find(
+                ROW_COLLECTION, {"mapping_id": str(mapping_id)}, limit=1000
+            )
         }
         ordered = self.store.list(
             ROW_COLLECTION,
@@ -634,7 +666,9 @@ class MappingBook:
         if "transform" in payload:
             name = str(payload["transform"] or "").strip()
             if not name:
-                raise InvalidMapping("transform is required: a row names the function applied to its value")
+                raise InvalidMapping(
+                    "transform is required: a row names the function applied to its value"
+                )
             data["transform"] = name
         if "transform_version" in payload and payload["transform_version"] is not None:
             try:
@@ -683,7 +717,7 @@ class MappingBook:
         payload = dict(report)
         payload["mapping_id"] = str(mapping_id)
         record = self.store.create(VALIDATION_COLLECTION, payload, actor=actor, source=source)
-        mapping = self.require_mapping(mapping_id)
+        self.require_mapping(mapping_id)
         self.store.update(
             mapping_id,
             {
@@ -758,7 +792,9 @@ class MappingBook:
         try:
             version = int(version)
         except (TypeError, ValueError) as exc:
-            raise InvalidMapping(f"version {payload.get('version')!r} is not a whole number") from exc
+            raise InvalidMapping(
+                f"version {payload.get('version')!r} is not a whole number"
+            ) from exc
         if version < 1:
             raise InvalidMapping("version must be 1 or more")
         resolved = REGISTRY.resolve(name, version)
@@ -768,7 +804,9 @@ class MappingBook:
             "version": version,
             "key": f"{name}@{version}",
             "description": str(payload.get("description") or ""),
-            "applies_to": [str(entry) for entry in applies_to] if isinstance(applies_to, Sequence) and not isinstance(applies_to, str) else [],
+            "applies_to": [str(entry) for entry in applies_to]
+            if isinstance(applies_to, Sequence) and not isinstance(applies_to, str)
+            else [],
             "connection_id": str(payload.get("connection_id") or ""),
             "declared_only": resolved is None or not resolved.executable,
         }

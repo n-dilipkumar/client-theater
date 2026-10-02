@@ -51,7 +51,9 @@ class PermissionDenied(HeadlessBookingError):
 class NotFound(HeadlessBookingError):
     """A room, asset, session, meeting or credential id does not resolve."""
 
-    def __init__(self, message: str, *, resource: str = "", record_id: str = "", room_id: str = "") -> None:
+    def __init__(
+        self, message: str, *, resource: str = "", record_id: str = "", room_id: str = ""
+    ) -> None:
         super().__init__(message)
         self.resource = resource
         self.record_id = record_id

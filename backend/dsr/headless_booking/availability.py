@@ -293,7 +293,9 @@ def parse_calendar_block(payload: object) -> Busy:
     """
     if not isinstance(payload, dict):
         raise HeadlessBookingError("a calendar block must be an object")
-    starts_at = parse_instant(payload.get("startsAt") or payload.get("startTime"), field="calendar.startsAt")
+    starts_at = parse_instant(
+        payload.get("startsAt") or payload.get("startTime"), field="calendar.startsAt"
+    )
     raw_end = payload.get("endsAt") or payload.get("endTime")
     if raw_end not in (None, ""):
         ends_at = parse_instant(raw_end, field="calendar.endsAt")

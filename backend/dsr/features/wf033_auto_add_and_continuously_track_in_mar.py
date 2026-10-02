@@ -45,8 +45,7 @@ from fastapi.responses import JSONResponse
 
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
-from dsr.market_intent import names as collection_names
-from dsr.market_intent import views as view_rules
+from dsr.market_intent import names as collection_names, views as view_rules
 from dsr.market_intent.engine import MarketIntentEngine
 from dsr.market_intent.errors import MarketIntentError
 from dsr.market_intent.vocabulary import AUTOMATION_ADD, AUTOMATION_TRACK
@@ -355,9 +354,7 @@ def research_tab(
     reported as a company reading about cloud security, even though both are
     "broader intent signals" and both set research intent.
     """
-    filters = view_rules.FilterSet.parse(
-        {"days": days, "visitor_intent": bool(visitor_intent)}
-    )
+    filters = view_rules.FilterSet.parse({"days": days, "visitor_intent": bool(visitor_intent)})
     return engine.research_tab(filters)
 
 
@@ -373,10 +370,13 @@ def list_companies(
     traffic_source: list[str] | None = Query(default=None),
     country: list[str] | None = Query(default=None),
     path: list[str] | None = Query(
-        default=None, description="operator:value, e.g. starts_with:/pricing or eq:/pricing@shop.example.com"
+        default=None,
+        description="operator:value, e.g. starts_with:/pricing or eq:/pricing@shop.example.com",
     ),
     in_target_markets: bool | None = Query(default=None),
-    segment: str | None = Query(default=None, description="Filter by segment; needs HubSpot Credits"),
+    segment: str | None = Query(
+        default=None, description="Filter by segment; needs HubSpot Credits"
+    ),
     lifecycle_stage: list[str] | None = Query(default=None),
     deal_stage: list[str] | None = Query(default=None),
     owner: list[str] | None = Query(default=None),
@@ -461,7 +461,9 @@ def patch_company(
     view that filters on it without saying why. ``properties`` takes arbitrary
     keys, so a team adding a field needs no migration and no coordination.
     """
-    return engine.update_company(company_key, payload, actor=actor, source=f"PATCH {router.prefix}/companies/{{company_key}}")
+    return engine.update_company(
+        company_key, payload, actor=actor, source=f"PATCH {router.prefix}/companies/{{company_key}}"
+    )
 
 
 @router.get("/companies/{company_key}/card")
@@ -525,7 +527,10 @@ def enroll_company(
     should not produce a failure banner over a company that *was* enrolled.
     """
     result = engine.enroll(
-        company_key, payload, actor=actor, source=f"POST {router.prefix}/companies/{{company_key}}/enroll"
+        company_key,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/companies/{{company_key}}/enroll",
     )
     if result.get("outcome") == "already_enrolled" and response is not None:
         response.status_code = 200
@@ -549,7 +554,7 @@ def save_view(
     payload: dict[str, Any] = Body(default_factory=dict),
     engine: MarketIntentEngine = EngineDep,
 ) -> dict[str, Any]:
-    """"Click Save view to persist the filter set as a named view."
+    """ "Click Save view to persist the filter set as a named view."
 
     A name already in use is refused with 409 rather than overwritten, because an
     automation is attached to a view and two views under one name would make
@@ -574,7 +579,9 @@ def withdraw_view(view_id: str, engine: MarketIntentEngine = EngineDep) -> dict[
     Together, because an automation whose view no longer exists has nothing to
     fire on and would report itself healthy while doing nothing.
     """
-    return engine.withdraw_view(view_id, actor="system", source=f"DELETE {router.prefix}/views/{{view_id}}")
+    return engine.withdraw_view(
+        view_id, actor="system", source=f"DELETE {router.prefix}/views/{{view_id}}"
+    )
 
 
 @router.get("/views/{view_id}/companies")
@@ -612,17 +619,23 @@ def save_automation(
     payload: dict[str, Any] = Body(default_factory=dict),
     engine: MarketIntentEngine = EngineDep,
 ) -> dict[str, Any]:
-    """"Toggle the switches on. At the bottom, click Save automation."
+    """ "Toggle the switches on. At the bottom, click Save automation."
 
     Switching a toggle on stamps when it was switched on, and saving again does
     not re-stamp it: a moving watermark would mean a company that entered last
     week could never be added, which is the opposite of what the toggle promises.
     """
-    return engine.save_automation(payload, actor="system", source=f"POST {router.prefix}/automations")
+    return engine.save_automation(
+        payload, actor="system", source=f"POST {router.prefix}/automations"
+    )
 
 
 @router.post("/automations/{automation_id}/run")
-def run_automation(automation_id: str, actor: str | None = Query(default=None), engine: MarketIntentEngine = EngineDep) -> dict[str, Any]:
+def run_automation(
+    automation_id: str,
+    actor: str | None = Query(default=None),
+    engine: MarketIntentEngine = EngineDep,
+) -> dict[str, Any]:
     """Apply one view's automation to the companies currently in its view.
 
     The researched rule, in full: "auto-add will only add companies that enter
@@ -665,7 +678,12 @@ def set_category(
     engine: MarketIntentEngine = EngineDep,
 ) -> dict[str, Any]:
     """Turn one stock auto-add category on or off, stamping when it was enabled."""
-    return engine.set_category(category_id, payload, actor="system", source=f"POST {router.prefix}/categories/{{category_id}}")
+    return engine.set_category(
+        category_id,
+        payload,
+        actor="system",
+        source=f"POST {router.prefix}/categories/{{category_id}}",
+    )
 
 
 @router.post("/categories/{category_id}/run")
@@ -699,8 +717,10 @@ def list_tracked(engine: MarketIntentEngine = EngineDep) -> dict[str, Any]:
 
 
 @router.post("/tracked/renew")
-def renew_tracking(actor: str | None = Query(default=None), engine: MarketIntentEngine = EngineDep) -> dict[str, Any]:
-    """"After that initial charge, tracking continues to be charged monthly."
+def renew_tracking(
+    actor: str | None = Query(default=None), engine: MarketIntentEngine = EngineDep
+) -> dict[str, Any]:
+    """ "After that initial charge, tracking continues to be charged monthly."
 
     One charge per tracked company per billing period. A second call in the same
     period charges nothing, which falls out of the one-row-per-company-per-period
@@ -721,7 +741,9 @@ def read_credits(engine: MarketIntentEngine = EngineDep) -> dict[str, Any]:
 
 
 @router.get("/overview")
-def overview(actor: str | None = Query(default=None), engine: MarketIntentEngine = EngineDep) -> dict[str, Any]:
+def overview(
+    actor: str | None = Query(default=None), engine: MarketIntentEngine = EngineDep
+) -> dict[str, Any]:
     """The Overview tab: the five researched numbers, and the four categories.
 
     "companies showing research intent, visitor intent, converted-to-lifecycle-
@@ -1135,7 +1157,9 @@ def _seed_now(context: dict[str, Any]) -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _demo_company(store: RecordStore, key: str, *, at: str, actor: str, source: str) -> dict[str, Any]:
+def _demo_company(
+    store: RecordStore, key: str, *, at: str, actor: str, source: str
+) -> dict[str, Any]:
     """Create the one company record the demo seeds directly.
 
     Contoso Health is in the account before any intent was seen, which is the
@@ -1203,7 +1227,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
       set to exactly 90 days rather than to a rounder number.
     """
     store = RecordStore(db)
-    rng: random.Random = context.get("rng") or random.Random("wf033")
+    context.get("rng") or random.Random("wf033")
     base = _seed_now(context)
     actor = "dana"
     source = "seed"
@@ -1341,10 +1365,16 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     # The manual control, from the Visitors tab: one enrolment, and a second
     # attempt at the same one, so idempotency is a row rather than a claim.
     enrolled = engine.enroll(
-        "northwind.com", {"workflow": "Enterprise nurture", "segment": "enterprise"}, actor=actor, source=source
+        "northwind.com",
+        {"workflow": "Enterprise nurture", "segment": "enterprise"},
+        actor=actor,
+        source=source,
     )
     repeat = engine.enroll(
-        "northwind.com", {"workflow": "Enterprise nurture", "segment": "enterprise"}, actor=actor, source=source
+        "northwind.com",
+        {"workflow": "Enterprise nurture", "segment": "enterprise"},
+        actor=actor,
+        source=source,
     )
 
     # A monthly renewal one period later, for the company that is tracked, so
@@ -1356,11 +1386,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     held = len(result.get("held_back") or [])
     news_types = sorted(
-        {
-            str(row.get("signal_type"))
-            for row in DEMO_RESEARCH
-            if row.get("kind") == "news"
-        }
+        {str(row.get("signal_type")) for row in DEMO_RESEARCH if row.get("kind") == "news"}
     )
     return (
         f"{len(DEMO_MARKETS)} target markets, {len(DEMO_CRITERIA)} intent criteria "

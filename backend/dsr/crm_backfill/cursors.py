@@ -112,7 +112,9 @@ def build(
     return record
 
 
-def is_expired(record: Mapping[str, Any] | None, now: datetime, expiry_days: int | None = None) -> bool:
+def is_expired(
+    record: Mapping[str, Any] | None, now: datetime, expiry_days: int | None = None
+) -> bool:
     """Whether the vendor will no longer answer for this cursor.
 
     Only a ``data_token`` expires. A Bulk job id, an export id and a paging
@@ -140,7 +142,9 @@ def age_days(record: Mapping[str, Any] | None, now: datetime) -> float:
     return round((now - _parse(record["updatedAt"])).total_seconds() / 86400.0, 3)
 
 
-def describe(record: Mapping[str, Any] | None, now: datetime, expiry_days: int | None = None) -> dict[str, Any]:
+def describe(
+    record: Mapping[str, Any] | None, now: datetime, expiry_days: int | None = None
+) -> dict[str, Any]:
     """The cursor plus its expiry verdict, for a run and for the wizard."""
     if not record:
         return {
@@ -164,11 +168,15 @@ def describe(record: Mapping[str, Any] | None, now: datetime, expiry_days: int |
     if expired:
         verdict["remedy"] = "start a new full-history backfill"
     elif record.get("kind") == "data_token":
-        verdict["resumable_until"] = (_parse(record["updatedAt"]) + timedelta(days=days)).isoformat()
+        verdict["resumable_until"] = (
+            _parse(record["updatedAt"]) + timedelta(days=days)
+        ).isoformat()
     return verdict
 
 
-def require_resumable(record: Mapping[str, Any] | None, now: datetime, expiry_days: int | None = None) -> None:
+def require_resumable(
+    record: Mapping[str, Any] | None, now: datetime, expiry_days: int | None = None
+) -> None:
     """Refuse to resume from a cursor the vendor has stopped answering for.
 
     Raising rather than restarting is the whole point. The research promises a

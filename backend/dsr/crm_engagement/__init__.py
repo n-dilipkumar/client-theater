@@ -46,7 +46,13 @@ serving, and that class of bug has shipped in this codebase before.
 from __future__ import annotations
 
 from dsr.crm_engagement import delivery, inferences, mapping, payloads, queue, vocabulary
-from dsr.crm_engagement.delivery import CreateReport, CreateResult, Transport, UrllibTransport, post_create
+from dsr.crm_engagement.delivery import (
+    CreateReport,
+    CreateResult,
+    Transport,
+    UrllibTransport,
+    post_create,
+)
 from dsr.crm_engagement.engine import EngagementSync, Plan
 from dsr.crm_engagement.errors import (
     EngagementSyncError,
@@ -58,7 +64,12 @@ from dsr.crm_engagement.errors import (
 )
 from dsr.crm_engagement.inferences import describe as describe_inferences
 from dsr.crm_engagement.mapping import Mapped, map_event, normalise_field_map, read_source
-from dsr.crm_engagement.payloads import CreateRequest, build_create, extract_record_id, success_codes
+from dsr.crm_engagement.payloads import (
+    CreateRequest,
+    build_create,
+    extract_record_id,
+    success_codes,
+)
 from dsr.crm_engagement.queue import (
     CONNECTOR_COLLECTION,
     CRM_RECORD_ID_FIELD,

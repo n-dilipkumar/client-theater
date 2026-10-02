@@ -74,8 +74,8 @@ from dsr.crm_provisioning.manifest import (
 )
 from dsr.crm_provisioning.vendors import (
     ADAPTERS,
-    HUBSPOT,
     DATAVERSE,
+    HUBSPOT,
     VendorAdapter,
     adapter_for,
     describe_adapter,

@@ -65,23 +65,9 @@ from fastapi.responses import JSONResponse
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
 from dsr.panel_time import (
-    BOOKING_COLLECTION,
-    CALENDAR_COLLECTION,
     COLLECTIONS,
-    INFERENCES,
     KINDS,
-    LOCATION_TYPES,
-    PANEL_COLLECTION,
-    PROVIDERS,
-    RANKERS,
-    RETUNE_ADJUSTMENTS,
-    SEARCH_COLLECTION,
-    SUGGESTION_REASON_ALL_FREE,
-    CalendarShapeError,
-    ConstraintError,
-    LimitExceeded,
     NotFound,
-    PanelShapeError,
     PanelTimeError,
     PanelTimeNotConfigured,
     SlotFinder,
@@ -422,7 +408,10 @@ def delete_panel(
 ) -> Response:
     """Soft-delete a panel. Its searches and bookings stay, and keep its id."""
     finder.delete_panel(
-        room_id, panel_id, actor=actor, source=f"DELETE {router.prefix}/rooms/{room_id}/panels/{panel_id}"
+        room_id,
+        panel_id,
+        actor=actor,
+        source=f"DELETE {router.prefix}/rooms/{room_id}/panels/{panel_id}",
     )
     return Response(status_code=204)
 
@@ -540,7 +529,9 @@ def read_search(room_id: str, search_id: str, finder: SlotFinder = FinderDep) ->
 
 
 @router.get("/rooms/{room_id}/searches/{search_id}/adjustments")
-def read_adjustments(room_id: str, search_id: str, finder: SlotFinder = FinderDep) -> dict[str, Any]:
+def read_adjustments(
+    room_id: str, search_id: str, finder: SlotFinder = FinderDep
+) -> dict[str, Any]:
     """What to change, in the order worth trying, for this search's empty reason.
 
     The research's automations line, served as data so the UI can render a picker
@@ -910,7 +901,10 @@ DEMO_PANELS: tuple[Mapping[str, Any], ...] = (
             "meeting_duration": "PT45M",
             "slot_interval": "PT45M",
             "min_attendee_percentage": 0,
-            "location_constraint": {"type": "room", "room_id": "engagement-room-london@northwind.example"},
+            "location_constraint": {
+                "type": "room",
+                "room_id": "engagement-room-london@northwind.example",
+            },
         },
     },
     {
@@ -1030,9 +1024,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         panel = panels.get(name)
         if panel is None:
             return None
-        return finder.find(
-            panel["room_id"], panel["id"], actor=actor, source=source
-        )
+        return finder.find(panel["room_id"], panel["id"], actor=actor, source=source)
 
     found = 0
     retuned = 0

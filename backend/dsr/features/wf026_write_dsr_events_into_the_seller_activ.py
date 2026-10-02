@@ -63,8 +63,8 @@ from dsr.outreach_feed import (
     describe_vocabulary,
     webhooks,
 )
-from dsr.outreach_feed.webhooks import compute_signature
 from dsr.outreach_feed.vocabulary import SIGNATURE_HEADER
+from dsr.outreach_feed.webhooks import compute_signature
 from dsr.store import RecordStore
 
 FEATURE = {
@@ -132,9 +132,7 @@ def _not_configured(request: Request, exc: FeedNotConfiguredError) -> JSONRespon
     the request wrong" - the frontend's ``apiRequest`` carries the status for
     exactly this.
     """
-    return JSONResponse(
-        status_code=428, content={"error": "not_configured", "detail": str(exc)}
-    )
+    return JSONResponse(status_code=428, content={"error": "not_configured", "detail": str(exc)})
 
 
 def _unknown_room(request: Request, exc: UnknownRoom) -> JSONResponse:
@@ -217,9 +215,7 @@ def register_app(
     the identity and the credentials the write needs, so a configured event name
     can be checked against a real app and a write can be authorized.
     """
-    return publisher.register_app(
-        payload, actor=actor, source=f"POST {router.prefix}/apps"
-    )
+    return publisher.register_app(payload, actor=actor, source=f"POST {router.prefix}/apps")
 
 
 @router.get("/apps/{app_id}")
@@ -312,7 +308,10 @@ def update_event_type(
     a property of the event, and a separate flag could drift out of step with it.
     """
     return publisher.update_event_type(
-        event_type_id, payload, actor=actor, source=f"PATCH {router.prefix}/event-types/{event_type_id}"
+        event_type_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/event-types/{event_type_id}",
     )
 
 
@@ -543,7 +542,9 @@ async def receive_outreach_webhook(
 @router.get("/signals")
 def list_signals(
     room_id: str | None = Query(default=None),
-    type: str | None = Query(default=None, description="opened | replied | bounced | delivered | …"),
+    type: str | None = Query(
+        default=None, description="opened | replied | bounced | delivered | …"
+    ),
     status: str | None = Query(default=None, description="recorded | ignored | duplicate"),
     limit: int = Query(default=100, ge=1, le=1000),
     publisher: FeedPublisher = PublisherDep,
@@ -671,7 +672,9 @@ DEMO_SIGNALS: tuple[Mapping[str, Any], ...] = (
             "data": {
                 "id": "mail_4f21",
                 "type": "mailing",
-                "relationships": {"prospect": {"data": {"type": "prospect", "id": "pros_northwind_ok"}}},
+                "relationships": {
+                    "prospect": {"data": {"type": "prospect", "id": "pros_northwind_ok"}}
+                },
                 "beforeUpdate": {"status": "delivered", "deliveredAt": "2026-09-24T08:02:11.000Z"},
                 "attributes": {"subject": "Northwind pricing, as discussed"},
             },
@@ -830,7 +833,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     source = "seed"
     actor = "dana"
 
-    apps = {spec["app_identifier"]: publisher.register_app(spec, actor=actor, source=source) for spec in DEMO_APPS}
+    apps = {
+        spec["app_identifier"]: publisher.register_app(spec, actor=actor, source=source)
+        for spec in DEMO_APPS
+    }
 
     for spec in DEMO_EVENT_TYPES:
         payload = {key: value for key, value in spec.items() if key != "app_identifier"}
@@ -853,7 +859,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         if index >= len(rooms):
             continue
         publisher.link_prospect(
-            rooms[index][0], {"prospect_id": prospect_id, "label": label, **extra}, actor=actor, source=source
+            rooms[index][0],
+            {"prospect_id": prospect_id, "label": label, **extra},
+            actor=actor,
+            source=source,
         )
 
     # The event stream the demo publishes from. The core dataset already holds
@@ -889,7 +898,11 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         stream.append(
             (
                 rooms[2][0],
-                {"person": "ops@fabrikam.example", "action": "downloaded", "target": "Pricing One-Pager"},
+                {
+                    "person": "ops@fabrikam.example",
+                    "action": "downloaded",
+                    "target": "Pricing One-Pager",
+                },
             )
         )
     if len(rooms) > 3:
@@ -900,7 +913,11 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         stream.append(
             (
                 rooms[3][0],
-                {"person": "lead@adventure.example", "action": "viewed", "target": "Enterprise Overview Deck"},
+                {
+                    "person": "lead@adventure.example",
+                    "action": "viewed",
+                    "target": "Enterprise Overview Deck",
+                },
             )
         )
     for room_id, payload in stream:

@@ -111,9 +111,7 @@ def _keystream(key: bytes, nonce: bytes, length: int) -> bytes:
     produced = 0
     counter = 0
     while produced < length:
-        block = hmac.new(
-            key, nonce + counter.to_bytes(4, "big"), hashlib.sha256
-        ).digest()
+        block = hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest()
         blocks.append(block)
         produced += len(block)
         counter += 1
@@ -133,7 +131,9 @@ def seal(payload: Mapping[str, Any], key: bytes) -> str:
     """
     plaintext = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     nonce = secrets.token_bytes(12)
-    ciphertext = bytes(a ^ b for a, b in zip(plaintext, _keystream(key, nonce, len(plaintext)), strict=True))
+    ciphertext = bytes(
+        a ^ b for a, b in zip(plaintext, _keystream(key, nonce, len(plaintext)), strict=True)
+    )
     tag = _mac(key, nonce, ciphertext)
     return ".".join(
         [
@@ -302,7 +302,11 @@ class CredentialVault:
         """Every sealed row for a connection, as summaries. Never unsealed."""
         rows = self.store.find("crm_credential", {"connection_id": connection_id}, limit=100)
         return sorted(
-            (self.summarise(row) for row in rows if row["data"].get("connection_id") == connection_id),
+            (
+                self.summarise(row)
+                for row in rows
+                if row["data"].get("connection_id") == connection_id
+            ),
             key=lambda entry: entry["org_key"],
         )
 

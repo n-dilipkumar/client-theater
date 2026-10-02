@@ -27,17 +27,14 @@ import ast
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pytest
-
 # Importing the app is what runs ``load_features``. The mounting assertions below
 # are about the host's discovery, so the host has to have run; relying on some
 # other test file to have imported this module first would make them pass or fail
 # depending on the order pytest collected in, which is how a green suite hides a
 # broken mount.
 import dsr.api  # noqa: F401
+import pytest
 from dsr.db.audited import AuditedDatabase
-from dsr.features import REGISTRY, load_feature
-from dsr.features.wf008_external_sync import seed as feature_seed
 from dsr.external_library.errors import ExternalSyncError
 from dsr.external_library.ratelimit import RateLimiter
 from dsr.external_library.sources import (
@@ -52,6 +49,8 @@ from dsr.external_library.sources import (
     unregister_source,
 )
 from dsr.external_library.sync import IN_SYNC, LINKED, ORPHANED, ROOT, SNAPSHOT, ExternalLibrarySync
+from dsr.features import REGISTRY, load_feature
+from dsr.features.wf008_external_sync import seed as feature_seed
 from dsr.store import RecordStore
 
 SOURCE = GOOGLE_DRIVE
@@ -114,7 +113,9 @@ def clock():
 
 @pytest.fixture()
 def library(store, drive, clock):
-    return ExternalLibrarySync(store, adapters={GOOGLE_DRIVE: drive}, limiter=RateLimiter(clock=clock))
+    return ExternalLibrarySync(
+        store, adapters={GOOGLE_DRIVE: drive}, limiter=RateLimiter(clock=clock)
+    )
 
 
 @pytest.fixture()
@@ -218,7 +219,9 @@ def test_auto_sync_defaults_to_false_when_omitted(library, room, connection):
 
 def test_explicit_false_and_omitted_agree(library, room, connection):
     explicit = add(library, room, auto_sync=False)["item"]["data"]["source"]
-    omitted = add(library, room, external_content_id=STALE_FILE_ID, auto_sync=None)["item"]["data"]["source"]
+    omitted = add(library, room, external_content_id=STALE_FILE_ID, auto_sync=None)["item"]["data"][
+        "source"
+    ]
 
     assert explicit["linkage"] == omitted["linkage"] == SNAPSHOT
 
@@ -238,7 +241,9 @@ def test_provider_fields_are_stored_not_dropped(library, room, connection):
 
 
 def test_arbitrary_metadata_is_stored_and_indexed(library, room, connection, store):
-    result = add(library, room, metadata={"review_owner": "sam", "campaign": {"tier": "enterprise"}})
+    result = add(
+        library, room, metadata={"review_owner": "sam", "campaign": {"tier": "enterprise"}}
+    )
 
     assert result["item"]["data"]["campaign"] == {"tier": "enterprise"}
     found = store.find("document", {"campaign.tier": "enterprise"})
@@ -259,7 +264,9 @@ def test_no_connection_is_a_not_found_with_a_remedy(library, room):
     assert error.correlation_id.startswith("corr_")
 
 
-def test_a_disconnected_connection_does_not_satisfy_the_prerequisite(library, store, room, connection):
+def test_a_disconnected_connection_does_not_satisfy_the_prerequisite(
+    library, store, room, connection
+):
     store.update(connection["id"], {"status": "disconnected"})
 
     with pytest.raises(ExternalSyncError) as caught:
@@ -445,7 +452,9 @@ def test_a_relink_does_not_spend_the_allowance(library, room, connection):
 # -- idempotence ------------------------------------------------------------ #
 
 
-def test_relinking_the_same_file_into_the_same_folder_changes_nothing(library, room, connection, db):
+def test_relinking_the_same_file_into_the_same_folder_changes_nothing(
+    library, room, connection, db
+):
     first = add(library, room, external_content_id=SAMPLE_FILE_ID)
     second = add(library, room, external_content_id=SAMPLE_FILE_ID)
 
@@ -577,7 +586,9 @@ def test_sources_reports_registration_and_connection_state(library, store):
         }
     ]
 
-    store.create("external_connection", {"source": GOOGLE_DRIVE, "name": "Dana", "status": "connected"})
+    store.create(
+        "external_connection", {"source": GOOGLE_DRIVE, "name": "Dana", "status": "connected"}
+    )
 
     after = library.sources()
     assert after[0]["connected"] is True
@@ -618,7 +629,9 @@ def test_resync_writes_nothing_when_the_source_has_not_moved(library, room, conn
     report = library.resync(source=RESYNC_SOURCE)
 
     assert report["updated"] == []
-    assert report["in_sync"] == [{"content_id": report["in_sync"][0]["content_id"], "version": "rev-7"}]
+    assert report["in_sync"] == [
+        {"content_id": report["in_sync"][0]["content_id"], "version": "rev-7"}
+    ]
     # A pass that discovers nothing must not manufacture audit rows.
     assert len(db.audit(collection="document")) == before
 
@@ -636,7 +649,9 @@ def test_resync_never_follows_a_snapshot(library, room, connection, drive, db):
     assert db.require(content_id)["data"]["source"]["source_version"] == "rev-7"
 
 
-def test_resync_marks_an_item_orphaned_when_its_source_is_gone(library, room, connection, drive, db):
+def test_resync_marks_an_item_orphaned_when_its_source_is_gone(
+    library, room, connection, drive, db
+):
     content_id = add(library, room, auto_sync=True)["content_id"]
     drive.remove(SAMPLE_FILE_ID)
 
@@ -661,7 +676,9 @@ def test_resync_leaves_an_already_orphaned_item_alone(library, room, connection,
     assert len(db.audit(collection="document")) == audit_after_first
 
 
-def test_resync_recovers_an_orphaned_item_when_the_source_returns(library, room, connection, drive, db):
+def test_resync_recovers_an_orphaned_item_when_the_source_returns(
+    library, room, connection, drive, db
+):
     content_id = add(library, room, auto_sync=True)["content_id"]
     drive.remove(SAMPLE_FILE_ID)
     library.resync(source=RESYNC_SOURCE)
@@ -691,7 +708,9 @@ def test_resync_recovers_an_orphaned_item_when_the_source_returns(library, room,
     assert recovered["orphaned_reason"] is None
 
 
-def test_resync_keeps_the_item_in_its_folder_and_its_title(library, store, room, connection, drive, db):
+def test_resync_keeps_the_item_in_its_folder_and_its_title(
+    library, store, room, connection, drive, db
+):
     folder = store.create("library_folder", {"name": "Q2 Decks"}, room_id=room["id"])
     content_id = add(
         library, room, parent_folder_id=folder["id"], title="Board-approved deck", auto_sync=True
@@ -714,7 +733,9 @@ def test_resync_keeps_the_item_in_its_folder_and_its_title(library, store, room,
     assert item["size_bytes"] == 18_432_000
 
 
-def test_resync_fails_an_item_whose_connection_went_away(library, store, room, connection, drive, db):
+def test_resync_fails_an_item_whose_connection_went_away(
+    library, store, room, connection, drive, db
+):
     content_id = add(library, room, auto_sync=True)["content_id"]
     store.update(connection["id"], {"status": "disconnected"})
 
@@ -750,7 +771,9 @@ def test_a_moved_source_reads_in_sync_until_a_pass_runs(library, room, connectio
     assert "rev-7" in before["reason"]
 
     report = library.resync(source=RESYNC_SOURCE)
-    assert report["updated"] == [{"content_id": content_id, "from_version": "rev-7", "to_version": "rev-8"}]
+    assert report["updated"] == [
+        {"content_id": content_id, "from_version": "rev-7", "to_version": "rev-8"}
+    ]
     assert "rev-8" in library.status_of(library.store.get(content_id))["reason"]
 
 
@@ -771,7 +794,9 @@ def test_every_write_reaches_the_audit_log(library, room, connection, drive, db)
     assert entries[1]["source"] == ADD_SOURCE
 
 
-def test_the_orphan_marker_is_audited_under_the_pass_that_found_it(library, room, connection, drive, db):
+def test_the_orphan_marker_is_audited_under_the_pass_that_found_it(
+    library, room, connection, drive, db
+):
     content_id = add(library, room, auto_sync=True)["content_id"]
     drive.remove(SAMPLE_FILE_ID)
 
@@ -829,8 +854,12 @@ def box_registered():
     unregister_source("Box")
 
 
-def test_a_new_source_can_be_registered_without_touching_the_workflow(store, room, clock, box_registered):
-    library = ExternalLibrarySync(store, adapters=source_registry(), limiter=RateLimiter(clock=clock))
+def test_a_new_source_can_be_registered_without_touching_the_workflow(
+    store, room, clock, box_registered
+):
+    library = ExternalLibrarySync(
+        store, adapters=source_registry(), limiter=RateLimiter(clock=clock)
+    )
     store.create("external_connection", {"source": "Box", "name": "Board", "status": "connected"})
 
     result = library.add(
@@ -1009,7 +1038,9 @@ def test_the_domain_module_hard_codes_no_route():
 
     for module_path in modules:
         offenders = [
-            text for text in _code_strings(module_path.read_text(encoding="utf-8")) if "/api/" in text
+            text
+            for text in _code_strings(module_path.read_text(encoding="utf-8"))
+            if "/api/" in text
         ]
         assert not offenders, f"{module_path.name} hard-codes a route: {offenders}"
 
@@ -1037,7 +1068,10 @@ def test_neither_the_feature_nor_its_domain_opens_the_database(store):
     """The audit row is written in the same transaction as the change, so a
     feature that reached past the store would break the product's one promise."""
     package = Path(load_feature("wf008_external_sync").__file__).parent
-    files = [package / "wf008_external_sync.py", *sorted((package.parent / "external_library").glob("*.py"))]
+    files = [
+        package / "wf008_external_sync.py",
+        *sorted((package.parent / "external_library").glob("*.py")),
+    ]
     for path in files:
         text = path.read_text(encoding="utf-8")
         assert "import sqlite3" not in text, f"{path.name} imports sqlite3 directly"
@@ -1057,8 +1091,8 @@ def test_the_domain_package_does_not_shadow_wf007s_library_module():
     This test is the reason the rename cannot be undone by a later rename: it
     asserts both halves, not just this one.
     """
-    import dsr.library
     import dsr.external_library
+    import dsr.library
 
     assert hasattr(dsr.library, "ContentLibrary"), "WF-007's dsr/library.py is shadowed"
     assert Path(dsr.library.__file__).suffix == ".py", "dsr.library resolved to a package"

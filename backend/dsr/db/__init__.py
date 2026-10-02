@@ -4,10 +4,10 @@
 """
 
 from dsr.db.audited import (
+    SCHEMA_VERSION,
     AuditedDatabase,
     AuditError,
     RecordNotFound,
-    SCHEMA_VERSION,
     new_id,
     utcnow,
 )

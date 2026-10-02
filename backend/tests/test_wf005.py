@@ -13,9 +13,6 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-from starlette.testclient import TestClient as _TC  # noqa: F401  (dsr.api re-exports)
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.permissions import (
@@ -26,14 +23,13 @@ from dsr.permissions import (
 )
 from dsr.room_lifecycle import (
     ACTIVE,
-    ARCHIVED,
     ARCHIVE_CONFIRMATION,
     ARCHIVE_NOTICE,
-    RoomBadRequest,
+    ARCHIVED,
+    ROLE_CAPABILITIES,
     RoomConflict,
     RoomForbidden,
     RoomNotFound,
-    ROLE_CAPABILITIES,
     available_actions,
     capabilities_for,
     room_state,
@@ -41,6 +37,8 @@ from dsr.room_lifecycle import (
 )
 from dsr.room_lifecycle.engine import RoomLifecycle
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
+from starlette.testclient import TestClient as _TC  # noqa: F401  (dsr.api re-exports)
 
 MODULE = "dsr.features.wf005_archive_and_restore_a_room"
 PREFIX = "/api/wf-005"
@@ -329,9 +327,7 @@ def test_the_state_route_offers_only_actions_the_write_would_allow(http):
     ).json()
     assert owner["available_actions"] == ["archive"]
 
-    viewer = http.get(
-        f"{PREFIX}/rooms/{room['room_id']}/state", headers={"X-Role": VIEWER}
-    ).json()
+    viewer = http.get(f"{PREFIX}/rooms/{room['room_id']}/state", headers={"X-Role": VIEWER}).json()
     assert viewer["available_actions"] == []
 
 

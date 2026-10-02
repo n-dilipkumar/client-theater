@@ -198,7 +198,9 @@ def normalise_activity(
     if not isinstance(payload, Mapping):
         raise MalformedActivity("an activity event must be a JSON object")
 
-    data: Mapping[str, Any] = payload.get("data") if isinstance(payload.get("data"), Mapping) else payload
+    data: Mapping[str, Any] = (
+        payload.get("data") if isinstance(payload.get("data"), Mapping) else payload
+    )
     contact = pick(data, "contact")
     if not isinstance(contact, str) or not contact.strip():
         raise MalformedActivity(

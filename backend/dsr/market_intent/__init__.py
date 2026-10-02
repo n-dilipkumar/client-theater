@@ -32,6 +32,7 @@ time from the observation stream rather than stamping it at run time.
 
 from __future__ import annotations
 
+from dsr.market_intent.credits import charge, period_for, summarise
 from dsr.market_intent.criteria import (
     PATH_OPERATOR_LABELS,
     PATH_OPERATORS,
@@ -41,7 +42,6 @@ from dsr.market_intent.criteria import (
     parse_page_filters,
     qualify_view,
 )
-from dsr.market_intent.credits import charge, period_for, summarise
 from dsr.market_intent.domains import (
     DomainInfo,
     display_name,

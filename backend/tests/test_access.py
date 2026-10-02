@@ -8,7 +8,6 @@ break silently, so they are pinned without the HTTP surface in the way.
 from __future__ import annotations
 
 import pytest
-
 from dsr.access import (
     MODE_IDENTIFY,
     MODE_OPEN,
@@ -161,8 +160,12 @@ def test_validate_policy_rejects_domain_security_without_email_verification():
     selected", so Domain Security on its own is a misconfiguration."""
     with pytest.raises(PolicyError) as excinfo:
         validate_policy(
-            {"mode": MODE_IDENTIFY, "collect_email": True, "domain_security": True,
-             "allowed_domains": "northwind.example"}
+            {
+                "mode": MODE_IDENTIFY,
+                "collect_email": True,
+                "domain_security": True,
+                "allowed_domains": "northwind.example",
+            }
         )
     assert "domain_security" in excinfo.value.errors
 
@@ -172,8 +175,12 @@ def test_validate_policy_rejects_an_empty_allowlist():
     checkbox means."""
     with pytest.raises(PolicyError) as excinfo:
         validate_policy(
-            {"mode": MODE_VERIFY_EMAIL, "collect_email": True, "domain_security": True,
-             "allowed_domains": []}
+            {
+                "mode": MODE_VERIFY_EMAIL,
+                "collect_email": True,
+                "domain_security": True,
+                "allowed_domains": [],
+            }
         )
     assert "allowed_domains" in excinfo.value.errors
 
@@ -200,8 +207,12 @@ def test_validate_policy_collects_several_errors_at_once():
 
 def test_validate_policy_normalises_the_allowlist():
     policy = validate_policy(
-        {"mode": MODE_VERIFY_EMAIL, "collect_email": True, "domain_security": True,
-         "allowed_domains": "Northwind.example, @contoso.example"}
+        {
+            "mode": MODE_VERIFY_EMAIL,
+            "collect_email": True,
+            "domain_security": True,
+            "allowed_domains": "Northwind.example, @contoso.example",
+        }
     )
     assert policy["allowed_domains"] == ["northwind.example", "contoso.example"]
 
@@ -223,11 +234,9 @@ def test_validate_policy_defaults_inherit_to_false():
 
 def test_required_fields_follows_the_collect_flags():
     assert required_fields(validate_policy({"mode": MODE_OPEN})) == []
+    assert required_fields(validate_policy({"mode": MODE_IDENTIFY, "collect_name": True})) == [
+        "name"
+    ]
     assert required_fields(
-        validate_policy({"mode": MODE_IDENTIFY, "collect_name": True})
-    ) == ["name"]
-    assert required_fields(
-        validate_policy(
-            {"mode": MODE_VERIFY_EMAIL, "collect_email": True, "collect_name": True}
-        )
+        validate_policy({"mode": MODE_VERIFY_EMAIL, "collect_email": True, "collect_name": True})
     ) == ["name", "email"]

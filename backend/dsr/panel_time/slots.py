@@ -56,6 +56,7 @@ from dsr.panel_time.vocabulary import (
     WORK_WEEKDAYS,
 )
 
+
 #: The researched aggregate: round half away from zero to a whole percentage, so
 #: the confidence badge is an integer a person can be shown. [inferred] The
 #: research says "averaged confidence score" and never says whether it is an
@@ -99,7 +100,9 @@ class Evaluation:
             return 0
         return round_percentage(len(self.free) * 100 / self.invited)
 
-    def describe(self, *, return_suggestion_reasons: bool = True, reason: str | None = None) -> dict[str, Any]:
+    def describe(
+        self, *, return_suggestion_reasons: bool = True, reason: str | None = None
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             **self.candidate.describe(),
             "confidence": self.confidence,
@@ -149,7 +152,9 @@ def normalise_time_constraint(raw: Mapping[str, Any] | None) -> dict[str, Any]:
     slots: list[dict[str, Any]] = []
     for index, entry in enumerate(slots_raw):
         if not isinstance(entry, Mapping):
-            raise ConstraintError(f"timeSlots[{index}] must be an object; got {type(entry).__name__}")
+            raise ConstraintError(
+                f"timeSlots[{index}] must be an object; got {type(entry).__name__}"
+            )
         begin = _instant_of(entry.get("start"), f"timeSlots[{index}].start")
         finish = _instant_of(entry.get("end"), f"timeSlots[{index}].end")
         if finish <= begin:
@@ -349,7 +354,9 @@ def normalise_house_rules(raw: Mapping[str, Any] | None) -> dict[str, Any]:
         if not isinstance(days, (list, tuple)) or not all(
             isinstance(day, int) and 0 <= day <= 6 for day in days
         ):
-            raise ConstraintError("house_rules.weekdays must be a list of weekday numbers, 0=Monday")
+            raise ConstraintError(
+                "house_rules.weekdays must be a list of weekday numbers, 0=Monday"
+            )
         rules["weekdays"] = [int(day) for day in days]
     blackouts = raw.get("blackouts")
     if blackouts is not None:
@@ -391,9 +398,21 @@ def apply_house_rules(
     allowed: list[Candidate] = []
     refused: list[dict[str, Any]] = []
 
-    earliest = parse_clock_time(rules["earliest_start"], field="house_rules.earliest_start") if rules.get("earliest_start") else None
-    latest = parse_clock_time(rules["latest_end"], field="house_rules.latest_end") if rules.get("latest_end") else None
-    friday_after = parse_clock_time(rules["no_friday_after"], field="house_rules.no_friday_after") if rules.get("no_friday_after") else None
+    earliest = (
+        parse_clock_time(rules["earliest_start"], field="house_rules.earliest_start")
+        if rules.get("earliest_start")
+        else None
+    )
+    latest = (
+        parse_clock_time(rules["latest_end"], field="house_rules.latest_end")
+        if rules.get("latest_end")
+        else None
+    )
+    friday_after = (
+        parse_clock_time(rules["no_friday_after"], field="house_rules.no_friday_after")
+        if rules.get("no_friday_after")
+        else None
+    )
     weekdays = set(rules.get("weekdays") or ())
     blackouts = [
         (parse_instant(entry["from"]), parse_instant(entry["to"]))
@@ -409,10 +428,17 @@ def apply_house_rules(
         if weekdays and local_start.weekday() not in weekdays:
             rule, detail = "weekdays", f"{local_start:%A} is not one of the allowed weekdays"
         elif earliest and (local_start.hour, local_start.minute) < earliest:
-            rule, detail = "earliest_start", f"starts at {local_start:%H:%M}, before {rules['earliest_start']}"
+            rule, detail = (
+                "earliest_start",
+                f"starts at {local_start:%H:%M}, before {rules['earliest_start']}",
+            )
         elif latest and (local_end.hour, local_end.minute) > latest:
             rule, detail = "latest_end", f"ends at {local_end:%H:%M}, after {rules['latest_end']}"
-        elif friday_after and local_start.weekday() == 4 and (local_start.hour, local_start.minute) >= friday_after:
+        elif (
+            friday_after
+            and local_start.weekday() == 4
+            and (local_start.hour, local_start.minute) >= friday_after
+        ):
             rule, detail = "no_friday_after", f"a Friday starting at {local_start:%H:%M}"
         elif any(
             overlaps(candidate.start, candidate.end, black_start, black_end)
@@ -477,7 +503,9 @@ def rank(
     if not isinstance(unknown_penalty, int) or isinstance(unknown_penalty, bool):
         raise ConstraintError("unknown_penalty must be an integer")
     if unknown_penalty < 0:
-        raise ConstraintError("unknown_penalty must not be negative; it is subtracted from confidence")
+        raise ConstraintError(
+            "unknown_penalty must not be negative; it is subtracted from confidence"
+        )
 
     scored: list[tuple[int, datetime, Evaluation]] = []
     for evaluation in evaluations:
@@ -515,7 +543,10 @@ def window(time_constraint: Mapping[str, Any]) -> tuple[datetime, datetime]:
 
 
 def pad_window(
-    time_constraint: Mapping[str, Any], *, before: timedelta = timedelta(0), after: timedelta = timedelta(0)
+    time_constraint: Mapping[str, Any],
+    *,
+    before: timedelta = timedelta(0),
+    after: timedelta = timedelta(0),
 ) -> dict[str, Any]:
     """The same window, pushed outwards. The one adjustment that always helps.
 

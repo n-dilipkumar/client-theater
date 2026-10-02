@@ -16,8 +16,6 @@ the suite can never write into the database a person is working in.
 
 from __future__ import annotations
 
-import pytest
-
 from dsr.db.audited import AuditedDatabase
 from dsr.room_templates import create_room
 from dsr.store import RecordStore
@@ -132,9 +130,7 @@ def test_a_room_survives_a_reopen_with_an_arbitrary_payload_field(tmp_path):
         stored = second.get(room_id)
         assert stored["data"]["procurement_contact"] == "dana@northwind.example"
         assert stored["data"]["renewal_notice_days"] == 45
-        found = second.find(
-            "room", {"procurement_contact": "dana@northwind.example"}
-        )
+        found = second.find("room", {"procurement_contact": "dana@northwind.example"})
         assert [r["id"] for r in found] == [room_id]
     finally:
         second.db.close()

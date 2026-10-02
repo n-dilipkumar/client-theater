@@ -79,7 +79,9 @@ def _contact_value(contact: Any) -> str:
     return found.strip() if isinstance(found, str) else ""
 
 
-def _resolve_value(spec: Any, *, room: Mapping[str, Any] | None, contact: Mapping[str, Any] | None) -> Any:
+def _resolve_value(
+    spec: Any, *, room: Mapping[str, Any] | None, contact: Mapping[str, Any] | None
+) -> Any:
     """Resolve an action's value, which may be a literal or a path out of the room.
 
     A literal is used as-is. A ``{"from": "dotted.path"}`` object is read out of the
@@ -245,9 +247,7 @@ def resolve_actions(
 ) -> list[dict[str, Any]]:
     """Every action of a workflow, resolved, in the order the workflow lists them."""
     return [
-        resolve_action(
-            action, contact=contact, room=room, lifecycle_stage=lifecycle_stage
-        )
+        resolve_action(action, contact=contact, room=room, lifecycle_stage=lifecycle_stage)
         for action in actions
     ]
 

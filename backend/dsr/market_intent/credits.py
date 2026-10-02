@@ -88,9 +88,7 @@ def charge(
     # One row per company per period, found through the dynamic index on two
     # indexed scalars - so the structural guarantee below needs no uniqueness
     # constraint of its own, and there is no migration to add one.
-    existing = store.find(
-        CREDITS, {"company_key": company_key, "period": billing_period}, limit=10
-    )
+    existing = store.find(CREDITS, {"company_key": company_key, "period": billing_period}, limit=10)
 
     if not existing:
         created = store.create(
@@ -137,7 +135,8 @@ def charge(
             # one period repeats the track action, and a rule that charged a
             # saving on every repeat would report credits saved that were never
             # owed.
-            "waived": int(data.get("waived") or 0) + (cost_of(action) if already and new_action else 0),
+            "waived": int(data.get("waived") or 0)
+            + (cost_of(action) if already and new_action else 0),
         },
         actor=actor,
         source=source,
@@ -172,7 +171,9 @@ def summarise(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
         waived = int(data.get("waived") or 0)
         total_charged += amount
         total_waived += waived
-        bucket = by_period.setdefault(period, {"period": period, "charged": 0, "waived": 0, "companies": 0})
+        bucket = by_period.setdefault(
+            period, {"period": period, "charged": 0, "waived": 0, "companies": 0}
+        )
         bucket["charged"] += amount
         bucket["waived"] += waived
         bucket["companies"] += 1

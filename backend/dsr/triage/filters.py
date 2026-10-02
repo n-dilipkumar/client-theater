@@ -267,9 +267,7 @@ def _compile_condition(
                 "index": index,
                 "field": field,
                 "op": op,
-                "detail": (
-                    f"{op!r} does not apply to {field}, which is a {known['type']} field"
-                ),
+                "detail": (f"{op!r} does not apply to {field}, which is a {known['type']} field"),
             }
         )
         return None
@@ -325,7 +323,11 @@ def _compile_condition(
             )
             return None
 
-    return {"field": field, "op": op, "value": list(value) if isinstance(value, (tuple, set)) else value}
+    return {
+        "field": field,
+        "op": op,
+        "value": list(value) if isinstance(value, (tuple, set)) else value,
+    }
 
 
 def compile_filters(
@@ -461,13 +463,21 @@ def evaluate(condition: Mapping[str, Any], row: Mapping[str, Any], context: Filt
         # Requires a value on both sides. "Stage is not Closed Lost" must not
         # sweep in every workspace that has no CRM stage at all, which is what a
         # plain negation would do.
-        return not _is_absent(actual) and not _is_absent(expected) and not _equal(actual, expected, kind)
+        return (
+            not _is_absent(actual)
+            and not _is_absent(expected)
+            and not _equal(actual, expected, kind)
+        )
     if op == "contains":
         return as_text(expected).casefold() in as_text(actual).casefold()
     if op == "in":
-        return not _is_absent(actual) and any(_equal(actual, candidate, kind) for candidate in expected)
+        return not _is_absent(actual) and any(
+            _equal(actual, candidate, kind) for candidate in expected
+        )
     if op == "not_in":
-        return not _is_absent(actual) and not any(_equal(actual, candidate, kind) for candidate in expected)
+        return not _is_absent(actual) and not any(
+            _equal(actual, candidate, kind) for candidate in expected
+        )
     if op in ("gt", "gte", "lt", "lte"):
         if _is_absent(actual):
             return False

@@ -41,12 +41,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr import crm_upsert as cu
-from dsr.crm_upsert import capabilities as cap
-from dsr.crm_upsert import payloads as pay
-from dsr.crm_upsert import runs as run_mod
+from dsr.crm_upsert import capabilities as cap, payloads as pay, runs as run_mod
 from dsr.crm_upsert.errors import (
     BatchTooLarge,
     MixedObjectTypes,
@@ -59,6 +55,7 @@ from dsr.crm_upsert.errors import (
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-038"
 MODULE = "wf038_batch_upsert_engagement_rows_keyed_on_"
@@ -125,18 +122,14 @@ def make_connection(
     **extra,
 ) -> dict:
     body = {"vendor": vendor, "object": object_name, "key_field": key_field, **extra}
-    response = client.post(
-        f"{PREFIX}/connections", json=body, params={"room_id": room_id}
-    )
+    response = client.post(f"{PREFIX}/connections", json=body, params={"room_id": room_id})
     assert response.status_code == 201, response.text
     return response.json()["connection"]
 
 
 def make_engagement(client, room_id: str, key: str, **extra) -> dict:
     payload = {"engagement_id": key, "event_type": "viewed", "account": "Northwind", **extra}
-    return client.post(
-        f"{PREFIX}/rooms/{room_id}/engagement", json=payload
-    ).json()["record"]
+    return client.post(f"{PREFIX}/rooms/{room_id}/engagement", json=payload).json()["record"]
 
 
 # -- domain helpers ---------------------------------------------------------- #
@@ -324,12 +317,17 @@ def test_hubspot_is_capped_at_the_researched_100():
 
 
 def test_salesforce_carries_both_researched_endpoints():
-    assert cap.SALESFORCE.bulk_path == "/services/data/vXX.X/composite/sobjects/{object}/{key_field}"
-    assert cap.SALESFORCE.single_path == "/services/data/vXX.X/sobjects/{object}/{key_field}/{key_value}"
+    assert (
+        cap.SALESFORCE.bulk_path == "/services/data/vXX.X/composite/sobjects/{object}/{key_field}"
+    )
+    assert (
+        cap.SALESFORCE.single_path
+        == "/services/data/vXX.X/sobjects/{object}/{key_field}/{key_value}"
+    )
 
 
 def test_salesforce_supports_all_or_none_and_update_only():
-    """"You can choose whether to roll back the entire request" and
+    """ "You can choose whether to roll back the entire request" and
     "use the `updateOnly` parameter" are both researched switches."""
     assert cap.SALESFORCE.supports_all_or_none is True
     assert cap.SALESFORCE.supports_update_only is True
@@ -352,7 +350,7 @@ def test_dataverse_uses_the_documented_upsertmultiple_action():
 
 
 def test_dataverse_returns_no_per_item_results():
-    """"The `UpsertMultiple` action returns `204 NoContent`", so the capability
+    """ "The `UpsertMultiple` action returns `204 NoContent`", so the capability
     must say the connector can never confirm a row it sent."""
     assert cap.DATAVERSE.returns_per_item_results is False
 
@@ -399,20 +397,25 @@ def test_a_zero_batch_size_is_refused():
 
 
 def test_a_record_id_key_type_is_refused():
-    """"Only external ids are supported. Don't use record ids." """
+    """ "Only external ids are supported. Don't use record ids." """
     with pytest.raises(UnsupportedKey) as caught:
         cap.resolve_key_type(cap.SALESFORCE, "record_id", "Something__c")
     assert "Only external ids are supported" in str(caught.value)
 
 
-@pytest.mark.parametrize("field_name", ["Id", "id", "RecordId", "record_id", "crm_record_id", "CRMRecordId"])
+@pytest.mark.parametrize(
+    "field_name", ["Id", "id", "RecordId", "record_id", "crm_record_id", "CRMRecordId"]
+)
 def test_a_record_id_field_name_is_refused(field_name):
     with pytest.raises(UnsupportedKey):
         cap.resolve_key_type(cap.SALESFORCE, "external_id", field_name)
 
 
 def test_an_external_id_field_name_is_accepted():
-    assert cap.resolve_key_type(cap.SALESFORCE, "external_id", "External_Engagement_Id__c") == "external_id"
+    assert (
+        cap.resolve_key_type(cap.SALESFORCE, "external_id", "External_Engagement_Id__c")
+        == "external_id"
+    )
 
 
 def test_an_unknown_key_type_is_refused():
@@ -431,7 +434,9 @@ def test_a_key_type_is_inferred_when_a_vendor_allows_exactly_one():
     """Restating the only key type a vendor has would be friction, not safety."""
     assert cap.resolve_connection_key_type(cap.SALESFORCE, "", "Ext__c") == "external_id"
     assert cap.resolve_connection_key_type(cap.HUBSPOT, "", "email") == "unique_property"
-    assert cap.resolve_connection_key_type(cap.DATAVERSE, "", "sample_keyattribute") == "alternate_key"
+    assert (
+        cap.resolve_connection_key_type(cap.DATAVERSE, "", "sample_keyattribute") == "alternate_key"
+    )
 
 
 def test_an_explicit_key_type_beats_the_inferred_one():
@@ -620,7 +625,9 @@ def test_record_id_field_detection(name, expected):
 
 
 def test_a_salesforce_item_carries_an_attributes_type():
-    item = pay.salesforce_item({"A__c": 1}, object_name="Engagement__c", key_field="Ext__c", key_value_="k1")
+    item = pay.salesforce_item(
+        {"A__c": 1}, object_name="Engagement__c", key_field="Ext__c", key_value_="k1"
+    )
     assert item["attributes"] == {"type": "Engagement__c"}
     assert item["Ext__c"] == "k1"
 
@@ -637,7 +644,7 @@ def test_a_salesforce_payload_puts_records_under_records():
 
 
 def test_a_salesforce_payload_carries_no_id_field():
-    """"**no `id` field**, external-ID field only" """
+    """ "**no `id` field**, external-ID field only" """
     body = pay.build_payload(
         cap.SALESFORCE,
         object_name="Engagement__c",
@@ -651,7 +658,7 @@ def test_a_salesforce_payload_carries_no_id_field():
 
 
 def test_a_salesforce_item_keeps_the_request_order():
-    """"Objects are created or updated in the order they're listed in the request
+    """ "Objects are created or updated in the order they're listed in the request
     body", so the builder must not sort or group."""
     body = pay.build_payload(
         cap.SALESFORCE,
@@ -781,7 +788,7 @@ def test_no_built_in_capability_template_leaves_a_placeholder_in_a_path():
 
 
 def test_a_hubspot_item_names_its_id_property():
-    """"include the `idProperty` parameter to identify the unique identifier
+    """ "include the `idProperty` parameter to identify the unique identifier
     property you're using" """
     item = pay.hubspot_item({"lastname": "B"}, key_field="email", key_value_="a@b.example")
     assert item["idProperty"] == "email"
@@ -793,7 +800,10 @@ def test_the_hubspot_envelope_id_is_the_id_property_value_not_a_record_id():
     """The generated ``id`` is the researched idProperty's value. Guarding the
     whole envelope for record ids would refuse every HubSpot request."""
     body = pay.build_payload(
-        cap.HUBSPOT, object_name="contacts", key_field="email", entries=[("a@b.example", {"lastname": "B"})]
+        cap.HUBSPOT,
+        object_name="contacts",
+        key_field="email",
+        entries=[("a@b.example", {"lastname": "B"})],
     )
     assert body["inputs"][0]["id"] == "a@b.example"
 
@@ -811,7 +821,7 @@ def test_a_dataverse_item_carries_odata_type_and_id():
 
 
 def test_every_dataverse_item_carries_its_own_odata_type():
-    """"You must specify the `@odata.type` annotation with every item in the
+    """ "You must specify the `@odata.type` annotation with every item in the
     `Targets` parameter" - so it is per item, not once for the collection."""
     body = pay.build_payload(
         cap.DATAVERSE,
@@ -857,10 +867,9 @@ def test_a_dataverse_logical_name_is_singular_and_the_id_stays_plural():
 
 
 def test_two_object_types_in_one_request_are_refused():
-    """"The list can contain objects only of the type indicated in the request
+    """ "The list can contain objects only of the type indicated in the request
     URI" """
     with pytest.raises(MixedObjectTypes) as caught:
-        pay.salesforce_item  # keep the reference explicit for the reader
         pay._assert_single_type(
             [
                 {"attributes": {"type": "A__c"}},
@@ -912,7 +921,7 @@ def test_a_single_row_request_puts_the_key_in_the_path_not_the_body():
 
 
 def test_update_only_is_sent_when_the_vendor_supports_it():
-    """"To prevent a new record from being created, use the `updateOnly`
+    """ "To prevent a new record from being created, use the `updateOnly`
     parameter" """
     request = pay.build_single_request(
         cap.SALESFORCE,
@@ -1049,7 +1058,7 @@ def test_a_record_id_key_field_is_refused_by_preflight():
 
 
 def test_a_hubspot_email_row_missing_a_required_property_is_refused():
-    """"Partial upserts are not supported when using `email` as the `idProperty`
+    """ "Partial upserts are not supported when using `email` as the `idProperty`
     for contacts" """
     with pytest.raises(pay.RowRejected) as caught:
         pay.preflight_row(
@@ -1103,7 +1112,9 @@ def test_an_unknown_rejection_reason_cannot_be_constructed():
 
 
 def test_mapped_fields_carry_only_fields_the_room_holds():
-    fields = pay.mapped_fields({"event_type": "viewed", "other": 1}, {"event_type": "E__c", "missing": "M__c"})
+    fields = pay.mapped_fields(
+        {"event_type": "viewed", "other": 1}, {"event_type": "E__c", "missing": "M__c"}
+    )
     assert fields == {"E__c": "viewed"}
 
 
@@ -1242,7 +1253,7 @@ def test_too_many_results_also_fails_the_chunk(store):
 
 
 def test_a_duplicate_external_id_is_an_error_not_a_second_write(store):
-    """"If the external ID matches multiple existing records, then a 300 error is
+    """ "If the external ID matches multiple existing records, then a 300 error is
     returned, and no records are created or updated." """
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
@@ -1300,7 +1311,12 @@ def test_the_error_text_is_the_crm_s_own_words(store):
                     {
                         "id": None,
                         "success": False,
-                        "errors": [{"statusCode": "REQUIRED_FIELD_MISSING", "message": "Required fields are missing: [Name]"}],
+                        "errors": [
+                            {
+                                "statusCode": "REQUIRED_FIELD_MISSING",
+                                "message": "Required fields are missing: [Name]",
+                            }
+                        ],
                     }
                 ]
             )
@@ -1331,7 +1347,7 @@ def test_a_result_carrying_only_a_status_code_still_produces_text(store):
 
 
 def test_all_or_none_rolls_the_whole_chunk_back(store):
-    """"You can choose whether to roll back the entire request when an error
+    """ "You can choose whether to roll back the entire request when an error
     occurs" - so the rows that "succeeded" were not written either."""
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
@@ -1348,7 +1364,11 @@ def test_all_or_none_rolls_the_whole_chunk_back(store):
             cu.salesforce_upsert_results(
                 [
                     {"id": "a01", "success": True, "created": True},
-                    {"id": None, "success": False, "errors": [{"statusCode": "300", "message": "dup"}]},
+                    {
+                        "id": None,
+                        "success": False,
+                        "errors": [{"statusCode": "300", "message": "dup"}],
+                    },
                 ]
             )
         ),
@@ -1425,7 +1445,9 @@ def test_a_confirmed_row_records_synced_at_and_the_record_id(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     data = store.get(queued["id"])["data"]
     assert data["sync_status"] == "synced"
@@ -1446,7 +1468,9 @@ def test_a_failed_row_stays_pending_and_records_why(store):
         config,
         room["id"],
         cu.ScriptedTransport(
-            cu.salesforce_upsert_results([{"id": None, "success": False, "errors": [{"message": "nope"}]}])
+            cu.salesforce_upsert_results(
+                [{"id": None, "success": False, "errors": [{"message": "nope"}]}]
+            )
         ),
     )
     data = store.get(queued["id"])["data"]
@@ -1472,11 +1496,15 @@ def test_a_row_the_crm_refused_is_queued_again(store):
         config,
         room["id"],
         cu.ScriptedTransport(
-            cu.salesforce_upsert_results([{"id": None, "success": False, "errors": [{"message": "nope"}]}])
+            cu.salesforce_upsert_results(
+                [{"id": None, "success": False, "errors": [{"message": "nope"}]}]
+            )
         ),
     )
     assert cu.row_status(store.get(queued["id"]), connection.id) == "failed"
-    assert [r["id"] for r in cu.pending_rows(store, connection, config, room_id=room["id"])] == [queued["id"]]
+    assert [r["id"] for r in cu.pending_rows(store, connection, config, room_id=room["id"])] == [
+        queued["id"]
+    ]
 
 
 def test_a_failed_row_leaves_the_queue_once_it_lands(store):
@@ -1491,7 +1519,9 @@ def test_a_failed_row_leaves_the_queue_once_it_lands(store):
         config,
         room["id"],
         cu.ScriptedTransport(
-            cu.salesforce_upsert_results([{"id": None, "success": False, "errors": [{"message": "nope"}]}])
+            cu.salesforce_upsert_results(
+                [{"id": None, "success": False, "errors": [{"message": "nope"}]}]
+            )
         ),
     )
     run_over(
@@ -1499,7 +1529,9 @@ def test_a_failed_row_leaves_the_queue_once_it_lands(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     assert cu.pending_rows(store, connection, config, room_id=room["id"]) == []
 
@@ -1537,9 +1569,17 @@ def test_a_refused_row_is_queued_again_as_pending(store):
     connection = conn(store, config, room["id"])
     queued = row(store, room["id"], "")
 
-    run_over(store, connection, config, room["id"], cu.ScriptedTransport(cu.salesforce_upsert_results([])))
+    run_over(
+        store,
+        connection,
+        config,
+        room["id"],
+        cu.ScriptedTransport(cu.salesforce_upsert_results([])),
+    )
     assert cu.row_status(store.get(queued["id"]), connection.id) == "pending"
-    assert [r["id"] for r in cu.pending_rows(store, connection, config, room_id=room["id"])] == [queued["id"]]
+    assert [r["id"] for r in cu.pending_rows(store, connection, config, room_id=room["id"])] == [
+        queued["id"]
+    ]
 
 
 def test_a_row_that_once_synced_has_synced_at_cleared_when_it_fails(store):
@@ -1555,7 +1595,9 @@ def test_a_row_that_once_synced_has_synced_at_cleared_when_it_fails(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     assert store.get(queued["id"])["data"]["synced_at"]
 
@@ -1570,7 +1612,9 @@ def test_a_row_that_once_synced_has_synced_at_cleared_when_it_fails(store):
         config,
         room["id"],
         cu.ScriptedTransport(
-            cu.salesforce_upsert_results([{"id": None, "success": False, "errors": [{"message": "nope"}]}])
+            cu.salesforce_upsert_results(
+                [{"id": None, "success": False, "errors": [{"message": "nope"}]}]
+            )
         ),
     )
     data = store.get(queued["id"])["data"]
@@ -1612,7 +1656,7 @@ def test_one_bad_row_does_not_stop_the_others(store):
 
 
 def test_dataverse_rows_are_submitted_not_synced(store):
-    """"The `UpsertMultiple` action returns `204 NoContent`", so there is no
+    """ "The `UpsertMultiple` action returns `204 NoContent`", so there is no
     per-item success flag to read."""
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
@@ -1655,7 +1699,9 @@ def test_a_submitted_row_leaves_the_queue(store):
     )
     row(store, room["id"], "k1")
 
-    run_over(store, connection, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple()))
+    run_over(
+        store, connection, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple())
+    )
     assert cu.pending_rows(store, connection, config, room_id=room["id"]) == []
 
 
@@ -1672,7 +1718,9 @@ def test_unconfirmed_is_counted_apart_from_synced(store):
         fields={"event_type": "eventtype"},
     )
     row(store, room["id"], "k1")
-    run_over(store, connection, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple()))
+    run_over(
+        store, connection, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple())
+    )
 
     view = cu.queue_view(store, connection, config, room_id=room["id"])
     assert view["counts"]["unconfirmed"] == 1
@@ -1686,7 +1734,7 @@ def test_unconfirmed_is_counted_apart_from_synced(store):
 
 
 def test_a_table_with_no_bulk_upsert_sends_one_request_per_row(store):
-    """"it auto-falls back from `UpsertMultiple` to per-row `PATCH` for tables
+    """ "it auto-falls back from `UpsertMultiple` to per-row `PATCH` for tables
     that don't support bulk upsert" """
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
@@ -1730,7 +1778,7 @@ def test_the_fallback_puts_the_key_in_the_path(store):
 
 
 def test_a_single_row_201_created_and_204_updated(store):
-    """"``201`` - 'Created' success code, for POST requests and some PATCH
+    """ "``201`` - 'Created' success code, for POST requests and some PATCH
     requests" versus "``204`` - 'No Content' success code"."""
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
@@ -1788,7 +1836,9 @@ def test_a_queue_is_chunked_at_the_connections_batch_size(store):
     for index in range(5):
         row(store, room["id"], f"k{index}")
 
-    transport = cu.ScriptedTransport(lambda request: cu.salesforce_upsert_results(ok_results(len(request.body["records"]))))
+    transport = cu.ScriptedTransport(
+        lambda request: cu.salesforce_upsert_results(ok_results(len(request.body["records"])))
+    )
     result = run_over(store, connection, config, room["id"], transport)
 
     assert transport.count == 3
@@ -1818,7 +1868,9 @@ def test_two_connections_keep_two_independent_queues(store):
         salesforce,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     assert cu.pending_rows(store, salesforce, config, room_id=room["id"]) == []
     assert len(cu.pending_rows(store, dataverse, config, room_id=room["id"])) == 1
@@ -1830,8 +1882,15 @@ def test_a_write_back_keeps_a_sibling_connections_state(store):
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
     first = conn(store, config, room["id"], batch_size=50)
-    second = conn(store, config, room["id"], vendor="dataverse", object_name="engagements",
-                  key_field="sample_keyattribute", fields={"event_type": "eventtype"})
+    second = conn(
+        store,
+        config,
+        room["id"],
+        vendor="dataverse",
+        object_name="engagements",
+        key_field="sample_keyattribute",
+        fields={"event_type": "eventtype"},
+    )
     queued = row(store, room["id"], "k1")
 
     run_over(
@@ -1839,9 +1898,13 @@ def test_a_write_back_keeps_a_sibling_connections_state(store):
         first,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
-    run_over(store, second, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple()))
+    run_over(
+        store, second, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple())
+    )
 
     sync = store.get(queued["id"])["data"]["sync"]
     assert sync[first.id]["status"] == "synced"
@@ -1868,7 +1931,9 @@ def test_an_unknown_driver_is_refused(store):
     room = store.create("room", {"name": "R"}, source="test")
     connection = conn(store, config, room["id"])
     with pytest.raises(UpsertError) as caught:
-        run_over(store, connection, config, room["id"], cu.ScriptedTransport(), driver="crm_side_trigger")
+        run_over(
+            store, connection, config, room["id"], cu.ScriptedTransport(), driver="crm_side_trigger"
+        )
     assert "driver must be one of" in str(caught.value)
 
 
@@ -1882,7 +1947,7 @@ def test_a_run_records_its_transport_so_a_simulation_is_visible(store):
 
 
 def test_a_run_writes_only_the_two_collections_the_research_names(store):
-    """"Nothing runs inside the CRM in this workflow" - a run writes the room's
+    """ "Nothing runs inside the CRM in this workflow" - a run writes the room's
     rows and its own log, and registers nothing on the CRM side."""
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
@@ -1895,7 +1960,9 @@ def test_a_run_writes_only_the_two_collections_the_research_names(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     after = {entry["collection"] for entry in store.collections()}
     assert after - before <= set(run_mod.WRITTEN_COLLECTIONS)
@@ -1987,7 +2054,9 @@ def test_a_response_with_no_per_item_detail_fails_the_chunk(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.OutboundResponse(status=400, body=[{"errorCode": "INVALID", "message": "bad batch"}])),
+        cu.ScriptedTransport(
+            cu.OutboundResponse(status=400, body=[{"errorCode": "INVALID", "message": "bad batch"}])
+        ),
     )
     assert result.outcomes[0].outcome == "failed"
     assert "bad batch" in result.outcomes[0].errors[0]
@@ -2023,7 +2092,9 @@ def test_config_saving_requires_a_source(store):
 def test_a_connection_is_validated_on_save(store):
     config = cu.load_config(store)
     with pytest.raises(UnsupportedKey):
-        cu.validate_connection(store, {"vendor": "salesforce", "object": "E", "key_field": "Id"}, config=config)
+        cu.validate_connection(
+            store, {"vendor": "salesforce", "object": "E", "key_field": "Id"}, config=config
+        )
 
 
 def test_a_connection_must_name_a_vendor(store):
@@ -2067,7 +2138,9 @@ def test_a_connection_cannot_ask_for_an_over_cap_batch(store):
     config = cu.load_config(store)
     with pytest.raises(BatchTooLarge):
         cu.validate_connection(
-            store, {"vendor": "hubspot", "object": "contacts", "key_field": "email", "batch_size": 250}, config=config
+            store,
+            {"vendor": "hubspot", "object": "contacts", "key_field": "email", "batch_size": 250},
+            config=config,
         )
 
 
@@ -2149,9 +2222,7 @@ def test_the_queue_target_is_published_and_never_truncates_a_run(store):
 
 def test_the_queue_counts_at_target_when_full(store):
     config = cu.load_config(store)
-    store.create(
-        "crm_upsert_config", {"key": "settings", "queue": {"target": 2}}, source="test"
-    )
+    store.create("crm_upsert_config", {"key": "settings", "queue": {"target": 2}}, source="test")
     config = cu.load_config(store)
     room = store.create("room", {"name": "R"}, source="test")
     connection = conn(store, config, room["id"])
@@ -2229,7 +2300,9 @@ def test_a_queue_under_the_threshold_is_not_opportunistically_due(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     row(store, room["id"], "k2")
     state = cu.backlog(store, connection, config, room_id=room["id"], now=NOW)
@@ -2247,12 +2320,21 @@ def test_the_nightly_interval_is_reported_and_honoured(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     room_id = room["id"]
-    store.create("engagement", {"engagement_id": "k2", "event_type": "viewed"}, room_id=room_id, source="test")
+    store.create(
+        "engagement",
+        {"engagement_id": "k2", "event_type": "viewed"},
+        room_id=room_id,
+        source="test",
+    )
 
-    just_after = cu.backlog(store, connection, config, room_id=room_id, now=NOW + timedelta(minutes=5))
+    just_after = cu.backlog(
+        store, connection, config, room_id=room_id, now=NOW + timedelta(minutes=5)
+    )
     assert just_after["due"] is False
 
     a_later = cu.backlog(store, connection, config, room_id=room_id, now=NOW + timedelta(hours=25))
@@ -2270,7 +2352,9 @@ def test_the_backlog_reports_its_next_due_time(store):
         connection,
         config,
         room["id"],
-        cu.ScriptedTransport(cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])),
+        cu.ScriptedTransport(
+            cu.salesforce_upsert_results([{"id": "a01", "success": True, "created": True}])
+        ),
     )
     state = cu.backlog(store, connection, config, room_id=room["id"], now=NOW + timedelta(hours=1))
     assert state["next_due_at"]
@@ -2290,7 +2374,9 @@ def test_the_backlog_counts_unconfirmed_rows(store):
         fields={"event_type": "eventtype"},
     )
     row(store, room["id"], "k1")
-    run_over(store, connection, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple()))
+    run_over(
+        store, connection, config, room["id"], cu.ScriptedTransport(cu.dataverse_upsert_multiple())
+    )
     state = cu.backlog(store, connection, config, room_id=room["id"], now=NOW)
     assert state["unconfirmed"] == 1
     assert state["pending"] == 0
@@ -2328,14 +2414,21 @@ def test_an_external_id_field_raises_no_email_gap(store):
     connection = cu.validate_connection(
         store, {"vendor": "salesforce", "object": "E", "key_field": "Ext__c"}, config=config
     )
-    assert "salesforce-email-external-id" not in {entry["id"] for entry in cu.lint(connection, config, store)}
+    assert "salesforce-email-external-id" not in {
+        entry["id"] for entry in cu.lint(connection, config, store)
+    }
 
 
 def test_the_lint_reports_the_hubspot_partial_upsert_rule(store):
     config = cu.load_config(store)
     connection = cu.validate_connection(
         store,
-        {"vendor": "hubspot", "object": "contacts", "key_field": "email", "required_properties": ["lastname"]},
+        {
+            "vendor": "hubspot",
+            "object": "contacts",
+            "key_field": "email",
+            "required_properties": ["lastname"],
+        },
         config=config,
     )
     advisories = {entry["id"]: entry for entry in cu.lint(connection, config, store)}
@@ -2358,7 +2451,9 @@ def test_the_lint_reports_a_vendor_that_cannot_confirm_a_row(store):
 def test_the_lint_marks_a_local_capability_as_an_inference(store):
     config = cu.load_config(store)
     connection = cu.validate_connection(
-        store, {"vendor": "legacy_table", "object": "engagements", "key_field": "eng_key"}, config=config
+        store,
+        {"vendor": "legacy_table", "object": "engagements", "key_field": "eng_key"},
+        config=config,
     )
     advisories = {entry["id"]: entry for entry in cu.lint(connection, config, store)}
     assert advisories["local-capability"]["kind"] == "inference"

@@ -49,9 +49,15 @@ def _unknown_room(exc: analytics.UnknownRoom) -> HTTPException:
 
 @router.get("/overview")
 def analytics_overview(
-    room_id: str | None = Query(default=None, description="Scope to one deal; omitted means All Rooms"),
-    grain: Literal["day", "week"] = Query(default="day", description="Chart grain for visit frequency"),
-    as_of: str | None = Query(default=None, description="ISO timestamp to evaluate recency against"),
+    room_id: str | None = Query(
+        default=None, description="Scope to one deal; omitted means All Rooms"
+    ),
+    grain: Literal["day", "week"] = Query(
+        default="day", description="Chart grain for visit frequency"
+    ),
+    as_of: str | None = Query(
+        default=None, description="ISO timestamp to evaluate recency against"
+    ),
     store: RecordStore = StoreDep,
 ) -> dict[str, Any]:
     """The aggregate Analytics view: active deals, engagement, and alerts.
@@ -173,7 +179,10 @@ def analytics_config(store: RecordStore = StoreDep) -> dict[str, Any]:
     config = analytics.load_config(store)
     connection = dict(config.get("connection") or {})
     connection["token"] = "set" if connection.get("token") else ""
-    return {"connected": analytics.is_connected(config), "config": {**config, "connection": connection}}
+    return {
+        "connected": analytics.is_connected(config),
+        "config": {**config, "connection": connection},
+    }
 
 
 @router.patch("/config")
@@ -187,7 +196,9 @@ def analytics_update_config(
     Everything here is a record, not a column: thresholds, the action taxonomy,
     and the field-name synonyms are all overridable without a migration.
     """
-    record = analytics.save_config(store, payload, actor=actor, source=f"PATCH {router.prefix}/config")
+    record = analytics.save_config(
+        store, payload, actor=actor, source=f"PATCH {router.prefix}/config"
+    )
     return {"updated": True, "record": record}
 
 
@@ -238,7 +249,10 @@ def seed(db, context: dict[str, Any]) -> str:
     rng = context["rng"]
 
     config = dict(ANALYTICS_CONFIG)
-    config["connection"] = {**config["connection"], "connected_at": now.isoformat(timespec="seconds")}
+    config["connection"] = {
+        **config["connection"],
+        "connected_at": now.isoformat(timespec="seconds"),
+    }
     db.create(
         "analytics_config",
         config,
@@ -256,7 +270,9 @@ def seed(db, context: dict[str, Any]) -> str:
                     "summary": note,
                     "actor": rng.choice(["dana", "sam"]),
                     "kind": "note",
-                    "at": (now - timedelta(days=offset + 1, hours=index)).isoformat(timespec="seconds"),
+                    "at": (now - timedelta(days=offset + 1, hours=index)).isoformat(
+                        timespec="seconds"
+                    ),
                 },
                 room_id=room_id,
                 actor="dana",

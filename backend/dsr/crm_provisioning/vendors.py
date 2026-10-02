@@ -124,7 +124,9 @@ class VendorAdapter:
             "No researched provisioning behaviour for this vendor is recorded in "
             "docs/research/digital-sales-room-workflows/wf/WF-036.md.",
         )
-        raise UnsupportedVendor(f"{self.vendor!r} is not a vendor this workflow can provision: {gap}")
+        raise UnsupportedVendor(
+            f"{self.vendor!r} is not a vendor this workflow can provision: {gap}"
+        )
 
 
 #: HubSpot. The property-create path and the five required body fields are

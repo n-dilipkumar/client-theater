@@ -146,9 +146,7 @@ def normalise(payload: Mapping[str, Any] | Sequence[Any] | None) -> list[dict[st
     return [normalise_entry(entry) for entry in entries]
 
 
-def judge(
-    statuses: Sequence[Mapping[str, Any]], *, attempts_made: int = 0
-) -> dict[str, Any]:
+def judge(statuses: Sequence[Mapping[str, Any]], *, attempts_made: int = 0) -> dict[str, Any]:
     """What this report means for a retry decision.
 
     Returns the state the provision should be in, which app (or apps) are
@@ -161,7 +159,9 @@ def judge(
     failed = [entry for entry in entries if entry.get("success") is not True]
     succeeded = [entry for entry in entries if entry.get("success") is True]
 
-    used = max(int(attempts_made or 0), max((int(e.get("failures") or 0) for e in failed), default=0))
+    used = max(
+        int(attempts_made or 0), max((int(e.get("failures") or 0) for e in failed), default=0)
+    )
     remaining = max(RETRY_ATTEMPTS - used, 0)
 
     if not entries:

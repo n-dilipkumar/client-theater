@@ -217,7 +217,7 @@ CHILIPIPER_WEBHOOKS: tuple[dict[str, Any], ...] = (
         "carries": ["type"],
         "type_value": "Deleted",
         "sourced_from": (
-            "Meeting Update + type: \"Deleted\"; For Canceled Meeting ... triggers when a user "
+            'Meeting Update + type: "Deleted"; For Canceled Meeting ... triggers when a user '
             "or prospect cancels the meeting from any via source"
         ),
         "source": "chilipiper_webhooks",
@@ -525,9 +525,7 @@ NOTIFICATION_TEMPLATES: tuple[dict[str, Any], ...] = (
     {
         "template": TEMPLATE_RESCHEDULE_REQUESTED,
         "trigger": "request-reschedule",
-        "sourced_from": (
-            "the attendee will receive an email with a link to reschedule"
-        ),
+        "sourced_from": ("the attendee will receive an email with a link to reschedule"),
         "source": "cal_api_reference",
     },
     {

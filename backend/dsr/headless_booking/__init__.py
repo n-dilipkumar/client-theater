@@ -58,7 +58,11 @@ Module map, in dependency order:
 
 from __future__ import annotations
 
-from dsr.headless_booking.assets import host_calendar_key, meeting_link, normalise as normalise_asset
+from dsr.headless_booking.assets import (
+    host_calendar_key,
+    meeting_link,
+    normalise as normalise_asset,
+)
 from dsr.headless_booking.availability import (
     DEFAULT_MAX_SLOTS,
     DEFAULT_MEETING_MINUTES,

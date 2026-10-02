@@ -85,11 +85,15 @@ PagesDep = Depends(get_pages)
 
 
 def _actor() -> Any:
-    return Query(default=None, description="Who is acting; checked against the room's collaborators")
+    return Query(
+        default=None, description="Who is acting; checked against the room's collaborators"
+    )
 
 
 def _expected_revision() -> Any:
-    return Query(default=None, description="The page revision the caller last read; a mismatch is a 409")
+    return Query(
+        default=None, description="The page revision the caller last read; a mismatch is a 409"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -438,7 +442,9 @@ def published_page(room_id: str, slug: str, pages: PageService = PagesDep) -> di
     try:
         return pages.published_page(room_id, slug)
     except RecordNotFound as exc:
-        raise HTTPException(status_code=404, detail=f"no published page at {slug!r} in this room") from exc
+        raise HTTPException(
+            status_code=404, detail=f"no published page at {slug!r} in this room"
+        ) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -491,7 +497,10 @@ PAGE_SEEDS = [
                     "body": "Everything your team needs to evaluate us, in one place.",
                 },
             },
-            {"fragment": "text", "config": {"body": "Reply to your account manager with any questions."}},
+            {
+                "fragment": "text",
+                "config": {"body": "Reply to your account manager with any questions."},
+            },
             # The Document Gallery Block, on the page buyers actually read, so
             # the published view exercises the room's documents.
             {"fragment": "document-gallery", "config": {}},
@@ -524,7 +533,11 @@ PAGE_SEEDS = [
             {"fragment": "pdf-preview", "config": {}},
             {
                 "fragment": "video",
-                "config": {"url": "https://example.com/walkthrough.mp4", "width": 640, "height": 360},
+                "config": {
+                    "url": "https://example.com/walkthrough.mp4",
+                    "width": 640,
+                    "height": 360,
+                },
             },
             {"fragment": "question-and-answer", "config": {}},
         ],
@@ -605,7 +618,9 @@ def seed(db, context: dict[str, Any]) -> str:
             source="seed",
         )
 
-        document_ids = [record["id"] for record in store.list("document", room_id=room_id, limit=50)]
+        document_ids = [
+            record["id"] for record in store.list("document", room_id=room_id, limit=50)
+        ]
 
         for spec in PAGE_SEEDS:
             blocks = _with_documents(spec["blocks"], document_ids)
@@ -628,12 +643,7 @@ def seed(db, context: dict[str, Any]) -> str:
             )
             pages += 1
             if spec["publish"]:
-                service.publish(
-                    room_id, page["id"], actor="dana", note="seeded", source="seed"
-                )
+                service.publish(room_id, page["id"], actor="dana", note="seeded", source="seed")
                 revisions += 1
 
-    return (
-        f"1 fragment set, 1 fragment, {pages} pages, {revisions} published revisions"
-    )
-
+    return f"1 fragment set, 1 fragment, {pages} pages, {revisions} published revisions"

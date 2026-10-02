@@ -153,9 +153,7 @@ def require_surface(value: Any, *, field: str = "surface") -> str:
         return DEFAULT_SURFACE
     text = str(value).strip().lower().replace("-", "_").replace(" ", "_")
     if text not in SURFACES:
-        raise ReassignError(
-            f"unknown {field} {value!r}; it must be one of {', '.join(SURFACES)}"
-        )
+        raise ReassignError(f"unknown {field} {value!r}; it must be one of {', '.join(SURFACES)}")
     return text
 
 
@@ -193,8 +191,7 @@ def require_assignment_kind(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_")
     if text not in ASSIGNMENT_KINDS:
         raise ReassignError(
-            f"unknown assign_to kind {value!r}; the scheduler offers "
-            f"{', '.join(ASSIGNMENT_KINDS)}"
+            f"unknown assign_to kind {value!r}; the scheduler offers {', '.join(ASSIGNMENT_KINDS)}"
         )
     return text
 
@@ -288,7 +285,9 @@ def require_locked(value: Any, *, field: str) -> str:
     """A Meeting Type or Workspace name. Required, because a lock has to match."""
     text = normalise_key(value)
     if not text:
-        raise ReassignError(f"{field} is required; it cannot be changed but it is what the lock is checked against")
+        raise ReassignError(
+            f"{field} is required; it cannot be changed but it is what the lock is checked against"
+        )
     return text
 
 

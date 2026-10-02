@@ -18,10 +18,127 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.16,<0.17"]
 
 [tool.setuptools.packages.find]
 include = ["dsr*"]
+
+# Ruff is the single Python lint and format tool: one dependency in place of
+# flake8 + black + isort. The toolchain was settled by a Jev decision
+# (audit jev-20261001T162201-8520-21672, confidence 0.95).
+#
+# `tools/` and `orchestration/` live outside this directory, so they are linted
+# and formatted by running ruff from the repo root with
+# `--config backend/pyproject.toml`:
+#
+#   ruff check .  --config backend/pyproject.toml
+#   ruff format . --config backend/pyproject.toml
+#
+# The `--config` flag is not optional and the failure it prevents is quiet.
+# A bare `ruff check .` from the repo root finds no config, falls back to ruff's
+# own defaults, and reports ~570 findings that are almost entirely inside the
+# vendored .agents/ and .claude/ skill directories this file excludes. Nothing
+# says "you forgot the flag" - it just looks like the repo is full of errors.
+# The pre-commit hooks pass the flag for exactly this reason.
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "data",
+    "node_modules",
+    ".ruff_cache",
+    # Vendored skill payloads, pinned by skills-lock.json and byte-identical to
+    # upstream. Reformatting them would make the lock unverifiable, and they are
+    # not this project's code to own.
+    ".agents/skills",
+    ".claude/skills",
+    # Markdown is documentation, not source. Left to the formatter, `ruff format`
+    # rewrites the Python inside fenced code blocks, which changes a document
+    # about the codebase without changing the codebase. AGENTS.md and
+    # docs/FEATURE-CONTRACT.md were both reformatted this way on the first pass.
+    "*.md",
+    "docs",
+    "design-system",
+    ".github",
+    # Agent A owns the contract tooling. Reformatting files another branch is
+    # rewriting at the same time turns a clean merge into a conflict, and a
+    # formatter conflict is never worth resolving by hand.
+    "tools/contract.py",
+    "tools/check_feature_diff.py",
+]
+
+[tool.ruff.lint]
+# E pycodestyle errors, F pyflakes, I isort, B bugbear.
+#
+# UP (pyupgrade) was dropped from the set the Jev decision named, on evidence
+# rather than preference. It rewrote `datetime.timezone.utc` to `datetime.UTC`,
+# which narrows the code below the declared `requires-python = ">=3.11"`, and it
+# moved `typing` names to `collections.abc`, which broke
+# test_wf024.py::test_the_domain_module_depends_on_nothing_but_the_store. That
+# test is an architectural guard, not a style assertion: it pins the exact
+# import surface of `dsr/client_engagement.py` so the domain module provably
+# depends on nothing but the store. UP bought a preference and cost a
+# constraint, so it is not enabled.
+select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint.pycodestyle]
+# The formatter wraps code to 100. It cannot wrap a string literal, a URL, a
+# SQL statement or a cited research quote, and this codebase carries a lot of
+# human-facing prose in error messages and provenance files. Binding E501 to
+# the same 100 therefore flags work the formatter has correctly decided it
+# cannot do, and the only way to clear those findings would be to split
+# sentences across lines by hand. The lint bound sits above the format bound so
+# E501 reports a line that is genuinely out of bounds rather than one the
+# formatter already declined to split. Measured: the longest unsplittable prose
+# line under backend/ is 145 chars, so 150 is the smallest bound that separates
+# "the formatter tried" from "a human wrote a sentence and stopped".
+max-line-length = 150
+
+[tool.ruff.lint.isort]
+# Keep `from x import a` and `from x import b as c` in one statement. Without
+# this, isort splits every aliased import into its own `from` line, so a single
+# logical import becomes three statements the reader has to reassemble.
+combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's own idiom puts calls in default arguments: `q: str = Query("x")`,
+# `db=Depends(get_db)`. B008 is a genuine footgun in a plain function and pure
+# noise in a route signature, so it is off for the package and on everywhere
+# else. Both spellings are listed because the pattern is resolved against the
+# path as invoked: `dsr/...` when run from backend/, `backend/dsr/...` from the
+# repo root.
+"dsr/**" = ["B008"]
+"**/dsr/**" = ["B008"]
+# Tests assert on long fixture strings and reproduce production payloads
+# verbatim. Wrapping them would hide what they are actually checking.
+"tests/**" = ["E501"]
+"**/tests/**" = ["E501"]
+# Research provenance files. Each entry is a sourced quote or a stated design
+# inference, and the value of the file is that the sentence reads as it was
+# written. Splitting a quote across lines would change what is being cited.
+# Every other rule still applies here, including F and B.
+"**/inferences.py" = ["E501"]
+"**/vocabulary.py" = ["E501"]
+"**/rules.py" = ["E501"]
+# Embedded browser payloads: JavaScript and CSS written as Python string
+# literals. The formatter cannot rewrap inside a string, and reindenting JS to
+# fit a Python column would obscure it.
+"tools/design_floor_browser.py" = ["E501"]
+"tools/verify_all_pages.py" = ["E501"]
+"tools/verify_all_routes.py" = ["E501"]
+"tools/verify_localhost.py" = ["E501"]
+# Prompt text addressed to a sub-agent, and the Jev gate's own question
+# vocabulary. Both are documents rather than code: their line breaks are part of
+# how they read.
+"tools/spawn_batch.py" = ["E501"]
+"tools/jev.py" = ["E501"]
+"orchestration/port_prompt.py" = ["E501"]
+"orchestration/make_port_briefs.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

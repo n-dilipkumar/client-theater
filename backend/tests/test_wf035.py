@@ -46,28 +46,24 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.fieldmap import (
     FieldMapping,
     InvalidMapping,
     InvalidSyncKey,
-    MappingNotValid,
     MetadataUnavailable,
     SyncKeyCapacity,
     UnknownConnection,
     UnknownMapping,
     UnsupportedSyncKeyRequest,
+    inferences as inference_module,
+    metadata as metadata_module,
     preview as preview_fn,
+    sync_key as sync_key_module,
+    validate as validate_module,
+    vocabulary as vocab,
 )
-from dsr.fieldmap import inferences as inference_module
-from dsr.fieldmap import metadata as metadata_module
-from dsr.fieldmap import sync_key as sync_key_module
-from dsr.fieldmap import validate as validate_module
-from dsr.fieldmap import vocabulary as vocab
-from dsr.fieldmap.metadata import Metadata, Option, Property, normalise
 from dsr.fieldmap.mappings import (
     CONNECTION_COLLECTION,
     MAPPING_COLLECTION,
@@ -78,6 +74,7 @@ from dsr.fieldmap.mappings import (
     metadata_view,
     row_view,
 )
+from dsr.fieldmap.metadata import Metadata, Option, Property, normalise
 from dsr.fieldmap.transforms import (
     BUILTINS,
     REGISTRY,
@@ -87,6 +84,7 @@ from dsr.fieldmap.transforms import (
     transform_key,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated rather than imported so renaming the route
 #: fails here instead of following silently - which is what a test is for.
@@ -191,9 +189,15 @@ def dataverse_metadata(*, keys=(), extra=()) -> Metadata:
     ]
     return normalise(
         "dataverse",
-        {"value": [{"SchemaName": "account", "Attributes": attributes, "Keys": [
-            {"KeyAttributes": list(key)} for key in keys
-        ]}]},
+        {
+            "value": [
+                {
+                    "SchemaName": "account",
+                    "Attributes": attributes,
+                    "Keys": [{"KeyAttributes": list(key)} for key in keys],
+                }
+            ]
+        },
         "account",
     )
 
@@ -218,7 +222,11 @@ def add_row(engine, connection_id, mapping_id, **payload):
 
 
 def add_properties(engine, connection_id, crm_object="contacts", metadata=None, **payload):
-    document = metadata.to_dict() if metadata is not None else {"results": [dict(r) for r in HUBSPOT_RESULTS]}
+    document = (
+        metadata.to_dict()
+        if metadata is not None
+        else {"results": [dict(r) for r in HUBSPOT_RESULTS]}
+    )
     # Round-trip through the vendor shape rather than the normalised one, so the
     # normaliser is exercised rather than bypassed.
     if metadata is not None and metadata.provider == "hubspot":
@@ -379,7 +387,7 @@ def test_enumeration_only_ever_pairs_with_a_selection_presentation():
 
 
 def test_each_vendor_ships_a_default_mapping():
-    """"A self-hosted room can ship a *default* mapping per vendor"."""
+    """ "A self-hosted room can ship a *default* mapping per vendor"."""
     for provider in ("hubspot", "dataverse", "salesforce"):
         assert vocab.default_mapping(provider), provider
         assert vocab.default_mapping_object(provider)
@@ -506,12 +514,17 @@ def test_datetime_utc_writes_a_z_suffix():
 
 
 def test_datetime_utc_reads_a_naive_input_as_utc_and_says_so():
-    assert REGISTRY.require("datetime.utc").fn("2026-03-01T09:00:00", {}, "out") == "2026-03-01T09:00:00Z"
+    assert (
+        REGISTRY.require("datetime.utc").fn("2026-03-01T09:00:00", {}, "out")
+        == "2026-03-01T09:00:00Z"
+    )
     assert "read as UTC" in REGISTRY.require("datetime.utc").description
 
 
 def test_datetime_utc_reads_a_date_as_midnight_utc():
-    assert REGISTRY.require("datetime.utc").fn(date(2026, 3, 1), {}, "out") == "2026-03-01T00:00:00Z"
+    assert (
+        REGISTRY.require("datetime.utc").fn(date(2026, 3, 1), {}, "out") == "2026-03-01T00:00:00Z"
+    )
 
 
 def test_datetime_utc_raises_on_a_value_it_cannot_read():
@@ -670,7 +683,9 @@ def test_an_unknown_field_type_is_accepted_rather_than_refused():
 
 def test_the_catalogue_reports_names_and_versions_for_a_client():
     described = REGISTRY.describe()
-    assert all({"name", "version", "key", "applies_to", "builtin"} <= set(item) for item in described)
+    assert all(
+        {"name", "version", "key", "applies_to", "builtin"} <= set(item) for item in described
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -769,7 +784,12 @@ def test_a_dataverse_read_accepts_a_csdl_shaped_payload():
 def test_a_dataverse_read_accepts_a_bare_list_of_rows():
     data = normalise(
         "dataverse",
-        [{"SchemaName": "account", "Attributes": [{"LogicalName": "x", "AttributeType": "String"}]}],
+        [
+            {
+                "SchemaName": "account",
+                "Attributes": [{"LogicalName": "x", "AttributeType": "String"}],
+            }
+        ],
         "account",
     )
     assert data.property("x") is not None
@@ -926,7 +946,9 @@ def test_a_non_list_option_payload_yields_no_options():
 
 
 def test_a_property_built_by_hand_can_carry_options_directly():
-    prop = Property(name="x", label="X", value_type="PicklistAttributeMetadata", options=(Option("0", "No"),))
+    prop = Property(
+        name="x", label="X", value_type="PicklistAttributeMetadata", options=(Option("0", "No"),)
+    )
     assert prop.internal_values == ("0",)
     assert prop.is_enumeration is True
 
@@ -960,7 +982,9 @@ def test_an_unknown_property_carries_its_suggestions(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="email", target_property="dsr_row_od")
+    add_row(
+        engine, connection["id"], mapping["id"], source_field="email", target_property="dsr_row_od"
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     detail = report["rows"][0]["findings"][0]["detail"]
     assert "dsr_row_id" in detail["suggestions"]
@@ -971,7 +995,14 @@ def test_a_type_mismatch_is_the_second_researched_finding(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="seats", source_type="text", target_property="seats")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="seats",
+        source_type="text",
+        target_property="seats",
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert "type_mismatch" in flags_of(report, "seats")
 
@@ -980,7 +1011,14 @@ def test_a_type_mismatch_names_both_sides_and_which_field_was_read(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="seats", source_type="text", target_property="seats")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="seats",
+        source_type="text",
+        target_property="seats",
+    )
     detail = report_for(engine, connection["id"], mapping["id"])["rows"][0]["findings"][0]["detail"]
     assert detail["source_type"] == "text"
     assert detail["actual_type"] == "number"
@@ -992,7 +1030,14 @@ def test_a_matching_type_raises_no_finding(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="seats", source_type="number", target_property="seats")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="seats",
+        source_type="number",
+        target_property="seats",
+    )
     assert flags_of(report_for(engine, connection["id"], mapping["id"]), "seats") == []
 
 
@@ -1102,7 +1147,13 @@ def test_a_property_whose_fieldtype_disagrees_with_its_type_is_a_warning(engine)
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="renewal", target_property="renewal_date")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="renewal",
+        target_property="renewal_date",
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert flags_of(report, "renewal") == ["field_type_disagrees"]
 
@@ -1111,8 +1162,12 @@ def test_two_rows_on_one_property_report_the_claimant(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="account", target_property="email")
-    add_row(engine, connection["id"], mapping["id"], source_field="contact", target_property="email")
+    add_row(
+        engine, connection["id"], mapping["id"], source_field="account", target_property="email"
+    )
+    add_row(
+        engine, connection["id"], mapping["id"], source_field="contact", target_property="email"
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert flags_of(report, "account") == []
     assert flags_of(report, "contact") == ["duplicate_target"]
@@ -1123,7 +1178,14 @@ def test_a_row_naming_an_unregistered_transform_is_an_error(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email", transform="nope")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="a",
+        target_property="email",
+        transform="nope",
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert flags_of(report, "a") == ["transform_unavailable"]
 
@@ -1132,7 +1194,14 @@ def test_an_unregistered_transform_finding_lists_what_is_registered(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email", transform="nope")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="a",
+        target_property="email",
+        transform="nope",
+    )
     detail = report_for(engine, connection["id"], mapping["id"])["rows"][0]["findings"][0]["detail"]
     assert "picklist.map" in detail["registered"]
 
@@ -1150,7 +1219,9 @@ def test_a_transform_naming_the_wrong_field_type_is_a_warning_not_an_error(engin
         target_property="seats",
         transform="email.normalize",
     )
-    assert flags_of(report_for(engine, connection["id"], mapping["id"]), "a") == ["transform_mismatch"]
+    assert flags_of(report_for(engine, connection["id"], mapping["id"]), "a") == [
+        "transform_mismatch"
+    ]
 
 
 def test_a_pinned_transform_version_that_is_not_registered_is_an_error(engine):
@@ -1166,7 +1237,9 @@ def test_a_pinned_transform_version_that_is_not_registered_is_an_error(engine):
         transform="identity",
         transform_version=4,
     )
-    assert flags_of(report_for(engine, connection["id"], mapping["id"]), "a") == ["transform_unavailable"]
+    assert flags_of(report_for(engine, connection["id"], mapping["id"]), "a") == [
+        "transform_unavailable"
+    ]
 
 
 def test_a_clean_row_with_a_key_is_activatable(engine):
@@ -1174,7 +1247,9 @@ def test_a_clean_row_with_a_key_is_activatable(engine):
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
     add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
-    engine.pin_sync_key(connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE)
+    engine.pin_sync_key(
+        connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert report["counts"]["error"] == 0
     assert report["can_activate"] is True
@@ -1196,9 +1271,18 @@ def test_the_report_counts_every_severity(engine):
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
     add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
-    add_row(engine, connection["id"], mapping["id"], source_field="b", source_type="text", target_property="seats")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="b",
+        source_type="text",
+        target_property="seats",
+    )
     add_row(engine, connection["id"], mapping["id"], source_field="c")
-    engine.pin_sync_key(connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE)
+    engine.pin_sync_key(
+        connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert report["counts"]["ok"] == 1
     assert report["counts"]["error"] == 1
@@ -1240,9 +1324,30 @@ def test_the_report_counts_mappable_and_inbound_rows(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email", direction="out")
-    add_row(engine, connection["id"], mapping["id"], source_field="b", target_property="seats", direction="in")
-    add_row(engine, connection["id"], mapping["id"], source_field="c", target_property="dsr_row_id", direction="both")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="a",
+        target_property="email",
+        direction="out",
+    )
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="b",
+        target_property="seats",
+        direction="in",
+    )
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="c",
+        target_property="dsr_row_id",
+        direction="both",
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert report["mappable_rows"] == 2
     assert report["inbound_rows"] == 2
@@ -1279,7 +1384,9 @@ def test_a_stored_row_validates_as_the_row_it_is(engine):
             source_type=field_type,
             target_property=target,
         )
-    engine.pin_sync_key(connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE)
+    engine.pin_sync_key(
+        connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE
+    )
     report = report_for(engine, connection["id"], mapping["id"])
     assert [item["source_field"] for item in report["rows"]] == ["a", "b", "c"]
     assert report["can_activate"] is True
@@ -1287,7 +1394,11 @@ def test_a_stored_row_validates_as_the_row_it_is(engine):
 
 
 def test_a_flat_row_and_a_stored_record_validate_identically():
-    record = {"id": "r1", "collection": ROW_COLLECTION, "data": {"source_field": "a", "target_property": "email"}}
+    record = {
+        "id": "r1",
+        "collection": ROW_COLLECTION,
+        "data": {"source_field": "a", "target_property": "email"},
+    }
     flat = {"id": "r1", "source_field": "a", "target_property": "email"}
     data = hubspot_metadata()
     assert validate_module.validate_row(record, data) == validate_module.validate_row(flat, data)
@@ -1317,7 +1428,9 @@ def test_the_key_section_reports_an_already_keyed_column():
 
 
 def test_the_key_section_refuses_an_ineligible_dataverse_attribute():
-    section = validate_module.validate_sync_key({"properties": ["donotemail"]}, dataverse_metadata())
+    section = validate_module.validate_sync_key(
+        {"properties": ["donotemail"]}, dataverse_metadata()
+    )
     assert "sync_key_ineligible_type" in section["flags"]
 
 
@@ -1338,7 +1451,12 @@ def test_the_three_researched_flags_are_all_errors():
 
 def test_a_finding_carries_a_flag_a_severity_a_message_and_a_detail():
     item = validate_module.finding("unknown_property", "nope", detail={"a": 1})
-    assert item == {"flag": "unknown_property", "severity": "error", "message": "nope", "detail": {"a": 1}}
+    assert item == {
+        "flag": "unknown_property",
+        "severity": "error",
+        "message": "nope",
+        "detail": {"a": 1},
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -1401,7 +1519,9 @@ def test_a_key_fitting_into_the_last_slot_is_accepted_and_reports_no_room_left()
 
 
 def test_a_key_already_enforced_costs_no_slot():
-    pinned = sync_key_module.pin({"properties": ["dsr_row_id"]}, hubspot_metadata(keyed=True, unique=8))
+    pinned = sync_key_module.pin(
+        {"properties": ["dsr_row_id"]}, hubspot_metadata(keyed=True, unique=8)
+    )
     assert pinned["already_enforced"] == 1
     assert pinned["newly_enforced"] == 0
     assert pinned["usage"]["remaining"] == 1
@@ -1623,7 +1743,9 @@ def test_a_both_row_appears_once_in_each_direction(engine):
         direction="both",
         transform="email.normalize",
     )
-    result = engine.preview(connection_id, mapping_id, {"id": "r1", "buyer_email": "A@b.c", "email": "x@y.z"})
+    result = engine.preview(
+        connection_id, mapping_id, {"id": "r1", "buyer_email": "A@b.c", "email": "x@y.z"}
+    )
     assert result["out"]["email"] == "a@b.c"
     assert result["in"]["buyer_email"] == "x@y.z"
     assert len([item for item in result["trace"] if item["target_property"] == "email"]) == 2
@@ -1642,7 +1764,10 @@ def test_a_preview_honours_a_single_requested_direction(engine):
         transform="email.normalize",
     )
     result = engine.preview(
-        connection_id, mapping_id, {"id": "r1", "buyer_email": "a@b.c", "email": "x@y.z"}, directions=("out",)
+        connection_id,
+        mapping_id,
+        {"id": "r1", "buyer_email": "a@b.c", "email": "x@y.z"},
+        directions=("out",),
     )
     assert result["in"] == {}
     assert result["directions"] == ["out"]
@@ -1660,7 +1785,12 @@ def test_a_record_missing_a_mapped_field_is_skipped_not_refused(engine):
 def test_an_inbound_record_missing_the_property_is_skipped(engine):
     connection_id, mapping_id = preview_ready(engine)
     add_row(
-        engine, connection_id, mapping_id, source_field="buyer_email", target_property="email", direction="in"
+        engine,
+        connection_id,
+        mapping_id,
+        source_field="buyer_email",
+        target_property="email",
+        direction="in",
     )
     result = engine.preview(connection_id, mapping_id, {"id": "r1"})
     assert result["trace"][0]["reason"] == "target_property_absent"
@@ -1738,7 +1868,14 @@ def test_a_transform_that_cannot_read_a_value_fails_that_row_only(engine):
 
 def test_a_row_naming_an_unregistered_transform_is_reported_not_raised(engine):
     connection_id, mapping_id = preview_ready(engine)
-    add_row(engine, connection_id, mapping_id, source_field="a", target_property="email", transform="nope")
+    add_row(
+        engine,
+        connection_id,
+        mapping_id,
+        source_field="a",
+        target_property="email",
+        transform="nope",
+    )
     result = engine.preview(connection_id, mapping_id, {"id": "r1", "a": "x"})
     assert result["trace"][0]["reason"] == "transform_unavailable"
     assert result["writable"] is False
@@ -1827,9 +1964,9 @@ def test_a_connections_provider_cannot_be_changed(engine):
 
 def test_a_connection_can_be_renamed(engine):
     record = make_connection(engine)
-    assert engine.amend_connection(record["id"], {"name": "renamed"}, source=SOURCE)["connection"]["name"] == (
-        "renamed"
-    )
+    assert engine.amend_connection(record["id"], {"name": "renamed"}, source=SOURCE)["connection"][
+        "name"
+    ] == ("renamed")
 
 
 def test_a_connection_carries_arbitrary_extra_fields_without_a_migration(engine):
@@ -1848,7 +1985,9 @@ def test_a_mapping_cannot_be_moved_to_another_object(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     with pytest.raises(InvalidMapping, match="CRM object cannot be changed"):
-        engine.amend_mapping(connection["id"], mapping["id"], {"crm_object": "deals"}, source=SOURCE)
+        engine.amend_mapping(
+            connection["id"], mapping["id"], {"crm_object": "deals"}, source=SOURCE
+        )
 
 
 def test_a_mapping_state_cannot_be_patched(engine):
@@ -1863,7 +2002,9 @@ def test_a_mapping_cannot_be_moved_to_another_connection(engine):
     second = make_connection(engine, name="second")
     mapping = make_mapping(engine, first["id"])
     with pytest.raises(InvalidMapping, match="cannot be moved to another connection"):
-        engine.amend_mapping(first["id"], mapping["id"], {"connection_id": second["id"]}, source=SOURCE)
+        engine.amend_mapping(
+            first["id"], mapping["id"], {"connection_id": second["id"]}, source=SOURCE
+        )
 
 
 def test_a_mapping_under_the_wrong_connection_is_a_named_404(engine):
@@ -1919,7 +2060,10 @@ def test_a_row_transform_config_may_be_any_shape_the_transform_reads(engine):
         mapping["id"],
         source_field="a",
         transform="tenant.thing",
-        transform_config={"rules": [{"when": {"field": "x"}, "then": [1, 2]}], "tenant_specific": True},
+        transform_config={
+            "rules": [{"when": {"field": "x"}, "then": [1, 2]}],
+            "tenant_specific": True,
+        },
     )
     assert row["row"]["transform_config"]["tenant_specific"] is True
 
@@ -1927,8 +2071,12 @@ def test_a_row_transform_config_may_be_any_shape_the_transform_reads(engine):
 def test_posting_the_same_source_field_twice_amends_the_row(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
-    first = add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
-    second = add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="seats")
+    first = add_row(
+        engine, connection["id"], mapping["id"], source_field="a", target_property="email"
+    )
+    second = add_row(
+        engine, connection["id"], mapping["id"], source_field="a", target_property="seats"
+    )
     assert first["created"] is True
     assert second["created"] is False
     assert first["row"]["id"] == second["row"]["id"]
@@ -1939,7 +2087,9 @@ def test_patching_a_row_leaves_the_fields_it_did_not_mention(engine, store):
     """``store.update`` merges shallowly, so a direction-only patch must not blank the target."""
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
-    row = add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
+    row = add_row(
+        engine, connection["id"], mapping["id"], source_field="a", target_property="email"
+    )
     patched = engine.patch_row(
         connection["id"], mapping["id"], row["row"]["id"], {"direction": "in"}, source=SOURCE
     )
@@ -1956,7 +2106,12 @@ def test_a_patched_row_is_still_validated_as_a_whole_row(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     row = add_row(
-        engine, connection["id"], mapping["id"], source_field="a", source_type="text", target_property="seats"
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="a",
+        source_type="text",
+        target_property="seats",
     )
     with pytest.raises(InvalidMapping, match="transform is required"):
         engine.patch_row(
@@ -1967,10 +2122,16 @@ def test_a_patched_row_is_still_validated_as_a_whole_row(engine):
 def test_a_patch_cannot_set_a_direction_outside_the_vocabulary(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
-    row = add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
+    row = add_row(
+        engine, connection["id"], mapping["id"], source_field="a", target_property="email"
+    )
     with pytest.raises(InvalidMapping, match="in', 'out' or 'both"):
         engine.patch_row(
-            connection["id"], mapping["id"], row["row"]["id"], {"direction": "sideways"}, source=SOURCE
+            connection["id"],
+            mapping["id"],
+            row["row"]["id"],
+            {"direction": "sideways"},
+            source=SOURCE,
         )
 
 
@@ -1981,7 +2142,11 @@ def test_a_row_cannot_be_moved_to_another_mapping(engine):
     row = add_row(engine, connection["id"], first["id"], source_field="a")
     with pytest.raises(InvalidMapping, match="cannot be moved"):
         engine.patch_row(
-            connection["id"], first["id"], row["row"]["id"], {"mapping_id": second["id"]}, source=SOURCE
+            connection["id"],
+            first["id"],
+            row["row"]["id"],
+            {"mapping_id": second["id"]},
+            source=SOURCE,
         )
 
 
@@ -2009,10 +2174,19 @@ def test_any_change_to_the_grid_clears_the_last_validation(engine):
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
     add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
-    engine.pin_sync_key(connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE)
+    engine.pin_sync_key(
+        connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE
+    )
     report_for(engine, connection["id"], mapping["id"], record=True)
     assert engine.last_validation(connection["id"], mapping["id"])["can_activate"] is True
-    add_row(engine, connection["id"], mapping["id"], source_field="b", source_type="text", target_property="seats")
+    add_row(
+        engine,
+        connection["id"],
+        mapping["id"],
+        source_field="b",
+        source_type="text",
+        target_property="seats",
+    )
     stale = engine.last_validation(connection["id"], mapping["id"])
     assert stale["validated"] is False
     assert stale["stale"] is True
@@ -2023,7 +2197,9 @@ def test_pinning_a_key_clears_the_last_validation(engine):
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
     add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
-    engine.pin_sync_key(connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE)
+    engine.pin_sync_key(
+        connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE
+    )
     report_for(engine, connection["id"], mapping["id"], record=True)
     engine.pin_sync_key(connection["id"], mapping["id"], {"properties": ["email"]}, source=SOURCE)
     assert engine.last_validation(connection["id"], mapping["id"])["validated"] is False
@@ -2033,8 +2209,12 @@ def test_deleting_a_row_clears_the_last_validation(engine):
     connection = make_connection(engine)
     mapping = make_mapping(engine, connection["id"])
     add_properties(engine, connection["id"])
-    row = add_row(engine, connection["id"], mapping["id"], source_field="a", target_property="email")
-    engine.pin_sync_key(connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE)
+    row = add_row(
+        engine, connection["id"], mapping["id"], source_field="a", target_property="email"
+    )
+    engine.pin_sync_key(
+        connection["id"], mapping["id"], {"properties": ["dsr_row_id"]}, source=SOURCE
+    )
     report_for(engine, connection["id"], mapping["id"], record=True)
     engine.delete_row(connection["id"], mapping["id"], row["row"]["id"], source=SOURCE)
     assert engine.last_validation(connection["id"], mapping["id"])["validated"] is False
@@ -2148,14 +2328,26 @@ def client(monkeypatch):
 def http_connection(client, provider="hubspot", **payload):
     body = {"name": "HS", "provider": provider}
     body.update(payload)
-    return client.post(f"{PREFIX}/connections", json=body, params={"actor": "dana"}).json()["connection"]
+    return client.post(f"{PREFIX}/connections", json=body, params={"actor": "dana"}).json()[
+        "connection"
+    ]
 
 
 def http_properties(client, connection_id, crm_object="contacts", metadata=None):
     document = (
-        {"results": [{"name": p.name, "type": p.value_type, "fieldType": p.field_type,
-                      "groupName": p.group, "hasUniqueValue": p.unique,
-                      "options": [o.to_dict() for o in p.options]} for p in metadata.properties]}
+        {
+            "results": [
+                {
+                    "name": p.name,
+                    "type": p.value_type,
+                    "fieldType": p.field_type,
+                    "groupName": p.group,
+                    "hasUniqueValue": p.unique,
+                    "options": [o.to_dict() for o in p.options],
+                }
+                for p in metadata.properties
+            ]
+        }
         if metadata
         else {"results": [dict(entry) for entry in HUBSPOT_RESULTS]}
     )
@@ -2193,7 +2385,9 @@ def test_the_transforms_route_serves_the_registry(client):
 
 def test_declaring_a_transform_over_http_is_201(client):
     response = client.post(
-        f"{PREFIX}/transforms", json={"name": "tenant.thing", "version": 1}, params={"actor": "dana"}
+        f"{PREFIX}/transforms",
+        json={"name": "tenant.thing", "version": 1},
+        params={"actor": "dana"},
     )
     assert response.status_code == 201
     assert response.json()["transform"]["declared_only"] is True
@@ -2208,12 +2402,17 @@ def test_the_summary_route_is_200_on_an_empty_store(client):
 def test_connections_list_and_read_over_http(client):
     connection = http_connection(client)
     assert client.get(f"{PREFIX}/connections").json()["count"] == 1
-    assert client.get(f"{PREFIX}/connections/{connection['id']}").json()["connection"]["id"] == connection["id"]
+    assert (
+        client.get(f"{PREFIX}/connections/{connection['id']}").json()["connection"]["id"]
+        == connection["id"]
+    )
 
 
 def test_creating_a_connection_over_http_is_201_and_audited(client):
     response = client.post(
-        f"{PREFIX}/connections", json={"name": "HS", "provider": "hubspot"}, params={"actor": "dana"}
+        f"{PREFIX}/connections",
+        json={"name": "HS", "provider": "hubspot"},
+        params={"actor": "dana"},
     )
     assert response.status_code == 201
     audit = client.get("/api/audit", params={"collection": CONNECTION_COLLECTION}).json()
@@ -2235,7 +2434,9 @@ def test_an_unknown_connection_is_404(client):
 def test_patching_a_connection_over_http_is_audited_under_its_own_route(client):
     connection = http_connection(client)
     response = client.patch(
-        f"{PREFIX}/connections/{connection['id']}", json={"account": "Northwind"}, params={"actor": "dana"}
+        f"{PREFIX}/connections/{connection['id']}",
+        json={"account": "Northwind"},
+        params={"actor": "dana"},
     )
     assert response.status_code == 200
     audit = client.get("/api/audit", params={"collection": CONNECTION_COLLECTION}).json()["entries"]
@@ -2261,7 +2462,9 @@ def test_recording_properties_with_no_object_is_422(client):
 
 def test_recording_properties_with_no_document_is_422_and_names_the_route(client):
     connection = http_connection(client)
-    response = client.post(f"{PREFIX}/connections/{connection['id']}/properties", json={"crm_object": "contacts"})
+    response = client.post(
+        f"{PREFIX}/connections/{connection['id']}/properties", json={"crm_object": "contacts"}
+    )
     assert response.status_code == 422
     assert "/connections/{id}/properties" in response.json()["detail"]
 
@@ -2270,23 +2473,33 @@ def http_ready(client, provider="hubspot", crm_object="contacts", **connection_f
     """A connection, a recorded property read, a mapping and one mapped row."""
     connection = http_connection(client, provider=provider, **connection_fields)
     body = (
-        {"crm_object": crm_object, "document": {"value": [
-            {
-                "SchemaName": "account",
-                "Attributes": [
-                    {"LogicalName": "dsr_row_id", "AttributeType": "String"},
-                    {"LogicalName": "name", "AttributeType": "String"},
-                    {"LogicalName": "donotemail", "AttributeType": "Boolean"},
-                ],
-                "Keys": [],
-            }
-        ]}}
+        {
+            "crm_object": crm_object,
+            "document": {
+                "value": [
+                    {
+                        "SchemaName": "account",
+                        "Attributes": [
+                            {"LogicalName": "dsr_row_id", "AttributeType": "String"},
+                            {"LogicalName": "name", "AttributeType": "String"},
+                            {"LogicalName": "donotemail", "AttributeType": "Boolean"},
+                        ],
+                        "Keys": [],
+                    }
+                ]
+            },
+        }
         if provider == "dataverse"
         else {"crm_object": crm_object, "document": {"results": [dict(r) for r in HUBSPOT_RESULTS]}}
     )
-    assert client.post(
-        f"{PREFIX}/connections/{connection['id']}/properties", json=body, params={"actor": "dana"}
-    ).status_code == 201
+    assert (
+        client.post(
+            f"{PREFIX}/connections/{connection['id']}/properties",
+            json=body,
+            params={"actor": "dana"},
+        ).status_code
+        == 201
+    )
     mapping = http_mapping(client, connection["id"], crm_object=crm_object)
     return connection, mapping
 
@@ -2301,9 +2514,12 @@ def test_recording_an_unreadable_document_is_refused_rather_than_stored(client):
         json={"crm_object": "contacts", "document": {"properties": []}},
     )
     assert bad.status_code == 422
-    assert client.get(f"{PREFIX}/connections/{connection['id']}/properties", params={"crm_object": "contacts"}).json()[
-        "property_count"
-    ] == 5
+    assert (
+        client.get(
+            f"{PREFIX}/connections/{connection['id']}/properties", params={"crm_object": "contacts"}
+        ).json()["property_count"]
+        == 5
+    )
 
 
 def test_reading_properties_with_nothing_recorded_is_409_with_the_endpoints(client):
@@ -2362,12 +2578,19 @@ def test_adding_a_row_over_http_is_201_and_audited(client):
     created = http_mapping(client, connection["id"])
     response = client.post(
         f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/rows",
-        json={"source_field": "buyer_email", "target_property": "email", "transform": "email.normalize"},
+        json={
+            "source_field": "buyer_email",
+            "target_property": "email",
+            "transform": "email.normalize",
+        },
         params={"actor": "dana"},
     )
     assert response.status_code == 201
     audit = client.get("/api/audit", params={"collection": ROW_COLLECTION}).json()["entries"]
-    assert audit[0]["source"] == f"POST {PREFIX}/connections/{connection['id']}/mappings/{created['id']}/rows"
+    assert (
+        audit[0]["source"]
+        == f"POST {PREFIX}/connections/{connection['id']}/mappings/{created['id']}/rows"
+    )
 
 
 def test_amending_a_row_over_http_is_audited_under_its_own_route(client):
@@ -2417,7 +2640,8 @@ def test_deleting_a_mapping_over_http_removes_its_rows(client):
     connection = http_connection(client)
     created = http_mapping(client, connection["id"], apply_defaults=True)
     response = client.delete(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}", params={"actor": "dana"}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}",
+        params={"actor": "dana"},
     )
     assert response.status_code == 200
     assert response.json()["rows_removed"] == 5
@@ -2452,7 +2676,9 @@ def test_validating_with_record_stores_the_run(client):
 def test_reading_the_validation_of_a_never_validated_mapping_is_200_and_explains(client):
     connection = http_connection(client)
     created = http_mapping(client, connection["id"])
-    response = client.get(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validation")
+    response = client.get(
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validation"
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["validated"] is False
@@ -2464,16 +2690,21 @@ def test_listing_validations_over_http(client):
     http_properties(client, connection["id"])
     created = http_mapping(client, connection["id"], apply_defaults=True)
     client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate", json={"record": True}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate",
+        json={"record": True},
     )
-    response = client.get(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validations")
+    response = client.get(
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validations"
+    )
     assert response.json()["count"] == 1
 
 
 def test_activating_a_never_validated_mapping_is_422_with_no_report(client):
     connection = http_connection(client)
     created = http_mapping(client, connection["id"])
-    response = client.post(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate")
+    response = client.post(
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate"
+    )
     assert response.status_code == 422
     body = response.json()
     assert body["error"] == "mapping_not_valid"
@@ -2490,9 +2721,12 @@ def test_activating_a_mapping_with_an_error_is_422_with_the_report(client):
         json={"source_field": "seats", "source_type": "text", "target_property": "seats"},
     )
     client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate", json={"record": True}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate",
+        json={"record": True},
     )
-    response = client.post(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate")
+    response = client.post(
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate"
+    )
     assert response.status_code == 422
     body = response.json()
     assert body["validated"] is True
@@ -2505,8 +2739,12 @@ def test_activating_a_clean_mapping_over_http_is_200_and_audited(client):
     created = http_mapping(client, connection["id"])
     client.post(
         f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/rows",
-        json={"source_field": "buyer_email", "source_type": "email", "target_property": "email",
-              "transform": "email.normalize"},
+        json={
+            "source_field": "buyer_email",
+            "source_type": "email",
+            "target_property": "email",
+            "transform": "email.normalize",
+        },
     )
     client.post(
         f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key",
@@ -2514,10 +2752,12 @@ def test_activating_a_clean_mapping_over_http_is_200_and_audited(client):
         params={"actor": "dana"},
     )
     client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate", json={"record": True}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate",
+        json={"record": True},
     )
     response = client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate", params={"actor": "dana"}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate",
+        params={"actor": "dana"},
     )
     assert response.status_code == 200
     assert response.json()["state"] == "active"
@@ -2536,19 +2776,27 @@ def test_deactivating_over_http_returns_the_mapping_to_draft(client):
         json={"properties": ["dsr_row_id"]},
     )
     client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate", json={"record": True}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/validate",
+        json={"record": True},
     )
-    assert client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate"
-    ).status_code == 200
-    response = client.post(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/deactivate")
+    assert (
+        client.post(
+            f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate"
+        ).status_code
+        == 200
+    )
+    response = client.post(
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/deactivate"
+    )
     assert response.json()["state"] == "draft"
 
 
 def test_reading_the_sync_key_before_one_is_pinned_reports_it_rather_than_refusing(client):
     connection = http_connection(client)
     created = http_mapping(client, connection["id"])
-    body = client.get(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key").json()
+    body = client.get(
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key"
+    ).json()
     assert body["pinned"] is False
     assert body["limit"] == 10
 
@@ -2622,7 +2870,8 @@ def test_unpinning_a_key_over_http_clears_it(client):
         json={"properties": ["dsr_row_id"]},
     )
     response = client.delete(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key", params={"actor": "dana"}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key",
+        params={"actor": "dana"},
     )
     assert response.json()["pinned"] is False
 
@@ -2634,7 +2883,8 @@ def test_the_hubspot_create_request_is_served_and_sourced(client):
         json={"properties": ["dsr_row_id"]},
     )
     response = client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key/request", json={}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key/request",
+        json={},
     )
     assert response.status_code == 200
     body = response.json()
@@ -2658,7 +2908,8 @@ def test_a_salesforce_create_request_is_422_with_the_gap_quoted(client):
         json={"properties": ["DSR_Row_Id__c"]},
     )
     response = client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key/request", json={}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key/request",
+        json={},
     )
     assert response.status_code == 422
     assert response.json()["error"] == "unsupported_sync_key_request"
@@ -2671,7 +2922,8 @@ def test_building_a_request_with_no_pinned_key_is_422(client):
     http_properties(client, connection["id"])
     created = http_mapping(client, connection["id"])
     response = client.post(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key/request", json={}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key/request",
+        json={},
     )
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_sync_key"
@@ -2774,8 +3026,12 @@ def test_every_write_route_names_a_route_the_host_actually_mounted(client):
     # Exercise every write route this feature has.
     connection = http_connection(client, property_group="contactinformation")
     http_properties(client, connection["id"])
-    client.post(f"{PREFIX}/transforms", json={"name": "tenant.x", "version": 1}, params={"actor": "dana"})
-    client.patch(f"{PREFIX}/connections/{connection['id']}", json={"account": "N"}, params={"actor": "dana"})
+    client.post(
+        f"{PREFIX}/transforms", json={"name": "tenant.x", "version": 1}, params={"actor": "dana"}
+    )
+    client.patch(
+        f"{PREFIX}/connections/{connection['id']}", json={"account": "N"}, params={"actor": "dana"}
+    )
     created = http_mapping(client, connection["id"], apply_defaults=True)
     client.post(
         f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/rows",
@@ -2800,20 +3056,26 @@ def test_every_write_route_names_a_route_the_host_actually_mounted(client):
         json={"properties": ["dsr_row_id"]},
         params={"actor": "dana"},
     )
-    client.post(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate", params={"actor": "dana"})
+    client.post(
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/activate",
+        params={"actor": "dana"},
+    )
     client.post(f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/deactivate")
     client.delete(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key", params={"actor": "dana"}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/sync-key",
+        params={"actor": "dana"},
     )
     client.post(
         f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/preview",
         json={"record": {"id": "r1"}},
     )
     client.delete(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/rows/{row_id}", params={"actor": "dana"}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}/rows/{row_id}",
+        params={"actor": "dana"},
     )
     client.delete(
-        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}", params={"actor": "dana"}
+        f"{PREFIX}/connections/{connection['id']}/mappings/{created['id']}",
+        params={"actor": "dana"},
     )
 
     entries = client.get("/api/audit", params={"limit": 500}).json()["entries"]
@@ -2824,7 +3086,9 @@ def test_every_write_route_names_a_route_the_host_actually_mounted(client):
         path = source.partition(" ")[2]
         shape = _match_shape(mounted, path)
         assert shape is not None, f"source {source!r} names a path the host did not mount"
-        assert method in _methods_of(mounted, shape), f"source {source!r} names a method that is not mounted"
+        assert method in _methods_of(mounted, shape), (
+            f"source {source!r} names a method that is not mounted"
+        )
 
 
 def _methods_of(mounted: set[tuple[str, str]], shape: str) -> set[str]:
@@ -2847,7 +3111,7 @@ def _match_shape(mounted: set[tuple[str, str]], path: str) -> str | None:
             continue
         if all(
             wanted.startswith("{") or wanted == got
-            for wanted, got in zip(shape_segments, segments)
+            for wanted, got in zip(shape_segments, segments, strict=False)
         ):
             return shape
     return None
@@ -2881,7 +3145,9 @@ def test_no_domain_method_can_be_called_without_a_source():
 
 def test_the_feature_appears_in_the_registry_with_its_routes(client):
     body = client.get("/api/features").json()
-    feature = next(f for f in body["features"] if f["id"] == "wf-035-map-sales-room-fields-onto-crm-fields-")
+    feature = next(
+        f for f in body["features"] if f["id"] == "wf-035-map-sales-room-fields-onto-crm-fields-"
+    )
     assert feature["prefix"] == PREFIX
     assert len(feature["routes"]) == 32
     assert body["failed_count"] == 0
@@ -2932,7 +3198,9 @@ def test_the_seed_reports_what_it_added(seeded):
 
 def test_the_seed_produces_a_clean_active_mapping(seeded):
     engine, _summary = seeded
-    active = [m for m in engine.list_mappings(state="active")["mappings"] if m["provider"] == "hubspot"]
+    active = [
+        m for m in engine.list_mappings(state="active")["mappings"] if m["provider"] == "hubspot"
+    ]
     assert active
     assert active[0]["validation"]["counts"]["error"] == 0
 
@@ -2945,8 +3213,14 @@ def test_the_seed_produces_one_row_per_researched_finding(seeded):
         if m["crm_object"] == "deals" and m["provider"] == "hubspot"
     )
     flags = {flag for item in broken["validation"]["rows"] for flag in item["flags"]}
-    assert {"unknown_property", "type_mismatch", "unsupported_option", "duplicate_target",
-            "transform_unavailable", "no_target"} <= flags
+    assert {
+        "unknown_property",
+        "type_mismatch",
+        "unsupported_option",
+        "duplicate_target",
+        "transform_unavailable",
+        "no_target",
+    } <= flags
 
 
 def test_the_seed_leaves_one_mapping_with_no_metadata_read(seeded):
@@ -3002,7 +3276,9 @@ def test_the_mapping_view_reports_what_the_grid_renders(store, book):
     connection = book.create_connection({"name": "HS", "provider": "hubspot"}, source=SOURCE)
     record = book.create_mapping(connection["id"], {"crm_object": "contacts"}, source=SOURCE)
     book.upsert_row(record["id"], {"source_field": "a", "target_property": "email"}, source=SOURCE)
-    view = mapping_view(record, rows=book.rows(record["id"]), connection=book.connection(connection["id"]))
+    view = mapping_view(
+        record, rows=book.rows(record["id"]), connection=book.connection(connection["id"])
+    )
     assert view["row_count"] == 1
     assert view["rows"][0]["source_field"] == "a"
     assert view["connection_name"] == "HS"
@@ -3014,7 +3290,9 @@ def test_the_row_view_is_flat(store, book):
     book = MappingBook(store)
     connection = book.create_connection({"name": "HS", "provider": "hubspot"}, source=SOURCE)
     record = book.create_mapping(connection["id"], {"crm_object": "contacts"}, source=SOURCE)
-    row, _created = book.upsert_row(record["id"], {"source_field": "a", "target_property": "email"}, source=SOURCE)
+    row, _created = book.upsert_row(
+        record["id"], {"source_field": "a", "target_property": "email"}, source=SOURCE
+    )
     view = row_view(row)
     assert view["direction"] == "out"
     assert view["transform"] == "identity"

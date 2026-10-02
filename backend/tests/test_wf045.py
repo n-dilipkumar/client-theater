@@ -48,15 +48,13 @@ from __future__ import annotations
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.crm_backfill import (
-    CURSORS_STORE,
     CURSOR_FIELDS,
+    CURSORS_STORE,
     DEFAULT_KEY_FIELD,
     DIRECTIONS,
     EVENTS,
@@ -74,25 +72,26 @@ from dsr.crm_backfill import (
     RunNotFound,
     RunStateError,
     SimulatedHistory,
-    UnknownConnection,
     UnkeyedRow,
+    UnknownConnection,
     UnsupportedStrategy,
     UnsupportedVendor,
     build_cursor,
     bulk_threshold,
+    cursors as cursor_rules,
     default_expiry_days,
     default_page_size,
     default_registry,
     is_expired,
     normalise_scope,
+    plan as plan_rules,
+    quota as quota_rules,
     require_resumable,
+    transform as transform_rules,
+    vendors as vendor_rules,
 )
-from dsr.crm_backfill import cursors as cursor_rules
-from dsr.crm_backfill import plan as plan_rules
-from dsr.crm_backfill import quota as quota_rules
-from dsr.crm_backfill import transform as transform_rules
-from dsr.crm_backfill import vendors as vendor_rules
-from dsr.crm_backfill.engine import CONNECTIONS, RUNS, new_counters, progress
+from dsr.crm_backfill.engine import RUNS, progress
+from dsr.crm_backfill.errors import InvalidRange
 from dsr.crm_backfill.inferences import INFERENCES, by_id, describe
 from dsr.crm_backfill.vendors import (
     HUBSPOT_EXPORT_STATUSES,
@@ -113,6 +112,7 @@ from dsr.crm_backfill.vocabulary import (
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -146,7 +146,9 @@ class Clock:
         return self.now
 
 
-def history_rows(count: int, prefix: str = "acc", *, days: int = 60, unkeyed: int = 0) -> list[dict[str, Any]]:
+def history_rows(
+    count: int, prefix: str = "acc", *, days: int = 60, unkeyed: int = 0
+) -> list[dict[str, Any]]:
     """A deterministic history, newest last, with the last ``unkeyed`` rows unidentifiable."""
     rows: list[dict[str, Any]] = []
     for index in range(count):
@@ -155,7 +157,9 @@ def history_rows(count: int, prefix: str = "acc", *, days: int = 60, unkeyed: in
             "Name": f"Account {index:04d}",
             "Stage__c": ["Prospecting", "Proposal", "Negotiation"][index % 3],
             "Amount": 1_000 + index,
-            "occurred_at": (NOW - timedelta(days=days - (days * index // max(1, count)))).isoformat(),
+            "occurred_at": (
+                NOW - timedelta(days=days - (days * index // max(1, count)))
+            ).isoformat(),
         }
         rows.append(row)
     for row in rows[-unkeyed:] if unkeyed else []:
@@ -196,9 +200,7 @@ def salesforce(engine):
 
 @pytest.fixture()
 def dataverse(engine):
-    return engine.create_connection(
-        {"name": "DV", "vendor": "dataverse"}, source=SOURCE
-    )
+    return engine.create_connection({"name": "DV", "vendor": "dataverse"}, source=SOURCE)
 
 
 @pytest.fixture()
@@ -228,7 +230,9 @@ def open_run(engine, connection, room="room-1", **overrides: Any) -> dict[str, A
     return engine.start(room, payload, source=SOURCE)
 
 
-def drive(engine, room: str, run: Mapping[str, Any], *, limit: int = 40, source: str = POLL_SOURCE) -> dict[str, Any]:
+def drive(
+    engine, room: str, run: Mapping[str, Any], *, limit: int = 40, source: str = POLL_SOURCE
+) -> dict[str, Any]:
     """Poll until the run stops moving, the way a scheduler would."""
     current = dict(run)
     for _ in range(limit):
@@ -276,7 +280,11 @@ def http(monkeypatch):
 def http_room(http):
     return http.post(
         "/api/records/room",
-        json={"name": "Northwind Traders — Enterprise Evaluation", "account": "Northwind", "owner": "dana"},
+        json={
+            "name": "Northwind Traders — Enterprise Evaluation",
+            "account": "Northwind",
+            "owner": "dana",
+        },
     ).json()["id"]
 
 
@@ -332,7 +340,12 @@ def test_feature_module_does_not_import_the_shared_app():
 def test_frontend_descriptor_id_matches_the_backend_feature_id():
     """The two halves of a feature are findable by one name, so they must agree."""
     descriptor = (
-        Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / FEATURE_ID / "index.jsx"
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "features"
+        / FEATURE_ID
+        / "index.jsx"
     )
     text = descriptor.read_text(encoding="utf-8")
     module = load_feature(MODULE)
@@ -343,9 +356,10 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
 
 def test_the_feature_exports_what_the_host_looks_for():
     module = load_feature(MODULE)
-    assert set(module.EXCEPTION_HANDLERS) == {BackfillEngine.__module__ and __import__(
-        "dsr.crm_backfill", fromlist=["BackfillError"]
-    ).BackfillError}
+    assert set(module.EXCEPTION_HANDLERS) == {
+        BackfillEngine.__module__
+        and __import__("dsr.crm_backfill", fromlist=["BackfillError"]).BackfillError
+    }
     assert callable(module.seed)
 
 
@@ -380,7 +394,7 @@ def test_every_error_type_hangs_off_one_base():
 
 def test_the_three_researched_vendors_are_the_registry():
     assert set(VENDORS) == {"salesforce", "dataverse", "hubspot"}
-    assert default_registry() .keys() == VENDORS.keys()
+    assert default_registry().keys() == VENDORS.keys()
 
 
 def test_each_vendor_carries_the_quote_that_fixed_it():
@@ -417,7 +431,9 @@ def test_the_seven_day_window_is_quoted_verbatim():
 
 
 def test_the_five_thousand_page_size_is_quoted_verbatim():
-    assert "greater than 5,000, the user can page through" in NUMBERS["dataverse_page_size"]["quote"]
+    assert (
+        "greater than 5,000, the user can page through" in NUMBERS["dataverse_page_size"]["quote"]
+    )
 
 
 def test_the_negative_is_published_because_it_is_easy_to_drop():
@@ -440,7 +456,9 @@ def test_the_run_states_include_the_one_the_research_forces_into_existence():
 
 
 def test_every_state_the_engine_can_store_is_published():
-    assert set(RUN_STATES) == set(describe_vocabulary()["run_states"][i]["value"] for i in range(len(RUN_STATES)))
+    assert set(RUN_STATES) == set(
+        describe_vocabulary()["run_states"][i]["value"] for i in range(len(RUN_STATES))
+    )
 
 
 def test_the_per_run_log_has_an_event_for_each_kind_the_engine_writes():
@@ -557,7 +575,11 @@ def test_only_a_data_token_ages_out():
 
 def test_a_data_token_older_than_the_window_is_expired():
     record = build_cursor(
-        vendor="dataverse", connection_id="c", cursor="600", updated_at=NOW - timedelta(days=8), kind="data_token"
+        vendor="dataverse",
+        connection_id="c",
+        cursor="600",
+        updated_at=NOW - timedelta(days=8),
+        kind="data_token",
     )
     assert is_expired(record, NOW) is True
     # Two days earlier, the same cursor is six days old and still inside the window.
@@ -567,7 +589,11 @@ def test_a_data_token_older_than_the_window_is_expired():
 def test_the_window_is_half_open_at_exactly_seven_days():
     """``<=`` not ``<``: the vendor stops answering *at* the boundary."""
     at_limit = build_cursor(
-        vendor="dataverse", connection_id="c", cursor="1", updated_at=NOW - timedelta(days=7), kind="data_token"
+        vendor="dataverse",
+        connection_id="c",
+        cursor="1",
+        updated_at=NOW - timedelta(days=7),
+        kind="data_token",
     )
     assert is_expired(at_limit, NOW) is True
     just_inside = build_cursor(
@@ -583,7 +609,11 @@ def test_the_window_is_half_open_at_exactly_seven_days():
 def test_a_connection_may_declare_its_own_window():
     """``ExpireChangeTrackingInDays`` "controls this duration and can be changed"."""
     record = build_cursor(
-        vendor="dataverse", connection_id="c", cursor="1", updated_at=NOW - timedelta(days=9), kind="data_token"
+        vendor="dataverse",
+        connection_id="c",
+        cursor="1",
+        updated_at=NOW - timedelta(days=9),
+        kind="data_token",
     )
     assert is_expired(record, NOW, 14) is False
     assert is_expired(record, NOW, 3) is True
@@ -596,7 +626,11 @@ def test_a_cursor_whose_timestamp_cannot_be_read_is_treated_as_old():
 
 def test_require_resumable_names_the_backfill_to_open_instead_of_stalling_silently():
     record = build_cursor(
-        vendor="dataverse", connection_id="c", cursor="600", updated_at=NOW - timedelta(days=9), kind="data_token"
+        vendor="dataverse",
+        connection_id="c",
+        cursor="600",
+        updated_at=NOW - timedelta(days=9),
+        kind="data_token",
     )
     with pytest.raises(CursorExpired) as caught:
         require_resumable(record, NOW)
@@ -636,7 +670,11 @@ def test_describe_of_no_cursor_says_so_rather_than_raising():
 
 def test_age_days_is_reported_so_a_stalled_run_can_say_how_stale():
     record = build_cursor(
-        vendor="dataverse", connection_id="c", cursor="1", updated_at=NOW - timedelta(days=9, hours=12), kind="data_token"
+        vendor="dataverse",
+        connection_id="c",
+        cursor="1",
+        updated_at=NOW - timedelta(days=9, hours=12),
+        kind="data_token",
     )
     assert cursor_rules.age_days(record, NOW) == 9.5
 
@@ -672,8 +710,10 @@ def test_a_range_that_runs_backwards_is_refused():
 
 
 def test_a_range_spanning_nothing_is_refused_rather_than_reported_as_done():
-    with pytest.raises(Exception):
-        normalise_scope({"kind": "range", "from": "2026-06-01T00:00:00Z", "to": "2026-06-01T00:00:00Z"}, NOW)
+    with pytest.raises(InvalidRange):
+        normalise_scope(
+            {"kind": "range", "from": "2026-06-01T00:00:00Z", "to": "2026-06-01T00:00:00Z"}, NOW
+        )
 
 
 def test_a_range_that_starts_in_the_future_is_refused():
@@ -684,13 +724,19 @@ def test_a_range_that_starts_in_the_future_is_refused():
 
 def test_a_to_in_the_future_is_refused():
     with pytest.raises(Exception) as caught:
-        normalise_scope({"kind": "range", "from": "2026-01-01T00:00:00Z", "to": "2027-01-01T00:00:00Z"}, NOW)
+        normalise_scope(
+            {"kind": "range", "from": "2026-01-01T00:00:00Z", "to": "2027-01-01T00:00:00Z"}, NOW
+        )
     assert "future" in str(caught.value)
 
 
 def test_a_to_a_minute_ahead_is_a_rounding_artefact_and_is_allowed():
     scope = normalise_scope(
-        {"kind": "range", "from": "2026-01-01T00:00:00Z", "to": (NOW + timedelta(seconds=30)).isoformat()},
+        {
+            "kind": "range",
+            "from": "2026-01-01T00:00:00Z",
+            "to": (NOW + timedelta(seconds=30)).isoformat(),
+        },
         NOW,
     )
     assert scope["to"] == (NOW + timedelta(seconds=30)).isoformat()
@@ -737,7 +783,7 @@ def test_an_unparseable_timestamp_names_the_format():
 
 
 def test_a_scope_must_be_an_object():
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidRange):
         normalise_scope(["range"], NOW)
 
 
@@ -966,7 +1012,9 @@ def test_the_default_key_field_is_the_vendor_external_id():
 
 
 def test_the_field_map_renames_and_carries_everything_else_through():
-    mapped = transform_rules.apply_map({"Id": "006A", "Name": "Deal", "Amount": 1}, {"Name": "title"})
+    mapped = transform_rules.apply_map(
+        {"Id": "006A", "Name": "Deal", "Amount": 1}, {"Name": "title"}
+    )
     # `Id` is Salesforce's spelling and is not reserved, so it survives. Lowercase
     # `id` is the envelope's, and `test_a_vendor_field_called_id_is_carried...`
     # covers that one.
@@ -999,7 +1047,9 @@ def test_a_field_map_onto_this_products_bookkeeping_is_refused():
 
 def test_the_reverse_map_is_the_map_read_the_other_way():
     stored = {"title": "Deal", "stage": "Proposal", "external_id": "006A"}
-    assert transform_rules.apply_map(stored, {"Name": "title", "Stage__c": "stage"}, reverse=True) == {
+    assert transform_rules.apply_map(
+        stored, {"Name": "title", "Stage__c": "stage"}, reverse=True
+    ) == {
         "Name": "Deal",
         "Stage__c": "Proposal",
     }
@@ -1127,7 +1177,9 @@ def test_a_custom_object_named_by_its_label_asks_for_an_object_type_id():
 
 def test_a_standard_object_name_is_accepted():
     assert (
-        vendor_rules.check_object_addressing({"standard_objects": ["CONTACT"]}, {"object_name": "CONTACT"})
+        vendor_rules.check_object_addressing(
+            {"standard_objects": ["CONTACT"]}, {"object_name": "CONTACT"}
+        )
         == []
     )
 
@@ -1137,9 +1189,13 @@ def test_a_connection_that_declares_no_standard_objects_declines_to_guess():
 
 
 def test_an_object_type_id_satisfies_the_rule_on_its_own():
-    assert vendor_rules.check_object_addressing(
-        {"standard_objects": ["CONTACT"]}, {"object_name": "MY_CUSTOM", "object_type_id": "12345"}
-    ) == []
+    assert (
+        vendor_rules.check_object_addressing(
+            {"standard_objects": ["CONTACT"]},
+            {"object_name": "MY_CUSTOM", "object_type_id": "12345"},
+        )
+        == []
+    )
 
 
 def test_the_simulated_history_pages_in_a_stable_order():
@@ -1153,11 +1209,11 @@ def test_the_simulated_history_pages_in_a_stable_order():
 def test_the_history_scope_is_inclusive_below_and_exclusive_above():
     """Two adjacent ranges neither skip nor double-count the row on their boundary."""
     source = SimulatedHistory(history_rows(4, days=4))
-    whole = source.scoped({}, {"from": "2026-01-01T00:00:00+00:00", "to": "2027-01-01T00:00:00+00:00"})
-    half = source.scoped({}, {"from": whole[0]["occurred_at"], "to": whole[2]["occurred_at"]})
-    rest = source.scoped(
-        {}, {"from": whole[2]["occurred_at"], "to": "2027-01-01T00:00:00+00:00"}
+    whole = source.scoped(
+        {}, {"from": "2026-01-01T00:00:00+00:00", "to": "2027-01-01T00:00:00+00:00"}
     )
+    half = source.scoped({}, {"from": whole[0]["occurred_at"], "to": whole[2]["occurred_at"]})
+    rest = source.scoped({}, {"from": whole[2]["occurred_at"], "to": "2027-01-01T00:00:00+00:00"})
     assert len(half) + len(rest) == len(whole)
     assert [r["id"] for r in half] + [r["id"] for r in rest] == [r["id"] for r in whole]
 
@@ -1211,9 +1267,13 @@ def test_a_salesforce_job_is_not_readable_on_its_first_poll():
     plan = {"scope": {"kind": "full_history"}, "page_size": 5, "ready_after": 1}
     started = adapter.start({"id": "c1"}, plan | {"run_id": "r1"})
     assert started.job_state == "queued" and started.rows == [] and started.more is True
-    early = adapter.read_page({"id": "c1"}, plan | {"run_id": "r1"}, {"ready_after": 1}, started.cursor, 0)
+    early = adapter.read_page(
+        {"id": "c1"}, plan | {"run_id": "r1"}, {"ready_after": 1}, started.cursor, 0
+    )
     assert early.rows == [] and "still being prepared" in early.detail
-    ready = adapter.read_page({"id": "c1"}, plan | {"run_id": "r1"}, {"ready_after": 1}, started.cursor, 1)
+    ready = adapter.read_page(
+        {"id": "c1"}, plan | {"run_id": "r1"}, {"ready_after": 1}, started.cursor, 1
+    )
     assert len(ready.rows) == 5 and ready.more is True
 
 
@@ -1221,14 +1281,22 @@ def test_a_salesforce_cursor_is_the_job_and_does_not_move():
     adapter = SalesforceBulkAdapter(SimulatedHistory(history_rows(10)))
     plan = {"scope": {"kind": "full_history"}, "page_size": 5, "ready_after": 0}
     started = adapter.start({"id": "c1"}, plan | {"run_id": "r1"})
-    page = adapter.read_page({"id": "c1"}, plan | {"run_id": "r1"}, {"processed": 5, "total": 10}, started.cursor, 1)
+    page = adapter.read_page(
+        {"id": "c1"}, plan | {"run_id": "r1"}, {"processed": 5, "total": 10}, started.cursor, 1
+    )
     assert page.cursor == started.cursor
 
 
 def test_a_job_handle_is_derived_from_the_run_so_two_processes_agree():
-    first = SalesforceBulkAdapter(SimulatedHistory([])).start({"id": "c1"}, {"run_id": "r1", "attempt": 0})
-    again = SalesforceBulkAdapter(SimulatedHistory([])).start({"id": "c1"}, {"run_id": "r1", "attempt": 0})
-    other = SalesforceBulkAdapter(SimulatedHistory([])).start({"id": "c1"}, {"run_id": "r1", "attempt": 1})
+    first = SalesforceBulkAdapter(SimulatedHistory([])).start(
+        {"id": "c1"}, {"run_id": "r1", "attempt": 0}
+    )
+    again = SalesforceBulkAdapter(SimulatedHistory([])).start(
+        {"id": "c1"}, {"run_id": "r1", "attempt": 0}
+    )
+    other = SalesforceBulkAdapter(SimulatedHistory([])).start(
+        {"id": "c1"}, {"run_id": "r1", "attempt": 1}
+    )
     assert first.cursor == again.cursor
     assert other.cursor != first.cursor
 
@@ -1359,13 +1427,21 @@ def test_from_scratch_ignores_the_stored_cursor(engine, dataverse):
     assert again["data"]["adopted_cursor"] is False
 
 
-def test_an_unknown_volume_is_reconsidered_once_against_the_vendors_own_count(engine, salesforce, store):
+def test_an_unknown_volume_is_reconsidered_once_against_the_vendors_own_count(
+    engine, salesforce, store
+):
     """The room said it did not know the volume; the vendor does, and nothing has landed yet."""
     big = BackfillEngine(
-        RecordStore(store.db), registry=default_registry(SimulatedHistory(history_rows(40))), clock=lambda: NOW
+        RecordStore(store.db),
+        registry=default_registry(SimulatedHistory(history_rows(40))),
+        clock=lambda: NOW,
     )
     connection = big.create_connection({"vendor": "salesforce"}, source=SOURCE)
-    run = big.start("room-1", {"connection_id": connection["id"], "scope": {"kind": "full_history"}, "page_size": 5}, source=SOURCE)
+    run = big.start(
+        "room-1",
+        {"connection_id": connection["id"], "scope": {"kind": "full_history"}, "page_size": 5},
+        source=SOURCE,
+    )
     events = [entry["data"]["event"] for entry in big.events(run["id"])]
     assert "strategy_reconsidered" in events
     assert "run_replanned" in events
@@ -1396,9 +1472,13 @@ def test_opening_a_run_needs_a_room(engine, dataverse):
         engine.start("", {"connection_id": dataverse["id"]}, source=SOURCE)
 
 
-def test_a_backfill_larger_than_the_rest_of_the_allowance_is_refused_before_a_job_exists(store, clock):
+def test_a_backfill_larger_than_the_rest_of_the_allowance_is_refused_before_a_job_exists(
+    store, clock
+):
     engine = BackfillEngine(
-        RecordStore(store.db), registry=default_registry(SimulatedHistory(history_rows(40))), clock=clock
+        RecordStore(store.db),
+        registry=default_registry(SimulatedHistory(history_rows(40))),
+        clock=clock,
     )
     connection = engine.create_connection(
         {
@@ -1522,7 +1602,9 @@ def test_a_row_with_no_key_is_rejected_and_the_page_carries_on(store, clock):
     assert rejections and "cannot stall the range" in rejections[0]["data"]["detail"]
 
 
-def test_a_rejected_row_is_rendered_shortly_because_a_log_is_not_a_record_of_personal_data(store, clock):
+def test_a_rejected_row_is_rendered_shortly_because_a_log_is_not_a_record_of_personal_data(
+    store, clock
+):
     engine = BackfillEngine(
         RecordStore(store.db),
         registry=default_registry(SimulatedHistory(history_rows(4, unkeyed=1))),
@@ -1572,9 +1654,7 @@ def test_a_run_that_reaches_the_allowance_waits_for_the_reset_rather_than_failin
     )
     # Four calls allowed: the start spends one and the size check passes, so the
     # run opens; the wall arrives on a later poll rather than at the door.
-    connection = engine.create_connection(
-        {"vendor": "salesforce", "daily_limit": 4}, source=SOURCE
-    )
+    connection = engine.create_connection({"vendor": "salesforce", "daily_limit": 4}, source=SOURCE)
     run = open_run(engine, connection, page_size=5, estimated_records=1)
     step = {}
     for _ in range(8):
@@ -1631,7 +1711,9 @@ def test_a_crash_between_the_page_and_the_cursor_replays_the_page_and_duplicates
     after = engine.resume("room-1", run["id"], source=RESUME_SOURCE)["run"]
     assert len(engine.replica(room_id="room-1", limit=100)) == landed
     assert after["counters"]["rows_created"] == 10, "only the genuinely new page created anything"
-    assert after["counters"]["rows_unchanged"] == 10, "the replayed page merged rather than duplicated"
+    assert after["counters"]["rows_unchanged"] == 10, (
+        "the replayed page merged rather than duplicated"
+    )
 
 
 def test_a_crash_after_the_cursor_moves_loses_nothing(engine, dataverse, store):
@@ -1665,7 +1747,9 @@ def test_a_finished_run_cannot_be_resumed(engine, dataverse):
         engine.resume("room-1", run["id"], source=RESUME_SOURCE)
 
 
-def test_an_aged_data_token_stalls_the_run_rather_than_reading_the_range_again(engine, dataverse, clock):
+def test_an_aged_data_token_stalls_the_run_rather_than_reading_the_range_again(
+    engine, dataverse, clock
+):
     """Dataverse "throws an exception"; the room refuses first and says what to do."""
     run = open_run(engine, dataverse, page_size=10)
     clock.advance(days=8)
@@ -1728,7 +1812,9 @@ def test_reading_the_same_range_again_writes_nothing_at_all(engine, dataverse, s
     second = drive(engine, "room-1", open_run(engine, dataverse, page_size=7, from_scratch=True))
     assert second["counters"]["rows_unchanged"] == 30
     assert second["counters"]["rows_written"] == 0
-    assert {row["id"]: row["revision"] for row in engine.replica(room_id="room-1", limit=100)} == revisions
+    assert {
+        row["id"]: row["revision"] for row in engine.replica(room_id="room-1", limit=100)
+    } == revisions
     assert len(store.audit(collection=REPLICA, limit=1000)) == audits
 
 
@@ -1743,14 +1829,18 @@ def test_a_row_whose_content_moved_is_written_and_its_last_seen_at_moves(store, 
     clock.advance(hours=1)
     again = drive(engine, "room-1", open_run(engine, connection, page_size=5, from_scratch=True))
     assert again["counters"]["rows_updated"] == 1
-    after = next(row for row in engine.replica(room_id="room-1", limit=10) if row["data"]["external_id"] == "acc-0000")
+    after = next(
+        row
+        for row in engine.replica(room_id="room-1", limit=10)
+        if row["data"]["external_id"] == "acc-0000"
+    )
     assert after["data"]["Name"] == "Renamed"
     assert after["data"]["last_seen_at"] > before["data"]["last_seen_at"]
     assert after["data"]["first_seen_at"] == before["data"]["first_seen_at"]
 
 
 def test_the_field_map_renames_the_replica_columns(engine, salesforce):
-    run = drive(engine, "room-1", open_run(engine, salesforce, page_size=10, field_map={"Name": "title"}))
+    drive(engine, "room-1", open_run(engine, salesforce, page_size=10, field_map={"Name": "title"}))
     row = engine.replica(room_id="room-1", limit=1)[0]
     assert row["data"]["title"].startswith("Account")
     assert "Name" not in row["data"]
@@ -1768,9 +1858,14 @@ def test_a_push_submits_the_replica_back_through_the_same_map(engine, salesforce
     assert push["data"]["direction"] == "push"
     assert push["counters"]["rows_written"] == 30
     assert push["data"]["state"] == "complete"
-    assert "submitted" in [
-        e["data"]["detail"] for e in engine.events(push["id"]) if e["data"]["event"] == "page_written"
-    ][0]
+    assert (
+        "submitted"
+        in [
+            e["data"]["detail"]
+            for e in engine.events(push["id"])
+            if e["data"]["event"] == "page_written"
+        ][0]
+    )
 
 
 def test_a_push_advances_a_paging_cookie_cursor(engine, salesforce):
@@ -1863,7 +1958,9 @@ def test_cursors_report_their_expiry_verdict_per_connection(engine, dataverse, s
     assert listed["data_token"]["expiry"]["connection_known"] is True
 
 
-def test_a_cursor_whose_connection_is_gone_reports_it_rather_than_looking_fine(engine, dataverse, store):
+def test_a_cursor_whose_connection_is_gone_reports_it_rather_than_looking_fine(
+    engine, dataverse, store
+):
     run = open_run(engine, dataverse)
     store.delete(run["data"]["connection_id"], source="test")
     listed = engine.cursors(room_id="room-1")
@@ -1871,7 +1968,9 @@ def test_a_cursor_whose_connection_is_gone_reports_it_rather_than_looking_fine(e
 
 
 def test_the_replica_is_filterable_on_a_mapped_field(engine, salesforce):
-    drive(engine, "room-1", open_run(engine, salesforce, page_size=5, field_map={"Stage__c": "stage"}))
+    drive(
+        engine, "room-1", open_run(engine, salesforce, page_size=5, field_map={"Stage__c": "stage"})
+    )
     found = engine.replica(room_id="room-1", where="stage=Proposal", limit=100)
     assert found and all(row["data"]["stage"] == "Proposal" for row in found)
 
@@ -1951,7 +2050,9 @@ def test_progress_never_carries_an_eta():
     """
     for state, total, seen in (("running", 100, 50), ("running", None, 0), ("complete", 1, 1)):
         shape = progress({"rows_total": total, "rows_seen": seen}, state)
-        assert not any(key in shape for key in ("eta", "eta_at", "finishes_at", "estimated_completion"))
+        assert not any(
+            key in shape for key in ("eta", "eta_at", "finishes_at", "estimated_completion")
+        )
         assert "no_sla" in shape or shape["basis"] == "complete"
     assert NO_SLA_QUOTE in str(progress({"rows_total": 100, "rows_seen": 1}, "running"))
 
@@ -2046,7 +2147,9 @@ def test_a_backfill_can_be_opened_polled_and_read_over_http(http, http_room, htt
     assert summary["by_state"]["complete"] == 1
 
 
-def test_the_poll_route_reports_not_due_rather_than_asking_the_vendor_again(http, http_room, http_connection):
+def test_the_poll_route_reports_not_due_rather_than_asking_the_vendor_again(
+    http, http_room, http_connection
+):
     opened = http.post(
         f"{PREFIX}/rooms/{http_room}/backfills",
         json={
@@ -2088,7 +2191,12 @@ def test_cancel_over_http_takes_a_reason(http, http_room, http_connection):
         json={"reason": "picked the wrong quarter"},
     ).json()
     assert cancelled["data"]["state"] == "cancelled"
-    logged = [entry["detail"] for entry in http.get(f"{PREFIX}/rooms/{http_room}/backfills/{opened['id']}/log").json()["events"]]
+    logged = [
+        entry["detail"]
+        for entry in http.get(f"{PREFIX}/rooms/{http_room}/backfills/{opened['id']}/log").json()[
+            "events"
+        ]
+    ]
     assert any("wrong quarter" in detail for detail in logged), logged
 
 
@@ -2117,12 +2225,31 @@ def test_cursors_and_replica_are_served_per_room(http, http_room, http_connectio
 def test_runs_are_listed_and_filterable_over_http(http, http_room, http_connection):
     http.post(
         f"{PREFIX}/rooms/{http_room}/backfills",
-        json={"connection_id": http_connection["id"], "scope": {"kind": "full_history"}, "poll_interval_seconds": 0},
+        json={
+            "connection_id": http_connection["id"],
+            "scope": {"kind": "full_history"},
+            "poll_interval_seconds": 0,
+        },
     )
     assert http.get(f"{PREFIX}/rooms/{http_room}/backfills").json()["count"] == 1
-    assert http.get(f"{PREFIX}/rooms/{http_room}/backfills", params={"state": "running"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/rooms/{http_room}/backfills", params={"state": "complete"}).json()["count"] == 0
-    assert http.get(f"{PREFIX}/rooms/{http_room}/backfills", params={"where": "vendor=salesforce"}).json()["count"] == 1
+    assert (
+        http.get(f"{PREFIX}/rooms/{http_room}/backfills", params={"state": "running"}).json()[
+            "count"
+        ]
+        == 1
+    )
+    assert (
+        http.get(f"{PREFIX}/rooms/{http_room}/backfills", params={"state": "complete"}).json()[
+            "count"
+        ]
+        == 0
+    )
+    assert (
+        http.get(
+            f"{PREFIX}/rooms/{http_room}/backfills", params={"where": "vendor=salesforce"}
+        ).json()["count"]
+        == 1
+    )
 
 
 def test_an_unknown_run_is_a_404_from_this_feature_s_own_error(http, http_room):
@@ -2140,12 +2267,18 @@ def test_an_unknown_connection_is_a_409_not_a_404(http, http_room):
     assert response.json()["error"] == "backfill_connection_not_found"
 
 
-def test_a_range_that_runs_backwards_is_a_422_with_the_field_to_fix(http, http_room, http_connection):
+def test_a_range_that_runs_backwards_is_a_422_with_the_field_to_fix(
+    http, http_room, http_connection
+):
     response = http.post(
         f"{PREFIX}/rooms/{http_room}/backfills",
         json={
             "connection_id": http_connection["id"],
-            "scope": {"kind": "range", "from": "2026-06-01T00:00:00Z", "to": "2026-01-01T00:00:00Z"},
+            "scope": {
+                "kind": "range",
+                "from": "2026-06-01T00:00:00Z",
+                "to": "2026-01-01T00:00:00Z",
+            },
         },
     )
     assert response.status_code == 400
@@ -2239,10 +2372,16 @@ def test_the_audit_source_is_a_required_keyword_on_every_writing_method():
         assert parameters["source"].kind is inspect.Parameter.KEYWORD_ONLY, name
 
 
-def test_every_audit_row_this_writes_records_the_room_it_belongs_to(http, http_room, http_connection):
+def test_every_audit_row_this_writes_records_the_room_it_belongs_to(
+    http, http_room, http_connection
+):
     http.post(
         f"{PREFIX}/rooms/{http_room}/backfills",
-        json={"connection_id": http_connection["id"], "scope": {"kind": "full_history"}, "poll_interval_seconds": 0},
+        json={
+            "connection_id": http_connection["id"],
+            "scope": {"kind": "full_history"},
+            "poll_interval_seconds": 0,
+        },
     )
     entries = http.get("/api/audit", params={"limit": 1000}).json()["entries"]
     mine = [entry for entry in entries if entry["source"] and PREFIX in entry["source"]]
@@ -2267,12 +2406,16 @@ def test_the_feature_added_no_table_and_no_typed_column(store):
     """The only fixed vocabulary is the envelope; the collections are ordinary."""
     before = {
         row["name"]
-        for row in store.db._conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        for row in store.db._conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
     }
     BackfillEngine(store).vocabulary()
     after = {
         row["name"]
-        for row in store.db._conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        for row in store.db._conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
     }
     assert before == after
 
@@ -2280,10 +2423,14 @@ def test_the_feature_added_no_table_and_no_typed_column(store):
 def test_the_collections_are_named_apart_from_every_other_features(store, engine, dataverse):
     open_run(engine, dataverse)
     assert {record["collection"] for record in store.list(RUNS, limit=10)} == {"crm_backfill_run"}
-    assert {record["collection"] for record in store.list(CURSORS_STORE, limit=10)} == {"crm_backfill_cursor"}
+    assert {record["collection"] for record in store.list(CURSORS_STORE, limit=10)} == {
+        "crm_backfill_cursor"
+    }
 
 
-def test_the_cursor_store_deduplicates_its_researched_fields_into_one_indexable_name(engine, dataverse):
+def test_the_cursor_store_deduplicates_its_researched_fields_into_one_indexable_name(
+    engine, dataverse
+):
     """The mirror exists so a `where` on the snake_case name resolves."""
     run = open_run(engine, dataverse)
     connection_id = run["data"]["connection_id"]

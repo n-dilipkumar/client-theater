@@ -21,15 +21,15 @@ from dsr.deps import StoreDep
 from dsr.permissions import ROLE_LABELS
 from dsr.room_lifecycle import (
     ACTIVE,
-    ARCHIVED,
     ARCHIVE_CONFIRMATION,
     ARCHIVE_NOTICE,
+    ARCHIVED,
+    ROLE_CAPABILITIES,
     RoomBadRequest,
     RoomConflict,
     RoomForbidden,
     RoomNotFound,
     RoomRefusal,
-    ROLE_CAPABILITIES,
     available_actions,
     room_state,
     status_of,
@@ -119,7 +119,9 @@ def vocabulary() -> dict[str, Any]:
             },
         },
         "roles": dict(ROLE_LABELS),
-        "role_capabilities": {role: sorted(caps) for role, caps in sorted(ROLE_CAPABILITIES.items())},
+        "role_capabilities": {
+            role: sorted(caps) for role, caps in sorted(ROLE_CAPABILITIES.items())
+        },
         "notice": ARCHIVE_NOTICE,
         "writes": ["status"],
         "inferred": [

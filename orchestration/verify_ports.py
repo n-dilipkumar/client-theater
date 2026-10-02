@@ -15,6 +15,7 @@ the product:
   3. the host actually loads it - the host *skips* a feature that fails to
      import and reports it, so a broken feature can look like a green build
 """
+
 import json
 import os
 import subprocess
@@ -42,14 +43,22 @@ TARGETS = [
 
 
 def run(args, cwd, timeout=600, env=None):
-    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout, env=env)
+    p = subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=env,
+    )
     return p.returncode, (p.stdout + p.stderr)
 
 
 def main():
     results = {}
-    for ticket, folder, branch in TARGETS:
+    for ticket, folder, _branch in TARGETS:
         wt = WORKSPACES / folder
         print("=" * 78)
         print(f"  {ticket}   {folder}")
@@ -73,9 +82,21 @@ def main():
         env = dict(os.environ)
         env["DSR_DB_PATH"] = str(Path(tmp) / "verify.db")
         env["DSR_AUDIT_DIR"] = str(Path(tmp) / "audit")
-        code, out = run([str(PY), "-m", "pytest", "-p", "no:cacheprovider",
-                         "--tb=line", "-o", "addopts=", "-q"],
-                        wt / "backend", env=env)
+        code, out = run(
+            [
+                str(PY),
+                "-m",
+                "pytest",
+                "-p",
+                "no:cacheprovider",
+                "--tb=line",
+                "-o",
+                "addopts=",
+                "-q",
+            ],
+            wt / "backend",
+            env=env,
+        )
         passed = failed = 0
         for line in reversed(out.splitlines()):
             if " passed" in line or " failed" in line:
@@ -122,22 +143,27 @@ def main():
             if line.startswith("{") and '"loaded"' in line:
                 reg = json.loads(line)
         if reg:
-            print(f"  host loaded          :")
+            print("  host loaded          :")
             for fid, prefix, n in reg["loaded"]:
                 mark = "  <-- this port" if ticket.lower().replace("-", "") in fid else ""
                 print(f"      {fid:34} {prefix or '-':18} {n} routes{mark}")
             if reg["failed"]:
-                print(f"  host FAILED features :")
+                print("  host FAILED features :")
                 for fid, err in reg["failed"]:
                     print(f"      {fid}: {err}")
             else:
-                print(f"  failed features      : none")
+                print("  failed features      : none")
         else:
             print(f"  host check FAILED    : {out3[-400:]}")
 
         ok = (not offenders) and failed == 0 and reg is not None and not reg["failed"]
-        results[ticket] = {"ok": ok, "passed": passed, "failed": failed,
-                           "offenders": offenders, "files": len(files)}
+        results[ticket] = {
+            "ok": ok,
+            "passed": passed,
+            "failed": failed,
+            "offenders": offenders,
+            "files": len(files),
+        }
         print(f"\n  VERDICT: {'PASS' if ok else 'NEEDS WORK'}")
         print()
 
@@ -146,10 +172,14 @@ def main():
     print("=" * 78)
     for ticket, _, _ in TARGETS:
         r = results.get(ticket, {})
-        print(f"  {ticket}  {r.get('passed', '?')} passed  {r.get('failed', '?')} failed  "
-              f"shared={r.get('offenders', '?')}  -> {'PASS' if r.get('ok') else 'NEEDS WORK'}")
+        print(
+            f"  {ticket}  {r.get('passed', '?')} passed  {r.get('failed', '?')} failed  "
+            f"shared={r.get('offenders', '?')}  -> {'PASS' if r.get('ok') else 'NEEDS WORK'}"
+        )
 
-    (MAIN / "data" / "verify_ports.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    (MAIN / "data" / "verify_ports.json").write_text(
+        json.dumps(results, indent=2), encoding="utf-8"
+    )
     return 0 if all(r.get("ok") for r in results.values()) else 1
 
 
