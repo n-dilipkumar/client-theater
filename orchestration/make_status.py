@@ -48,7 +48,7 @@ section reading "0 in progress" is a claim about the world that nobody re-checks
 
 Usage:
     .venv/Scripts/python orchestration/make_status.py
-    .venv/Scripts/python orchestration/make_status.py --tests 9939,0,2
+    .venv/Scripts/python orchestration/make_status.py --tests <passed>,<failed>,<xfailed>
 """
 
 from __future__ import annotations
@@ -146,6 +146,36 @@ def git(*args: str, cwd: Path = ROOT) -> str:
         timeout=120,
     )
     return (p.stdout + p.stderr).strip()
+
+
+#: The ref a test measurement is attributed to.
+#:
+#: Every other measurement here is asked of `origin/main`, because built-state and
+#: the test-file inventory are read out of a git tree. The test suite is the one
+#: exception: pytest runs in the working tree (`cwd=ROOT / "backend"`), so the tree
+#: it measures is the checked-out one. Keying the cache on `origin/main` instead
+#: would let a feature branch that adds tests write its higher count under main's
+#: sha, and the next run on main would serve that count as a fact about main --
+#: the same lie, one hop further along.
+MEASURED_REF = "HEAD"
+
+
+def measured_ref() -> str:
+    """Name the tree the suite is about to be run on, or ``""`` if git cannot.
+
+    The short sha, plus ``+dirty`` when anything under `backend/` has uncommitted
+    edits. A dirty tree is not the commit its sha names, and an untracked
+    ``test_wf123.py`` under `backend/tests`` is exactly the kind of change that
+    moves the count, so untracked files count towards the marker. Empty is
+    returned rather than a guess: a measurement whose tree cannot be named is one
+    nothing may later reuse.
+    """
+    sha = git("log", "-1", "--format=%h", MEASURED_REF)
+    if not sha:
+        return ""
+    if git("status", "--porcelain", "--untracked-files=all", "--", "backend"):
+        sha += "+dirty"
+    return sha
 
 
 # --------------------------------------------------------------------------- #
@@ -268,19 +298,43 @@ def conditional() -> list[str]:
 
 SUITE_CACHE = ROOT / "data" / "suite_result.json"
 
+#: How long a measurement stays fresh, in seconds. Age is a floor on staleness, not
+#: evidence of currency: a tree does not change on the hour.
+CACHE_MAX_AGE = 3600
+
+
+def cache_is_current(entry: dict, ref: str, age: float) -> bool:
+    """Whether a cached measurement may be served as a measurement of ``ref``.
+
+    Age alone is not evidence. The entry records the ref it was measured on, and a
+    measurement of any other tree is a measurement of a state that has stopped
+    existing - however recent it is. So the ref has to match, and an entry with no
+    ref at all is refused rather than guessed at, because an entry that cannot name
+    its tree cannot be shown to describe this one.
+    """
+    return bool(ref) and entry.get("ref") == ref and age < CACHE_MAX_AGE and bool(entry.get("passed"))
+
 
 def suite_count(argv: list[str]):
-    """Measure the suite, or reuse a recent measurement.
+    """Measure the suite, or reuse a measurement of this exact tree.
 
     Running the suite is the slow part - about two minutes unloaded, and far
     longer with a dozen agents competing for the CPU, which is how this generator
     got killed mid-run and left the dashboard describing a state that had never
     been committed. A dashboard that costs a quarter of an hour to refresh is a
-    dashboard nobody refreshes.
+    dashboard nobody refreshes. So the cache stays, and its whole job is to stop
+    the suite being run twice for the same tree.
 
-    So the test count is the one number that may be supplied rather than
-    recomputed, and it is never invented: it comes either from this run or from a
-    measurement on record, and the dashboard says which, and when.
+    It used to be trusted on age alone, and that is how this dashboard came to
+    report 9939 while the tree carried 9995: a measurement taken on `454c005` was
+    served as current for an hour, because nothing compared the `ref` the entry
+    recorded against the tree being described. It is now pinned - see
+    `cache_is_current` - and the label says which commit a reused number came
+    from, so a reader can tell a reused measurement from a fresh one.
+
+    The count is never invented. It comes from this run, from a measurement of
+    this tree, or from a human passing `--tests`, and the dashboard says which,
+    and when, and on what.
     """
     for i, a in enumerate(argv):
         if a == "--tests" and i + 1 < len(argv):
@@ -290,6 +344,7 @@ def suite_count(argv: list[str]):
                 int(parts[1]),
                 (int(parts[2]) if len(parts) > 2 else 0),
                 "supplied",
+                "",
             )
         if a.startswith("--tests="):
             parts = a.split("=", 1)[1].split(",")
@@ -298,18 +353,22 @@ def suite_count(argv: list[str]):
                 int(parts[1]),
                 (int(parts[2]) if len(parts) > 2 else 0),
                 "supplied",
+                "",
             )
+
+    ref = measured_ref()
 
     if SUITE_CACHE.exists():
         try:
             d = json.loads(SUITE_CACHE.read_text(encoding="utf-8"))
             age = time.time() - d.get("at", 0)
-            if age < 3600 and d.get("passed"):
+            if cache_is_current(d, ref, age):
                 return (
                     d["passed"],
                     d.get("failed", 0),
                     d.get("xfailed", 0),
-                    f"measured {int(age // 60)} min ago",
+                    f"measured {int(age // 60)} min ago on {ref}",
+                    ref,
                 )
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
@@ -342,23 +401,27 @@ def suite_count(argv: list[str]):
             xfail = int(m.group(1))
         if passed or failed:
             break
-    try:
-        SUITE_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        SUITE_CACHE.write_text(
-            json.dumps(
-                {
-                    "at": time.time(),
-                    "passed": passed,
-                    "failed": failed,
-                    "xfailed": xfail,
-                    "ref": git("log", "-1", "--format=%h", "origin/main"),
-                }
-            ),
-            encoding="utf-8",
-        )
-    except OSError:
-        pass
-    return passed, failed, xfail, "measured now"
+    # Record the ref this run measured, and only if it can be named. An entry with
+    # an empty `ref` would sit in a cache that no reader is allowed to accept, so
+    # writing one buys nothing.
+    if ref:
+        try:
+            SUITE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+            SUITE_CACHE.write_text(
+                json.dumps(
+                    {
+                        "at": time.time(),
+                        "passed": passed,
+                        "failed": failed,
+                        "xfailed": xfail,
+                        "ref": ref,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+    return passed, failed, xfail, "measured now", ref
 
 
 def escape_cell(text: str) -> str:
@@ -380,7 +443,7 @@ def render() -> tuple[str, dict]:
     front = frontend_features()
     tests = test_files()
     reg = host_report()
-    passed, failed, xfail, tests_from = suite_count(sys.argv[1:])
+    passed, failed, xfail, tests_from, tests_ref = suite_count(sys.argv[1:])
     entries = corpus()
 
     routes_by_ticket: dict[str, tuple[str, int]] = {}
@@ -575,11 +638,20 @@ def render() -> tuple[str, dict]:
     A("| `workflows.json` | each name, domain and criticality |")
     A("| `criticality-decisions.json` | the criticality judgment and its basis |")
     A("| `backend/tests`, `frontend/src/features` | test and UI presence |")
+    A("| the test suite | the test count, run here or reused from a measurement of this tree |")
     A("")
     A("No new source of truth: built-state is measured, never cached. Sections")
     A("describing agent worktrees were removed rather than printed as zeros —")
     A('this generator cannot measure them, and a section reading "0 in progress"')
     A("is a claim about the world nobody re-checks.")
+    A("")
+    A("The one cache left is the test count, because the suite takes about two")
+    A("minutes and this generator used to get killed mid-run. It is pinned to the")
+    A("commit it was measured on: age alone is not evidence, and a measurement of")
+    A("some earlier commit is a measurement of a tree that no longer exists, which")
+    A("is how this dashboard came to quote a count for a state that had stopped")
+    A("being true. A reused count names its commit above, so a reader can tell it")
+    A("from a fresh one.")
     A("")
     A("The Description column is read out of each workflow's own specification")
     A("page, the same page the ticket number comes from. It used to come from a")
@@ -598,6 +670,7 @@ def render() -> tuple[str, dict]:
         "failed": failed,
         "xfailed": xfail,
         "tests_from": tests_from,
+        "tests_ref": tests_ref,
         "failed_features": failed_features,
         "head": head.split()[0] if head else "?",
         "built_tickets": [r["ticket"] for r in done],
@@ -629,6 +702,12 @@ def main() -> int:
     section = back.split("## Every workflow", 1)[-1].split("\n## ", 1)[0]
     row_re = re.compile(r"^\| `WF-\d{3}` \| [^|]+\| [^|]+\|", re.M)
     owner_re = re.compile(r"^\| `WF-\d{3}` \|.*\| \|\s*$", re.M)
+    # The cache rule is asserted here as a truth table rather than left to prose.
+    # These five cases are the regression test for the bug that produced a
+    # dashboard quoting a measurement of a commit that had moved on, so they are
+    # hermetic: they touch no cache file and run no suite.
+    ref_now = measured_ref()
+    fresh = {"at": time.time(), "passed": 9939, "failed": 0, "xfailed": 2, "ref": ref_now}
     checks = {
         f"{stats['total']} rows, one per workflow": len(row_re.findall(section)) == stats["total"],
         "every built ticket present": all(f"| `{t}` |" in back for t in stats["built_tickets"]),
@@ -639,6 +718,20 @@ def main() -> int:
         "the measured route count": f"routes     {stats['routes']}" in back,
         "the measured test count": f"tests      {stats['passed']} passed" in back,
         "the test count's provenance is stated": f"({stats['tests_from']})" in back,
+        "a reused test count names the commit it came from": stats["tests_from"]
+        in ("measured now", "supplied")
+        or stats["tests_from"].endswith(f"on {stats['tests_ref']}"),
+        "a measurement of this tree is accepted": cache_is_current(fresh, ref_now, 0.0),
+        "a measurement of another tree is refused, however fresh": not cache_is_current(
+            {**fresh, "ref": "454c005"}, ref_now, 0.0
+        ),
+        "a measurement with no ref is refused": not cache_is_current(
+            {"at": time.time(), "passed": 1}, ref_now, 0.0
+        ),
+        "a measurement over an hour old is refused": not cache_is_current(
+            fresh, ref_now, CACHE_MAX_AGE + 1
+        ),
+        "nothing is reused when no tree can be named": not cache_is_current(fresh, "", 0.0),
         "the measured failure count": f"features   {stats['failed_features']} failed" in back,
         f"{stats['total']} rows carry an empty Owner cell": len(owner_re.findall(section))
         == stats["total"],

@@ -8,16 +8,16 @@
 Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `baaa07f Rebuild STATUS.md as a per-workflow table, measured from git (#77)` &middot; measured 2026-10-01T19:20:35+05:30
+`main` at `4c3a09a Merge pull request #83 from n-dilipkumar/chore/landing-and-labels` &middot; measured 2026-10-02T10:07:48+05:30
 
-Measured in `C:\Users\Dilip\orca\workspaces\client-theater\t1-docs-dedup`. This file is written by the generator and by nothing
+Measured in `C:\Users\Dilip\orca\workspaces\client-theater\status-truth`. This file is written by the generator and by nothing
 else; if a copy of it lives in another clone, that copy is not this run.
 
 ## Progress
 
     workflows  [###########.......................] 48/138
     routes     881
-    tests      9939 passed, 0 failed, 2 xfailed  (supplied)
+    tests      9995 passed, 0 failed, 2 xfailed  (measured 0 min ago on 4c3a09a)
     features   0 failed to load
     to go      90
 
@@ -281,11 +281,20 @@ will otherwise always look like the obvious queue.
 | `workflows.json` | each name, domain and criticality |
 | `criticality-decisions.json` | the criticality judgment and its basis |
 | `backend/tests`, `frontend/src/features` | test and UI presence |
+| the test suite | the test count, run here or reused from a measurement of this tree |
 
 No new source of truth: built-state is measured, never cached. Sections
 describing agent worktrees were removed rather than printed as zeros —
 this generator cannot measure them, and a section reading "0 in progress"
 is a claim about the world nobody re-checks.
+
+The one cache left is the test count, because the suite takes about two
+minutes and this generator used to get killed mid-run. It is pinned to the
+commit it was measured on: age alone is not evidence, and a measurement of
+some earlier commit is a measurement of a tree that no longer exists, which
+is how this dashboard came to quote a count for a state that had stopped
+being true. A reused count names its commit above, so a reader can tell it
+from a fresh one.
 
 The Description column is read out of each workflow's own specification
 page, the same page the ticket number comes from. It used to come from a
