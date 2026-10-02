@@ -76,7 +76,9 @@ def _room_name(record: Mapping[str, Any]) -> str:
 
 
 def _currency() -> str:
-    return (os.environ.get("DSR_CRM_CURRENCY") or DEFAULT_CURRENCY).strip().upper() or DEFAULT_CURRENCY
+    return (
+        os.environ.get("DSR_CRM_CURRENCY") or DEFAULT_CURRENCY
+    ).strip().upper() or DEFAULT_CURRENCY
 
 
 def _amount(payload: Mapping[str, Any], raw: Any) -> float:
@@ -165,9 +167,7 @@ def preconditions(store: RecordStore, *, room_id: str | None = None) -> dict[str
     deals = scan(store, DEAL_COLLECTION, room_id=room_id).records
     rooms = _rooms_by_id(store)
 
-    linked_rooms = [
-        record for record in deals if record.get("room_id") in rooms
-    ]
+    linked_rooms = [record for record in deals if record.get("room_id") in rooms]
     account_names = {_account_name(record.get("data") or {}).lower() for record in accounts}
     account_names.discard("")
     linked_accounts = [
@@ -175,11 +175,7 @@ def preconditions(store: RecordStore, *, room_id: str | None = None) -> dict[str
         for record in linked_rooms
         if _deal_account(record.get("data") or {}).lower() in account_names
     ]
-    linked_assets = [
-        record
-        for record in linked_rooms
-        if _asset_ids(record.get("data") or {})
-    ]
+    linked_assets = [record for record in linked_rooms if _asset_ids(record.get("data") or {})]
 
     blockers: list[dict[str, str]] = []
     if not accounts:
@@ -505,7 +501,11 @@ def sales_influence(
         )
 
     assets = [
-        {**bucket, "workspaces": sorted(bucket["workspaces"]), "workspace_count": len(bucket["workspaces"])}
+        {
+            **bucket,
+            "workspaces": sorted(bucket["workspaces"]),
+            "workspace_count": len(bucket["workspaces"]),
+        }
         for bucket in per_asset.values()
     ]
     assets.sort(key=lambda entry: (-entry["revenue"], entry["title"]))
@@ -523,8 +523,7 @@ def sales_influence(
         "filters": report.filters.as_dict(),
         "room_id": active.room_id,
         "currency": None if len(associated_revenue) > 1 else next(iter(associated_revenue), None),
-        "revenue_mixed_currencies": len(associated_revenue) > 1
-        or len(deal_revenue) > 1,
+        "revenue_mixed_currencies": len(associated_revenue) > 1 or len(deal_revenue) > 1,
         "revenue_by_currency": associated_revenue,
         "deal_revenue_by_currency": deal_revenue,
         "totals": {
@@ -707,14 +706,24 @@ def link_account(
         found = store.find(ACCOUNT_COLLECTION, {"crm_id": crm_id}, limit=1)
         existing = found[0] if found else None
     if existing is not None:
-        return {"created": False, "account": store.update(existing["id"], data, actor=actor, source=source)}
-    return {"created": True, "account": store.create(ACCOUNT_COLLECTION, data, actor=actor, source=source)}
+        return {
+            "created": False,
+            "account": store.update(existing["id"], data, actor=actor, source=source),
+        }
+    return {
+        "created": True,
+        "account": store.create(ACCOUNT_COLLECTION, data, actor=actor, source=source),
+    }
 
 
 def summarise_links(store: RecordStore) -> dict[str, Any]:
     """Every recorded link, for a reviewer to read the join's inputs directly."""
-    accounts = [record["data"] | {"id": record["id"]} for record in scan(store, ACCOUNT_COLLECTION).records]
-    deals = [record["data"] | {"id": record["id"]} for record in scan(store, DEAL_COLLECTION).records]
+    accounts = [
+        record["data"] | {"id": record["id"]} for record in scan(store, ACCOUNT_COLLECTION).records
+    ]
+    deals = [
+        record["data"] | {"id": record["id"]} for record in scan(store, DEAL_COLLECTION).records
+    ]
     return {
         "accounts": accounts,
         "deals": deals,

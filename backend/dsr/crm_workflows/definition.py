@@ -47,8 +47,8 @@ from dsr.crm_workflows.errors import (
 )
 from dsr.crm_workflows.vocabulary import (
     ACTION_KINDS,
-    DELIVERY_PATHS,
     DEFAULT_INTEGRATION,
+    DELIVERY_PATHS,
     ENROLLMENT_TYPES,
     STAGE_KINDS,
     require_trigger_mode,
@@ -228,8 +228,7 @@ def normalise_workflow(payload: Mapping[str, Any]) -> dict[str, Any]:
         **{
             key: value
             for key, value in payload.items()
-            if key
-            not in ("status", "published_at", "enrollments", "last_enrolled_at", "revision")
+            if key not in ("status", "published_at", "enrollments", "last_enrolled_at", "revision")
         },
         "name": name,
         "description": str(payload.get("description") or "").strip(),
@@ -316,7 +315,11 @@ def apply_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[st
 
     merged = {key: value for key, value in current.items() if key not in reserved}
     for key, value in patch.items():
-        if key == "trigger" and isinstance(value, Mapping) and isinstance(current.get("trigger"), Mapping):
+        if (
+            key == "trigger"
+            and isinstance(value, Mapping)
+            and isinstance(current.get("trigger"), Mapping)
+        ):
             merged["trigger"] = {**current["trigger"], **value}
         else:
             merged[key] = value
@@ -329,7 +332,9 @@ def apply_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[st
     return normalise_workflow(merged)
 
 
-def lint_workflow(definition: Mapping[str, Any], integration: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+def lint_workflow(
+    definition: Mapping[str, Any], integration: Mapping[str, Any] | None
+) -> list[dict[str, Any]]:
     """Everything about a definition a person would want to know before publishing.
 
     The integration findings are the researched step 1 - "Verify the HubSpot
@@ -379,7 +384,9 @@ def lint_workflow(definition: Mapping[str, Any], integration: Mapping[str, Any] 
                     "code": "action_unresolved",
                     "severity": "warning",
                     "field": f"actions.{action.get('index')}",
-                    "message": str(action.get("reason") or "this action kind is not resolved by this build."),
+                    "message": str(
+                        action.get("reason") or "this action kind is not resolved by this build."
+                    ),
                 }
             )
         elif action.get("kind") == "update_field" and not action.get("value"):

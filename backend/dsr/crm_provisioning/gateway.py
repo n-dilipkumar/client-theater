@@ -106,7 +106,8 @@ class SimulatedCrm:
             limit=1000,
         )
         return sorted(
-            (dict(row["data"]) | {"id": row["id"]} for row in rows), key=lambda d: str(d.get("name"))
+            (dict(row["data"]) | {"id": row["id"]} for row in rows),
+            key=lambda d: str(d.get("name")),
         )
 
     def property_definitions(
@@ -119,7 +120,8 @@ class SimulatedCrm:
             limit=1000,
         )
         return sorted(
-            (dict(row["data"]) | {"id": row["id"]} for row in rows), key=lambda d: str(d.get("name"))
+            (dict(row["data"]) | {"id": row["id"]} for row in rows),
+            key=lambda d: str(d.get("name")),
         )
 
     def find_object(self, connection: Mapping[str, Any], name: str) -> dict[str, Any] | None:
@@ -139,7 +141,8 @@ class SimulatedCrm:
     def key_definitions(self, connection: Mapping[str, Any]) -> list[dict[str, Any]]:
         rows = self.store.find(KEYS, {"connection_id": connection["id"]}, limit=1000)
         return sorted(
-            (dict(row["data"]) | {"id": row["id"]} for row in rows), key=lambda d: str(d.get("key_id"))
+            (dict(row["data"]) | {"id": row["id"]} for row in rows),
+            key=lambda d: str(d.get("key_id")),
         )
 
     def find_key(self, connection: Mapping[str, Any], key_id: str) -> dict[str, Any] | None:
@@ -300,7 +303,11 @@ class SimulatedCrm:
         return self._patch_key(
             connection,
             key_id,
-            {"status": next_status, "polls": polls, "async_job_id": f"job-{self.rng.randrange(10**8):08d}"},
+            {
+                "status": next_status,
+                "polls": polls,
+                "async_job_id": f"job-{self.rng.randrange(10**8):08d}",
+            },
             source=source,
             actor=actor,
         )

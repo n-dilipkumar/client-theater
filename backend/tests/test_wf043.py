@@ -60,8 +60,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.change_stream import (
     CDC_EDITIONS,
@@ -82,17 +80,17 @@ from dsr.change_stream import (
     INVALIDATIONS,
     ORGS,
     OWNED_COLLECTIONS,
-    REPLICA,
     RECOMMENDED_BUFFER_BYTES,
+    REPLICA,
     REPLICA_STATES,
     STANDARD_CHANNEL,
-    SUBSCRIPTIONS,
     SUBSCRIPTION_STATES,
+    SUBSCRIPTIONS,
     TABLES,
     TRANSPORTS,
     UNENRICHED_CHANGE_TYPES,
-    UNSUPPORTED_DELTA_QUERY_OPTIONS,
     UNSUPPORTED_DELTA_QUERY_OPTION_MESSAGE,
+    UNSUPPORTED_DELTA_QUERY_OPTIONS,
     BufferSet,
     ChangeStreamEngine,
     ChangeStreamError,
@@ -105,7 +103,6 @@ from dsr.change_stream import (
     DuplicateOrg,
     EditionDoesNotSupportCdc,
     EntityNotOnChannel,
-    EventError,
     FieldMapError,
     MalformedEvent,
     MissingTrackChangesPreference,
@@ -115,7 +112,6 @@ from dsr.change_stream import (
     RecordUnresolvable,
     StandardChannelEnrichmentRefused,
     SubscriptionClosed,
-    SubscriptionError,
     SubscriptionLimitExceeded,
     UnknownChangeType,
     UnknownChannel,
@@ -127,10 +123,12 @@ from dsr.change_stream import (
     add_enrichment,
     apply_field_map,
     change_count,
+    dataverse as dataverse_rules,
     deal_panel_row,
     edition_supports_cdc,
     enriched_fields_in_effect,
     field_map_findings,
+    hubspot as hubspot_rules,
     is_enriched_change_type,
     is_standard_channel,
     merge_into,
@@ -150,17 +148,21 @@ from dsr.change_stream import (
     supports_enrichment,
     sync_key_field,
     unmapped_crm_fields,
+    usage as usage_rules,
     wire_format_for,
 )
-from dsr.change_stream import dataverse as dataverse_rules
-from dsr.change_stream import hubspot as hubspot_rules
-from dsr.change_stream import usage as usage_rules
 from dsr.change_stream.buffering import TransactionBuffer
 from dsr.change_stream.events import applies_to_entity
-from dsr.change_stream.inferences import ENRICHMENT_QUOTE, INFERENCES, SOURCED_QUOTE, by_id, describe
+from dsr.change_stream.inferences import (
+    ENRICHMENT_QUOTE,
+    INFERENCES,
+    SOURCED_QUOTE,
+    by_id,
+)
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -290,9 +292,7 @@ def subscription(engine, enriched_channel, room):
     opened = engine.open_subscription(
         {"channel_id": enriched_channel["id"]}, room_id=room["id"], actor="dana", source=SOURCE
     )
-    return engine.fetch(
-        opened["id"], {"num_requested": 50}, actor="dana", source=SOURCE
-    )
+    return engine.fetch(opened["id"], {"num_requested": 50}, actor="dana", source=SOURCE)
 
 
 @pytest.fixture()
@@ -330,7 +330,9 @@ def http_setup(client) -> dict[str, Any]:
             "field_map": FIELD_MAP,
         },
     ).json()
-    client.post(f"{PREFIX}/channels/{channel['id']}/enrichment", json={"fields": ["External_Id__c"]})
+    client.post(
+        f"{PREFIX}/channels/{channel['id']}/enrichment", json={"fields": ["External_Id__c"]}
+    )
     subscription = client.post(
         f"{PREFIX}/rooms/{room['id']}/subscriptions", json={"channel_id": channel["id"]}
     ).json()
@@ -368,9 +370,9 @@ def test_the_prefix_is_ours_alone(http):
     for feature in body["features"]:
         if feature["id"] == FEATURE_ID:
             continue
-        assert not any(
-            route["path"].startswith(PREFIX) for route in feature["routes"]
-        ), f"{feature['id']} also serves under {PREFIX}"
+        assert not any(route["path"].startswith(PREFIX) for route in feature["routes"]), (
+            f"{feature['id']} also serves under {PREFIX}"
+        )
 
 
 def test_feature_module_does_not_import_the_shared_app():
@@ -449,7 +451,7 @@ def test_the_enrichment_transport_set_is_the_three_the_research_names():
 
 
 def test_the_wire_format_is_named_for_pub_sub_and_cometd_only():
-    """"subscriber deserialisation (Avro for Pub/Sub, JSON for CometD)"."""
+    """ "subscriber deserialisation (Avro for Pub/Sub, JSON for CometD)"."""
     assert wire_format_for("pubsub") == "avro"
     assert wire_format_for("cometd") == "json"
     # Not named by the research, so not guessed.
@@ -468,7 +470,7 @@ def test_the_edition_gate_covers_exactly_the_four_editions():
 
 
 def test_the_recommended_buffer_is_three_megabytes():
-    """"We recommend you set the buffer size to 3 MB"."""
+    """ "We recommend you set the buffer size to 3 MB"."""
     assert RECOMMENDED_BUFFER_BYTES == 3 * 1024 * 1024
 
 
@@ -523,8 +525,7 @@ def test_no_other_feature_writes_into_a_collection_this_one_owns():
             if re.search(rf"""['"]{re.escape(name)}['"]""", text):
                 offenders.append(f"{path.name} mentions {name!r}")
     assert not offenders, (
-        "another feature already owns a collection this one writes to: "
-        + ", ".join(offenders)
+        "another feature already owns a collection this one writes to: " + ", ".join(offenders)
     )
 
 
@@ -560,7 +561,11 @@ def test_the_vocabulary_endpoint_serves_what_the_rules_enforce(http):
     assert body["replica_states"] == list(REPLICA_STATES)
     assert body["deal_panel"] == DEAL_PANEL
     assert body["fields"]["change_event"][:5] == [
-        "changeType", "transactionKey", "sequenceNumber", "commitTimestamp", "changedFields"
+        "changeType",
+        "transactionKey",
+        "sequenceNumber",
+        "commitTimestamp",
+        "changedFields",
     ]
 
 
@@ -568,7 +573,10 @@ def test_the_vocabulary_endpoint_names_the_transports_and_their_capabilities(htt
     transports = {row["id"]: row for row in http.get(f"{PREFIX}/vocabulary").json()["transports"]}
     assert set(transports) == set(TRANSPORTS)
     assert transports["pubsub"] == {
-        "id": "pubsub", "vendor": "salesforce", "wire_format": "avro", "supports_enrichment": True
+        "id": "pubsub",
+        "vendor": "salesforce",
+        "wire_format": "avro",
+        "supports_enrichment": True,
     }
     assert transports["delta_link"]["vendor"] == "dataverse"
     assert transports["workflow_webhook"]["vendor"] == "hubspot"
@@ -655,7 +663,12 @@ def test_the_inference_endpoint_serves_the_register_beside_the_sourced_quotes(ht
     assert body["sourced"]["standard_channel"] == STANDARD_CHANNEL
     assert body["sourced"]["enrichment_transports"] == list(ENRICHMENT_TRANSPORTS)
     assert body["sourced"]["recommended_buffer_bytes"] == RECOMMENDED_BUFFER_BYTES
-    assert body["sourced"]["delta_query_options_refused"] == ["$filter", "$orderby", "$expand", "$top"]
+    assert body["sourced"]["delta_query_options_refused"] == [
+        "$filter",
+        "$orderby",
+        "$expand",
+        "$top",
+    ]
     assert {row["id"] for row in body["inferences"]} == {entry["id"] for entry in INFERENCES}
 
 
@@ -813,12 +826,16 @@ def test_enriched_fields_apply_to_update_and_delete():
 
 
 def test_enriched_fields_are_dropped_on_create_and_undelete():
-    """"these events contain all the populated fields"."""
+    """ "these events contain all the populated fields"."""
     channel = {"enriched_fields": ["External_Id__c"]}
     for change_type in UNENRICHED_CHANGE_TYPES:
-        assert enriched_fields_in_effect(
-            {"change_type": change_type, "enriched_fields": {"External_Id__c": "stale"}}, channel
-        ) == {}
+        assert (
+            enriched_fields_in_effect(
+                {"change_type": change_type, "enriched_fields": {"External_Id__c": "stale"}},
+                channel,
+            )
+            == {}
+        )
 
 
 def test_only_selected_enriched_fields_are_used():
@@ -877,17 +894,20 @@ def test_sync_key_field_falls_back_to_the_researchs_own_example():
 
 
 def test_the_sync_key_resolves_from_the_payload_before_the_enriched_field():
-    """"If the sync key itself changed, the new value is the row to find."""
+    """ "If the sync key itself changed, the new value is the row to find."""
     field_map = normalise_field_map(FIELD_MAP)
-    assert resolve_external_id(
-        {"External_Id__c": "new"}, {"External_Id__c": "old"}, field_map
-    ) == "new"
+    assert (
+        resolve_external_id({"External_Id__c": "new"}, {"External_Id__c": "old"}, field_map)
+        == "new"
+    )
     assert resolve_external_id({}, {"External_Id__c": "old"}, field_map) == "old"
     assert resolve_external_id({}, {}, field_map) is None
 
 
 def test_a_blank_sync_key_value_is_not_a_resolution():
-    assert resolve_external_id({"External_Id__c": "   "}, {}, normalise_field_map(FIELD_MAP)) is None
+    assert (
+        resolve_external_id({"External_Id__c": "   "}, {}, normalise_field_map(FIELD_MAP)) is None
+    )
 
 
 def test_changed_fields_decides_what_is_applied_and_nothing_else_is_cleared():
@@ -914,7 +934,10 @@ def test_an_empty_changed_fields_list_applies_nothing():
 def test_a_value_the_payload_omits_falls_through_to_the_enriched_field():
     field_map = normalise_field_map(FIELD_MAP)
     applied = apply_field_map(
-        {"StageName": "X"}, {"External_Id__c": "dsr-9"}, field_map, changed_fields=["External_Id__c"]
+        {"StageName": "X"},
+        {"External_Id__c": "dsr-9"},
+        field_map,
+        changed_fields=["External_Id__c"],
     )
     assert applied["fields"] == {"external_id": "dsr-9"}
     assert applied["read_from"]["external_id"] == "enriched"
@@ -943,9 +966,12 @@ def test_a_field_the_map_does_not_name_is_recorded_not_dropped():
 
 def test_a_field_the_map_does_name_is_not_reported_as_unmapped():
     field_map = normalise_field_map(FIELD_MAP)
-    assert unmapped_crm_fields(
-        {"StageName": "X", "External_Id__c": "a", "Account_Name__c": "b"}, field_map, None
-    ) == []
+    assert (
+        unmapped_crm_fields(
+            {"StageName": "X", "External_Id__c": "a", "Account_Name__c": "b"}, field_map, None
+        )
+        == []
+    )
 
 
 def test_field_map_findings_report_a_missing_sync_key_as_an_error():
@@ -1007,14 +1033,14 @@ def test_a_repeat_of_the_same_key_parks_and_commits_nothing():
 
 
 def test_a_different_key_commits_the_parked_transaction():
-    """"only commits to the room's local replica when the key changes"."""
+    """ "only commits to the room's local replica when the key changes"."""
     buffers = BufferSet()
     buffers.accept(normalise_event(event_payload(sequenceNumber=1)))
-    buffers.accept(
-        normalise_event(event_payload(sequenceNumber=2, commitTimestamp=ago(4)))
-    )
+    buffers.accept(normalise_event(event_payload(sequenceNumber=2, commitTimestamp=ago(4))))
     buffer, completed, outcome = buffers.accept(
-        normalise_event(event_payload(transactionKey="txn-B", sequenceNumber=1, commitTimestamp=ago(3)))
+        normalise_event(
+            event_payload(transactionKey="txn-B", sequenceNumber=1, commitTimestamp=ago(3))
+        )
     )
     assert [b.key for b in completed] == ["txn-A"]
     assert buffer.key == "txn-B"
@@ -1025,10 +1051,14 @@ def test_each_new_key_commits_only_the_one_it_closed():
     buffers = BufferSet()
     buffers.accept(normalise_event(event_payload(transactionKey="txn-1", sequenceNumber=1)))
     _b, first, _o = buffers.accept(
-        normalise_event(event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)))
+        normalise_event(
+            event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4))
+        )
     )
     _b, second, _o = buffers.accept(
-        normalise_event(event_payload(transactionKey="txn-3", sequenceNumber=1, commitTimestamp=ago(3)))
+        normalise_event(
+            event_payload(transactionKey="txn-3", sequenceNumber=1, commitTimestamp=ago(3))
+        )
     )
     assert [b.key for b in first] == ["txn-1"]
     assert [b.key for b in second] == ["txn-2"]
@@ -1045,12 +1075,16 @@ def test_a_restored_run_commits_together_when_the_next_key_arrives():
     buffers = BufferSet()
     buffers.accept(normalise_event(event_payload(transactionKey="txn-1", sequenceNumber=1)))
     _b, completed, _o = buffers.accept(
-        normalise_event(event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)))
+        normalise_event(
+            event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4))
+        )
     )
     buffers.restore_front(completed)
     assert buffers.keys() == ["txn-1", "txn-2"]
     _b, drained, _o = buffers.accept(
-        normalise_event(event_payload(transactionKey="txn-3", sequenceNumber=1, commitTimestamp=ago(3)))
+        normalise_event(
+            event_payload(transactionKey="txn-3", sequenceNumber=1, commitTimestamp=ago(3))
+        )
     )
     assert [b.key for b in drained] == ["txn-1", "txn-2"]
 
@@ -1059,7 +1093,9 @@ def test_events_inside_a_transaction_apply_in_sequence_order():
     buffers = BufferSet()
     for sequence in (3, 1, 2):
         buffers.accept(
-            normalise_event(event_payload(sequenceNumber=sequence, commitTimestamp=ago(10 - sequence)))
+            normalise_event(
+                event_payload(sequenceNumber=sequence, commitTimestamp=ago(10 - sequence))
+            )
         )
     assert [e["sequence_number"] for e in buffers.current().ordered()] == [1, 2, 3]
 
@@ -1077,7 +1113,7 @@ def test_a_duplicate_sequence_number_inside_one_transaction_is_refused():
 
 
 def test_a_sequence_gap_is_reported_and_not_repaired():
-    """"Reconcile gaps and overflows" is section 18: a different workflow."""
+    """ "Reconcile gaps and overflows" is section 18: a different workflow."""
     assert sequence_gaps(parked("txn-A", 1, 2, 5, 6).ordered()) == [
         {"after": 2, "before": 5, "missing": 2}
     ]
@@ -1097,8 +1133,11 @@ def test_the_buffer_description_names_the_gap_policy_so_a_reader_is_not_led():
 def test_closing_the_stream_flushes_what_is_parked():
     buffers = BufferSet()
     buffers.accept(normalise_event(event_payload(transactionKey="txn-1", sequenceNumber=1)))
-    buffers.accept(normalise_event(event_payload(transactionKey="txn-2", sequenceNumber=1,
-                                                 commitTimestamp=ago(4))))
+    buffers.accept(
+        normalise_event(
+            event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4))
+        )
+    )
     ready = buffers.flush()
     assert [b.key for b in ready] == ["txn-2"]
     assert buffers.keys() == []
@@ -1108,7 +1147,9 @@ def test_closing_a_restored_run_flushes_the_whole_run():
     buffers = BufferSet()
     buffers.accept(normalise_event(event_payload(transactionKey="txn-1", sequenceNumber=1)))
     _b, completed, _o = buffers.accept(
-        normalise_event(event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)))
+        normalise_event(
+            event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4))
+        )
     )
     buffers.restore_front(completed)
     assert [b.key for b in buffers.flush()] == ["txn-1", "txn-2"]
@@ -1122,7 +1163,9 @@ def test_a_failed_commit_puts_its_transaction_back_where_it_was():
     buffers = BufferSet()
     buffers.accept(normalise_event(event_payload(transactionKey="txn-1", sequenceNumber=1)))
     _b, completed, _o = buffers.accept(
-        normalise_event(event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)))
+        normalise_event(
+            event_payload(transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4))
+        )
     )
     buffers.restore_front(completed)
     assert buffers.keys() == ["txn-1", "txn-2"]
@@ -1193,8 +1236,13 @@ def channel_stub(**overrides: Any) -> dict[str, Any]:
 
 def test_a_create_writes_the_row_from_the_payload():
     event = normalise_event(
-        event_payload(payload={"External_Id__c": "dsr-1", "StageName": "Prospecting",
-                               "Account_Name__c": "Northwind"})
+        event_payload(
+            payload={
+                "External_Id__c": "dsr-1",
+                "StageName": "Prospecting",
+                "Account_Name__c": "Northwind",
+            }
+        )
     )
     plan = plan_event(event, channel_stub(), existing=None)
     assert plan["action"] == "insert"
@@ -1225,9 +1273,12 @@ def test_an_update_merges_only_what_changed_and_resolves_through_enrichment():
 
 def test_an_update_for_a_known_record_is_an_update_not_an_insert():
     event = normalise_event(
-        event_payload(changeType="UPDATE", changedFields=["StageName"],
-                      payload={"StageName": "Negotiation"},
-                      enrichedFields={"External_Id__c": "dsr-1"})
+        event_payload(
+            changeType="UPDATE",
+            changedFields=["StageName"],
+            payload={"StageName": "Negotiation"},
+            enrichedFields={"External_Id__c": "dsr-1"},
+        )
     )
     plan = plan_event(event, channel_stub(), existing={"id": "replica-1", "data": {}})
     assert plan["action"] == "update"
@@ -1241,7 +1292,9 @@ def test_a_delete_becomes_a_tombstone_that_keeps_its_sync_key():
     plan = plan_event(event, channel_stub(), existing={"id": "replica-1", "data": {}})
     assert plan["action"] == "delete"
     assert plan["state"] == "deleted"
-    merged = merge_into({"id": "replica-1", "data": {"external_id": "dsr-1", "stage": "Won"}}, plan, event)
+    merged = merge_into(
+        {"id": "replica-1", "data": {"external_id": "dsr-1", "stage": "Won"}}, plan, event
+    )
     assert merged["data"]["external_id"] == "dsr-1"
     assert merged["data"]["replica_state"] == "deleted"
     assert merged["data"]["stage"] == "Won"
@@ -1249,8 +1302,10 @@ def test_a_delete_becomes_a_tombstone_that_keeps_its_sync_key():
 
 def test_an_undelete_restores_a_tombstone():
     event = normalise_event(
-        event_payload(changeType="UNDELETE", payload={"External_Id__c": "dsr-1",
-                                                      "Account_Name__c": "Northwind"})
+        event_payload(
+            changeType="UNDELETE",
+            payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
+        )
     )
     plan = plan_event(event, channel_stub(), existing=None)
     assert plan["action"] == "insert"
@@ -1270,9 +1325,11 @@ def test_an_undelete_against_a_known_row_is_a_restore():
 
 
 def test_an_undelete_with_no_tombstone_still_writes_a_complete_row():
-    """"these events contain all the populated fields"."""
+    """ "these events contain all the populated fields"."""
     event = normalise_event(
-        event_payload(changeType="UNDELETE", payload={"External_Id__c": "dsr-1", "StageName": "Won"})
+        event_payload(
+            changeType="UNDELETE", payload={"External_Id__c": "dsr-1", "StageName": "Won"}
+        )
     )
     plan = plan_event(event, channel_stub(), existing=None)
     assert plan["action"] == "insert"
@@ -1280,11 +1337,12 @@ def test_an_undelete_with_no_tombstone_still_writes_a_complete_row():
 
 
 def test_an_update_with_no_resolvable_record_is_refused_naming_the_field():
-    """"If the room needs an unchanged field (e.g. the external ID) to resolve
+    """ "If the room needs an unchanged field (e.g. the external ID) to resolve
     the record, that field is added as an enriched field on the channel." """
     event = normalise_event(
-        event_payload(changeType="UPDATE", changedFields=["StageName"],
-                      payload={"StageName": "Negotiation"})
+        event_payload(
+            changeType="UPDATE", changedFields=["StageName"], payload={"StageName": "Negotiation"}
+        )
     )
     with pytest.raises(RecordUnresolvable) as caught:
         plan_event(event, channel_stub(enriched_fields=[]), existing=None)
@@ -1301,7 +1359,7 @@ def test_a_delete_with_no_resolvable_record_is_refused_too():
 
 
 def test_a_create_with_no_sync_key_is_refused_without_advising_enrichment():
-    """"Enriched fields aren't included in change events for create"."""
+    """ "Enriched fields aren't included in change events for create"."""
     event = normalise_event(event_payload(changeType="CREATE", payload={"StageName": "X"}))
     with pytest.raises(RecordUnresolvable) as caught:
         plan_event(event, channel_stub(), existing=None)
@@ -1310,9 +1368,12 @@ def test_a_create_with_no_sync_key_is_refused_without_advising_enrichment():
 
 def test_a_merge_reports_exactly_which_replica_fields_moved():
     event = normalise_event(
-        event_payload(changeType="UPDATE", changedFields=["StageName"],
-                      payload={"StageName": "Negotiation"},
-                      enrichedFields={"External_Id__c": "dsr-1"})
+        event_payload(
+            changeType="UPDATE",
+            changedFields=["StageName"],
+            payload={"StageName": "Negotiation"},
+            enrichedFields={"External_Id__c": "dsr-1"},
+        )
     )
     plan = plan_event(event, channel_stub(), existing=None)
     merged = merge_into(
@@ -1336,9 +1397,12 @@ def test_a_replica_row_records_its_channel_so_the_lookup_can_be_indexed():
 
 def test_replica_findings_report_enriched_values_and_unmapped_crm_fields():
     event = normalise_event(
-        event_payload(changeType="UPDATE", changedFields=["StageName", "Brand_New__c"],
-                      payload={"StageName": "Negotiation", "Brand_New__c": 1},
-                      enrichedFields={"External_Id__c": "dsr-1"})
+        event_payload(
+            changeType="UPDATE",
+            changedFields=["StageName", "Brand_New__c"],
+            payload={"StageName": "Negotiation", "Brand_New__c": 1},
+            enrichedFields={"External_Id__c": "dsr-1"},
+        )
     )
     plan = plan_event(event, channel_stub(), existing=None)
     codes = {entry["code"] for entry in replica_findings(plan, channel_stub())}
@@ -1357,8 +1421,11 @@ def test_a_delete_for_an_unknown_record_is_flagged_rather_than_silent():
 
 def test_a_clean_update_with_the_sync_key_in_the_payload_carries_no_findings():
     event = normalise_event(
-        event_payload(changeType="UPDATE", changedFields=["StageName"],
-                      payload={"StageName": "Negotiation", "External_Id__c": "dsr-1"})
+        event_payload(
+            changeType="UPDATE",
+            changedFields=["StageName"],
+            payload={"StageName": "Negotiation", "External_Id__c": "dsr-1"},
+        )
     )
     plan = plan_event(event, channel_stub(), existing={"id": "r", "data": {}})
     assert plan["resolution"] == "payload"
@@ -1367,9 +1434,12 @@ def test_a_clean_update_with_the_sync_key_in_the_payload_carries_no_findings():
 
 def test_an_update_that_needs_enrichment_to_resolve_is_flagged_for_it():
     event = normalise_event(
-        event_payload(changeType="UPDATE", changedFields=["StageName"],
-                      payload={"StageName": "Negotiation"},
-                      enrichedFields={"External_Id__c": "dsr-1"})
+        event_payload(
+            changeType="UPDATE",
+            changedFields=["StageName"],
+            payload={"StageName": "Negotiation"},
+            enrichedFields={"External_Id__c": "dsr-1"},
+        )
     )
     plan = plan_event(event, channel_stub(), existing={"id": "r", "data": {}})
     codes = {entry["code"] for entry in replica_findings(plan, channel_stub())}
@@ -1378,8 +1448,9 @@ def test_an_update_that_needs_enrichment_to_resolve_is_flagged_for_it():
 
 
 def test_the_deal_panel_row_hides_the_bookkeeping_fields():
-    event = normalise_event(event_payload(payload={"External_Id__c": "dsr-1",
-                                                    "Account_Name__c": "Northwind"}))
+    event = normalise_event(
+        event_payload(payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"})
+    )
     plan = plan_event(event, channel_stub(), existing=None)
     merged = merge_into(None, plan, event)
     row = deal_panel_row({"id": "replica-1", "room_id": "room-1", "data": merged["data"]})
@@ -1421,8 +1492,12 @@ def test_any_other_name_makes_a_custom_channel():
 def test_a_caller_cannot_relabel_a_custom_channel_as_the_standard_one():
     with pytest.raises(ChannelError) as caught:
         normalise_channel(
-            {"name": "/data/dsrOpportunities", "kind": "standard", "entities": ["Opportunity"],
-             "field_map": FIELD_MAP},
+            {
+                "name": "/data/dsrOpportunities",
+                "kind": "standard",
+                "entities": ["Opportunity"],
+                "field_map": FIELD_MAP,
+            },
             org=org_stub(),
             transport="pubsub",
         )
@@ -1459,8 +1534,12 @@ def test_the_default_buffer_is_the_vendor_recommendation_and_a_deviation_is_repo
     assert default["buffer_matches_recommendation"] is True
 
     smaller = normalise_channel(
-        {"name": "/data/y", "entities": ["Opportunity"], "field_map": FIELD_MAP,
-         "buffer_bytes": 1024},
+        {
+            "name": "/data/y",
+            "entities": ["Opportunity"],
+            "field_map": FIELD_MAP,
+            "buffer_bytes": 1024,
+        },
         org=org_stub(),
         transport="pubsub",
     )
@@ -1471,15 +1550,19 @@ def test_a_buffer_size_must_be_a_positive_whole_number():
     for bad in (0, -1, "lots"):
         with pytest.raises(ChannelError):
             normalise_channel(
-                {"name": "/data/x", "entities": ["Opportunity"], "field_map": FIELD_MAP,
-                 "buffer_bytes": bad},
+                {
+                    "name": "/data/x",
+                    "entities": ["Opportunity"],
+                    "field_map": FIELD_MAP,
+                    "buffer_bytes": bad,
+                },
                 org=org_stub(),
                 transport="pubsub",
             )
 
 
 def test_channel_name_collision_is_case_sensitive():
-    """"The channel name is case-sensitive." """
+    """ "The channel name is case-sensitive." """
     existing = [{"name": STANDARD_CHANNEL, "org_id": "crm_org_stub"}]
     from dsr.change_stream.channels import channel_name_taken
 
@@ -1502,7 +1585,10 @@ def test_the_collision_message_names_the_names_in_use():
         {"name": "/data/dsrContacts", "org_id": "crm_org_stub"},
         {"name": "/data/other", "org_id": "crm_org_elsewhere"},
     ]
-    assert names_in_use(existing, org_id="crm_org_stub") == ["/data/ChangeEvents", "/data/dsrContacts"]
+    assert names_in_use(existing, org_id="crm_org_stub") == [
+        "/data/ChangeEvents",
+        "/data/dsrContacts",
+    ]
 
 
 def test_enrichment_on_the_standard_channel_is_refused_with_the_researched_reason():
@@ -1518,7 +1604,7 @@ def test_enrichment_on_the_standard_channel_is_refused_with_the_researched_reaso
 
 
 def test_a_case_variant_of_the_standard_channel_is_still_protected():
-    """"The channel name is case-sensitive", so a variant is a separate channel -
+    """ "The channel name is case-sensitive", so a variant is a separate channel -
     but the harm the isolation rule names does not depend on the spelling."""
     assert is_standard_channel("/data/changeevents") is True
 
@@ -1555,9 +1641,12 @@ def test_removing_an_enrichment_the_channel_does_not_have_is_refused():
     with pytest.raises(ChannelError) as caught:
         remove_enrichment({"name": "/data/x", "enriched_fields": ["A__c"]}, "B__c")
     assert "it enriches" in str(caught.value)
-    assert remove_enrichment({"name": "/data/x", "enriched_fields": ["A__c"]}, "A__c")[
-        "enriched_fields"
-    ] == []
+    assert (
+        remove_enrichment({"name": "/data/x", "enriched_fields": ["A__c"]}, "A__c")[
+            "enriched_fields"
+        ]
+        == []
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1579,14 +1668,18 @@ def test_a_table_needs_a_logical_name():
 
 
 def test_enabling_track_changes_is_idempotent():
-    assert dataverse_rules.enable_track_changes({"track_changes": False})["already_enabled"] is False
+    assert (
+        dataverse_rules.enable_track_changes({"track_changes": False})["already_enabled"] is False
+    )
     assert dataverse_rules.enable_track_changes({"track_changes": True})["already_enabled"] is True
 
 
 def test_disabling_track_changes_is_refused_from_either_state():
-    """"After you enable change tracking for a table, you can't disable it." """
-    for table in ({"logical_name": "account", "track_changes": True},
-                  {"logical_name": "account", "track_changes": False}):
+    """ "After you enable change tracking for a table, you can't disable it." """
+    for table in (
+        {"logical_name": "account", "track_changes": True},
+        {"logical_name": "account", "track_changes": False},
+    ):
         with pytest.raises(ChangeTrackingIrreversible) as caught:
             dataverse_rules.refuse_disable(table)
         assert "can't disable it" in str(caught.value)
@@ -1600,8 +1693,11 @@ def test_a_poll_without_the_track_changes_header_is_refused():
 
 def test_a_poll_on_a_table_that_is_not_tracking_is_refused():
     with pytest.raises(ChangeTrackingDisabled) as caught:
-        poll({"logical_name": "account", "track_changes": False},
-             prefer=CHANGE_TRACKING_PREFERENCE, options={})
+        poll(
+            {"logical_name": "account", "track_changes": False},
+            prefer=CHANGE_TRACKING_PREFERENCE,
+            options={},
+        )
     assert "Track changes" in str(caught.value)
 
 
@@ -1613,7 +1709,7 @@ def test_each_of_the_four_refused_query_options_names_itself(option):
             prefer=CHANGE_TRACKING_PREFERENCE,
             options={option: "1"},
         )
-    assert str(caught.value).startswith("The \"$")
+    assert str(caught.value).startswith('The "$')
 
 
 def test_select_is_not_a_refused_query_option():
@@ -1664,8 +1760,13 @@ def test_the_change_count_needs_tracking_and_says_what_it_does_not_count():
     with pytest.raises(ChangeTrackingDisabled):
         change_count({"logical_name": "account", "track_changes": False}, deltatoken=None)
     counted = change_count(
-        {"logical_name": "account", "track_changes": True, "entity_set": "accounts",
-         "deltatoken": "account:0", "change_count": 7},
+        {
+            "logical_name": "account",
+            "track_changes": True,
+            "entity_set": "accounts",
+            "deltatoken": "account:0",
+            "change_count": 7,
+        },
         deltatoken="account:0",
     )
     assert counted["count"] == 7
@@ -1694,7 +1795,7 @@ def test_a_hubspot_subscription_records_that_the_criteria_are_the_workflows():
 
 
 def test_a_workflow_call_is_exempt_from_the_rate_limit_and_still_counted():
-    """"Webhook calls made via workflows do not count towards the API rate limit." """
+    """ "Webhook calls made via workflows do not count towards the API rate limit." """
     result = hubspot_rules.charge_or_exempt({"limit": 10, "spent": 4}, via_workflow=True)
     assert result["charged"] is False
     assert result["spent"] == 4
@@ -1731,7 +1832,7 @@ def test_the_hubspot_description_says_the_rest_surface_is_not_built():
 
 
 def test_requested_and_delivered_are_counted_apart():
-    """"the number of requested events in the FetchRequest parameter"."""
+    """ "the number of requested events in the FetchRequest parameter"."""
     usage = usage_rules.request_fetch(None, 100)
     assert usage["events_requested"] == 100
     assert usage["fetch_outstanding"] == 100
@@ -1742,7 +1843,9 @@ def test_requested_and_delivered_are_counted_apart():
 
 
 def test_the_buffer_high_water_never_goes_back_down():
-    usage = usage_rules.record_delivery(usage_rules.record_delivery(None, buffer_bytes=900), buffer_bytes=10)
+    usage = usage_rules.record_delivery(
+        usage_rules.record_delivery(None, buffer_bytes=900), buffer_bytes=10
+    )
     assert usage["buffer_high_water_bytes"] == 900
     assert usage["buffer_bytes"] == 10
 
@@ -1771,9 +1874,14 @@ def test_usage_merge_ignores_a_counter_it_does_not_know():
 
 def test_the_usage_description_compares_against_the_recommendation():
     described = usage_rules.describe(
-        {"id": "sub-1", "channel_name": "/data/x", "transport": "pubsub", "state": "open",
-         "buffer_limit_bytes": RECOMMENDED_BUFFER_BYTES,
-         "usage": {"events_delivered": 2, "buffer_bytes": RECOMMENDED_BUFFER_BYTES * 2}}
+        {
+            "id": "sub-1",
+            "channel_name": "/data/x",
+            "transport": "pubsub",
+            "state": "open",
+            "buffer_limit_bytes": RECOMMENDED_BUFFER_BYTES,
+            "usage": {"events_delivered": 2, "buffer_bytes": RECOMMENDED_BUFFER_BYTES * 2},
+        }
     )
     assert described["recommended_buffer_bytes"] == RECOMMENDED_BUFFER_BYTES
     assert described["buffer_exceeds_recommendation"] is True
@@ -1804,7 +1912,9 @@ def test_registering_an_org_records_the_gate_reading(engine):
 def test_the_system_must_be_one_the_research_names(engine):
     for bad in ("pipedrive", "", None):
         with pytest.raises(OrgError):
-            engine.register_org({"system": bad, "edition": "Unlimited"}, actor="dana", source=SOURCE)
+            engine.register_org(
+                {"system": bad, "edition": "Unlimited"}, actor="dana", source=SOURCE
+            )
 
 
 def test_the_edition_is_required_and_says_why(engine):
@@ -1814,18 +1924,22 @@ def test_the_edition_is_required_and_says_why(engine):
 
 
 def test_one_org_per_system_so_the_gate_has_one_answer(engine):
-    engine.register_org({"system": "salesforce", "edition": "Unlimited"}, actor="dana", source=SOURCE)
+    engine.register_org(
+        {"system": "salesforce", "edition": "Unlimited"}, actor="dana", source=SOURCE
+    )
     with pytest.raises(DuplicateOrg):
-        engine.register_org({"system": "salesforce", "edition": "Enterprise"}, actor="dana", source=SOURCE)
+        engine.register_org(
+            {"system": "salesforce", "edition": "Enterprise"}, actor="dana", source=SOURCE
+        )
 
 
 def test_enabling_cdc_on_an_edition_without_it_is_refused(engine, org):
     engine.orgs()
-    low = engine.register_org(
-        {"system": "hubspot", "edition": "Free"}, actor="dana", source=SOURCE
-    )
+    low = engine.register_org({"system": "hubspot", "edition": "Free"}, actor="dana", source=SOURCE)
     with pytest.raises(EditionDoesNotSupportCdc) as caught:
-        engine.patch_org(low["id"], {"cdc_enabled": True, "entities": ["Deal"]}, actor="dana", source=SOURCE)
+        engine.patch_org(
+            low["id"], {"cdc_enabled": True, "entities": ["Deal"]}, actor="dana", source=SOURCE
+        )
     assert "Professional" not in str(caught.value)
     assert "Enterprise, Performance, Unlimited, Developer" in str(caught.value)
 
@@ -1840,8 +1954,12 @@ def test_enabling_cdc_needs_the_objects_the_room_cares_about(engine, org):
 def test_a_channel_needs_cdc_enabled_first(engine, org):
     with pytest.raises(ChangeStreamError) as caught:
         engine.create_channel(
-            {"name": "/data/x", "org_id": org["id"], "entities": ["Opportunity"],
-             "field_map": FIELD_MAP},
+            {
+                "name": "/data/x",
+                "org_id": org["id"],
+                "entities": ["Opportunity"],
+                "field_map": FIELD_MAP,
+            },
             actor="dana",
             source=SOURCE,
         )
@@ -1866,8 +1984,12 @@ def test_patching_an_org_with_nothing_to_change_is_refused(engine, cdc_org):
 
 def test_a_channel_is_created_on_a_cdc_enabled_org(engine, cdc_org):
     channel = engine.create_channel(
-        {"name": "/data/dsrOpportunities", "org_id": cdc_org["id"], "entities": ["Opportunity"],
-         "field_map": FIELD_MAP},
+        {
+            "name": "/data/dsrOpportunities",
+            "org_id": cdc_org["id"],
+            "entities": ["Opportunity"],
+            "field_map": FIELD_MAP,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -1879,8 +2001,12 @@ def test_a_channel_is_created_on_a_cdc_enabled_org(engine, cdc_org):
 def test_a_duplicate_channel_name_on_the_same_org_is_refused(engine, cdc_org, channel):
     with pytest.raises(DuplicateChannelName) as caught:
         engine.create_channel(
-            {"name": channel["name"], "org_id": cdc_org["id"], "entities": ["Opportunity"],
-             "field_map": FIELD_MAP},
+            {
+                "name": channel["name"],
+                "org_id": cdc_org["id"],
+                "entities": ["Opportunity"],
+                "field_map": FIELD_MAP,
+            },
             actor="dana",
             source=SOURCE,
         )
@@ -1888,18 +2014,26 @@ def test_a_duplicate_channel_name_on_the_same_org_is_refused(engine, cdc_org, ch
 
 
 def test_the_same_name_on_another_org_is_allowed(engine, cdc_org, channel):
-    other = engine.register_org({"system": "hubspot", "edition": "Professional"}, actor="dana",
-                                source=SOURCE)
+    other = engine.register_org(
+        {"system": "hubspot", "edition": "Professional"}, actor="dana", source=SOURCE
+    )
     with pytest.raises(EditionDoesNotSupportCdc):
-        engine.patch_org(other["id"], {"cdc_enabled": True, "entities": ["Deal"]}, actor="dana",
-                          source=SOURCE)
+        engine.patch_org(
+            other["id"], {"cdc_enabled": True, "entities": ["Deal"]}, actor="dana", source=SOURCE
+        )
     other = engine.patch_org(
         other["id"], {"edition": "Enterprise", "org_name": "Contoso"}, actor="dana", source=SOURCE
     )
-    engine.patch_org(other["id"], {"cdc_enabled": True, "entities": ["Deal"]}, actor="dana",
-                     source=SOURCE)
+    engine.patch_org(
+        other["id"], {"cdc_enabled": True, "entities": ["Deal"]}, actor="dana", source=SOURCE
+    )
     second = engine.create_channel(
-        {"name": channel["name"], "org_id": other["id"], "entities": ["Deal"], "field_map": FIELD_MAP},
+        {
+            "name": channel["name"],
+            "org_id": other["id"],
+            "entities": ["Deal"],
+            "field_map": FIELD_MAP,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -1910,18 +2044,23 @@ def test_the_channel_name_filter_is_case_sensitive_over_http(http):
     setup = http_setup(http)
     http.post(
         f"{PREFIX}/channels",
-        json={"name": "/data/changeevents", "org_id": setup["org"]["id"],
-              "entities": ["Opportunity"], "transport": "pubsub", "field_map": FIELD_MAP},
+        json={
+            "name": "/data/changeevents",
+            "org_id": setup["org"]["id"],
+            "entities": ["Opportunity"],
+            "transport": "pubsub",
+            "field_map": FIELD_MAP,
+        },
     )
     exact = http.get(f"{PREFIX}/channels", params={"name": "/data/changeevents"}).json()
     assert exact["count"] == 1
-    assert http.get(f"{PREFIX}/channels", params={"name": "/DATA/ChangeEvents"}).json()["count"] == 0
+    assert (
+        http.get(f"{PREFIX}/channels", params={"name": "/DATA/ChangeEvents"}).json()["count"] == 0
+    )
 
 
 def test_enrichment_through_the_engine_records_the_fields(engine, channel):
-    enriched = engine.enrich_channel(
-        channel["id"], ["External_Id__c"], actor="dana", source=SOURCE
-    )
+    enriched = engine.enrich_channel(channel["id"], ["External_Id__c"], actor="dana", source=SOURCE)
     assert enriched["enriched_fields"] == ["External_Id__c"]
     assert enriched["added"] == ["External_Id__c"]
     assert "enriched field" in enriched["enrichment_note"]
@@ -1929,8 +2068,12 @@ def test_enrichment_through_the_engine_records_the_fields(engine, channel):
 
 def test_enriching_the_standard_channel_through_the_engine_is_refused(engine, cdc_org):
     standard = engine.create_channel(
-        {"name": STANDARD_CHANNEL, "org_id": cdc_org["id"], "entities": ["Opportunity"],
-         "field_map": FIELD_MAP},
+        {
+            "name": STANDARD_CHANNEL,
+            "org_id": cdc_org["id"],
+            "entities": ["Opportunity"],
+            "field_map": FIELD_MAP,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -1996,9 +2139,7 @@ def test_a_fetch_request_records_what_was_asked_for(engine, subscription):
 
 
 def test_the_vendors_num_events_spelling_works_too(engine, subscription):
-    fetched = engine.fetch(
-        subscription["id"], {"numEvents": 10}, actor="dana", source=SOURCE
-    )
+    fetched = engine.fetch(subscription["id"], {"numEvents": 10}, actor="dana", source=SOURCE)
     assert fetched["usage"]["events_requested"] == 60
     assert fetched["fetch_outstanding"] == 60
 
@@ -2082,7 +2223,7 @@ def fresh_subscription(engine, channel, room):
 
 
 def test_an_event_with_no_fetch_request_outstanding_is_refused(engine, channel, room):
-    """"The client can control the flow of events received"."""
+    """ "The client can control the flow of events received"."""
     opened = engine.open_subscription(
         {"channel_id": channel["id"]}, room_id=room["id"], actor="dana", source=SOURCE
     )
@@ -2122,7 +2263,11 @@ def test_an_event_parks_and_commits_nothing_until_the_key_changes(engine, subscr
 def test_the_arrival_of_a_new_key_commits_the_parked_transaction(engine, subscription, room):
     deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1)
     result = deliver(
-        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
         commitTimestamp=ago(4),
     )
     assert [row["transaction_key"] for row in result["committed"]] == ["txn-1"]
@@ -2131,17 +2276,34 @@ def test_the_arrival_of_a_new_key_commits_the_parked_transaction(engine, subscri
 
 def test_a_committed_transaction_applies_every_event_in_sequence_order(engine, subscription, room):
     deliver(
-        engine, subscription, room, transactionKey="txn-1", sequenceNumber=3,
-        changeType="UPDATE", changedFields=["Amount"], payload={"Amount": 300},
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=3,
+        changeType="UPDATE",
+        changedFields=["Amount"],
+        payload={"Amount": 300},
         enrichedFields={"External_Id__c": "dsr-1"},
     )
     deliver(
-        engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-        changeType="UPDATE", changedFields=["StageName"], payload={"StageName": "Negotiation"},
-        enrichedFields={"External_Id__c": "dsr-1"}, commitTimestamp=ago(6),
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        changeType="UPDATE",
+        changedFields=["StageName"],
+        payload={"StageName": "Negotiation"},
+        enrichedFields={"External_Id__c": "dsr-1"},
+        commitTimestamp=ago(6),
     )
     result = deliver(
-        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
         commitTimestamp=ago(4),
     )
     committed = result["committed"][0]
@@ -2160,12 +2322,25 @@ def test_the_commit_result_names_the_rule_that_fired(engine, subscription, room)
 
 
 def test_an_update_merges_into_the_row_a_create_wrote(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1", "StageName": "Prospecting", "Amount": 100})
     deliver(
-        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-        commitTimestamp=ago(4), changeType="UPDATE", changedFields=["StageName"],
-        payload={"StageName": "Negotiation"}, enrichedFields={"External_Id__c": "dsr-1"},
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1", "StageName": "Prospecting", "Amount": 100},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="UPDATE",
+        changedFields=["StageName"],
+        payload={"StageName": "Negotiation"},
+        enrichedFields={"External_Id__c": "dsr-1"},
     )
     # txn-2 is the transaction the stream is still filling, so the drain is the
     # close. That is the researched rule's terminal case, not a shortcut.
@@ -2178,23 +2353,50 @@ def test_an_update_merges_into_the_row_a_create_wrote(engine, subscription, room
 
 def test_a_field_the_update_did_not_change_is_kept(engine, subscription, room):
     """The "unchanged but needed" gap, and the reason nothing is cleared."""
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1", "StageName": "Prospecting", "Amount": 100})
     deliver(
-        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-        commitTimestamp=ago(4), changeType="UPDATE", changedFields=["StageName"],
-        payload={"StageName": "Negotiation"}, enrichedFields={"External_Id__c": "dsr-1"},
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1", "StageName": "Prospecting", "Amount": 100},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="UPDATE",
+        changedFields=["StageName"],
+        payload={"StageName": "Negotiation"},
+        enrichedFields={"External_Id__c": "dsr-1"},
     )
     engine.close_subscription(subscription["id"], actor="dana", source=SOURCE)
     assert engine.replica(room_id=room["id"])[0]["fields"]["amount"] == 100
 
 
 def test_a_delete_commits_a_tombstone_and_keeps_the_sync_key(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4), changeType="DELETE", payload={},
-            enrichedFields={"External_Id__c": "dsr-1"})
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="DELETE",
+        payload={},
+        enrichedFields={"External_Id__c": "dsr-1"},
+    )
     engine.close_subscription(subscription["id"], actor="dana", source=SOURCE)
     rows = engine.replica(room_id=room["id"])
     assert rows[0]["state"] == "deleted"
@@ -2203,14 +2405,35 @@ def test_a_delete_commits_a_tombstone_and_keeps_the_sync_key(engine, subscriptio
 
 
 def test_an_undelete_finds_the_tombstone_and_restores_it(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4), changeType="DELETE", payload={},
-            enrichedFields={"External_Id__c": "dsr-1"})
-    deliver(engine, subscription, room, transactionKey="txn-3", sequenceNumber=1,
-            commitTimestamp=ago(3), changeType="UNDELETE",
-            payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"})
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="DELETE",
+        payload={},
+        enrichedFields={"External_Id__c": "dsr-1"},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-3",
+        sequenceNumber=1,
+        commitTimestamp=ago(3),
+        changeType="UNDELETE",
+        payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
+    )
     engine.close_subscription(subscription["id"], actor="dana", source=SOURCE)
     rows = engine.replica(room_id=room["id"])
     assert rows[0]["state"] == "live"
@@ -2219,11 +2442,25 @@ def test_an_undelete_finds_the_tombstone_and_restores_it(engine, subscription, r
 
 
 def test_a_delete_that_is_never_undeleted_leaves_a_tombstone(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4), changeType="DELETE", payload={},
-            enrichedFields={"External_Id__c": "dsr-1"})
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="DELETE",
+        payload={},
+        enrichedFields={"External_Id__c": "dsr-1"},
+    )
     assert engine.replica(room_id=room["id"])[0]["state"] == "live"
     engine.close_subscription(subscription["id"], actor="dana", source=SOURCE)
     rows = engine.replica(room_id=room["id"])
@@ -2233,11 +2470,25 @@ def test_a_delete_that_is_never_undeleted_leaves_a_tombstone(engine, subscriptio
 
 
 def test_a_tombstone_can_be_filtered_on(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4), changeType="DELETE", payload={},
-            enrichedFields={"External_Id__c": "dsr-1"})
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1"},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="DELETE",
+        payload={},
+        enrichedFields={"External_Id__c": "dsr-1"},
+    )
     engine.close_subscription(subscription["id"], actor="dana", source=SOURCE)
     assert engine.replica(room_id=room["id"], state="deleted")
     assert engine.replica(room_id=room["id"], state="live") == []
@@ -2245,8 +2496,13 @@ def test_a_tombstone_can_be_filtered_on(engine, subscription, room):
 
 def test_an_unresolvable_update_is_refused_at_commit_and_stays_parked(engine, room, cdc_org):
     channel = engine.create_channel(
-        {"name": "/data/dsrNoEnrichment", "org_id": cdc_org["id"], "entities": ["Opportunity"],
-         "transport": "pubsub", "field_map": FIELD_MAP},
+        {
+            "name": "/data/dsrNoEnrichment",
+            "org_id": cdc_org["id"],
+            "entities": ["Opportunity"],
+            "transport": "pubsub",
+            "field_map": FIELD_MAP,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -2254,24 +2510,43 @@ def test_an_unresolvable_update_is_refused_at_commit_and_stays_parked(engine, ro
         {"channel_id": channel["id"]}, room_id=room["id"], actor="dana", source=SOURCE
     )
     engine.fetch(opened["id"], {"num_requested": 10}, actor="dana", source=SOURCE)
-    deliver(engine, opened, room, transactionKey="txn-1", sequenceNumber=1, changeType="UPDATE",
-            changedFields=["StageName"], payload={"StageName": "Negotiation"})
+    deliver(
+        engine,
+        opened,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        changeType="UPDATE",
+        changedFields=["StageName"],
+        payload={"StageName": "Negotiation"},
+    )
     with pytest.raises(RecordUnresolvable) as caught:
-        deliver(engine, opened, room, transactionKey="txn-2", sequenceNumber=1,
-                commitTimestamp=ago(4), changeType="UPDATE", changedFields=["Amount"],
-                payload={"Amount": 1})
+        deliver(
+            engine,
+            opened,
+            room,
+            transactionKey="txn-2",
+            sequenceNumber=1,
+            commitTimestamp=ago(4),
+            changeType="UPDATE",
+            changedFields=["Amount"],
+            payload={"Amount": 1},
+        )
     assert "External_Id__c" in str(caught.value)
     parked = engine.buffer_view(room_id=room["id"])["subscriptions"][0]["parked"]
     assert [row["transaction_key"] for row in parked] == ["txn-1", "txn-2"]
     assert engine.replica(room_id=room["id"]) == []
 
 
-def test_a_close_whose_flush_cannot_be_applied_is_refused_and_leaves_it_open(
-    engine, room, cdc_org
-):
+def test_a_close_whose_flush_cannot_be_applied_is_refused_and_leaves_it_open(engine, room, cdc_org):
     channel = engine.create_channel(
-        {"name": "/data/dsrNoEnrichment", "org_id": cdc_org["id"], "entities": ["Opportunity"],
-         "transport": "pubsub", "field_map": FIELD_MAP},
+        {
+            "name": "/data/dsrNoEnrichment",
+            "org_id": cdc_org["id"],
+            "entities": ["Opportunity"],
+            "transport": "pubsub",
+            "field_map": FIELD_MAP,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -2279,8 +2554,14 @@ def test_a_close_whose_flush_cannot_be_applied_is_refused_and_leaves_it_open(
         {"channel_id": channel["id"]}, room_id=room["id"], actor="dana", source=SOURCE
     )
     engine.fetch(opened["id"], {"num_requested": 10}, actor="dana", source=SOURCE)
-    deliver(engine, opened, room, changeType="UPDATE", changedFields=["StageName"],
-            payload={"StageName": "Negotiation"})
+    deliver(
+        engine,
+        opened,
+        room,
+        changeType="UPDATE",
+        changedFields=["StageName"],
+        payload={"StageName": "Negotiation"},
+    )
     with pytest.raises(RecordUnresolvable):
         engine.close_subscription(opened["id"], actor="dana", source=SOURCE)
     assert engine.subscription(opened["id"])["state"] == "open"
@@ -2307,8 +2588,15 @@ def test_a_duplicate_sequence_number_answers_duplicate_and_applies_nothing(
     engine, subscription, room
 ):
     deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1)
-    result = deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-                     commitTimestamp=ago(4), payload={"StageName": "X"})
+    result = deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        payload={"StageName": "X"},
+    )
     assert result["outcome"] == "duplicate"
     assert result["reason"] == "duplicate_sequence_number"
     assert result["committed"] == []
@@ -2330,19 +2618,33 @@ def test_the_buffer_view_says_why_an_idle_buffer_is_healthy(engine, subscription
 
 def test_the_buffer_view_can_narrow_to_one_subscription(engine, room, cdc_org):
     first = engine.create_channel(
-        {"name": "/data/a", "org_id": cdc_org["id"], "entities": ["Opportunity"],
-         "transport": "pubsub", "field_map": FIELD_MAP},
-        actor="dana", source=SOURCE,
+        {
+            "name": "/data/a",
+            "org_id": cdc_org["id"],
+            "entities": ["Opportunity"],
+            "transport": "pubsub",
+            "field_map": FIELD_MAP,
+        },
+        actor="dana",
+        source=SOURCE,
     )
     second = engine.create_channel(
-        {"name": "/data/b", "org_id": cdc_org["id"], "entities": ["Opportunity"],
-         "transport": "pubsub", "field_map": FIELD_MAP},
-        actor="dana", source=SOURCE,
+        {
+            "name": "/data/b",
+            "org_id": cdc_org["id"],
+            "entities": ["Opportunity"],
+            "transport": "pubsub",
+            "field_map": FIELD_MAP,
+        },
+        actor="dana",
+        source=SOURCE,
     )
-    one = engine.open_subscription({"channel_id": first["id"]}, room_id=room["id"],
-                                   actor="dana", source=SOURCE)
-    engine.open_subscription({"channel_id": second["id"]}, room_id=room["id"],
-                             actor="dana", source=SOURCE)
+    one = engine.open_subscription(
+        {"channel_id": first["id"]}, room_id=room["id"], actor="dana", source=SOURCE
+    )
+    engine.open_subscription(
+        {"channel_id": second["id"]}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     view = engine.buffer_view(room_id=room["id"], subscription_id=one["id"])
     assert view["count"] == 1
 
@@ -2354,8 +2656,9 @@ def test_the_buffer_view_can_narrow_to_one_subscription(engine, room, cdc_org):
 
 def test_the_live_activity_panel_filters_on_the_dynamic_index(engine, subscription, room):
     deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1)
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4))
+    deliver(
+        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)
+    )
     assert len(engine.events(room_id=room["id"])) == 2
     assert len(engine.events(room_id=room["id"], state="buffered")) == 1
     assert len(engine.events(room_id=room["id"], state="committed")) == 1
@@ -2365,10 +2668,12 @@ def test_the_live_activity_panel_filters_on_the_dynamic_index(engine, subscripti
 
 
 def test_the_live_activity_panel_is_newest_first(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            commitTimestamp=ago(5))
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4))
+    deliver(
+        engine, subscription, room, transactionKey="txn-1", sequenceNumber=1, commitTimestamp=ago(5)
+    )
+    deliver(
+        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)
+    )
     listed = engine.events(room_id=room["id"])
     assert [row["commit_timestamp"] for row in listed] == [ago(4), ago(5)]
 
@@ -2395,10 +2700,17 @@ def test_one_replica_row_can_be_read_by_external_id(engine, subscription, room):
 
 
 def test_the_deal_panel_groups_by_the_account_the_field_map_resolves(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4))
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
+    )
+    deliver(
+        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)
+    )
     panel = engine.deal_panel(room_id=room["id"])
     assert panel["panel"] == DEAL_PANEL
     assert [row["account"] for row in panel["accounts"]] == ["Northwind"]
@@ -2408,20 +2720,40 @@ def test_the_deal_panel_groups_by_the_account_the_field_map_resolves(engine, sub
 def test_a_channel_with_no_account_field_still_produces_a_panel(engine, room, cdc_org):
     field_map = {"sync_key": "Contact_External_Id__c", "fields": {"Title": "title"}}
     channel = engine.create_channel(
-        {"name": "/data/dsrContacts", "org_id": cdc_org["id"], "entities": ["Contact"],
-         "transport": "relay", "field_map": field_map},
-        actor="dana", source=SOURCE,
+        {
+            "name": "/data/dsrContacts",
+            "org_id": cdc_org["id"],
+            "entities": ["Contact"],
+            "transport": "relay",
+            "field_map": field_map,
+        },
+        actor="dana",
+        source=SOURCE,
     )
     opened = engine.open_subscription(
         {"channel_id": channel["id"]}, room_id=room["id"], actor="dana", source=SOURCE
     )
     engine.fetch(opened["id"], {"num_requested": 4}, actor="dana", source=SOURCE)
-    deliver(engine, opened, room, entity="Contact",
-            payload={"Contact_External_Id__c": "ctc-1", "Title": "CISO"})
-    deliver(engine, opened, room, entity="Contact", transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4), changeType="UPDATE", changedFields=["Title"],
-            payload={"Title": "VP Security"},
-            enrichedFields={"Contact_External_Id__c": "ctc-1"})
+    deliver(
+        engine,
+        opened,
+        room,
+        entity="Contact",
+        payload={"Contact_External_Id__c": "ctc-1", "Title": "CISO"},
+    )
+    deliver(
+        engine,
+        opened,
+        room,
+        entity="Contact",
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="UPDATE",
+        changedFields=["Title"],
+        payload={"Title": "VP Security"},
+        enrichedFields={"Contact_External_Id__c": "ctc-1"},
+    )
     invalidations = engine.invalidations(room_id=room["id"])
     assert invalidations[0]["resolved"] is False
     assert "field_map declares no account_field" in invalidations[0]["unresolved_note"]
@@ -2432,10 +2764,15 @@ def test_a_channel_with_no_account_field_still_produces_a_panel(engine, room, cd
 
 
 def test_every_commit_writes_one_invalidation_naming_the_panel(engine, subscription, room):
-    deliver(engine, subscription, room, payload={"External_Id__c": "dsr-1",
-                                                 "Account_Name__c": "Northwind"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4))
+    deliver(
+        engine,
+        subscription,
+        room,
+        payload={"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
+    )
+    deliver(
+        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)
+    )
     rows = engine.invalidations(room_id=room["id"])
     assert len(rows) == 1
     assert rows[0]["panel"] == DEAL_PANEL
@@ -2448,8 +2785,9 @@ def test_every_commit_writes_one_invalidation_naming_the_panel(engine, subscript
 def test_the_summary_counts_this_rooms_rows_only(engine, subscription, room, store):
     other = store.create("room", {"name": "Other", "account": "Contoso"}, actor="dana")
     deliver(engine, subscription, room)
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4))
+    deliver(
+        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)
+    )
     summary = engine.summary(room_id=other["id"])
     assert summary["events"] == 0
     assert summary["replica_rows"] == 0
@@ -2458,9 +2796,17 @@ def test_the_summary_counts_this_rooms_rows_only(engine, subscription, room, sto
 
 def test_the_summary_reports_what_is_parked_and_which_replica_state(engine, subscription, room):
     deliver(engine, subscription, room, payload={"External_Id__c": "dsr-1"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4), changeType="DELETE", payload={},
-            enrichedFields={"External_Id__c": "dsr-1"})
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-2",
+        sequenceNumber=1,
+        commitTimestamp=ago(4),
+        changeType="DELETE",
+        payload={},
+        enrichedFields={"External_Id__c": "dsr-1"},
+    )
     # The delete is the transaction the stream is still filling, so the row is
     # still live and the summary says one is parked. Both halves of the rule.
     assert engine.summary(room_id=room["id"])["replica_live"] == 1
@@ -2504,9 +2850,10 @@ def test_turning_track_changes_on_records_the_annotation_and_its_irreversibility
     assert enabled["change_tracking_supported"] is True
     assert enabled["annotation"] == CHANGE_TRACKING_ANNOTATION
     assert enabled["irreversible"] is True
-    assert engine.enable_track_changes(table["id"], actor="dana", source=SOURCE)[
-        "already_enabled"
-    ] is True
+    assert (
+        engine.enable_track_changes(table["id"], actor="dana", source=SOURCE)["already_enabled"]
+        is True
+    )
 
 
 def test_turning_track_changes_off_is_always_refused(engine):
@@ -2521,16 +2868,25 @@ def test_a_poll_advances_the_deltatoken_and_the_delta_link(engine):
     engine.enable_track_changes(table["id"], actor="dana", source=SOURCE)
     first = engine.poll_table(
         table["id"],
-        {"prefer": CHANGE_TRACKING_PREFERENCE, "options": {"select": "accountid"}, "changes_observed": 2},
-        actor="dana", source=SOURCE,
+        {
+            "prefer": CHANGE_TRACKING_PREFERENCE,
+            "options": {"select": "accountid"},
+            "changes_observed": 2,
+        },
+        actor="dana",
+        source=SOURCE,
     )
     assert first["returned_deltatoken"]
     assert engine.table(table["id"])["deltatoken"] == first["returned_deltatoken"]
     second = engine.poll_table(
         table["id"],
-        {"prefer": CHANGE_TRACKING_PREFERENCE, "options": {"deltatoken": first["returned_deltatoken"]},
-         "changes_observed": 1},
-        actor="dana", source=SOURCE,
+        {
+            "prefer": CHANGE_TRACKING_PREFERENCE,
+            "options": {"deltatoken": first["returned_deltatoken"]},
+            "changes_observed": 1,
+        },
+        actor="dana",
+        source=SOURCE,
     )
     assert second["incremental"] is True
     assert engine.table(table["id"])["poll_count"] == 2
@@ -2556,7 +2912,8 @@ def test_the_change_count_route_says_what_it_counts(engine):
     engine.poll_table(
         table["id"],
         {"prefer": CHANGE_TRACKING_PREFERENCE, "options": {}, "changes_observed": 5},
-        actor="dana", source=SOURCE,
+        actor="dana",
+        source=SOURCE,
     )
     counted = engine.count_table(table["id"], deltatoken=None)
     assert counted["count"] == 5
@@ -2571,7 +2928,9 @@ def test_the_change_count_route_says_what_it_counts(engine):
 def test_a_hubspot_webhook_target_is_registered_against_the_cap(engine):
     created = engine.register_hubspot_subscription(
         {"target_url": "https://hooks.example.invalid/stage", "workflow_id": "wf-1"},
-        room_id=None, actor="dana", source=SOURCE,
+        room_id=None,
+        actor="dana",
+        source=SOURCE,
     )
     assert created["workflow_id"] == "wf-1"
     assert created["capacity"]["live"] == 1
@@ -2582,7 +2941,10 @@ def test_a_hubspot_webhook_target_is_registered_against_the_cap(engine):
 
 def test_cancelling_a_hubspot_target_frees_its_slot(engine):
     created = engine.register_hubspot_subscription(
-        {"target_url": "https://hooks.example.invalid/stage"}, room_id=None, actor="dana", source=SOURCE
+        {"target_url": "https://hooks.example.invalid/stage"},
+        room_id=None,
+        actor="dana",
+        source=SOURCE,
     )
     engine.delete_hubspot_subscription(created["id"], actor="dana", source=SOURCE)
     assert engine.hubspot_capacity()["live"] == 0
@@ -2593,8 +2955,11 @@ def test_the_hubspot_cap_is_enforced_before_the_row_is_written(engine, store, mo
     from dsr.change_stream import hubspot as rules
 
     monkeypatch.setattr(rules, "WEBHOOK_SUBSCRIPTION_LIMIT", 2)
-    monkeypatch.setattr(engine, "hubspot_require_capacity",
-                        lambda: rules.require_capacity(len(store.list(HUBSPOT_SUBSCRIPTIONS, limit=1000))))
+    monkeypatch.setattr(
+        engine,
+        "hubspot_require_capacity",
+        lambda: rules.require_capacity(len(store.list(HUBSPOT_SUBSCRIPTIONS, limit=1000))),
+    )
     engine.register_hubspot_subscription(
         {"target_url": "https://hooks.example.invalid/a"}, room_id=None, actor="dana", source=SOURCE
     )
@@ -2603,14 +2968,20 @@ def test_the_hubspot_cap_is_enforced_before_the_row_is_written(engine, store, mo
     )
     with pytest.raises(SubscriptionLimitExceeded):
         engine.register_hubspot_subscription(
-            {"target_url": "https://hooks.example.invalid/c"}, room_id=None, actor="dana", source=SOURCE
+            {"target_url": "https://hooks.example.invalid/c"},
+            room_id=None,
+            actor="dana",
+            source=SOURCE,
         )
     assert len(store.list(HUBSPOT_SUBSCRIPTIONS, limit=100)) == 2
 
 
 def test_a_workflow_call_is_counted_and_not_charged(engine):
     created = engine.register_hubspot_subscription(
-        {"target_url": "https://hooks.example.invalid/stage"}, room_id=None, actor="dana", source=SOURCE
+        {"target_url": "https://hooks.example.invalid/stage"},
+        room_id=None,
+        actor="dana",
+        source=SOURCE,
     )
     charged = engine.charge_hubspot_call(
         created["id"], via_workflow=True, actor="dana", source=SOURCE
@@ -2623,7 +2994,10 @@ def test_a_workflow_call_is_counted_and_not_charged(engine):
 
 def test_an_app_call_is_charged_to_the_budget(engine):
     created = engine.register_hubspot_subscription(
-        {"target_url": "https://hooks.example.invalid/stage"}, room_id=None, actor="dana", source=SOURCE
+        {"target_url": "https://hooks.example.invalid/stage"},
+        room_id=None,
+        actor="dana",
+        source=SOURCE,
     )
     charged = engine.charge_hubspot_call(
         created["id"], via_workflow=False, actor="dana", source=SOURCE
@@ -2634,7 +3008,10 @@ def test_an_app_call_is_charged_to_the_budget(engine):
 
 def test_the_hubspot_usage_reports_the_exemption_beside_the_budget(engine):
     created = engine.register_hubspot_subscription(
-        {"target_url": "https://hooks.example.invalid/stage"}, room_id=None, actor="dana", source=SOURCE
+        {"target_url": "https://hooks.example.invalid/stage"},
+        room_id=None,
+        actor="dana",
+        source=SOURCE,
     )
     engine.charge_hubspot_call(created["id"], via_workflow=True, actor="dana", source=SOURCE)
     report = engine.hubspot_usage()
@@ -2647,7 +3024,9 @@ def test_the_hubspot_usage_reports_the_exemption_beside_the_budget(engine):
 
 def test_deleting_an_unknown_hubspot_target_is_refused(engine):
     with pytest.raises(ChangeStreamError):
-        engine.delete_hubspot_subscription("hubspot_webhook_subscription_nope", actor="dana", source=SOURCE)
+        engine.delete_hubspot_subscription(
+            "hubspot_webhook_subscription_nope", actor="dana", source=SOURCE
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -2657,8 +3036,9 @@ def test_deleting_an_unknown_hubspot_target_is_refused(engine):
 
 def test_usage_totals_add_up_across_subscriptions(engine, subscription, room):
     deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1)
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4))
+    deliver(
+        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)
+    )
     report = engine.usage()
     assert report["count"] == 1
     assert report["totals"]["events_delivered"] == 2
@@ -2696,7 +3076,7 @@ def test_usage_can_be_narrowed_to_a_room(engine, subscription, room, store):
 
 
 def test_the_whole_documented_flow_works_over_http(http):
-    """"An operator enables CDC, picks a channel, the client subscribes, events
+    """ "An operator enables CDC, picks a channel, the client subscribes, events
     arrive, a transaction commits, and the buyer's panel is refreshed." """
     setup = http_setup(http)
     room = setup["room"]["id"]
@@ -2710,8 +3090,12 @@ def test_the_whole_documented_flow_works_over_http(http):
             "transactionKey": "txn-1",
             "sequenceNumber": 1,
             "commitTimestamp": ago(6),
-            "payload": {"External_Id__c": "dsr-1", "StageName": "Prospecting",
-                        "Account_Name__c": "Northwind", "Amount": 100},
+            "payload": {
+                "External_Id__c": "dsr-1",
+                "StageName": "Prospecting",
+                "Account_Name__c": "Northwind",
+                "Amount": 100,
+            },
             "entity": "Opportunity",
         },
     )
@@ -2788,8 +3172,13 @@ def test_enrichment_on_the_standard_channel_answers_409_over_http(http):
     setup = http_setup(http)
     standard = http.post(
         f"{PREFIX}/channels",
-        json={"name": STANDARD_CHANNEL, "org_id": setup["org"]["id"], "entities": ["Opportunity"],
-              "transport": "pubsub", "field_map": FIELD_MAP},
+        json={
+            "name": STANDARD_CHANNEL,
+            "org_id": setup["org"]["id"],
+            "entities": ["Opportunity"],
+            "transport": "pubsub",
+            "field_map": FIELD_MAP,
+        },
     ).json()
     response = http.post(
         f"{PREFIX}/channels/{standard['id']}/enrichment", json={"fields": ["External_Id__c"]}
@@ -2802,8 +3191,13 @@ def test_enrichment_on_a_delta_link_transport_answers_400_over_http(http):
     setup = http_setup(http)
     relay = http.post(
         f"{PREFIX}/channels",
-        json={"name": "/data/dsrDelta", "org_id": setup["org"]["id"], "entities": ["Opportunity"],
-              "transport": "delta_link", "field_map": FIELD_MAP},
+        json={
+            "name": "/data/dsrDelta",
+            "org_id": setup["org"]["id"],
+            "entities": ["Opportunity"],
+            "transport": "delta_link",
+            "field_map": FIELD_MAP,
+        },
     ).json()
     response = http.post(f"{PREFIX}/channels/{relay['id']}/enrichment", json={"fields": ["X__c"]})
     assert response.status_code == 400
@@ -2812,16 +3206,16 @@ def test_enrichment_on_a_delta_link_transport_answers_400_over_http(http):
 
 def test_removing_enrichment_over_http_returns_the_removed_field(http):
     setup = http_setup(http)
-    response = http.delete(
-        f"{PREFIX}/channels/{setup['channel']['id']}/enrichment/External_Id__c"
-    )
+    response = http.delete(f"{PREFIX}/channels/{setup['channel']['id']}/enrichment/External_Id__c")
     assert response.status_code == 200
     assert response.json()["removed"] == ["External_Id__c"]
     assert response.json()["enriched_fields"] == []
 
 
 def test_the_edition_gate_answers_409_over_http(http):
-    org = http.post(f"{PREFIX}/orgs", json={"system": "salesforce", "edition": "Professional"}).json()
+    org = http.post(
+        f"{PREFIX}/orgs", json={"system": "salesforce", "edition": "Professional"}
+    ).json()
     response = http.patch(
         f"{PREFIX}/orgs/{org['id']}", json={"cdc_enabled": True, "entities": ["Opportunity"]}
     )
@@ -2856,8 +3250,11 @@ def test_a_delta_poll_carries_the_annotation_and_a_delta_link_over_http(http):
     http.post(f"{PREFIX}/dataverse/tables/{table['id']}/track-changes")
     body = http.post(
         f"{PREFIX}/dataverse/tables/{table['id']}/poll",
-        json={"prefer": CHANGE_TRACKING_PREFERENCE, "options": {"select": "accountid"},
-              "changes_observed": 2},
+        json={
+            "prefer": CHANGE_TRACKING_PREFERENCE,
+            "options": {"select": "accountid"},
+            "changes_observed": 2,
+        },
     ).json()
     assert body["changeTracking"]["Annotation"] == CHANGE_TRACKING_ANNOTATION
     assert body["@odata.deltaLink"].startswith(f"/api/data/{DATAVERSE_API_VERSION}/accounts")
@@ -2880,8 +3277,12 @@ def test_an_event_with_no_fetch_request_outstanding_answers_409_over_http(http):
     response = http.post(
         f"{PREFIX}/rooms/{setup['room']['id']}/events",
         json={
-            "subscription_id": other["id"], "changeType": "CREATE", "transactionKey": "txn-1",
-            "sequenceNumber": 1, "commitTimestamp": ago(1), "payload": {"External_Id__c": "x"},
+            "subscription_id": other["id"],
+            "changeType": "CREATE",
+            "transactionKey": "txn-1",
+            "sequenceNumber": 1,
+            "commitTimestamp": ago(1),
+            "payload": {"External_Id__c": "x"},
         },
     )
     assert response.status_code == 409
@@ -2894,8 +3295,11 @@ def test_closing_a_subscription_over_http_returns_what_it_flushed(http):
     http.post(
         f"{PREFIX}/rooms/{room}/events",
         json={
-            "subscription_id": setup["subscription"]["id"], "changeType": "CREATE",
-            "transactionKey": "txn-1", "sequenceNumber": 1, "commitTimestamp": ago(2),
+            "subscription_id": setup["subscription"]["id"],
+            "changeType": "CREATE",
+            "transactionKey": "txn-1",
+            "sequenceNumber": 1,
+            "commitTimestamp": ago(2),
             "payload": {"External_Id__c": "dsr-1", "Account_Name__c": "Northwind"},
             "entity": "Opportunity",
         },
@@ -2972,8 +3376,13 @@ def test_every_write_audits_a_path_this_router_serves(http):
     client_channels.append(
         http.post(
             f"{PREFIX}/channels",
-            json={"name": "/data/dsrOther", "org_id": setup["org"]["id"],
-                  "entities": ["Opportunity"], "transport": "pubsub", "field_map": FIELD_MAP},
+            json={
+                "name": "/data/dsrOther",
+                "org_id": setup["org"]["id"],
+                "entities": ["Opportunity"],
+                "transport": "pubsub",
+                "field_map": FIELD_MAP,
+            },
         ).json()
     )
     http.patch(f"{PREFIX}/orgs/{setup['org']['id']}", json={"org_name": "Renamed"})
@@ -2985,13 +3394,18 @@ def test_every_write_audits_a_path_this_router_serves(http):
     http.post(
         f"{PREFIX}/rooms/{room}/events",
         json={
-            "subscription_id": setup["subscription"]["id"], "changeType": "CREATE",
-            "transactionKey": "txn-1", "sequenceNumber": 1, "commitTimestamp": ago(2),
-            "payload": {"External_Id__c": "dsr-1"}, "entity": "Opportunity",
+            "subscription_id": setup["subscription"]["id"],
+            "changeType": "CREATE",
+            "transactionKey": "txn-1",
+            "sequenceNumber": 1,
+            "commitTimestamp": ago(2),
+            "payload": {"External_Id__c": "dsr-1"},
+            "entity": "Opportunity",
         },
     )
-    http.post(f"{PREFIX}/subscriptions/{setup['subscription']['id']}/fetch",
-              json={"num_requested": 5})
+    http.post(
+        f"{PREFIX}/subscriptions/{setup['subscription']['id']}/fetch", json={"num_requested": 5}
+    )
     http.post(f"{PREFIX}/subscriptions/{setup['subscription']['id']}/close")
     table = http.post(f"{PREFIX}/dataverse/tables", json={"logical_name": "account"}).json()
     http.post(f"{PREFIX}/dataverse/tables/{table['id']}/track-changes")
@@ -3032,9 +3446,13 @@ def test_no_audit_row_names_a_path_this_feature_does_not_serve(http):
     http.post(
         f"{PREFIX}/rooms/{setup['room']['id']}/events",
         json={
-            "subscription_id": setup["subscription"]["id"], "changeType": "CREATE",
-            "transactionKey": "txn-1", "sequenceNumber": 1, "commitTimestamp": ago(2),
-            "payload": {"External_Id__c": "dsr-1"}, "entity": "Opportunity",
+            "subscription_id": setup["subscription"]["id"],
+            "changeType": "CREATE",
+            "transactionKey": "txn-1",
+            "sequenceNumber": 1,
+            "commitTimestamp": ago(2),
+            "payload": {"External_Id__c": "dsr-1"},
+            "entity": "Opportunity",
         },
     )
     stale = [source for source in audit_sources(http) if PREFIX not in source]
@@ -3063,7 +3481,9 @@ def test_every_source_this_feature_can_write_is_one_of_its_own_routes():
         # doubled; the mounted path has single ones.
         (
             expression.split(" ", 1)[0],
-            f"{PREFIX}{expression.split('{router.prefix}')[1]}".replace("{{", "{").replace("}}", "}"),
+            f"{PREFIX}{expression.split('{router.prefix}')[1]}".replace("{{", "{").replace(
+                "}}", "}"
+            ),
         )
         for expression in expressions
     }
@@ -3087,7 +3507,11 @@ def test_no_domain_module_hardcodes_a_url_as_its_source():
                 literal = found.group(1).strip("\"'")
                 if literal in ("seed", ""):
                     continue
-                if literal.startswith("/api") or literal.startswith("POST ") or literal.startswith("PATCH "):
+                if (
+                    literal.startswith("/api")
+                    or literal.startswith("POST ")
+                    or literal.startswith("PATCH ")
+                ):
                     offenders.append(f"{module.name}:{number}: {found.group(1)}")
     assert not offenders, f"a domain module hardcodes an audit source: {offenders}"
 
@@ -3103,11 +3527,26 @@ def test_every_writing_engine_method_requires_source():
         signature = inspect.signature(member)
         if signature.parameters.get("source") is signature.empty:
             continue
-        writes = {"register_org", "patch_org", "create_channel", "patch_channel", "delete_channel",
-                  "enrich_channel", "unenrich_channel", "open_subscription", "fetch",
-                  "close_subscription", "deliver_event", "declare_table", "enable_track_changes",
-                  "disable_track_changes", "poll_table", "register_hubspot_subscription",
-                  "delete_hubspot_subscription", "charge_hubspot_call"}
+        writes = {
+            "register_org",
+            "patch_org",
+            "create_channel",
+            "patch_channel",
+            "delete_channel",
+            "enrich_channel",
+            "unenrich_channel",
+            "open_subscription",
+            "fetch",
+            "close_subscription",
+            "deliver_event",
+            "declare_table",
+            "enable_track_changes",
+            "disable_track_changes",
+            "poll_table",
+            "register_hubspot_subscription",
+            "delete_hubspot_subscription",
+            "charge_hubspot_call",
+        }
         if name in writes:
             assert signature.parameters["source"].kind is inspect.Parameter.KEYWORD_ONLY, name
             assert signature.parameters["source"].default is inspect.Parameter.empty, name
@@ -3124,10 +3563,14 @@ def seeded(tmp_path):
     store = RecordStore(db)
     module = load_feature(MODULE)
     rooms = [
-        (store.create("room", {"name": "Northwind", "account": "Northwind"}, actor="dana")["id"],
-         "Northwind"),
-        (store.create("room", {"name": "Contoso", "account": "Contoso"}, actor="dana")["id"],
-         "Contoso"),
+        (
+            store.create("room", {"name": "Northwind", "account": "Northwind"}, actor="dana")["id"],
+            "Northwind",
+        ),
+        (
+            store.create("room", {"name": "Contoso", "account": "Contoso"}, actor="dana")["id"],
+            "Contoso",
+        ),
     ]
     summary = module.seed(
         db,
@@ -3172,9 +3615,7 @@ def test_the_seed_leaves_a_tombstone_and_a_restored_row(seeded):
 
 def test_the_seed_shows_the_standard_channel_enrichment_refusal(seeded):
     _store, engine, _rooms, summary = seeded
-    standard = engine.channel(
-        next(c["id"] for c in engine.channels() if c["kind"] == "standard")
-    )
+    standard = engine.channel(next(c["id"] for c in engine.channels() if c["kind"] == "standard"))
     assert standard["enriched_fields"] == []
     assert "refused" in standard["enrichment_note"]
     assert "enrichment_not_available_on_the_standard_channel" in summary
@@ -3215,13 +3656,29 @@ def test_the_seed_shows_a_duplicate_refused_and_a_gap_reported(seeded):
 
 
 def test_a_sequence_gap_is_recorded_on_the_committed_events(engine, subscription, room):
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=1,
-            payload={"External_Id__c": "dsr-1"})
-    deliver(engine, subscription, room, transactionKey="txn-1", sequenceNumber=4,
-            commitTimestamp=ago(6), changeType="UPDATE", changedFields=["StageName"],
-            payload={"StageName": "Won"}, enrichedFields={"External_Id__c": "dsr-1"})
-    deliver(engine, subscription, room, transactionKey="txn-2", sequenceNumber=1,
-            commitTimestamp=ago(4))
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=1,
+        payload={"External_Id__c": "dsr-1"},
+    )
+    deliver(
+        engine,
+        subscription,
+        room,
+        transactionKey="txn-1",
+        sequenceNumber=4,
+        commitTimestamp=ago(6),
+        changeType="UPDATE",
+        changedFields=["StageName"],
+        payload={"StageName": "Won"},
+        enrichedFields={"External_Id__c": "dsr-1"},
+    )
+    deliver(
+        engine, subscription, room, transactionKey="txn-2", sequenceNumber=1, commitTimestamp=ago(4)
+    )
     rows = engine.events(room_id=room["id"], transaction_key="txn-1")
     assert rows[0]["sequence_gaps"] == [{"after": 1, "before": 4, "missing": 2}]
     assert rows[0]["state"] == "committed"

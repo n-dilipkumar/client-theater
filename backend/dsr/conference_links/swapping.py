@@ -41,7 +41,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from dsr.conference_links import locations, minting, vocabulary as vocab
+from dsr.conference_links import locations, vocabulary as vocab
 from dsr.conference_links.errors import LocationUnchanged
 
 #: The two researched reasons a swap can be attributed to. Step 4 names two, and
@@ -59,9 +59,7 @@ SWAP_REASONS: tuple[str, ...] = ("meeting-moved-tool", "rep-integration-swapped"
 LOCATION_TOKEN = "{location}"
 
 
-def same_location(
-    current: Mapping[str, Any] | None, proposed: Mapping[str, Any] | None
-) -> bool:
+def same_location(current: Mapping[str, Any] | None, proposed: Mapping[str, Any] | None) -> bool:
     """Does the proposed Location put the booking where it already is?
 
     Compared on the *provider and the URL*, never on the Location's id, because
@@ -134,7 +132,11 @@ def plan_swap(
         raise LocationUnchanged(
             f"booking {booking.get('booking_uid') or booking.get('id')} is already at "
             f"{previous.get('location_provider')}"
-            + (f" on {previous.get(vocab.MEETING_LOCATION_FIELD)}" if previous.get(vocab.MEETING_LOCATION_FIELD) else "")
+            + (
+                f" on {previous.get(vocab.MEETING_LOCATION_FIELD)}"
+                if previous.get(vocab.MEETING_LOCATION_FIELD)
+                else ""
+            )
             + "; the researched swap notifies attendees by email, so a swap that leaves the "
             "join link unchanged would email every attendee that nothing changed"
         )

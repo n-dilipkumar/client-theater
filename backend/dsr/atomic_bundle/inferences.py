@@ -27,17 +27,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from dsr.atomic_bundle.planner import (
-    WARN_COLLATION_NOT_APPLICABLE,
-    WARN_COMPENSATION_NOT_TRANSACTION,
-    WARN_IMPLICIT_DEPENDENCY,
-    WARN_TREE_HAS_NO_ORDERING_FLAG,
-)
 from dsr.atomic_bundle.dialects import (
     DEFAULT_API_VERSION as DEFAULT_SALESFORCE_VERSION,
-)
-from dsr.atomic_bundle.dialects import (
     DEFAULT_DATAVERSE_VERSION,
+)
+from dsr.atomic_bundle.planner import (
+    WARN_IMPLICIT_DEPENDENCY,
 )
 from dsr.atomic_bundle.vocabulary import (
     POLICY_MEANING,
@@ -46,7 +41,6 @@ from dsr.atomic_bundle.vocabulary import (
     SOURCED_GAPS,
     SOURCED_QUOTES,
 )
-
 
 INFERENCES: tuple[dict[str, Any], ...] = (
     {
@@ -284,8 +278,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         ),
         "value": {
             "shape": (
-                "{\"records\": [{\"attributes\": {\"type\", \"referenceId\"}, …fields…, "
-                "\"<ChildType>\": {\"records\": [ … ]}}]}"
+                '{"records": [{"attributes": {"type", "referenceId"}, …fields…, '
+                '"<ChildType>": {"records": [ … ]}}]}'
             ),
             "link_by": "nesting, not a parent id written into the child",
             "applied_to": ["200 records across all trees", "five types", "five levels deep"],

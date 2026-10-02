@@ -39,6 +39,7 @@ Usage:
     .venv/Scripts/python orchestration/make_workflow_board.py
     .venv/Scripts/python orchestration/make_workflow_board.py --check
 """
+
 from __future__ import annotations
 
 import json
@@ -86,8 +87,13 @@ def strip_stamp(text: str) -> str:
 
 def git(*args: str) -> str:
     p = subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=120,
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
     )
     return (p.stdout + p.stderr).strip()
 
@@ -104,7 +110,9 @@ def built_modules() -> dict[str, str]:
     each picking their own spelling is not a hypothetical.
     """
     found: dict[str, str] = {}
-    for line in git("ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features").splitlines():
+    for line in git(
+        "ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features"
+    ).splitlines():
         m = FEATURE_RE.search(line)
         if m:
             found[f"WF-{m.group(1)}"] = Path(line).name
@@ -114,7 +122,9 @@ def built_modules() -> dict[str, str]:
 def frontend_dirs() -> dict[str, str]:
     """Ticket -> frontend folder, for the built workflows that have one."""
     found: dict[str, str] = {}
-    for line in git("ls-tree", "-r", "--name-only", "origin/main", "frontend/src/features").splitlines():
+    for line in git(
+        "ls-tree", "-r", "--name-only", "origin/main", "frontend/src/features"
+    ).splitlines():
         m = FEATURE_RE.search(line)
         if m:
             found.setdefault(f"WF-{m.group(1)}", line.split("/")[-1])
@@ -158,8 +168,16 @@ def spec_is_complete(ticket: str) -> bool:
     if not path.exists():
         return False
     text = path.read_text(encoding="utf-8", errors="replace")
-    required = ("user_flow", "data_flow", "data_sources", "apis_hit",
-                "automations", "features_tools", "extensibility", "evidence")
+    required = (
+        "user_flow",
+        "data_flow",
+        "data_sources",
+        "apis_hit",
+        "automations",
+        "features_tools",
+        "extensibility",
+        "evidence",
+    )
     return all(re.search(rf"\b{s}\b", text) for s in required)
 
 
@@ -179,7 +197,6 @@ def catalogue_size() -> int:
 
 def render() -> tuple[str, dict]:
     built = built_modules()
-    front = frontend_dirs()
     tests = test_files()
     crit = load_criticality()
     deduped = catalogue_size()
@@ -232,8 +249,8 @@ def render() -> tuple[str, dict]:
     # ---- summary ---------------------------------------------------------- #
     A("## Summary")
     A("")
-    A(f"| | Count |")
-    A(f"|---|---:|")
+    A("| | Count |")
+    A("|---|---:|")
     A(f"| **Built and landed** | **{len(done)}** |")
     A(f"| Pending — critical | {len(pending_critical)} |")
     A(f"| Pending — supplementary | {len(pending_supp)} |")
@@ -241,12 +258,14 @@ def render() -> tuple[str, dict]:
     A(f"| Corpus researched | {len(all_tickets)} tickets, {deduped} after dedupe |")
     A(f"| Target | {TARGET} |")
     A("")
-    A(f"**{len(done)} of {TARGET} built ({100 * len(done) // TARGET}%), {TARGET - len(done)} to go.**")
+    A(
+        f"**{len(done)} of {TARGET} built ({100 * len(done) // TARGET}%), {TARGET - len(done)} to go.**"
+    )
     A("")
     A(f"The target is the whole corpus: {TARGET} researched workflows, all of")
-    A(f"them to be built. There is no cap and no shortlist to be chosen from -")
+    A("them to be built. There is no cap and no shortlist to be chosen from -")
     A(f"{len(pending)} remain, and criticality is what decides the order they are")
-    A(f"worked in, not which of them are worth doing.")
+    A("worked in, not which of them are worth doing.")
     A("")
 
     # ---- how to read it --------------------------------------------------- #
@@ -299,8 +318,10 @@ def render() -> tuple[str, dict]:
         A("|---|---|---|---|")
         for t in pending_critical:
             name = title_of(t) or "—"
-            A(f"| ⬜ **{t}** | {name} | {basis_of(t)} | "
-              f"{'complete' if spec_is_complete(t) else '**incomplete**'} |")
+            A(
+                f"| ⬜ **{t}** | {name} | {basis_of(t)} | "
+                f"{'complete' if spec_is_complete(t) else '**incomplete**'} |"
+            )
         A("")
     if pending_supp:
         A(f"### Supplementary ({len(pending_supp)})")
@@ -312,8 +333,7 @@ def render() -> tuple[str, dict]:
         A("|---|---|---|")
         for t in pending_supp:
             name = title_of(t) or "—"
-            A(f"| ⬜ {t} | {name} | "
-              f"{'complete' if spec_is_complete(t) else '**incomplete**'} |")
+            A(f"| ⬜ {t} | {name} | {'complete' if spec_is_complete(t) else '**incomplete**'} |")
         A("")
 
     # ---- provenance ------------------------------------------------------- #
@@ -361,8 +381,10 @@ def main() -> int:
         # everything except that one line.
         if strip_stamp(current) == strip_stamp(text):
             print(f"  OK       {OUT.relative_to(ROOT)} matches what is measured now")
-            print(f"           built {stats['built']}, pending {stats['pending']} "
-                  f"against origin/main {stats['head']}")
+            print(
+                f"           built {stats['built']}, pending {stats['pending']} "
+                f"against origin/main {stats['head']}"
+            )
             return 0
         print(f"  STALE    {OUT.relative_to(ROOT)} does not match origin/main")
         print(f"           built now: {stats['built']}  pending now: {stats['pending']}")
@@ -371,8 +393,10 @@ def main() -> int:
 
     OUT.write_text(text, encoding="utf-8")
     print(f"  wrote {OUT.relative_to(ROOT)}")
-    print(f"  built {stats['built']}, pending {stats['pending']} "
-          f"(critical {stats['pending_critical']}, supplementary {stats['pending_supp']})")
+    print(
+        f"  built {stats['built']}, pending {stats['pending']} "
+        f"(critical {stats['pending_critical']}, supplementary {stats['pending_supp']})"
+    )
     print(f"  against origin/main {stats['head']}")
 
     # Assert the rendered file against what was measured. A generator that
@@ -380,11 +404,15 @@ def main() -> int:
     back = OUT.read_text(encoding="utf-8")
     checks = {
         f"{stats['built']} built rows": back.count("| ✅ **WF-") == stats["built"],
-        f"every pending ticket listed": all(f"**{t}**" in back or f"| ⬜ {t} |" in back
-                                            for t in stats["pending_all"]),
-        "summary names its own build count": f"| **Built and landed** | **{stats['built']}** |" in back,
-        "summary names its pending count": f"| **Pending total** | **{stats['pending']}** |" in back,
-        "summary names its critical split": f"| Pending — critical | {stats['pending_critical']} |" in back,
+        "every pending ticket listed": all(
+            f"**{t}**" in back or f"| ⬜ {t} |" in back for t in stats["pending_all"]
+        ),
+        "summary names its own build count": f"| **Built and landed** | **{stats['built']}** |"
+        in back,
+        "summary names its pending count": f"| **Pending total** | **{stats['pending']}** |"
+        in back,
+        "summary names its critical split": f"| Pending — critical | {stats['pending_critical']} |"
+        in back,
         "names the commit it measured": stats["head"] in back,
         "no stale hand-edit claim": "Do not edit by hand" in back,
     }

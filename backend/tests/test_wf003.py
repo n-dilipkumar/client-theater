@@ -28,11 +28,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-003"
 
@@ -143,7 +142,9 @@ def test_a_request_with_no_role_is_refused(client, room):
 
 def test_document_without_a_name_is_400(client, room):
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/documents", json={"description": "no name"}, params=CONTRIBUTOR
+        f"{PREFIX}/rooms/{room['id']}/documents",
+        json={"description": "no name"},
+        params=CONTRIBUTOR,
     )
     assert response.status_code == 400
     assert response.json()["error"] == "invalid_document"
@@ -214,9 +215,7 @@ def test_a_teams_custom_field_is_filterable_over_http(client, room):
     # Schema flexibility end to end: no migration, queryable immediately.
     add(client, room["id"], "Contract.pdf", legal={"reviewer": "priya"})
 
-    response = client.get(
-        "/api/records/document", params={"where": '{"legal.reviewer":"priya"}'}
-    )
+    response = client.get("/api/records/document", params={"where": '{"legal.reviewer":"priya"}'})
 
     assert response.json()["count"] == 1
 
@@ -334,7 +333,9 @@ def test_instance_admin_can_delete_anyones_document(client, room):
 
 
 def test_delete_of_an_unknown_document_is_404(client, room):
-    response = client.delete(f"{PREFIX}/rooms/{room['id']}/documents/document_missing", params=ADMIN)
+    response = client.delete(
+        f"{PREFIX}/rooms/{room['id']}/documents/document_missing", params=ADMIN
+    )
     assert response.status_code == 404
 
 
@@ -530,7 +531,11 @@ def test_seed_leaves_a_readable_library():
             for index, title in enumerate(("Overview Deck", "Security Pack")):
                 db.create(
                     "document",
-                    {"title": title, "kind": "deck" if index == 0 else "pdf", "status": "published"},
+                    {
+                        "title": title,
+                        "kind": "deck" if index == 0 else "pdf",
+                        "status": "published",
+                    },
                     room_id=rooms[0]["id"],
                     actor="dana",
                     source="seed",

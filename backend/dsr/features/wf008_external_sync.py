@@ -265,7 +265,9 @@ def add_external_content(
 
     missing = [name for name in _REQUIRED_ADD_FIELDS if not str(payload.get(name) or "").strip()]
     if missing:
-        raise HTTPException(status_code=400, detail=f"missing required field(s): {', '.join(missing)}")
+        raise HTTPException(
+            status_code=400, detail=f"missing required field(s): {', '.join(missing)}"
+        )
 
     auto_sync = payload.get("autoSync")
     if auto_sync is not None and not isinstance(auto_sync, bool):

@@ -40,9 +40,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable, Mapping
 
-from dsr.crm import automations as automation_rules
-from dsr.crm import subscriptions as subscription_rules
-from dsr.crm.errors import CrmError
+from dsr.crm import automations as automation_rules, subscriptions as subscription_rules
 from dsr.crm.delivery import (
     DEFAULT_BACKOFF,
     DEFAULT_MAX_ATTEMPTS,
@@ -51,6 +49,7 @@ from dsr.crm.delivery import (
     UrllibTransport,
     deliver,
 )
+from dsr.crm.errors import CrmError
 from dsr.crm.vocabulary import (
     describe,
     is_field_type,
@@ -439,9 +438,7 @@ class CRMSync:
                         "resolved": outcome["resolved"],
                         "skipped": outcome["skipped"],
                         "warnings": outcome["warnings"],
-                        "error": (
-                            "; ".join(w["message"] for w in errors) if errors else None
-                        ),
+                        "error": ("; ".join(w["message"] for w in errors) if errors else None),
                         "needs_manual_update": bool(errors),
                     },
                     room_id=event["room_id"],
@@ -472,5 +469,7 @@ class CRMSync:
     def _counts(activity: list[Mapping[str, Any]]) -> dict[str, int]:
         counts = {"total": len(activity), "success": 0, "error": 0}
         for entry in activity:
-            counts[str(entry["data"].get("status"))] = counts.get(str(entry["data"].get("status")), 0) + 1
+            counts[str(entry["data"].get("status"))] = (
+                counts.get(str(entry["data"].get("status")), 0) + 1
+            )
         return counts

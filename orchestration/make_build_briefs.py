@@ -35,6 +35,7 @@ briefs could have gone wrong:
    the interesting one: no browser is attached to this session, so the agent must
    report that as not-verified rather than claiming it.
 """
+
 import json
 import re
 import subprocess
@@ -56,20 +57,36 @@ TEMPLATE = OUT / "WF-013.md"
 # inventing the workflow. Matched on the label, not on `**label:**` - the corpus
 # puts the colon outside the bold, and a pattern that requires it inside reports
 # every spec as having none of the nine.
-REQUIRED = ("user_flow", "data_flow", "data_sources", "apis_hit",
-            "automations", "features_tools", "extensibility", "evidence")
+REQUIRED = (
+    "user_flow",
+    "data_flow",
+    "data_sources",
+    "apis_hit",
+    "automations",
+    "features_tools",
+    "extensibility",
+    "evidence",
+)
 URL = re.compile(r"https?://[^\s\)\]\>`\"']+")
 
 
 def git(*args):
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", timeout=90).stdout
+    return subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=90,
+    ).stdout
 
 
 def live_features():
     live = set()
-    for f in git("ls-tree", "-r", "--name-only", "origin/main",
-                 "backend/dsr/features").splitlines():
+    for f in git(
+        "ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features"
+    ).splitlines():
         m = re.search(r"wf[_-]?(\d{3})", f)
         if m:
             live.add(int(m.group(1)))
@@ -79,8 +96,9 @@ def live_features():
 def existing_branches():
     """Tickets that already have a research branch, and so are ports not builds."""
     out = git("branch", "-a", "--list", "feature/WF-*")
-    return {int(m.group(1)) for line in out.splitlines()
-            if (m := re.search(r"feature/WF-(\d+)", line))}
+    return {
+        int(m.group(1)) for line in out.splitlines() if (m := re.search(r"feature/WF-(\d+)", line))
+    }
 
 
 def spec_of(n):
@@ -204,7 +222,7 @@ them.
 
 **The {len(sources)} sources it cites:**
 
-{chr(10).join(f'    {s}' for s in sources)}
+{chr(10).join(f"    {s}" for s in sources)}
 
 ---
 
@@ -216,7 +234,7 @@ them.
 
 | | |
 |---|---|
-| Feature module | `backend/dsr/features/wf{ticket[3:]}_{slug.replace('-', '_')}.py` |
+| Feature module | `backend/dsr/features/wf{ticket[3:]}_{slug.replace("-", "_")}.py` |
 | Router prefix | `/api/wf-{ticket[3:]}` |
 | Feature id | `wf-{ticket[3:]}-{slug}` |
 | Frontend folder | `frontend/src/features/wf-{ticket[3:]}-{slug}/` |
@@ -389,8 +407,7 @@ def main():
         "blocked": {f"WF-{n:03d}": why for n, why in blocked},
         "written": written,
     }
-    (OUT / "BUILD-BRIEFS.json").write_text(json.dumps(manifest, indent=2),
-                                           encoding="utf-8")
+    (OUT / "BUILD-BRIEFS.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print()
     print(f"  {len(written)} build briefs written, manifest in BUILD-BRIEFS.json")
     return 0

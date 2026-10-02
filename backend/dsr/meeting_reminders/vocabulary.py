@@ -135,6 +135,7 @@ def require_sms_from(value: Any) -> str:
         raise ReminderError(f"smsFrom must be one of {list(SMS_FROM)}; got {value!r}")
     return text
 
+
 #: What each email option resolves to, read off a booking. Published so a client
 #: renders the picker's hint from the server's own map rather than repeating it.
 EMAIL_TO_ROLES = {PRIMARY_GUEST: "the primary guest only", ALL_GUESTS: "every guest on the booking"}
@@ -182,7 +183,7 @@ CONDITION_DETAIL = {
     BEFORE: "sent at a set offset before the meeting starts",
     BEFORE_IF_NO_RESPONSE: (
         "sent at a set offset before the meeting starts, and only if the primary guest has "
-        'not responded to the invite (Accepted or Declined)'
+        "not responded to the invite (Accepted or Declined)"
     ),
     AFTER: "sent at a set offset after the meeting ends - the researched use is a follow-up email",
 }
@@ -417,9 +418,7 @@ def skip_reason(slug: str) -> str:
 def require_skip_reason(value: Any) -> str:
     text = str(value or "").strip().lower()
     if text not in SKIP_REASONS:
-        raise ReminderError(
-            f"skip reason must be one of {sorted(SKIP_REASONS)}; got {value!r}"
-        )
+        raise ReminderError(f"skip reason must be one of {sorted(SKIP_REASONS)}; got {value!r}")
     return text
 
 
@@ -579,8 +578,7 @@ CAL_TOKENS = (
 #: when SMS reminders are enabled for the event type".
 CAL_PHONE_FIELD = "attendee.phoneNumber"
 PHONE_REQUIRED_QUOTE = (
-    "`attendee.phoneNumber` - \"becomes required when SMS reminders are enabled for the event "
-    'type".'
+    '`attendee.phoneNumber` - "becomes required when SMS reminders are enabled for the event type".'
 )
 
 

@@ -38,8 +38,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from dsr.crm_provisioning import diff as schema_diff
-from dsr.crm_provisioning import manifest as manifests
+from dsr.crm_provisioning import diff as schema_diff, manifest as manifests
 from dsr.crm_provisioning.errors import (
     DuplicateManifestVersion,
     ManifestError,
@@ -196,7 +195,9 @@ class ProvisioningEngine:
             else self.store.list(MANIFESTS, limit=1000)
         )
         listed = [_data(row) for row in rows]
-        return sorted(listed, key=lambda row: (str(row.get("manifest_id")), str(row.get("version"))))
+        return sorted(
+            listed, key=lambda row: (str(row.get("manifest_id")), str(row.get("version")))
+        )
 
     def manifest(self, manifest_id: str, version: str | None = None) -> dict[str, Any]:
         rows = self.store.find(MANIFESTS, {"manifest_id": manifest_id}, limit=1000)
@@ -209,7 +210,9 @@ class ProvisioningEngine:
             # exists to prevent.
             chosen = max(rows, key=lambda row: _version_key(str(_data(row).get("version") or "")))
         else:
-            chosen = next((row for row in rows if str(_data(row).get("version")) == str(version)), None)
+            chosen = next(
+                (row for row in rows if str(_data(row).get("version")) == str(version)), None
+            )
             if chosen is None:
                 raise RecordNotFound(f"manifest {manifest_id} version {version}")
         return _data(chosen)
@@ -323,7 +326,9 @@ class ProvisioningEngine:
             adapter=chosen,
             findings=findings,
             objects=self.crm.object_definitions(connection),
-            properties=self.crm.property_definitions(connection, str((record.get("object") or {}).get("name"))),
+            properties=self.crm.property_definitions(
+                connection, str((record.get("object") or {}).get("name"))
+            ),
             keys=self.crm.key_definitions(connection),
         )
         plan["service_document"] = self.crm.service_document(connection)
@@ -620,9 +625,7 @@ class ProvisioningEngine:
         rows = self.store.list(OBJECTS, room_id=room_id, limit=1000)
         if where:
             rows = [row for row in rows if all(row["data"].get(k) == v for k, v in where.items())]
-        return sorted(
-            (_data(row) for row in rows), key=lambda row: str(row.get("crm_object_name"))
-        )
+        return sorted((_data(row) for row in rows), key=lambda row: str(row.get("crm_object_name")))
 
     def object(self, object_id: str) -> dict[str, Any]:
         record = self.store.get(object_id)
@@ -630,7 +633,9 @@ class ProvisioningEngine:
             raise RecordNotFound(object_id)
         return _data(record)
 
-    def object_for_connection(self, connection: Mapping[str, Any], name: str) -> dict[str, Any] | None:
+    def object_for_connection(
+        self, connection: Mapping[str, Any], name: str
+    ) -> dict[str, Any] | None:
         rows = self.store.find(
             OBJECTS,
             {"connection_id": connection["id"], "crm_object_name": name},
@@ -690,7 +695,8 @@ class ProvisioningEngine:
         # exactly the checks a manifest property goes through, so the two entry
         # points cannot disagree about what a vendor will accept.
         findings = manifests.findings_for(
-            {"properties": [prop], "object": record["data"], manifests.SYNC_KEY_FIELD: None}, adapter
+            {"properties": [prop], "object": record["data"], manifests.SYNC_KEY_FIELD: None},
+            adapter,
         )
         blocking_here = manifests.property_level(findings)
         if blocking_here:
@@ -716,7 +722,11 @@ class ProvisioningEngine:
 
         request = schema_diff.property_request(prop, adapter)
         self.crm.create_property(
-            connection, str(record["data"].get("crm_object_name")), request, source=source, actor=actor
+            connection,
+            str(record["data"].get("crm_object_name")),
+            request,
+            source=source,
+            actor=actor,
         )
         created = self.store.create(
             PROPERTIES,
@@ -757,14 +767,18 @@ class ProvisioningEngine:
             raise RecordNotFound(key_id)
         return _data(record)
 
-    def key_for_columns(self, connection: Mapping[str, Any], columns: list[str]) -> dict[str, Any] | None:
+    def key_for_columns(
+        self, connection: Mapping[str, Any], columns: list[str]
+    ) -> dict[str, Any] | None:
         rows = self.store.find(KEYS, {"connection_id": connection["id"]}, limit=1000)
         for row in rows:
             if list(_data(row).get("columns") or []) == list(columns):
                 return _data(row)
         return None
 
-    def _drive_key(self, key_id: str, action: str, *, actor: str | None, source: str) -> dict[str, Any]:
+    def _drive_key(
+        self, key_id: str, action: str, *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         record = self.key(key_id)
         connection = self.connection(str(record.get("connection_id")))
         if action == "poll":
@@ -779,7 +793,9 @@ class ProvisioningEngine:
             "status": remote.get("status"),
             "polls": remote.get("polls"),
             "async_job_id": remote.get("async_job_id"),
-            "reactivated_count": remote.get("reactivated_count", record.get("reactivated_count") or 0),
+            "reactivated_count": remote.get(
+                "reactivated_count", record.get("reactivated_count") or 0
+            ),
             "reactivated": bool(remote.get("reactivated")),
         }
         if remote.get("status") == "Active":
@@ -791,7 +807,9 @@ class ProvisioningEngine:
         """One look at the background index build. The researched ``AsyncJob``."""
         return self._drive_key(key_id, "poll", actor=actor, source=source)
 
-    def reactivate_key(self, key_id: str, *, actor: str | None = None, source: str) -> dict[str, Any]:
+    def reactivate_key(
+        self, key_id: str, *, actor: str | None = None, source: str
+    ) -> dict[str, Any]:
         """``ReactivateEntityKey``: repair a half-provisioned key.
 
         Idempotent in the same direction the installer is. A key whose index is
@@ -810,7 +828,11 @@ class ProvisioningEngine:
             where["connection_id"] = connection_id
         if outcome:
             where["outcome"] = outcome
-        rows = self.store.find(RUNS, where, limit=limit) if where else self.store.list(RUNS, limit=limit)
+        rows = (
+            self.store.find(RUNS, where, limit=limit)
+            if where
+            else self.store.list(RUNS, limit=limit)
+        )
         return [_data(row) for row in rows]
 
     def run(self, run_id: str) -> dict[str, Any]:
@@ -838,7 +860,9 @@ class ProvisioningEngine:
         )
         by_object: dict[str, list[dict[str, Any]]] = {}
         for obj in objects:
-            by_object.setdefault(str(obj.get("crm_object_id")), []).extend(self.properties(obj["id"]))
+            by_object.setdefault(str(obj.get("crm_object_id")), []).extend(
+                self.properties(obj["id"])
+            )
         keys = self.store.list(KEYS, room_id=room_id, limit=1000)
         return {
             "room_id": room_id,
@@ -869,13 +893,19 @@ class ProvisioningEngine:
         return {
             "room_id": room_id,
             "connections": len(connections),
-            "unsupported_connections": [c["name"] for c in connections if not c.get("supported", True)],
+            "unsupported_connections": [
+                c["name"] for c in connections if not c.get("supported", True)
+            ],
             "objects": payload["count"],
             "properties": sum(len(rows) for rows in payload["properties"].values()),
             "keys": len(keys),
             "keys_active": sum(1 for key in keys if key.get("status") == "Active"),
-            "needs_repair": sum(1 for key in keys if key.get("status") in {"Failed", "Pending", "In Progress"}),
-            "incomplete_objects": sum(1 for obj in payload["objects"] if obj.get("complete") is False),
+            "needs_repair": sum(
+                1 for key in keys if key.get("status") in {"Failed", "Pending", "In Progress"}
+            ),
+            "incomplete_objects": sum(
+                1 for obj in payload["objects"] if obj.get("complete") is False
+            ),
             "installations": len(runs),
             "last_installation": runs[0] if runs else None,
         }

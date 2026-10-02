@@ -51,7 +51,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from dsr.event_stream.errors import RateLimited, VocabularyError
 from dsr.event_stream.vocabulary import (
@@ -204,7 +204,9 @@ def pull(
         "resource": resource,
         "object": spec["object"],
         "vendor_path": spec["vendor_path"],
-        "url": backfill_route(str(spec["route"]), workspaceId=form_id or "id", formId=form_id or "id"),
+        "url": backfill_route(
+            str(spec["route"]), workspaceId=form_id or "id", formId=form_id or "id"
+        ),
         "properties": list(properties),
         "count": len(records),
         "results": [project_properties(record, spec, properties) for record in records],

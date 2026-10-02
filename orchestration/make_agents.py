@@ -22,6 +22,7 @@ because a dashboard nobody checks goes stale, and a dashboard that reports
 success while the thing it watches has failed is worse than no dashboard at all -
 which is the defect this project has now found in three separate tools.
 """
+
 from __future__ import annotations
 
 import json
@@ -56,14 +57,28 @@ TARGET = len(json.loads(_CORPUS.read_text(encoding="utf-8"))) if _CORPUS.exists(
 
 
 def run(args, cwd=ROOT, timeout=120):
-    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     return p.stdout if p.returncode == 0 else ""
 
 
 def orca(args, timeout=180):
-    p = subprocess.run(["orca", *args], cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        ["orca", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         return json.loads(p.stdout or "{}")
     except json.JSONDecodeError:
@@ -109,8 +124,10 @@ def main():
         if wp:
             by_worktree[wp.replace("\\", "/").lower()] = t
 
-    board = orca(["worktree", "list", "--repo", REPO, "--json"]) \
-        .get("result", {}).get("worktrees", []) or []
+    board = (
+        orca(["worktree", "list", "--repo", REPO, "--json"]).get("result", {}).get("worktrees", [])
+        or []
+    )
     board_counts = {}
     for w in board:
         s = w.get("workspaceStatus") or "?"
@@ -127,8 +144,9 @@ def main():
         if exists:
             a = git("rev-list", "--count", "origin/main..HEAD", cwd=wt)
             ahead = int(a) if a.isdigit() else 0
-            uncommitted = len([l for l in git("status", "--porcelain", cwd=wt).splitlines()
-                               if l.strip()])
+            uncommitted = len(
+                [line for line in git("status", "--porcelain", cwd=wt).splitlines() if line.strip()]
+            )
 
         if ticket in live:
             state = "MERGED"
@@ -146,16 +164,28 @@ def main():
         if term is None and ticket not in live and exists and not ahead and not uncommitted:
             state = "stopped, no output"
 
-        rows.append({
-            "ticket": ticket, "worktree": wt_name, "title": rec.get("title", ""),
-            "handle": rec.get("handle", ""), "commits": ahead,
-            "uncommitted": uncommitted, "state": state,
-            "tab": "open" if term else "closed",
-        })
+        rows.append(
+            {
+                "ticket": ticket,
+                "worktree": wt_name,
+                "title": rec.get("title", ""),
+                "handle": rec.get("handle", ""),
+                "commits": ahead,
+                "uncommitted": uncommitted,
+                "state": state,
+                "tab": "open" if term else "closed",
+            }
+        )
 
-    order = {"MERGED": 0, "READY TO MERGE": 1, "committed, still editing": 2,
-             "WRITING": 3, "no work yet": 4, "stopped, no output": 5,
-             "WORKTREE GONE": 6}
+    order = {
+        "MERGED": 0,
+        "READY TO MERGE": 1,
+        "committed, still editing": 2,
+        "WRITING": 3,
+        "no work yet": 4,
+        "stopped, no output": 5,
+        "WORKTREE GONE": 6,
+    }
     rows.sort(key=lambda r: (order.get(r["state"], 9), r["ticket"]))
 
     def n(state):
@@ -204,9 +234,11 @@ def main():
     A(f"`main` at `{tip}`")
     A(f"measured {stamp} in {time.time() - started:.0f}s")
     A("")
-    A(f"**{len(live)}** features on `main` of {TARGET}. Board: " +
-      ", ".join(f"{v} {k}" for k, v in sorted(board_counts.items())) +
-      f" ({len(board)} cards).")
+    A(
+        f"**{len(live)}** features on `main` of {TARGET}. Board: "
+        + ", ".join(f"{v} {k}" for k, v in sorted(board_counts.items()))
+        + f" ({len(board)} cards)."
+    )
     A("")
     A("## Every agent dispatched")
     A("")
@@ -218,8 +250,10 @@ def main():
         A("dispatched, and it will not reconstruct the list from worktree names.")
         A("")
     for r in rows:
-        A(f"| {r['ticket']} | {r['title'][:44] or '-'} | **{r['state']}** | "
-          f"{r['commits']} | {r['uncommitted']} | {r['tab']} |")
+        A(
+            f"| {r['ticket']} | {r['title'][:44] or '-'} | **{r['state']}** | "
+            f"{r['commits']} | {r['uncommitted']} | {r['tab']} |"
+        )
     A("")
     A("## What the states mean")
     A("")

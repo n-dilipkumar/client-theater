@@ -179,7 +179,9 @@ class Decision:
 
 def clean(reason: str = "") -> DuplicateResult:
     """No row matched. The researched "clean create"."""
-    return DuplicateResult(result="clean", reason=reason or "no existing record matched any configured key")
+    return DuplicateResult(
+        result="clean", reason=reason or "no existing record matched any configured key"
+    )
 
 
 def matched(

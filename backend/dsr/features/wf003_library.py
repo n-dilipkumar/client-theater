@@ -85,7 +85,9 @@ def _room_not_found(request: Request, exc: RoomNotFound) -> JSONResponse:
 
 
 def _document_not_found(request: Request, exc: DocumentNotFound) -> JSONResponse:
-    return JSONResponse(status_code=404, content={"error": "document_not_found", "detail": str(exc)})
+    return JSONResponse(
+        status_code=404, content={"error": "document_not_found", "detail": str(exc)}
+    )
 
 
 def _permission_denied(request: Request, exc: PermissionDenied) -> JSONResponse:
@@ -98,7 +100,9 @@ def _invalid_document(request: Request, exc: InvalidDocument) -> JSONResponse:
 
 def _invalid_transition(request: Request, exc: InvalidTransition) -> JSONResponse:
     # 409: the document exists, the requested change just is not available.
-    return JSONResponse(status_code=409, content={"error": "invalid_transition", "detail": str(exc)})
+    return JSONResponse(
+        status_code=409, content={"error": "invalid_transition", "detail": str(exc)}
+    )
 
 
 EXCEPTION_HANDLERS = {
@@ -289,7 +293,11 @@ def save_gallery_block(
     """
     # One route answers both verbs, so it also names the path it is serving:
     # a replaced block must not be audited as though it had just been created.
-    suffix = f"/rooms/{room_id}/document-gallery/{block_id}" if block_id else f"/rooms/{room_id}/document-gallery"
+    suffix = (
+        f"/rooms/{room_id}/document-gallery/{block_id}"
+        if block_id
+        else f"/rooms/{room_id}/document-gallery"
+    )
     return library.save_gallery(
         room_id,
         payload,
@@ -372,7 +380,9 @@ def seed(db, context: dict[str, Any]) -> str:
         room_id = record.get("room_id")
         account = next((a for r, a in room_ids if r == room_id), "")
         uploader = "dana" if index % 2 == 0 else "sam"
-        modified_at = (now - timedelta(days=index * 3, hours=index)).isoformat(timespec="milliseconds")
+        modified_at = (now - timedelta(days=index * 3, hours=index)).isoformat(
+            timespec="milliseconds"
+        )
         db.update(
             record["id"],
             {
@@ -383,7 +393,8 @@ def seed(db, context: dict[str, Any]) -> str:
                 "status": DOCUMENT_STATUSES[index % len(DOCUMENT_STATUSES)],
                 "uploaded_by": data.get("uploaded_by") or uploader,
                 "uploaded_at": data.get("uploaded_at") or modified_at,
-                "last_modified_by": data.get("last_modified_by") or ("sam" if index % 3 == 0 else "dana"),
+                "last_modified_by": data.get("last_modified_by")
+                or ("sam" if index % 3 == 0 else "dana"),
                 "last_modified_at": data.get("last_modified_at") or modified_at,
                 # One document is left without a thumbnail on purpose: rendering
                 # is asynchronous upstream, so "not rendered yet" is a real state

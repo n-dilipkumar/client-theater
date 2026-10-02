@@ -270,7 +270,16 @@ class NodeResult:
     ``message`` is the sentence a rep reads.
     """
 
-    __slots__ = ("node", "position", "outcome", "reason", "message", "crm_id", "resolved", "history_ids")
+    __slots__ = (
+        "node",
+        "position",
+        "outcome",
+        "reason",
+        "message",
+        "crm_id",
+        "resolved",
+        "history_ids",
+    )
 
     def __init__(
         self,
@@ -539,7 +548,15 @@ class BookingWriteback:
         data["has_token"] = bool(token)
         data["token_hint"] = f"…{token[-4:]}" if token else ""
         data.pop("token", None)
-        for key in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at"):
+        for key in (
+            "id",
+            "collection",
+            "room_id",
+            "revision",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        ):
             data.pop(key, None)
         return data
 
@@ -696,7 +713,11 @@ class BookingWriteback:
                 created_events=[],
                 deleted_events=[],
                 ok=False,
-                actionable={"reason": REASON_MEETING_TYPE_SYNC_OFF, "message": message, "node": "sync_to_crm"},
+                actionable={
+                    "reason": REASON_MEETING_TYPE_SYNC_OFF,
+                    "message": message,
+                    "node": "sync_to_crm",
+                },
                 started=started,
                 actor=actor,
                 source=source,
@@ -717,26 +738,49 @@ class BookingWriteback:
             node = by_name[name]
             if name in ANCHOR_NODES:
                 result, record = self._run_anchor(
-                    node=node, position=position, booking=booking, vendor=vendor,
-                    crm=crm, source=source, room_id=room_id, actor=actor,
+                    node=node,
+                    position=position,
+                    booking=booking,
+                    vendor=vendor,
+                    crm=crm,
+                    source=source,
+                    room_id=room_id,
+                    actor=actor,
                 )
             elif name == "related_object":
                 result, related = self._run_related(
-                    node=node, position=position, record=record, booking=booking,
-                    crm=crm, source=source,
+                    node=node,
+                    position=position,
+                    record=record,
+                    booking=booking,
+                    crm=crm,
+                    source=source,
                 )
             elif name in EVENT_NODE.values():
                 result, made = self._run_event(
-                    node=node, position=position, record=record, related=related,
-                    booking=booking, meeting_type=meeting_type_data, vendor=vendor,
-                    crm=crm, source=source, room_id=room_id, actor=actor,
-                    run_ref=run_id, flow_id=str(flow["id"]),
+                    node=node,
+                    position=position,
+                    record=record,
+                    related=related,
+                    booking=booking,
+                    meeting_type=meeting_type_data,
+                    vendor=vendor,
+                    crm=crm,
+                    source=source,
+                    room_id=room_id,
+                    actor=actor,
+                    run_ref=run_id,
+                    flow_id=str(flow["id"]),
                 )
                 created_events.extend(made)
             elif name in FIELD_NODE.values():
                 result = self._run_fields(
-                    node=node, position=position, record=record, booking=booking,
-                    crm=crm, source=source,
+                    node=node,
+                    position=position,
+                    record=record,
+                    booking=booking,
+                    crm=crm,
+                    source=source,
                 )
             elif name == "add_to_campaign":
                 result = self._run_campaign(
@@ -744,12 +788,19 @@ class BookingWriteback:
                 )
             elif name == "update_ownership":
                 result = self._run_ownership(
-                    node=node, position=position, record=record, booking=booking,
-                    crm=crm, source=source,
+                    node=node,
+                    position=position,
+                    record=record,
+                    booking=booking,
+                    crm=crm,
+                    source=source,
                 )
             else:  # pragma: no cover - validate_nodes refuses anything else
                 result = NodeResult(
-                    name, position, OUTCOME_SKIPPED, reason="unknown_node",
+                    name,
+                    position,
+                    OUTCOME_SKIPPED,
+                    reason="unknown_node",
                     message=f"node {name!r} is not one this build executes",
                 )
             steps.append(result)
@@ -833,9 +884,14 @@ class BookingWriteback:
             l2a = self._apply_l2a(matched, booking=booking, vendor=vendor, crm=crm, source=source)
             resolved["l2a"] = l2a
             if l2a.get("account_crm_id"):
-                matched = crm.update(
-                    matched["data"]["crm_id"], {"account_id": l2a["account_crm_id"]}, source=source
-                ) or matched
+                matched = (
+                    crm.update(
+                        matched["data"]["crm_id"],
+                        {"account_id": l2a["account_crm_id"]},
+                        source=source,
+                    )
+                    or matched
+                )
         elif node.get("l2a"):
             # The flow asked for L2A and it did not happen. Saying so beats leaving
             # `l2a: true` on a run that never applied it.
@@ -873,8 +929,12 @@ class BookingWriteback:
             except CrmRefused as exc:
                 return (
                     NodeResult(
-                        str(node.get("node")), position, OUTCOME_FAILED,
-                        reason=exc.code, message=str(exc.detail), resolved=resolved,
+                        str(node.get("node")),
+                        position,
+                        OUTCOME_FAILED,
+                        reason=exc.code,
+                        message=str(exc.detail),
+                        resolved=resolved,
                     ),
                     None,
                 )
@@ -894,8 +954,12 @@ class BookingWriteback:
             except CrmRefused as exc:
                 return (
                     NodeResult(
-                        str(node.get("node")), position, OUTCOME_FAILED,
-                        reason=exc.code, message=str(exc.detail), resolved=resolved,
+                        str(node.get("node")),
+                        position,
+                        OUTCOME_FAILED,
+                        reason=exc.code,
+                        message=str(exc.detail),
+                        resolved=resolved,
                     ),
                     matched,
                 )
@@ -911,7 +975,9 @@ class BookingWriteback:
             # reason, not as a success and not as a crash.
             return (
                 NodeResult(
-                    str(node.get("node")), position, OUTCOME_SKIPPED,
+                    str(node.get("node")),
+                    position,
+                    OUTCOME_SKIPPED,
                     reason=REASON_NO_CREATE,
                     message=(
                         "nothing matched by email and no create branch produced a record. "
@@ -926,15 +992,23 @@ class BookingWriteback:
         resolved["type"] = matched["data"].get("type")
         resolved["fields_written"] = wrote
         if resolved.get("create_outcome") in ("created", "always_created"):
-            reason = REASON_ALWAYS_LEAD if resolved["create_outcome"] == "always_created" else REASON_CREATED
+            reason = (
+                REASON_ALWAYS_LEAD
+                if resolved["create_outcome"] == "always_created"
+                else REASON_CREATED
+            )
         elif resolved.get("update_outcome") == "applied":
             reason = REASON_UPDATED
         else:
             reason = REASON_MATCHED
         return (
             NodeResult(
-                str(node.get("node")), position, OUTCOME_APPLIED,
-                reason=reason, crm_id=str(resolved["crm_id"]), resolved=resolved,
+                str(node.get("node")),
+                position,
+                OUTCOME_APPLIED,
+                reason=reason,
+                crm_id=str(resolved["crm_id"]),
+                resolved=resolved,
             ),
             matched,
         )
@@ -961,9 +1035,7 @@ class BookingWriteback:
         """
         if vendor != SALESFORCE:
             return {"applied": False, "reason": "l2a_is_a_salesforce_rule"}
-        company = str(
-            lead["data"].get("company") or booking.get("account", {}).get("name") or ""
-        )
+        company = str(lead["data"].get("company") or booking.get("account", {}).get("name") or "")
         if not company:
             return {"applied": False, "reason": "no_company_on_the_lead_to_convert"}
         existing = next(
@@ -1109,7 +1181,9 @@ class BookingWriteback:
         if record is None:
             return (
                 NodeResult(
-                    "related_object", position, OUTCOME_SKIPPED,
+                    "related_object",
+                    position,
+                    OUTCOME_SKIPPED,
                     reason=REASON_NO_RECORD,
                     message=(
                         "there is no record, so there is nothing to relate an Event to. "
@@ -1122,7 +1196,9 @@ class BookingWriteback:
         if str(record["data"].get("type")) != TYPE_CONTACT:
             return (
                 NodeResult(
-                    "related_object", position, OUTCOME_SKIPPED,
+                    "related_object",
+                    position,
+                    OUTCOME_SKIPPED,
                     reason=RELATED_REQUIRES_CONTACT_QUOTE,
                     message=related_requires_contact_message(str(record["data"].get("type"))),
                     resolved={"object": object_name, "required": TYPE_CONTACT},
@@ -1134,13 +1210,18 @@ class BookingWriteback:
             selection = self._select_campaign(str(node.get("campaign") or ""), crm=crm)
         else:
             selection = crm.select_related(
-                record_type, record=record["data"], on=parse_date(booking.get("starts_at")), source=source
+                record_type,
+                record=record["data"],
+                on=parse_date(booking.get("starts_at")),
+                source=source,
             )
         chosen = selection.get("chosen")
         if chosen is None:
             return (
                 NodeResult(
-                    "related_object", position, OUTCOME_SKIPPED,
+                    "related_object",
+                    position,
+                    OUTCOME_SKIPPED,
                     reason=REASON_NO_CANDIDATE,
                     message=(
                         f'[sourced] "{RELATED_SELECTION_QUOTE}" - this build applied the '
@@ -1154,7 +1235,9 @@ class BookingWriteback:
             )
         return (
             NodeResult(
-                "related_object", position, OUTCOME_APPLIED,
+                "related_object",
+                position,
+                OUTCOME_APPLIED,
                 reason=str(selection.get("rule")),
                 message=(
                     f'[sourced] "{RELATED_SELECTION_QUOTE}" - chose '
@@ -1188,7 +1271,8 @@ class BookingWriteback:
             (
                 row
                 for row in candidates
-                if wanted in (str(row["data"].get("crm_id") or ""), str(row["data"].get("name") or ""))
+                if wanted
+                in (str(row["data"].get("crm_id") or ""), str(row["data"].get("name") or ""))
             ),
             None,
         )
@@ -1237,7 +1321,9 @@ class BookingWriteback:
         if record is None:
             return (
                 NodeResult(
-                    str(node.get("node")), position, OUTCOME_SKIPPED,
+                    str(node.get("node")),
+                    position,
+                    OUTCOME_SKIPPED,
                     reason=REASON_NO_RECORD,
                     message=(
                         "[sourced] All created Events will be related to the Contact or "
@@ -1309,7 +1395,9 @@ class BookingWriteback:
         if failed:
             return (
                 NodeResult(
-                    str(node.get("node")), position, OUTCOME_FAILED,
+                    str(node.get("node")),
+                    position,
+                    OUTCOME_FAILED,
                     reason=str(failed[0].get("error_code") or "event_creation_failed"),
                     message=str(failed[0].get("error") or ""),
                     crm_id=created_ids[0] if created_ids else "",
@@ -1320,7 +1408,9 @@ class BookingWriteback:
             )
         return (
             NodeResult(
-                str(node.get("node")), position, OUTCOME_APPLIED,
+                str(node.get("node")),
+                position,
+                OUTCOME_APPLIED,
                 reason=REASON_CHILD_EVENT if children else REASON_DEFAULT_RELATION,
                 message=(
                     f"created {len(applied)} {event_type} row(s) related to "
@@ -1485,11 +1575,7 @@ class BookingWriteback:
             deleted.extend(self._clean(crm_id=crm_id, crm=crm, source=source))
         # The history rows are annotated so Events History shows the meeting was
         # taken away rather than quietly losing it.
-        history_ids = [
-            str(history_id)
-            for step in steps
-            for history_id in step.history_ids
-        ]
+        history_ids = [str(history_id) for step in steps for history_id in step.history_ids]
         for history_id in history_ids:
             row = self.store.get(history_id)
             if row is None or row["collection"] != HISTORY_COLLECTION:
@@ -1498,7 +1584,11 @@ class BookingWriteback:
                 continue
             self.store.update(
                 history_id,
-                {"deleted": True, "deleted_crm_id": ", ".join(deleted), "deleted_reason": REASON_DELETED},
+                {
+                    "deleted": True,
+                    "deleted_crm_id": ", ".join(deleted),
+                    "deleted_reason": REASON_DELETED,
+                },
                 actor="crm",
                 source=source,
             )
@@ -1518,7 +1608,9 @@ class BookingWriteback:
     ) -> NodeResult:
         if record is None:
             return NodeResult(
-                str(node.get("node")), position, OUTCOME_SKIPPED,
+                str(node.get("node")),
+                position,
+                OUTCOME_SKIPPED,
                 reason=REASON_NO_RECORD,
                 message="Update Field / Update Property writes to the record the create node produced, and there is none.",
             )
@@ -1527,7 +1619,9 @@ class BookingWriteback:
         )
         unwriteable = [item for item in written if not item.get("written")]
         return NodeResult(
-            str(node.get("node")), position, OUTCOME_APPLIED,
+            str(node.get("node")),
+            position,
+            OUTCOME_APPLIED,
             reason=REASON_FIELDS_WRITTEN,
             message=f"wrote {len(written) - len(unwriteable)} of {len(written)} field(s)",
             crm_id=str(record["data"].get("crm_id") or ""),
@@ -1551,7 +1645,9 @@ class BookingWriteback:
         """
         if record is None:
             return NodeResult(
-                "add_to_campaign", position, OUTCOME_SKIPPED,
+                "add_to_campaign",
+                position,
+                OUTCOME_SKIPPED,
                 reason=REASON_NO_RECORD,
                 message="a CampaignMember is a relation between a Campaign and a record, and there is no record.",
             )
@@ -1570,11 +1666,16 @@ class BookingWriteback:
                 outcome = "created"
         except CrmRefused as exc:
             return NodeResult(
-                "add_to_campaign", position, OUTCOME_FAILED,
-                reason=exc.code, message=str(exc.detail),
+                "add_to_campaign",
+                position,
+                OUTCOME_FAILED,
+                reason=exc.code,
+                message=str(exc.detail),
             )
         return NodeResult(
-            "add_to_campaign", position, OUTCOME_APPLIED,
+            "add_to_campaign",
+            position,
+            OUTCOME_APPLIED,
             reason=REASON_CAMPAIGN_MEMBER,
             message=f"{outcome} CampaignMember with status {CAMPAIGN_MEMBER_STATUS}",
             crm_id=str(updated["data"].get("crm_id") or ""),
@@ -1630,7 +1731,9 @@ class BookingWriteback:
         """
         if record is None:
             return NodeResult(
-                "update_ownership", position, OUTCOME_SKIPPED,
+                "update_ownership",
+                position,
+                OUTCOME_SKIPPED,
                 reason=REASON_NO_RECORD,
                 message="Update Ownership reassigns the record the create node produced, and there is none.",
             )
@@ -1672,7 +1775,9 @@ class BookingWriteback:
 
         if not chosen:
             return NodeResult(
-                "update_ownership", position, OUTCOME_SKIPPED,
+                "update_ownership",
+                position,
+                OUTCOME_SKIPPED,
                 reason=REASON_OWNER_NONE,
                 message=(
                     "no owner resolved: the fallback matched nothing, the record has no "
@@ -1683,7 +1788,9 @@ class BookingWriteback:
             )
         if chosen == str(record["data"].get("owner") or ""):
             return NodeResult(
-                "update_ownership", position, OUTCOME_SKIPPED,
+                "update_ownership",
+                position,
+                OUTCOME_SKIPPED,
                 reason=REASON_OWNER_UNCHANGED,
                 message=f"{chosen} already owns this record, so no write was made.",
                 crm_id=str(record["data"].get("crm_id") or ""),
@@ -1691,8 +1798,12 @@ class BookingWriteback:
             )
         crm.update(record["data"]["crm_id"], {"owner": chosen}, source=source)
         return NodeResult(
-            "update_ownership", position, OUTCOME_APPLIED,
-            reason=REASON_OWNER_FALLBACK if "fallback_" in resolved.get("branch", "") else REASON_OWNERSHIP,
+            "update_ownership",
+            position,
+            OUTCOME_APPLIED,
+            reason=REASON_OWNER_FALLBACK
+            if "fallback_" in resolved.get("branch", "")
+            else REASON_OWNERSHIP,
             message=f"owner set to {chosen} by the {resolved.get('branch')} branch",
             crm_id=str(record["data"].get("crm_id") or ""),
             resolved={**resolved, "owner": chosen},
@@ -1911,7 +2022,7 @@ class BookingWriteback:
             }
         run_record = self.run(room_id, str(data.get("run_ref") or ""))
         flow = self.flow(str(data.get("flow_id") or ""), room_id=room_id)
-        meeting_type = self.meeting_type(str(data.get("meeting_type_id") or ""), room_id=room_id)
+        self.meeting_type(str(data.get("meeting_type_id") or ""), room_id=room_id)
         vendor = str(flow["data"].get("vendor") or data.get("vendor") or SALESFORCE)
         event_type = str(data.get("event_type") or EVENT_RECORD_TYPE[vendor])
         client = crm or self.crm(room_id)
@@ -1962,7 +2073,9 @@ class BookingWriteback:
                 "error": error,
                 "error_code": error_code,
                 "run_ref": str(run_record["id"]),
-                "booking_ref": str(run_record["data"].get("booking_ref") or data.get("booking_ref") or ""),
+                "booking_ref": str(
+                    run_record["data"].get("booking_ref") or data.get("booking_ref") or ""
+                ),
             },
             room_id=str(row["room_id"] or room_id),
             actor=actor,
@@ -2062,8 +2175,7 @@ def _connector_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     vendor = str(payload.get("vendor") or "").strip()
     if vendor not in VENDORS:
         raise InvalidConfig(
-            "a connector needs a vendor this build writes to; known vendors are "
-            f"{list(VENDORS)}"
+            f"a connector needs a vendor this build writes to; known vendors are {list(VENDORS)}"
         )
     data: dict[str, Any] = {
         "vendor": vendor,

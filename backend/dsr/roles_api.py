@@ -213,7 +213,9 @@ def update_access(
     access_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
     actor: str | None = ACTOR,
-    confirm: bool = Query(default=False, description="Acknowledge the change; required for a role change"),
+    confirm: bool = Query(
+        default=False, description="Acknowledge the change; required for a role change"
+    ),
     service: AccessService = ServiceDep,
 ) -> dict[str, Any]:
     """Edit one row of *Who Has Access*.

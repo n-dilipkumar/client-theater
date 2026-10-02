@@ -36,15 +36,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from dsr.db.audited import RecordNotFound
 from dsr.dedupe.errors import DedupeError
 from dsr.dedupe.matching import REGISTRY, Match, MatcherRegistry, decisive, match_rows
 from dsr.dedupe.policy import normalise_connection
 from dsr.dedupe.rules import (
-    BLOCKED,
     CREATED,
     CREATED_DUPLICATE,
-    ESCALATED,
-    HARD_BLOCKED,
     UPDATED,
     Decision,
     DuplicateResult,
@@ -65,7 +63,6 @@ from dsr.dedupe.vocabulary import (
     require_vendor,
     serialise_duplicate_rule_header,
 )
-from dsr.db.audited import RecordNotFound
 from dsr.store import RecordStore
 
 #: The connection a row belongs to. Distinct from ``crm_*`` because ``crm_record``
@@ -184,9 +181,13 @@ class StoreCrm:
         source: str,
         room_id: str | None,
     ) -> dict[str, Any]:
-        return self.store.create(RECORD_COLLECTION, dict(payload), room_id=room_id, actor=actor, source=source)
+        return self.store.create(
+            RECORD_COLLECTION, dict(payload), room_id=room_id, actor=actor, source=source
+        )
 
-    def update(self, record_id: str, patch: Mapping[str, Any], *, actor: str | None, source: str) -> dict[str, Any]:
+    def update(
+        self, record_id: str, patch: Mapping[str, Any], *, actor: str | None, source: str
+    ) -> dict[str, Any]:
         return self.store.update(record_id, dict(patch), actor=actor, source=source)
 
 
@@ -234,7 +235,11 @@ class DedupeEngine:
         # room filter would read, and leaving it null would make a room-scoped
         # connection look unscoped to them.
         return self.store.create(
-            CONNECTION_COLLECTION, payload, room_id=payload.get("room_id"), actor=actor, source=source
+            CONNECTION_COLLECTION,
+            payload,
+            room_id=payload.get("room_id"),
+            actor=actor,
+            source=source,
         )
 
     def get_connection(self, connection_id: str) -> dict[str, Any] | None:
@@ -487,10 +492,16 @@ class DedupeEngine:
                     resolved.setdefault(str(row["id"]), dict(row))
             for match in match_rows(inbound, candidates, [key], self.registry, min_score=threshold):
                 found[(match.key, match.record_id, match.matcher)] = match
-        ordered = sorted(found.values(), key=lambda match: (-match.score, match.key, match.record_id))
+        ordered = sorted(
+            found.values(), key=lambda match: (-match.score, match.key, match.record_id)
+        )
         return (
             ordered,
-            {match.record_id: resolved[match.record_id] for match in ordered if match.record_id in resolved},
+            {
+                match.record_id: resolved[match.record_id]
+                for match in ordered
+                if match.record_id in resolved
+            },
         )
 
     def _result_for(
@@ -614,7 +625,11 @@ class DedupeEngine:
         """
         if decision.outcome == CREATED:
             record = self.crm.create(
-                {**payload, "synced_from": room_id, "object_type": payload.get("object_type", "contact")},
+                {
+                    **payload,
+                    "synced_from": room_id,
+                    "object_type": payload.get("object_type", "contact"),
+                },
                 actor=actor,
                 source=source,
                 room_id=room_id,

@@ -202,7 +202,14 @@ def preview(
                 continue
             payload[target] = after
             trace.append(
-                _trace(row_data, direction="out", status="ok", before=before, after=after, target=target)
+                _trace(
+                    row_data,
+                    direction="out",
+                    status="ok",
+                    before=before,
+                    after=after,
+                    target=target,
+                )
             )
 
         if want_in and sends_in(direction) and target:
@@ -272,7 +279,9 @@ def preview(
                 continue
             inbound[source_field] = after
             trace.append(
-                _trace(row_data, direction="in", status="ok", before=before, after=after, target=target)
+                _trace(
+                    row_data, direction="in", status="ok", before=before, after=after, target=target
+                )
             )
 
     # -- the sync key --------------------------------------------------------- #

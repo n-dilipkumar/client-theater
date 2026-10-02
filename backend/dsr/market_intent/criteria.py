@@ -226,7 +226,10 @@ class Criterion:
         """
         if not self.active:
             return False
-        if self.site and domains.resolve(page.get("host") or page.get("url") or "").root != self.site:
+        if (
+            self.site
+            and domains.resolve(page.get("host") or page.get("url") or "").root != self.site
+        ):
             return False
         return any(entry.matches(page) for entry in self.page_filters)
 
@@ -238,7 +241,10 @@ class Criterion:
         """
         if not self.active:
             return None
-        if self.site and domains.resolve(page.get("host") or page.get("url") or "").root != self.site:
+        if (
+            self.site
+            and domains.resolve(page.get("host") or page.get("url") or "").root != self.site
+        ):
             return None
         for entry in self.page_filters:
             if entry.matches(page):

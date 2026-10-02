@@ -8,6 +8,7 @@ overwritten.
 
 Regenerate with:  .venv/Scripts/python orchestration/pending_ports.py
 """
+
 from __future__ import annotations
 
 import json
@@ -37,15 +38,23 @@ from tools.contract import SHARED  # noqa: E402
 
 
 def git(*args, cwd=ROOT):
-    p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=90)
+    p = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=90,
+    )
     return (p.stdout + p.stderr).strip()
 
 
 def main():
     on_main = set()
-    for f in git("ls-tree", "-r", "--name-only", "origin/main",
-                 "backend/dsr/features").splitlines():
+    for f in git(
+        "ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features"
+    ).splitlines():
         m = re.search(r"wf[_-]?(\d{3})", f)
         if m:
             on_main.add(f"WF-{m.group(1)}")
@@ -61,21 +70,26 @@ def main():
                 continue
             branch = git("branch", "--show-current", cwd=d)
             ahead = git("rev-list", "--count", "origin/main..HEAD", cwd=d) or "0"
-            dirty = [l for l in git("status", "--porcelain", cwd=d).splitlines() if l.strip()]
-            files = [f for f in git("diff", "--name-only", "origin/main...HEAD", cwd=d).splitlines()
-                     if f.strip()]
+            dirty = [ln for ln in git("status", "--porcelain", cwd=d).splitlines() if ln.strip()]
+            files = [
+                f
+                for f in git("diff", "--name-only", "origin/main...HEAD", cwd=d).splitlines()
+                if f.strip()
+            ]
             if not files and not dirty:
                 continue  # nothing written yet
             offenders = sorted(set(files) & SHARED)
-            candidates.append({
-                "ticket": ticket,
-                "worktree": d.name,
-                "branch": branch,
-                "commits_ahead": int(ahead) if ahead.isdigit() else 0,
-                "uncommitted": len(dirty),
-                "changed_files": len(files),
-                "touches_shared": offenders,
-            })
+            candidates.append(
+                {
+                    "ticket": ticket,
+                    "worktree": d.name,
+                    "branch": branch,
+                    "commits_ahead": int(ahead) if ahead.isdigit() else 0,
+                    "uncommitted": len(dirty),
+                    "changed_files": len(files),
+                    "touches_shared": offenders,
+                }
+            )
 
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(candidates, indent=2), encoding="utf-8")
@@ -84,9 +98,11 @@ def main():
     print(f"pending ports    : {len(candidates)}")
     for c in candidates:
         flag = f"  !! SHARED: {c['touches_shared']}" if c["touches_shared"] else ""
-        print(f"  {c['ticket']}  {c['worktree']:<30} "
-              f"{c['commits_ahead']} commit(s), {c['uncommitted']} uncommitted, "
-              f"{c['changed_files']} file(s){flag}")
+        print(
+            f"  {c['ticket']}  {c['worktree']:<30} "
+            f"{c['commits_ahead']} commit(s), {c['uncommitted']} uncommitted, "
+            f"{c['changed_files']} file(s){flag}"
+        )
     print(f"\nwritten to {OUT.relative_to(ROOT)}")
     return 0
 

@@ -56,8 +56,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -105,6 +103,7 @@ from dsr.inroom_scheduling import (
     calendar_summary,
     first_free,
     grant_token,
+    inferences as scheduling_inferences,
     iso,
     normalise_attendee,
     normalise_booking_fields,
@@ -123,21 +122,19 @@ from dsr.inroom_scheduling import (
     require_bookable,
     require_live,
     require_live_token,
-    require_team_event_for_instant,
     require_operator,
+    require_team_event_for_instant,
     resolve_zone,
     room_metadata,
     route,
-    rule_matches,
     routed_slots_response,
+    rule_matches,
     slot_grid,
     snap_to_grid,
     token_state,
     validate_metadata,
     working_windows,
 )
-
-from dsr.inroom_scheduling import inferences as scheduling_inferences
 from dsr.inroom_scheduling.availability import Occupancy, selector_label
 from dsr.inroom_scheduling.bookings import (
     booking_created_event,
@@ -152,6 +149,7 @@ from dsr.inroom_scheduling.routing import OPERATORS
 from dsr.inroom_scheduling.schedules import candidate_starts, merge_ranges, overlaps
 from dsr.inroom_scheduling.vocabulary import published_vocabulary
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -229,7 +227,9 @@ def at():
 
 @pytest.fixture()
 def room(store):
-    return store.create("room", {"name": "Northwind — Enterprise", "account": "Northwind"}, actor="dana")
+    return store.create(
+        "room", {"name": "Northwind — Enterprise", "account": "Northwind"}, actor="dana"
+    )
 
 
 @pytest.fixture()
@@ -334,7 +334,9 @@ def client_spec(**overrides):
 def add_client(engine, *, grant=True, **overrides):
     record = engine.create_client(client_spec(**overrides), actor="dana", source=SOURCE)
     if grant:
-        engine.grant(record["id"], {"subject": overrides.get("host", "priya")}, actor="dana", source=SOURCE)
+        engine.grant(
+            record["id"], {"subject": overrides.get("host", "priya")}, actor="dana", source=SOURCE
+        )
     return record
 
 
@@ -363,7 +365,14 @@ def install(engine, room_id, *, event_type_id="evt_personal", **overrides):
 def form_spec(**overrides):
     body = {
         "name": "What is this about?",
-        "rules": [{"field": "topic", "operator": "equals", "value": "security", "eventTypeId": "evt_seated"}],
+        "rules": [
+            {
+                "field": "topic",
+                "operator": "equals",
+                "value": "security",
+                "eventTypeId": "evt_seated",
+            }
+        ],
         "fallbackEventTypeId": "evt_routing",
     }
     body.update(overrides)
@@ -429,14 +438,14 @@ def all_served_routes(client):
     a core write as well as a feature one.
     """
     routes = set()
-    for route in app.routes:
-        for method in getattr(route, "methods", None) or set():
+    for served in app.routes:
+        for method in getattr(served, "methods", None) or set():
             if method not in ("HEAD", "OPTIONS"):
-                routes.add((method, getattr(route, "path", "")))
+                routes.add((method, getattr(served, "path", "")))
     for feature in client.get("/api/features").json()["features"]:
-        for route in feature["routes"]:
-            for method in route["methods"]:
-                routes.add((method, route["path"]))
+        for advertised in feature["routes"]:
+            for method in advertised["methods"]:
+                routes.add((method, advertised["path"]))
     return routes
 
 
@@ -454,9 +463,11 @@ def source_names_a_mounted_route(source, routes):
         if mounted_method != method:
             continue
         parts = re.split(r"(\{[^}]+\})", template)
-        pattern = "^" + "".join(
-            r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts
-        ) + "$"
+        pattern = (
+            "^"
+            + "".join(r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts)
+            + "$"
+        )
         if re.match(pattern, path):
             return True
     return False
@@ -655,7 +666,9 @@ def test_working_windows_follow_the_local_weekday_not_the_utc_one():
     )
     # 2026-10-03 is a Saturday. 10:00 UTC is 22:00 Saturday in UTC+12, so the
     # local day is the 3rd - a weekend, and no window is produced.
-    windows = working_windows(host, (parse_instant("2026-10-03T00:00:00Z"), parse_instant("2026-10-04T00:00:00Z")))
+    windows = working_windows(
+        host, (parse_instant("2026-10-03T00:00:00Z"), parse_instant("2026-10-04T00:00:00Z"))
+    )
     assert windows == []
     assert zone.utcoffset(MONDAY) == timedelta(hours=12)
 
@@ -722,10 +735,24 @@ def test_candidate_starts_step_each_host_on_its_own_interval():
     what one of them can actually do.
     """
     quarter = normalise_host(
-        {"username": "a", "time_zone": "UTC", "days": [1], "start": "09:00", "end": "10:00", "slot_interval_minutes": 15}
+        {
+            "username": "a",
+            "time_zone": "UTC",
+            "days": [1],
+            "start": "09:00",
+            "end": "10:00",
+            "slot_interval_minutes": 15,
+        }
     )
     half = normalise_host(
-        {"username": "b", "time_zone": "UTC", "days": [1], "start": "09:00", "end": "10:00", "slot_interval_minutes": 30}
+        {
+            "username": "b",
+            "time_zone": "UTC",
+            "days": [1],
+            "start": "09:00",
+            "end": "10:00",
+            "slot_interval_minutes": 30,
+        }
     )
     starts = candidate_starts(
         [quarter, half],
@@ -795,7 +822,7 @@ def test_a_usernames_list_deduplicates_and_trims():
 
 
 def test_a_usernames_query_needs_two_or_more_names():
-    """"we just want to know when 2 or more people are available"."""
+    """ "we just want to know when 2 or more people are available"."""
     with pytest.raises(SelectorError, match="at least 2 names"):
         read_selector({"usernames": "alice"})
 
@@ -831,9 +858,24 @@ def test_a_slug_with_neither_username_nor_team_is_refused():
 
 def test_busy_time_merges_per_host():
     entries = [
-        {"uid": "a", "host": "priya", "start": "2026-09-28T10:00:00Z", "end": "2026-09-28T11:00:00Z"},
-        {"uid": "b", "host": "priya", "start": "2026-09-28T10:30:00Z", "end": "2026-09-28T12:00:00Z"},
-        {"uid": "c", "host": "marcus", "start": "2026-09-28T10:00:00Z", "end": "2026-09-28T10:30:00Z"},
+        {
+            "uid": "a",
+            "host": "priya",
+            "start": "2026-09-28T10:00:00Z",
+            "end": "2026-09-28T11:00:00Z",
+        },
+        {
+            "uid": "b",
+            "host": "priya",
+            "start": "2026-09-28T10:30:00Z",
+            "end": "2026-09-28T12:00:00Z",
+        },
+        {
+            "uid": "c",
+            "host": "marcus",
+            "start": "2026-09-28T10:00:00Z",
+            "end": "2026-09-28T10:30:00Z",
+        },
     ]
     busy = busy_intervals(entries)
     assert len(busy["priya"]) == 1
@@ -850,7 +892,12 @@ def test_the_reschedule_exclusion_drops_a_bookings_own_slot_from_busy_time():
     their own booking is the thing blocking it.
     """
     entries = [
-        {"uid": "bkg_1", "host": "priya", "start": "2026-09-28T10:00:00Z", "end": "2026-09-28T10:30:00Z"}
+        {
+            "uid": "bkg_1",
+            "host": "priya",
+            "start": "2026-09-28T10:00:00Z",
+            "end": "2026-09-28T10:30:00Z",
+        }
     ]
     assert busy_intervals(entries)["priya"]
     assert busy_intervals(entries, exclude_booking_uid="bkg_1") == {}
@@ -858,8 +905,18 @@ def test_the_reschedule_exclusion_drops_a_bookings_own_slot_from_busy_time():
 
 def test_the_reschedule_exclusion_only_drops_the_named_booking():
     entries = [
-        {"uid": "bkg_1", "host": "priya", "start": "2026-09-28T10:00:00Z", "end": "2026-09-28T10:30:00Z"},
-        {"uid": "bkg_2", "host": "priya", "start": "2026-09-28T11:00:00Z", "end": "2026-09-28T11:30:00Z"},
+        {
+            "uid": "bkg_1",
+            "host": "priya",
+            "start": "2026-09-28T10:00:00Z",
+            "end": "2026-09-28T10:30:00Z",
+        },
+        {
+            "uid": "bkg_2",
+            "host": "priya",
+            "start": "2026-09-28T11:00:00Z",
+            "end": "2026-09-28T11:30:00Z",
+        },
     ]
     busy = busy_intervals(entries, exclude_booking_uid="bkg_1")
     assert len(busy["priya"]) == 1
@@ -869,7 +926,12 @@ def test_the_reschedule_exclusion_only_drops_the_named_booking():
 def test_an_unparseable_busy_entry_is_skipped_rather_than_taking_a_listing_down():
     entries = [
         {"uid": "a", "host": "priya", "start": "nonsense", "end": "2026-09-28T11:00:00Z"},
-        {"uid": "b", "host": "priya", "start": "2026-09-28T11:00:00Z", "end": "2026-09-28T12:00:00Z"},
+        {
+            "uid": "b",
+            "host": "priya",
+            "start": "2026-09-28T11:00:00Z",
+            "end": "2026-09-28T12:00:00Z",
+        },
     ]
     assert len(busy_intervals(entries)["priya"]) == 1
 
@@ -998,9 +1060,7 @@ def test_a_hold_blocks_its_own_slot_only(engine, room):
     15:00 would find 15:00 held by your own hold.
     """
     ready(engine, room["id"])
-    engine.reserve(
-        room["id"], {"start": "2026-09-28T14:00:00Z"}, actor="dana", source=SOURCE
-    )
+    engine.reserve(room["id"], {"start": "2026-09-28T14:00:00Z"}, actor="dana", source=SOURCE)
     slots = {slot["start"]: slot for slot in _grid(engine, room["id"])}
     assert slots["2026-09-28T14:00:00Z"]["reason"] == "held"
     assert slots["2026-09-28T15:00:00Z"]["available"] is True
@@ -1027,7 +1087,7 @@ def test_a_slot_names_the_hosts_who_are_free(engine, room, store):
 
 
 def test_a_dynamic_query_needs_two_people_free(engine, room):
-    """"we just want to know when 2 or more people are available"."""
+    """ "we just want to know when 2 or more people are available"."""
     ready(engine, room["id"], event_types=(TEAM,), embed={"eventTypeId": "evt_team"})
     slots = engine.slots(room["id"], {"usernames": "priya,marcus"})["slots"]
     assert slots[0]["hosts_required"] == MIN_DYNAMIC_USERNAMES == 2
@@ -1174,7 +1234,7 @@ def test_the_default_hold_is_five_minutes():
 
 
 def test_a_hold_duration_may_be_customised():
-    """"you can also specify custom duration for how long the slot should be reserved for"."""
+    """ "you can also specify custom duration for how long the slot should be reserved for"."""
     assert normalise_duration(45) == 45
 
 
@@ -1195,9 +1255,8 @@ def test_a_hold_duration_is_bounded():
 
 
 def test_a_hold_expires_without_anybody_acting():
-    """"no user action needed for the hold to expire - a reservation auto-expires after
+    """ "no user action needed for the hold to expire - a reservation auto-expires after
     reservationDuration". A read at a later moment is the whole mechanism."""
-    from dsr.inroom_scheduling.holds import new_hold_payload
 
     payload = new_hold_payload(
         event_type_id="evt_personal",
@@ -1215,7 +1274,6 @@ def test_a_hold_expires_without_anybody_acting():
 
 
 def test_an_expired_hold_reports_the_stored_state_beside_the_computed_one():
-    from dsr.inroom_scheduling.holds import new_hold_payload
 
     payload = new_hold_payload(
         event_type_id="evt_personal",
@@ -1231,7 +1289,6 @@ def test_an_expired_hold_reports_the_stored_state_beside_the_computed_one():
 
 
 def test_a_consumed_hold_is_never_retroactively_expired():
-    from dsr.inroom_scheduling.holds import new_hold_payload
 
     payload = new_hold_payload(
         event_type_id="evt_personal",
@@ -1249,7 +1306,6 @@ def test_a_consumed_hold_is_never_retroactively_expired():
 
 
 def test_requiring_a_live_hold_says_the_hold_expired():
-    from dsr.inroom_scheduling.holds import HoldView, new_hold_payload
 
     payload = new_hold_payload(
         event_type_id="evt_personal",
@@ -1267,8 +1323,7 @@ def test_requiring_a_live_hold_says_the_hold_expired():
 
 
 def test_requiring_a_consumed_hold_does_not_say_it_expired():
-    """"the meeting exists, at that time, on that event type": retrying is the wrong advice."""
-    from dsr.inroom_scheduling.holds import new_hold_payload
+    """ "the meeting exists, at that time, on that event type": retrying is the wrong advice."""
 
     payload = new_hold_payload(
         event_type_id="evt_personal",
@@ -1345,7 +1400,11 @@ def test_extending_a_hold_the_clock_has_retired_is_refused(engine, room):
     later = SchedulingEngine(engine.store, clock=lambda: MONDAY + timedelta(minutes=6))
     with pytest.raises(HoldExpired):
         later.extend_hold(
-            room["id"], hold["reservationUid"], {"reservationDuration": 30}, actor="dana", source=SOURCE
+            room["id"],
+            hold["reservationUid"],
+            {"reservationDuration": 30},
+            actor="dana",
+            source=SOURCE,
         )
 
 
@@ -1375,7 +1434,9 @@ def test_an_attendee_needs_a_name_and_a_reachable_address():
 
 
 def test_an_attendee_inherits_the_rooms_zone_when_it_names_none():
-    resolved = normalise_attendee({"name": "A", "email": "a@b.example"}, default_time_zone="UTC+05:30")
+    resolved = normalise_attendee(
+        {"name": "A", "email": "a@b.example"}, default_time_zone="UTC+05:30"
+    )
     assert resolved["timeZone"] == "UTC+05:30"
 
 
@@ -1490,9 +1551,7 @@ def test_instant_makes_it_instant():
 def test_a_booking_cannot_be_both_recurring_and_instant():
     """The research lists three kinds as alternatives."""
     with pytest.raises(SchedulingError, match="either recurring or instant"):
-        read_booking_request(
-            {"attendee": ATTENDEE, "instant": True, "recurrenceCount": 3}
-        )
+        read_booking_request({"attendee": ATTENDEE, "instant": True, "recurrenceCount": 3})
 
 
 def test_recurrence_count_above_thirty_two_is_refused_not_truncated():
@@ -1529,7 +1588,7 @@ def test_an_instant_booking_is_the_one_kind_that_may_omit_a_start():
 
 
 def test_instant_on_a_personal_event_is_refused():
-    """"instant (`\"instant\": true`, team events only) bookings"."""
+    """ "instant (`\"instant\": true`, team events only) bookings"."""
     request = read_booking_request({"attendee": ATTENDEE, "instant": True})
     with pytest.raises(InstantNeedsTeamEvent) as refusal:
         require_team_event_for_instant(request, {"kind": "personal", "slug": "intro"})
@@ -1600,7 +1659,12 @@ def test_each_documented_conference_provider_produces_a_join_link(provider, expe
     payload = booking_payload(
         read_booking_request({"start": "2026-09-28T14:00:00Z", "attendee": ATTENDEE}),
         uid="bkg_1",
-        event_type={"eventTypeId": "evt", "location": provider, "conference": provider, "title": "x"},
+        event_type={
+            "eventTypeId": "evt",
+            "location": provider,
+            "conference": provider,
+            "title": "x",
+        },
         start="2026-09-28T14:00:00Z",
         end="2026-09-28T14:30:00Z",
         room_id="room_1",
@@ -1681,7 +1745,7 @@ def test_cancelling_a_series_does_not_rewrite_its_occurrences():
 
 
 def test_a_read_only_field_must_be_prefilled():
-    """"booking fields (prefill / read-only)" - the two travel together."""
+    """ "booking fields (prefill / read-only)" - the two travel together."""
     with pytest.raises(BookingFieldRejected, match="read_only but has no prefilled value"):
         normalise_booking_fields([{"name": "account", "read_only": True}])
 
@@ -1703,7 +1767,9 @@ def test_an_unknown_field_type_is_refused():
 
 
 def test_a_required_field_left_unanswered_is_refused():
-    event_type = {"booking_fields": [{"name": "team_size", "required": True, "options": ["1", "2"]}]}
+    event_type = {
+        "booking_fields": [{"name": "team_size", "required": True, "options": ["1", "2"]}]
+    }
     with pytest.raises(BookingFieldRejected, match="is required and was not answered"):
         apply_booking_fields(event_type, {})
 
@@ -1714,20 +1780,26 @@ def test_a_prefilled_field_is_answered_by_the_embed_not_the_prospect():
 
 
 def test_a_read_only_field_keeps_its_prefilled_value_when_nothing_is_submitted():
-    event_type = {"booking_fields": [{"name": "account", "read_only": True, "prefilled": "Northwind"}]}
+    event_type = {
+        "booking_fields": [{"name": "account", "read_only": True, "prefilled": "Northwind"}]
+    }
     assert apply_booking_fields(event_type, {}) == {"account": "Northwind"}
 
 
 def test_a_read_only_field_cannot_be_changed_by_the_prospect():
     """Silently keeping the prefilled value would record a booking that differs from
     the one the prospect believes they submitted."""
-    event_type = {"booking_fields": [{"name": "account", "read_only": True, "prefilled": "Northwind"}]}
+    event_type = {
+        "booking_fields": [{"name": "account", "read_only": True, "prefilled": "Northwind"}]
+    }
     with pytest.raises(BookingFieldRejected, match="cannot be changed"):
         apply_booking_fields(event_type, {"account": "Contoso"})
 
 
 def test_a_read_only_field_answered_with_its_prefilled_value_is_accepted():
-    event_type = {"booking_fields": [{"name": "account", "read_only": True, "prefilled": "Northwind"}]}
+    event_type = {
+        "booking_fields": [{"name": "account", "read_only": True, "prefilled": "Northwind"}]
+    }
     assert apply_booking_fields(event_type, {"account": "Northwind"}) == {"account": "Northwind"}
 
 
@@ -1773,9 +1845,7 @@ def test_an_event_type_with_no_host_has_no_working_hours():
 
 def test_an_event_type_with_an_empty_host_list_is_refused():
     with pytest.raises(SchedulingError, match="must name at least one host"):
-        normalise_event_type(
-            {"eventTypeId": "evt", "slug": "intro", "host": "priya", "hosts": []}
-        )
+        normalise_event_type({"eventTypeId": "evt", "slug": "intro", "host": "priya", "hosts": []})
 
 
 def test_a_personal_event_needs_a_username_and_a_team_event_a_team_slug():
@@ -1787,7 +1857,9 @@ def test_a_personal_event_needs_a_username_and_a_team_event_a_team_slug():
 
 def test_a_seated_event_must_say_how_many_seats():
     with pytest.raises(SchedulingError, match="seats is required for a seated event"):
-        normalise_event_type({"eventTypeId": "evt", "slug": "deep", "kind": "seated", "host": "alba"})
+        normalise_event_type(
+            {"eventTypeId": "evt", "slug": "deep", "kind": "seated", "host": "alba"}
+        )
 
 
 def test_a_seat_count_on_a_non_seated_event_is_refused():
@@ -1806,7 +1878,10 @@ def test_two_hosts_with_one_name_are_refused():
                 "slug": "war",
                 "kind": "team",
                 "teamSlug": "t",
-                "hosts": [{"username": "a", "time_zone": "UTC"}, {"username": "a", "time_zone": "UTC"}],
+                "hosts": [
+                    {"username": "a", "time_zone": "UTC"},
+                    {"username": "a", "time_zone": "UTC"},
+                ],
             }
         )
 
@@ -1889,7 +1964,12 @@ def test_a_credential_shaped_field_is_refused_rather_than_stored():
     for field in ("client_secret", "access_token", "api_key", "password"):
         with pytest.raises(EmbedConfigError, match="looks like a credential"):
             normalise_oauth_client(
-                {"client_id": "c", "redirect_uri": "https://x", "scopes": ["BOOKING"], field: "s3cret"}
+                {
+                    "client_id": "c",
+                    "redirect_uri": "https://x",
+                    "scopes": ["BOOKING"],
+                    field: "s3cret",
+                }
             )
 
 
@@ -1928,7 +2008,11 @@ def test_a_client_with_no_token_cannot_book():
 
 
 def test_an_expired_token_is_told_apart_from_a_missing_one():
-    client = {"token": grant_token({"scopes": ["BOOKING"]}, subject="priya", now=MONDAY, lifetime_minutes=10)}
+    client = {
+        "token": grant_token(
+            {"scopes": ["BOOKING"]}, subject="priya", now=MONDAY, lifetime_minutes=10
+        )
+    }
     state = token_state(client, now=MONDAY + timedelta(minutes=11))
     assert state["reason"] == "expired"
     with pytest.raises(TokenExpired, match="has expired"):
@@ -1949,25 +2033,28 @@ def test_a_live_booking_token_can_book():
 
 
 def test_an_embed_defaults_to_a_booker():
-    """"The sales room renders a Booker (and optionally ...)"."""
+    """ "The sales room renders a Booker (and optionally ...)"."""
     assert normalise_embed({"eventTypeId": "evt"})["components"] == ["booker"]
 
 
 def test_an_embed_rendering_no_booking_component_is_refused():
-    """"The prospect books entirely in-room" needs one of them."""
+    """ "The prospect books entirely in-room" needs one of them."""
     with pytest.raises(EmbedConfigError, match="renders no booking component"):
         normalise_embed({"eventTypeId": "evt", "components": ["availability", "event_type"]})
 
 
 def test_the_optional_components_are_genuinely_optional():
     resolved = normalise_embed(
-        {"eventTypeId": "evt", "components": ["booker", "availability", "event_type", "calendar_connect"]}
+        {
+            "eventTypeId": "evt",
+            "components": ["booker", "availability", "event_type", "calendar_connect"],
+        }
     )
     assert resolved["components"] == ["booker", "availability", "event_type", "calendar_connect"]
 
 
 def test_a_payment_form_on_a_free_event_type_is_refused():
-    """"a PaymentForm on an event type with no price renders a form that takes a payment
+    """ "a PaymentForm on an event type with no price renders a form that takes a payment
     for nothing"."""
     with pytest.raises(EmbedConfigError, match="no price"):
         normalise_embed(
@@ -1999,9 +2086,9 @@ def test_every_published_custom_property_is_accepted():
 
 
 def test_duplicate_components_are_collapsed():
-    assert normalise_embed({"eventTypeId": "evt", "components": ["booker", "booker"]})["components"] == [
-        "booker"
-    ]
+    assert normalise_embed({"eventTypeId": "evt", "components": ["booker", "booker"]})[
+        "components"
+    ] == ["booker"]
 
 
 def test_a_credential_shaped_field_is_refused_on_an_embed_too():
@@ -2021,7 +2108,9 @@ def test_a_routing_form_must_end_in_a_catch_all():
         normalise_form(
             {
                 "name": "f",
-                "rules": [{"field": "topic", "operator": "equals", "value": "x", "eventTypeId": "evt"}],
+                "rules": [
+                    {"field": "topic", "operator": "equals", "value": "x", "eventTypeId": "evt"}
+                ],
             }
         )
 
@@ -2033,10 +2122,16 @@ def test_a_routing_form_with_no_rules_is_refused():
 
 def test_a_rule_needs_a_field_an_operator_and_an_event_type():
     with pytest.raises(RoutingError, match="field is required"):
-        normalise_form(form_spec(rules=[{"operator": "equals", "value": "x", "eventTypeId": "evt"}]))
+        normalise_form(
+            form_spec(rules=[{"operator": "equals", "value": "x", "eventTypeId": "evt"}])
+        )
     with pytest.raises(RoutingError, match="unknown routing operator"):
         normalise_form(
-            form_spec(rules=[{"field": "t", "operator": "sounds_like", "value": "x", "eventTypeId": "evt"}])
+            form_spec(
+                rules=[
+                    {"field": "t", "operator": "sounds_like", "value": "x", "eventTypeId": "evt"}
+                ]
+            )
         )
     with pytest.raises(RoutingError, match="needs an eventTypeId"):
         normalise_form(form_spec(rules=[{"field": "t", "operator": "equals", "value": "x"}]))
@@ -2053,10 +2148,15 @@ def test_a_rule_that_routes_nowhere_must_say_so():
 
 def test_a_rule_needs_a_value_unless_its_operator_is_exists():
     with pytest.raises(RoutingError, match="needs a value for"):
-        normalise_form(form_spec(rules=[{"field": "t", "operator": "equals", "eventTypeId": "evt"}]))
-    assert normalise_form(
-        form_spec(rules=[{"field": "t", "operator": "exists", "eventTypeId": "evt"}])
-    )["rules"][0]["operator"] == "exists"
+        normalise_form(
+            form_spec(rules=[{"field": "t", "operator": "equals", "eventTypeId": "evt"}])
+        )
+    assert (
+        normalise_form(
+            form_spec(rules=[{"field": "t", "operator": "exists", "eventTypeId": "evt"}])
+        )["rules"][0]["operator"]
+        == "exists"
+    )
 
 
 def test_an_unpublished_operator_is_refused():
@@ -2093,9 +2193,10 @@ def test_every_published_operator_behaves_as_published(operator, value, answer, 
 
 def test_a_numeric_operator_does_not_match_a_non_number():
     """A form answering "a few" to a headcount question must fall through visibly."""
-    assert rule_matches(
-        {"field": "size", "operator": "greater_than", "value": 100}, {"size": "a few"}
-    ) is False
+    assert (
+        rule_matches({"field": "size", "operator": "greater_than", "value": 100}, {"size": "a few"})
+        is False
+    )
 
 
 def test_a_rule_does_not_match_a_question_that_was_not_asked():
@@ -2103,10 +2204,13 @@ def test_a_rule_does_not_match_a_question_that_was_not_asked():
 
 
 def test_string_comparison_is_trimmed_and_case_insensitive():
-    assert rule_matches(
-        {"field": "topic", "operator": "equals", "value": "Security", "eventTypeId": "evt"},
-        {"topic": "  SECURITY  "},
-    ) is True
+    assert (
+        rule_matches(
+            {"field": "topic", "operator": "equals", "value": "Security", "eventTypeId": "evt"},
+            {"topic": "  SECURITY  "},
+        )
+        is True
+    )
 
 
 def test_the_first_matching_rule_wins():
@@ -2124,7 +2228,9 @@ def test_an_unmatched_answer_falls_through_to_the_catch_all():
     """The build brief's rule: a rule that does not fall through is a bug somebody
     hits in production."""
     form = {
-        "rules": [{"field": "topic", "operator": "equals", "value": "a", "eventTypeId": "evt_first"}],
+        "rules": [
+            {"field": "topic", "operator": "equals", "value": "a", "eventTypeId": "evt_first"}
+        ],
         "fallbackEventTypeId": "evt_fallback",
     }
     answer = route(form, {"topic": "zzz"})
@@ -2157,7 +2263,13 @@ def test_a_rule_that_matched_and_declined_routes_nowhere_deliberately():
 
 def test_a_declined_route_returns_no_slots():
     response = routed_slots_response(
-        {"routed": False, "eventTypeId": None, "matched_rule": 0, "reason": "rule_declined", "detail": "d"},
+        {
+            "routed": False,
+            "eventTypeId": None,
+            "matched_rule": 0,
+            "reason": "rule_declined",
+            "detail": "d",
+        },
         [{"start": "a", "available": True}],
         form_id="form_1",
     )
@@ -2168,7 +2280,13 @@ def test_a_declined_route_returns_no_slots():
 def test_the_routing_response_says_it_saved_nothing():
     """It will not actually save the response."""
     response = routed_slots_response(
-        {"routed": True, "eventTypeId": "evt", "matched_rule": 0, "reason": "rule_matched", "detail": "d"},
+        {
+            "routed": True,
+            "eventTypeId": "evt",
+            "matched_rule": 0,
+            "reason": "rule_matched",
+            "detail": "d",
+        },
         [{"start": "a"}],
         form_id="form_1",
     )
@@ -2303,7 +2421,9 @@ def test_an_event_type_a_slug_and_a_username_resolve_to_the_same_grid(engine, ro
     ready(engine, room["id"])
     by_id = engine.slots(room["id"], {"eventTypeId": "evt_personal"})
     by_slug = engine.slots(room["id"], {"eventTypeSlug": "intro", "username": "priya"})
-    assert [slot["start"] for slot in by_id["slots"]] == [slot["start"] for slot in by_slug["slots"]]
+    assert [slot["start"] for slot in by_id["slots"]] == [
+        slot["start"] for slot in by_slug["slots"]
+    ]
 
 
 def test_a_team_slug_resolves_a_team_event(engine, room):
@@ -2388,9 +2508,7 @@ def test_a_hold_in_one_room_is_seen_by_another_room_sharing_the_host(engine, roo
     """A host is busy whoever booked them, and two rooms share the host's calendar."""
     ready(engine, room["id"])
     ready(engine, other_room["id"])
-    engine.reserve(
-        room["id"], {"start": "2026-09-28T14:00:00Z"}, actor="dana", source=SOURCE
-    )
+    engine.reserve(room["id"], {"start": "2026-09-28T14:00:00Z"}, actor="dana", source=SOURCE)
     slots = {slot["start"]: slot for slot in _grid(engine, other_room["id"])}
     assert slots["2026-09-28T14:00:00Z"]["reason"] == "held"
 
@@ -2505,10 +2623,10 @@ def test_a_write_materialises_a_lapsed_hold_and_records_both_moments(engine, roo
         room["id"], {"start": first_slot(engine, room["id"])}, actor="dana", source=SOURCE
     )
     later = SchedulingEngine(engine.store, clock=lambda: MONDAY + timedelta(minutes=6))
-    later.reserve(
-        room["id"], {"start": "2026-09-28T15:00:00Z"}, actor="dana", source=SOURCE
-    )
-    stored = store.find(RESERVATION_COLLECTION, {"reservationUid": hold["reservationUid"]})[0]["data"]
+    later.reserve(room["id"], {"start": "2026-09-28T15:00:00Z"}, actor="dana", source=SOURCE)
+    stored = store.find(RESERVATION_COLLECTION, {"reservationUid": hold["reservationUid"]})[0][
+        "data"
+    ]
     assert stored["state"] == "expired"
     assert stored["expired_at"] == iso(MONDAY + timedelta(minutes=5))
     assert stored["noticed_at"] == iso(MONDAY + timedelta(minutes=6))
@@ -2620,7 +2738,7 @@ def test_a_read_only_field_refusal_writes_nothing(engine, room, store):
 
 
 def test_routing_a_room_saves_nothing(engine, room, store):
-    """"It will not actually save the response"."""
+    """ "It will not actually save the response"."""
     ready(engine, room["id"], event_types=(PERSONAL, SEATED, ROUTING))
     form = engine.create_form(form_spec(), actor="dana", source=SOURCE)
     install(engine, room["id"], routingFormId=form["id"])
@@ -2683,7 +2801,9 @@ def test_the_summary_reports_both_documented_api_versions(engine):
 
 
 def test_connecting_the_same_calendar_twice_updates_rather_than_duplicating(engine):
-    first = engine.connect_calendar({"provider": "google", "host": "priya"}, actor="dana", source=SOURCE)
+    first = engine.connect_calendar(
+        {"provider": "google", "host": "priya"}, actor="dana", source=SOURCE
+    )
     second = engine.connect_calendar(
         {"provider": "google", "host": "priya", "label": "Work"}, actor="dana", source=SOURCE
     )
@@ -2755,9 +2875,7 @@ def test_the_room_annotation_is_audited_too(engine, store, room):
         source=SOURCE,
     )
     # The fixture inserted the room, so the annotation is the update that follows it.
-    updates = [
-        row for row in store.audit(collection="room") if row["action"] == "update"
-    ]
+    updates = [row for row in store.audit(collection="room") if row["action"] == "update"]
     assert updates, "installing an embed and booking must annotate the room"
     assert all(row["source"] == SOURCE for row in updates)
 
@@ -2766,9 +2884,7 @@ def test_a_refusal_still_records_the_audit_rows_that_came_before_it(engine, stor
     """Nothing happened, and here is why - which is what a rep needs to read."""
     ready(engine, room["id"])
     start = first_slot(engine, room["id"])
-    engine.book(
-        room["id"], {"start": start, "attendee": ATTENDEE}, actor="dana", source=SOURCE
-    )
+    engine.book(room["id"], {"start": start, "attendee": ATTENDEE}, actor="dana", source=SOURCE)
     before = len(store.audit(collection=BOOKING_COLLECTION))
     with pytest.raises(SlotUnavailable):
         engine.book(
@@ -2812,7 +2928,8 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
     start = next(slot["start"] for slot in grid["slots"] if slot["available"])
     hold = http.post(f"{PREFIX}/rooms/{room['id']}/holds", json={"start": start}).json()
     http.patch(
-        f"{PREFIX}/rooms/{room['id']}/holds/{hold['reservationUid']}", json={"reservationDuration": 30}
+        f"{PREFIX}/rooms/{room['id']}/holds/{hold['reservationUid']}",
+        json={"reservationDuration": 30},
     )
     booking = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2820,9 +2937,13 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
     ).json()
     http.delete(f"{PREFIX}/rooms/{room['id']}/bookings/{booking['uid']}?reason=demo")
     http.patch(f"{PREFIX}/event-types/{event_type['id']}", json={"title": "Renamed"})
-    http.delete(f"{PREFIX}/event-types/{http.post(f'{PREFIX}/event-types', json=TEAM).json()['id']}")
+    http.delete(
+        f"{PREFIX}/event-types/{http.post(f'{PREFIX}/event-types', json=TEAM).json()['id']}"
+    )
     http.delete(f"{PREFIX}/routing-forms/{form['id']}")
-    http.delete(f"{PREFIX}/calendars/{http.get(f'{PREFIX}/calendars').json()['connections'][0]['id']}")
+    http.delete(
+        f"{PREFIX}/calendars/{http.get(f'{PREFIX}/calendars').json()['connections'][0]['id']}"
+    )
     http.delete(f"{PREFIX}/oauth-clients/{client['id']}")
 
     store = RecordStore(client_store(http))
@@ -2844,7 +2965,7 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
     """
     client = http.post(f"{PREFIX}/oauth-clients", json=client_spec()).json()
     http.post(f"{PREFIX}/oauth-clients/{client['id']}/grant", json={"subject": "priya"})
-    event_type = http.post(f"{PREFIX}/event-types", json=PERSONAL).json()
+    http.post(f"{PREFIX}/event-types", json=PERSONAL).json()
     http.post(f"{PREFIX}/calendars", json={"provider": "google", "host": "priya"})
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     http.put(
@@ -2855,7 +2976,8 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
     start = next(slot["start"] for slot in grid["slots"] if slot["available"])
     hold = http.post(f"{PREFIX}/rooms/{room['id']}/holds", json={"start": start}).json()
     http.patch(
-        f"{PREFIX}/rooms/{room['id']}/holds/{hold['reservationUid']}", json={"reservationDuration": 30}
+        f"{PREFIX}/rooms/{room['id']}/holds/{hold['reservationUid']}",
+        json={"reservationDuration": 30},
     )
     booking = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2875,9 +2997,9 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
 
     assert len(mine) >= 8, f"the feature recorded only {len(mine)} sources"
     for source in sorted(mine):
-        assert source.startswith(tuple(f"{method} {PREFIX}" for method in ("POST", "PATCH", "DELETE", "PUT"))), (
-            f"{source!r} does not name a route under this feature's own prefix"
-        )
+        assert source.startswith(
+            tuple(f"{method} {PREFIX}" for method in ("POST", "PATCH", "DELETE", "PUT"))
+        ), f"{source!r} does not name a route under this feature's own prefix"
         assert source_names_a_mounted_route(source, routes), f"{source!r} names no mounted route"
 
 
@@ -2892,9 +3014,7 @@ def test_a_booking_written_over_http_records_its_own_route(http):
     )
     grid = http.get(f"{PREFIX}/rooms/{room['id']}/slots?eventTypeId=evt_personal").json()
     start = next(slot["start"] for slot in grid["slots"] if slot["available"])
-    http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings", json={"start": start, "attendee": ATTENDEE}
-    )
+    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"start": start, "attendee": ATTENDEE})
     store = RecordStore(client_store(http))
     sources = {row["source"] for row in store.audit(collection=BOOKING_COLLECTION)}
     assert sources == {f"POST {PREFIX}/rooms/{room['id']}/bookings"}
@@ -2922,17 +3042,13 @@ def test_the_feature_is_discovered_and_mounted_without_editing_the_host(http):
 
 
 def test_the_registry_reports_this_prefix_and_thirty_six_routes(http):
-    entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID
-    )
+    entry = next(f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID)
     assert entry["prefix"] == PREFIX
     assert len(entry["routes"]) == 36
 
 
 def test_the_registry_reports_this_features_exception_handler(http):
-    entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID
-    )
+    entry = next(f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID)
     assert entry["exception_handlers"] == ["SchedulingError"]
 
 
@@ -3035,9 +3151,7 @@ def test_a_refused_slot_comes_back_with_alternatives(http):
     )
     grid = http.get(f"{PREFIX}/rooms/{room['id']}/slots?eventTypeId=evt_personal").json()
     start = next(slot["start"] for slot in grid["slots"] if slot["available"])
-    http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings", json={"start": start, "attendee": ATTENDEE}
-    )
+    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"start": start, "attendee": ATTENDEE})
     response = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
         json={"start": start, "attendee": {"name": "Other", "email": "other@fabrikam.example"}},
@@ -3085,7 +3199,9 @@ def test_a_hold_from_another_room_is_a_404(http):
     grid = http.get(f"{PREFIX}/rooms/{mine['id']}/slots?eventTypeId=evt_personal").json()
     start = next(slot["start"] for slot in grid["slots"] if slot["available"])
     hold = http.post(f"{PREFIX}/rooms/{mine['id']}/holds", json={"start": start}).json()
-    assert http.get(f"{PREFIX}/rooms/{theirs['id']}/holds/{hold['reservationUid']}").status_code == 404
+    assert (
+        http.get(f"{PREFIX}/rooms/{theirs['id']}/holds/{hold['reservationUid']}").status_code == 404
+    )
     assert event_type["id"]
 
 
@@ -3105,9 +3221,7 @@ def test_the_booking_events_route_reports_the_automation_and_its_pending_deliver
     )
     grid = http.get(f"{PREFIX}/rooms/{room['id']}/slots?eventTypeId=evt_personal").json()
     start = next(slot["start"] for slot in grid["slots"] if slot["available"])
-    http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings", json={"start": start, "attendee": ATTENDEE}
-    )
+    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"start": start, "attendee": ATTENDEE})
     payload = http.get(f"{PREFIX}/rooms/{room['id']}/booking-events").json()
     assert [event["data"]["event"] for event in payload["events"]] == [BOOKING_CREATED]
     assert [delivery["data"]["status"] for delivery in payload["deliveries"]] == ["pending"]
@@ -3142,7 +3256,12 @@ def seed_module():
 
 def test_the_seed_runs_and_reports_a_mixed_demo(db, seed_module):
     rooms = [
-        (db.create("room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch")["id"], f"A{i}")
+        (
+            db.create(
+                "room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch"
+            )["id"],
+            f"A{i}",
+        )
         for i in range(3)
     ]
     reported = seed_module.seed(db, {"room_ids": rooms, "now": MONDAY})
@@ -3152,7 +3271,12 @@ def test_the_seed_runs_and_reports_a_mixed_demo(db, seed_module):
 
 def test_the_seed_shows_every_state_the_workflow_exists_for(db, seed_module):
     rooms = [
-        (db.create("room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch")["id"], f"A{i}")
+        (
+            db.create(
+                "room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch"
+            )["id"],
+            f"A{i}",
+        )
         for i in range(3)
     ]
     seed_module.seed(db, {"room_ids": rooms, "now": MONDAY})
@@ -3168,7 +3292,12 @@ def test_the_seed_shows_every_state_the_workflow_exists_for(db, seed_module):
 
 def test_the_seed_books_through_the_real_rules_and_not_around_them(db, seed_module):
     rooms = [
-        (db.create("room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch")["id"], f"A{i}")
+        (
+            db.create(
+                "room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch"
+            )["id"],
+            f"A{i}",
+        )
         for i in range(3)
     ]
     seed_module.seed(db, {"room_ids": rooms, "now": MONDAY})
@@ -3187,7 +3316,12 @@ def test_the_seed_books_through_the_real_rules_and_not_around_them(db, seed_modu
 
 def test_the_seed_audits_its_own_writes(db, seed_module):
     rooms = [
-        (db.create("room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch")["id"], f"A{i}")
+        (
+            db.create(
+                "room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch"
+            )["id"],
+            f"A{i}",
+        )
         for i in range(3)
     ]
     seed_module.seed(db, {"room_ids": rooms, "now": MONDAY})
@@ -3209,7 +3343,12 @@ def test_the_seed_runs_twice_without_raising(db, seed_module):
     """The seeder catches a raise and skips the feature, so a second run must not
     be the thing that breaks it."""
     rooms = [
-        (db.create("room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch")["id"], f"A{i}")
+        (
+            db.create(
+                "room", {"name": f"R{i}", "account": f"A{i}"}, actor="dana", source="scratch"
+            )["id"],
+            f"A{i}",
+        )
         for i in range(3)
     ]
     seed_module.seed(db, {"room_ids": rooms, "now": MONDAY})
@@ -3279,9 +3418,10 @@ def test_the_researched_quotes_carry_their_numbers():
     assert "defaults to 5 minutes" in quotes["reservation_duration"]
     assert "2 or more people are available" in quotes["dynamic_usernames"]
     assert "busy time calculations" in quotes["reschedule_exclusion"]
-    assert "will not actually save the response" in scheduling_inferences.describe()["vocabulary"][
-        "quotes"
-    ]["routing_slots"]
+    assert (
+        "will not actually save the response"
+        in scheduling_inferences.describe()["vocabulary"]["quotes"]["routing_slots"]
+    )
 
 
 def test_the_fall_through_inference_names_the_reading_this_build_took():

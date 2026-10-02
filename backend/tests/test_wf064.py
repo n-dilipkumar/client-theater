@@ -57,20 +57,18 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.scheduling import (
+    BOOKED,
     BOOKING_CANCELLED,
     BOOKING_LOCATION_UPDATED,
     BOOKING_RESCHEDULED,
-    BOOKED,
     CALENDAR_EVENT,
     CANCEL,
-    CANCELLED,
     CANCEL_SCOPE_NAMES,
+    CANCELLED,
     CHANGE_RESCHEDULE_REQUESTED,
     CHILICAL_HOME,
     CRM_SOBJECT,
@@ -93,7 +91,7 @@ from dsr.scheduling import (
     explain_missing,
     find_slot,
     has_happened,
-    iso,
+    inferences as scheduling_inferences,
     mint_pair,
     overlaps,
     parse,
@@ -103,7 +101,6 @@ from dsr.scheduling import (
     webhook_envelopes,
     window_for,
 )
-from dsr.scheduling import inferences as scheduling_inferences
 from dsr.scheduling.availability import MAX_RANGE_DAYS
 from dsr.scheduling.engine import (
     BOOKING_COLLECTION,
@@ -153,11 +150,9 @@ from dsr.scheduling.vocabulary import (
     RESCHEDULE_SOURCES,
     WORKFLOW_TRIGGERS,
     published_vocabulary,
-    require_actor_kind,
-    require_cancel_scope,
-    require_reschedule_source,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -230,7 +225,9 @@ def wall_wd(days: int, hour: int = 9, minute: int = 0) -> str:
     moment = datetime.now(timezone.utc) + timedelta(days=days)
     while moment.weekday() > 4:
         moment += timedelta(days=1)
-    return moment.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat(timespec="seconds")
+    return moment.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat(
+        timespec="seconds"
+    )
 
 
 def url(value: str) -> str:
@@ -257,7 +254,9 @@ def wd(days: int, hour: int = 9, minute: int = 0) -> str:
     moment = NOW + timedelta(days=days)
     while moment.weekday() > 4:
         moment += timedelta(days=1)
-    return moment.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat(timespec="seconds")
+    return moment.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat(
+        timespec="seconds"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -413,9 +412,11 @@ def source_names_a_mounted_route(source, routes):
         if mounted_method != method:
             continue
         parts = re.split(r"(\{[^}]+\})", template)
-        pattern = "^" + "".join(
-            r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts
-        ) + "$"
+        pattern = (
+            "^"
+            + "".join(r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts)
+            + "$"
+        )
         if re.match(pattern, path):
             return True
     return False
@@ -512,7 +513,9 @@ def test_there_are_exactly_three_intents():
 
 
 def test_each_intent_names_the_cal_endpoint_it_lands_on():
-    assert INTENT_NAMES and all(entry["cal_endpoint"].startswith("POST /v2/bookings/") for entry in INTENTS)
+    assert INTENT_NAMES and all(
+        entry["cal_endpoint"].startswith("POST /v2/bookings/") for entry in INTENTS
+    )
     by_intent = {entry["intent"]: entry for entry in INTENTS}
     assert by_intent[RESCHEDULE]["cal_endpoint"].endswith("/reschedule")
     assert by_intent[REQUEST_RESCHEDULE]["cal_endpoint"].endswith("/request-reschedule")
@@ -520,7 +523,7 @@ def test_each_intent_names_the_cal_endpoint_it_lands_on():
 
 
 def test_only_request_reschedule_cancels_the_booking():
-    """"Request to reschedule ... The booking will be cancelled" - only that one."""
+    """ "Request to reschedule ... The booking will be cancelled" - only that one."""
     by_intent = {entry["intent"]: entry for entry in INTENTS}
     assert by_intent[RESCHEDULE]["cancels_the_current_booking"] is False
     assert by_intent[REQUEST_RESCHEDULE]["cancels_the_current_booking"] is True
@@ -528,7 +531,7 @@ def test_only_request_reschedule_cancels_the_booking():
 
 
 def test_the_three_rescheduling_sources_are_the_ones_events_history_names():
-    """"(Calendar event, ChiliCal Home, or Reschedule Link)"."""
+    """ "(Calendar event, ChiliCal Home, or Reschedule Link)"."""
     assert set(RESCHEDULE_SOURCE_NAMES) == {CHILICAL_HOME, CALENDAR_EVENT, RESCHEDULE_LINK}
     assert [entry["source"] for entry in RESCHEDULE_SOURCES] == [
         CALENDAR_EVENT,
@@ -544,12 +547,15 @@ def test_each_rescheduling_source_carries_its_sourced_justification():
 
 
 def test_there_are_two_cancel_scopes_named_by_the_research():
-    """"individual recurrence or recurring booking to cancel all recurrences"."""
+    """ "individual recurrence or recurring booking to cancel all recurrences"."""
     assert set(CANCEL_SCOPE_NAMES) == {SCOPE_THIS, SCOPE_ALL}
 
 
 def test_the_two_workflow_triggers_are_the_researched_ones():
-    assert [entry["trigger"] for entry in WORKFLOW_TRIGGERS] == ["rescheduleEvent", "eventCancelled"]
+    assert [entry["trigger"] for entry in WORKFLOW_TRIGGERS] == [
+        "rescheduleEvent",
+        "eventCancelled",
+    ]
 
 
 def test_each_trigger_maps_to_the_change_it_fires_on():
@@ -586,7 +592,7 @@ def test_every_chain_field_is_published_with_its_source():
 
 
 def test_the_history_fields_are_the_four_the_research_lists():
-    """"who rescheduled it, to whom, when, and the rescheduling source"."""
+    """ "who rescheduled it, to whom, when, and the rescheduling source"."""
     assert [entry["field"] for entry in HISTORY_FIELDS] == [
         "who",
         "to whom",
@@ -604,7 +610,10 @@ def test_the_two_researched_meeting_type_settings_are_published():
 
 def test_each_meeting_type_setting_quotes_its_own_sentence():
     by_setting = {entry["setting"]: entry for entry in MEETING_TYPE_SETTINGS}
-    assert "expire after a meeting has happened" in by_setting["expire_reschedule_link"]["sourced_from"]
+    assert (
+        "expire after a meeting has happened"
+        in by_setting["expire_reschedule_link"]["sourced_from"]
+    )
     assert "will be deleted" in by_setting["delete_event"]["sourced_from"]
 
 
@@ -665,7 +674,7 @@ def test_every_published_vocabulary_entry_carries_its_quotation():
 
 
 def test_a_naive_timestamp_is_read_as_utc_and_documented_as_such():
-    """"2024-01-05T14:30:00Z" is offset-bearing; a hand-written one often is not."""
+    """ "2024-01-05T14:30:00Z" is offset-bearing; a hand-written one often is not."""
     assert parse("2026-10-01T09:00:00Z") == datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
     assert parse("2026-10-01T09:00:00") == datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
     assert parse("2026-10-01T11:00:00+02:00") == datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
@@ -684,7 +693,7 @@ def test_a_missing_timestamp_is_a_refusal_naming_the_field():
 
 
 def test_the_meeting_has_happened_at_its_start_not_its_end():
-    """"expire after a meeting has happened" - the start, not the end."""
+    """ "expire after a meeting has happened" - the start, not the end."""
     start = parse(at(0, 9, 0))
     end = parse(at(0, 11, 0))
     assert has_happened(start, end, parse(at(0, 8, 59))) is False
@@ -695,8 +704,14 @@ def test_the_meeting_has_happened_at_its_start_not_its_end():
 
 def test_two_intervals_that_only_touch_do_not_overlap():
     """A 09:00-09:30 meeting and a 09:30-10:00 one are not a conflict."""
-    assert overlaps(parse(at(0, 9, 0)), parse(at(0, 9, 30)), parse(at(0, 9, 30)), parse(at(0, 10, 0))) is False
-    assert overlaps(parse(at(0, 9, 0)), parse(at(0, 9, 30)), parse(at(0, 9, 29)), parse(at(0, 10, 0))) is True
+    assert (
+        overlaps(parse(at(0, 9, 0)), parse(at(0, 9, 30)), parse(at(0, 9, 30)), parse(at(0, 10, 0)))
+        is False
+    )
+    assert (
+        overlaps(parse(at(0, 9, 0)), parse(at(0, 9, 30)), parse(at(0, 9, 29)), parse(at(0, 10, 0)))
+        is True
+    )
 
 
 def test_minutes_from_midnight_is_the_window_unit():
@@ -800,7 +815,7 @@ def test_a_partly_overlapping_booking_also_blocks_the_slot():
 
 
 def test_the_original_booking_time_reappears_when_it_is_named():
-    """"bookingUidToReschedule ... will ensure that the original booking time
+    """ "bookingUidToReschedule ... will ensure that the original booking time
     appears within the returned available slots when rescheduling."
 
     This is the researched rule the whole recomputation exists for, and it is the
@@ -952,7 +967,7 @@ def test_a_reason_for_an_available_slot_says_so():
 
 
 def test_find_slot_matches_the_instant_exactly_not_by_containment():
-    """"09:15 on a 09:00-09:30 slot is a different time, and is refused."""
+    """ "09:15 on a 09:00-09:30 slot is a different time, and is refused."""
     slots = available_slots(
         host_email="dana@x.example",
         window=(540, 1020, [0, 1, 2, 3, 4]),
@@ -986,7 +1001,9 @@ def test_a_host_that_is_not_an_email_is_refused():
 
 
 def test_hours_accept_both_spellings():
-    assert normalise_meeting_type({"name": "T", "host_email": "d@x", "hours": "09:00-17:00"})["hours"] == {
+    assert normalise_meeting_type({"name": "T", "host_email": "d@x", "hours": "09:00-17:00"})[
+        "hours"
+    ] == {
         "start": 540,
         "end": 1020,
     }
@@ -1006,11 +1023,16 @@ def test_hours_that_are_not_readable_are_refused():
 
 
 def test_the_duration_has_a_default_and_bounded_ends():
-    assert normalise_meeting_type({"name": "T", "host_email": "d@x"})["duration_minutes"] == DEFAULT_DURATION_MINUTES
+    assert (
+        normalise_meeting_type({"name": "T", "host_email": "d@x"})["duration_minutes"]
+        == DEFAULT_DURATION_MINUTES
+    )
     with pytest.raises(DomainError):
         normalise_meeting_type({"name": "T", "host_email": "d@x", "duration_minutes": 0})
     with pytest.raises(DomainError):
-        normalise_meeting_type({"name": "T", "host_email": "d@x", "duration_minutes": MAX_DURATION_MINUTES + 1})
+        normalise_meeting_type(
+            {"name": "T", "host_email": "d@x", "duration_minutes": MAX_DURATION_MINUTES + 1}
+        )
 
 
 def test_the_minimum_duration_is_the_documented_one():
@@ -1027,9 +1049,14 @@ def test_the_two_researched_toggles_have_named_defaults():
 
 
 def test_a_toggle_given_as_a_string_is_respected_rather_than_replaced():
-    """"0" and "no" are false, not a missing value falling back to the default."""
+    """ "0" and "no" are false, not a missing value falling back to the default."""
     spec = normalise_meeting_type(
-        {"name": "T", "host_email": "d@x", "delete_event": "false", "expire_reschedule_link": "true"}
+        {
+            "name": "T",
+            "host_email": "d@x",
+            "delete_event": "false",
+            "expire_reschedule_link": "true",
+        }
     )
     assert spec["delete_event"] is False
     assert spec["expire_reschedule_link"] is True
@@ -1056,9 +1083,14 @@ def test_an_unknown_notification_channel_is_refused_at_configuration_time():
 
 
 def test_the_distribution_defaults_to_the_name_and_is_kept_verbatim():
-    spec = normalise_meeting_type({"name": "Enterprise", "host_email": "d@x", "distribution": "EMEA Enterprise"})
+    spec = normalise_meeting_type(
+        {"name": "Enterprise", "host_email": "d@x", "distribution": "EMEA Enterprise"}
+    )
     assert spec["distribution"] == "EMEA Enterprise"
-    assert normalise_meeting_type({"name": "Enterprise", "host_email": "d@x"})["distribution"] == "Enterprise"
+    assert (
+        normalise_meeting_type({"name": "Enterprise", "host_email": "d@x"})["distribution"]
+        == "Enterprise"
+    )
 
 
 def test_a_day_outside_the_week_is_refused():
@@ -1157,7 +1189,9 @@ def test_a_booking_derives_its_end_from_the_meeting_type_duration(engine, room, 
         room_id=room["id"],
         source=SOURCE,
     )
-    assert (parse(record["data"]["end_at"]) - parse(record["data"]["start_at"])) == timedelta(minutes=30)
+    assert (parse(record["data"]["end_at"]) - parse(record["data"]["start_at"])) == timedelta(
+        minutes=30
+    )
 
 
 def test_a_duplicate_uid_is_refused_rather_than_overwriting(engine, room, meeting_type, booking):
@@ -1168,7 +1202,9 @@ def test_a_duplicate_uid_is_refused_rather_than_overwriting(engine, room, meetin
 
 def test_a_booking_with_no_start_at_is_refused(engine, room, meeting_type):
     with pytest.raises(DomainError):
-        engine.create_booking({"meeting_type_id": meeting_type["id"]}, room_id=room["id"], source=SOURCE)
+        engine.create_booking(
+            {"meeting_type_id": meeting_type["id"]}, room_id=room["id"], source=SOURCE
+        )
 
 
 def test_a_booking_is_found_by_its_cal_uid_not_its_record_id(engine, booking):
@@ -1220,7 +1256,9 @@ def test_a_meeting_type_can_supply_the_reminders(engine, room, meeting_type):
 
 
 def test_a_booking_can_supply_its_own_reminders(engine, room, meeting_type):
-    record = make_booking(engine, room, meeting_type, reminders=[{"offset_minutes": 30, "label": "half hour"}])
+    record = make_booking(
+        engine, room, meeting_type, reminders=[{"offset_minutes": 30, "label": "half hour"}]
+    )
     assert [entry["offset_minutes"] for entry in record["data"]["reminders"]] == [30]
     assert record["data"]["reminders"][0]["label"] == "half hour"
 
@@ -1280,7 +1318,9 @@ def test_a_reschedule_rebases_the_booking_s_own_reminders(engine, room, meeting_
     )
     assert change["data"]["reminders"] == {"before": 2, "after": 2, "recomputed": True}
     moved = engine.get_booking(change["data"]["new_booking_uid"])
-    by_offset = {entry["offset_minutes"]: entry["scheduled_for"] for entry in moved["data"]["reminders"]}
+    by_offset = {
+        entry["offset_minutes"]: entry["scheduled_for"] for entry in moved["data"]["reminders"]
+    }
     assert by_offset == {1440: at(3, 9, 0), 60: at(4, 8, 0)}
 
 
@@ -1320,7 +1360,11 @@ def test_the_chain_carries_the_researched_field_names(engine, room, booking):
     change = engine.reschedule(
         room["id"],
         booking["data"]["uid"],
-        {"start_at": at(4, 9, 0), "reason": "later that week", "actor_email": "a@northwind.example"},
+        {
+            "start_at": at(4, 9, 0),
+            "reason": "later that week",
+            "actor_email": "a@northwind.example",
+        },
         source=SOURCE,
     )
     new = engine.get_booking(change["data"]["new_booking_uid"])
@@ -1353,10 +1397,16 @@ def test_two_independent_chains_number_from_one(engine, room, meeting_type):
     left = make_booking(engine, room, meeting_type, uid="bk_left")
     right = make_booking(engine, room, meeting_type, uid="bk_right", start_at=at(3, 11, 0))
     first = engine.reschedule(
-        room["id"], left["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        left["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     other = engine.reschedule(
-        room["id"], right["data"]["uid"], {"start_at": at(4, 11, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        right["data"]["uid"],
+        {"start_at": at(4, 11, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert first["data"]["reschedule_id"] == 1
     assert other["data"]["reschedule_id"] == 1
@@ -1400,7 +1450,9 @@ def test_a_reschedule_to_a_time_outside_the_hours_is_refused(engine, room, booki
 
 def test_a_reschedule_with_no_new_time_is_refused_naming_the_field(engine, room, booking):
     with pytest.raises(DomainError) as caught:
-        engine.reschedule(room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE)
+        engine.reschedule(
+            room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE
+        )
     assert "start_at" in str(caught.value)
 
 
@@ -1453,7 +1505,12 @@ def test_a_refused_reschedule_writes_nothing_at_all(engine, room, booking, store
     """No stub, no history row, no downstream row: nothing happened."""
     before = {
         name: len(store.list(name))
-        for name in (BOOKING_COLLECTION, CHANGE_COLLECTION, WEBHOOK_COLLECTION, CRM_EVENT_COLLECTION)
+        for name in (
+            BOOKING_COLLECTION,
+            CHANGE_COLLECTION,
+            WEBHOOK_COLLECTION,
+            CRM_EVENT_COLLECTION,
+        )
     }
     with pytest.raises(DomainError):
         engine.reschedule(
@@ -1464,7 +1521,12 @@ def test_a_refused_reschedule_writes_nothing_at_all(engine, room, booking, store
         )
     after = {
         name: len(store.list(name))
-        for name in (BOOKING_COLLECTION, CHANGE_COLLECTION, WEBHOOK_COLLECTION, CRM_EVENT_COLLECTION)
+        for name in (
+            BOOKING_COLLECTION,
+            CHANGE_COLLECTION,
+            WEBHOOK_COLLECTION,
+            CRM_EVENT_COLLECTION,
+        )
     }
     assert before == after
 
@@ -1473,15 +1535,21 @@ def test_a_cancelled_booking_cannot_be_rescheduled(engine, room, booking):
     engine.cancel(room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE)
     with pytest.raises(BookingConflict) as caught:
         engine.reschedule(
-            room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+            room["id"],
+            booking["data"]["uid"],
+            {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+            source=SOURCE,
         )
     assert "cancelled" in str(caught.value)
 
 
 def test_a_superseded_booking_cannot_be_rescheduled_again(engine, room, booking):
     """The old booking is spent; the new one is what a second move acts on."""
-    change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+    engine.reschedule(
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     with pytest.raises(BookingConflict) as caught:
         engine.reschedule(
@@ -1496,7 +1564,10 @@ def test_a_superseded_booking_cannot_be_rescheduled_again(engine, room, booking)
 def test_the_booking_a_reschedule_produced_can_be_moved_again(engine, room, booking):
     """Two moves in a row is the researched churn case, not an error."""
     first = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     second = engine.reschedule(
         room["id"],
@@ -1528,7 +1599,10 @@ def test_the_history_records_the_four_things_the_research_lists(engine, room, bo
 
 def test_the_history_row_carries_the_before_and_the_after(engine, room, booking):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert change["data"]["from"]["start_at"] == at(3, 9, 0)
     assert change["data"]["to"]["start_at"] == at(4, 9, 0)
@@ -1545,12 +1619,17 @@ def test_a_change_against_a_room_that_does_not_exist_is_a_404_not_a_400(engine, 
     from dsr.db.audited import RecordNotFound
 
     with pytest.raises(RecordNotFound):
-        engine.reschedule("room_nope", booking["data"]["uid"], {"start_at": at(4, 9, 0)}, source=SOURCE)
+        engine.reschedule(
+            "room_nope", booking["data"]["uid"], {"start_at": at(4, 9, 0)}, source=SOURCE
+        )
 
 
 def test_the_rescheduling_source_defaults_to_the_host_panel(engine, room, booking):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert change["data"]["reschedule_source"] == CHILICAL_HOME
 
@@ -1560,7 +1639,11 @@ def test_a_reschedule_source_that_is_not_researched_is_refused(engine, room, boo
         engine.reschedule(
             room["id"],
             booking["data"]["uid"],
-            {"start_at": at(4, 9, 0), "reschedule_source": "smoke_signal", "actor_email": "a@x.example"},
+            {
+                "start_at": at(4, 9, 0),
+                "reschedule_source": "smoke_signal",
+                "actor_email": "a@x.example",
+            },
             source=SOURCE,
         )
     assert "smoke_signal" in str(caught.value)
@@ -1599,7 +1682,9 @@ def test_a_change_arriving_through_a_link_is_the_attendees_even_if_the_payload_s
     assert change["data"]["actor_kind"] == "attendee"
 
 
-def test_a_link_belonging_to_another_booking_cannot_move_this_one(engine, room, meeting_type, booking):
+def test_a_link_belonging_to_another_booking_cannot_move_this_one(
+    engine, room, meeting_type, booking
+):
     other = make_booking(engine, room, meeting_type, uid="bk_other", start_at=at(3, 11, 0))
     with pytest.raises(MeetingNotFound):
         engine.reschedule(
@@ -1624,7 +1709,10 @@ def test_a_cancel_link_cannot_be_used_to_reschedule(engine, room, booking):
 def test_the_old_meetings_link_does_not_travel_to_the_new_booking(engine, room, booking):
     """The invite after a move must point at the meeting that is actually happening."""
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     new = engine.get_booking(change["data"]["new_booking_uid"])
     assert new["data"]["reschedule_token"] != booking["data"]["reschedule_token"]
@@ -1665,7 +1753,10 @@ def test_a_reschedule_may_move_the_meeting_to_another_host(engine, room, meeting
         },
         source=SOURCE,
     )
-    assert engine.get_booking(change["data"]["new_booking_uid"])["data"]["host_email"] == "sam@contoso.example"
+    assert (
+        engine.get_booking(change["data"]["new_booking_uid"])["data"]["host_email"]
+        == "sam@contoso.example"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1749,7 +1840,11 @@ def test_a_host_action_is_not_blocked_by_an_expired_link(engine, room):
     change = engine.reschedule(
         room["id"],
         past["data"]["uid"],
-        {"start_at": at(3, 9, 0), "actor_email": "dana@northwind.example", "reschedule_source": CHILICAL_HOME},
+        {
+            "start_at": at(3, 9, 0),
+            "actor_email": "dana@northwind.example",
+            "reschedule_source": CHILICAL_HOME,
+        },
         source=SOURCE,
     )
     assert change["data"]["type"] == "rescheduled"
@@ -1767,7 +1862,8 @@ def test_the_link_endpoint_resolves_both_kinds_of_token(http, live):
 def test_the_link_endpoint_reports_a_closed_link_rather_than_refusing(http, live):
     """A dead link is a fact a rep needs; it becomes a refusal only on the write."""
     http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/cancel", json={"actor_email": "a@x.example"}
+        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/cancel",
+        json={"actor_email": "a@x.example"},
     )
     body = http.get(f"{PREFIX}/links/{live['booking']['data']['cancel_token']}").json()
     assert body["expired"] is True
@@ -1791,7 +1887,10 @@ def test_a_completed_requests_link_is_closed(http, live):
         json={"actor_email": "a@x.example"},
     ).json()
     target = next(
-        slot["start_at"] for slot in http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}").json()["slots"]
+        slot["start_at"]
+        for slot in http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}").json()[
+            "slots"
+        ]
         if not slot["in_past"]
     )
     http.post(f"{PREFIX}/reschedule-requests/{request['id']}/complete", json={"start_at": target})
@@ -1845,7 +1944,9 @@ def test_the_link_path_is_a_named_decision_and_can_be_overridden(engine, booking
     )
 
 
-def test_the_invite_template_is_a_team_field_rather_than_a_product_constant(engine, room, meeting_type, booking):
+def test_the_invite_template_is_a_team_field_rather_than_a_product_constant(
+    engine, room, meeting_type, booking
+):
     typed = make_type(engine, room, name="Typed", title_template="Custom: {title} at {start_at}")
     record = make_booking(engine, room, typed, uid="bk_typed")
     invite = engine.invite(record["data"]["uid"], base="https://rooms.example.com")
@@ -1881,7 +1982,9 @@ def test_a_cancel_releases_the_booking(engine, room, booking):
 
 def test_the_cancellation_reason_is_optional_and_shipped_when_given(engine, room, meeting_type):
     quiet = make_booking(engine, room, meeting_type, uid="bk_quiet", start_at=at(3, 9, 0))
-    change = engine.cancel(room["id"], quiet["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE)
+    change = engine.cancel(
+        room["id"], quiet["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE
+    )
     assert change["data"]["cancellation_reason"] is None
 
     loud = make_booking(engine, room, meeting_type, uid="bk_loud", start_at=at(4, 11, 0))
@@ -1897,16 +2000,29 @@ def test_the_cancellation_reason_is_optional_and_shipped_when_given(engine, room
 def test_an_uncancellable_booking_is_a_409(engine, room, booking):
     engine.cancel(room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE)
     with pytest.raises(BookingConflict):
-        engine.cancel(room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE)
+        engine.cancel(
+            room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE
+        )
 
 
 def test_a_cancel_of_one_occurrence_leaves_the_rest_of_the_series_live(engine, room, meeting_type):
-    first = make_booking(engine, room, meeting_type, uid="bk_s1", recurring_group="bk_s", recurrence_index=1)
+    first = make_booking(
+        engine, room, meeting_type, uid="bk_s1", recurring_group="bk_s", recurrence_index=1
+    )
     second = make_booking(
-        engine, room, meeting_type, uid="bk_s2", start_at=at(4, 9, 0), recurring_group="bk_s", recurrence_index=2
+        engine,
+        room,
+        meeting_type,
+        uid="bk_s2",
+        start_at=at(4, 9, 0),
+        recurring_group="bk_s",
+        recurrence_index=2,
     )
     engine.cancel(
-        room["id"], first["data"]["uid"], {"scope": SCOPE_THIS, "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        first["data"]["uid"],
+        {"scope": SCOPE_THIS, "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert engine.get_booking(second["data"]["uid"])["data"]["status"] == BOOKED
 
@@ -1928,7 +2044,8 @@ def test_a_wholesale_cancel_takes_every_live_occurrence(engine, room, meeting_ty
     assert result["sweep"]["count"] == 3
     assert sorted(result["sweep"]["changes"]) and len(result["sweep"]["changes"]) == 3
     assert engine.list_bookings(status=CANCELLED, limit=10) and all(
-        record["data"]["status"] == CANCELLED for record in engine.list_bookings(recurring_group="bk_w")
+        record["data"]["status"] == CANCELLED
+        for record in engine.list_bookings(recurring_group="bk_w")
     )
 
 
@@ -1943,7 +2060,9 @@ def test_a_wholesale_cancel_writes_one_history_row_per_occurrence(engine, room, 
             recurring_group="bk_v",
             recurrence_index=index,
         )
-    engine.cancel(room["id"], "bk_v1", {"scope": SCOPE_ALL, "actor_email": "a@x.example"}, source=SOURCE)
+    engine.cancel(
+        room["id"], "bk_v1", {"scope": SCOPE_ALL, "actor_email": "a@x.example"}, source=SOURCE
+    )
     history = engine.changes(booking_uid="bk_v2")
     assert len(history) == 1
     assert history[0]["data"]["booking_uid"] == "bk_v2"
@@ -1951,7 +2070,10 @@ def test_a_wholesale_cancel_writes_one_history_row_per_occurrence(engine, room, 
 
 def test_a_wholesale_cancel_on_a_booking_with_no_series_cancels_just_it(engine, room, booking):
     result = engine.cancel(
-        room["id"], booking["data"]["uid"], {"scope": SCOPE_ALL, "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"scope": SCOPE_ALL, "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert "sweep" not in result
     assert result["data"]["booking_uid"] == booking["data"]["uid"]
@@ -1960,7 +2082,10 @@ def test_a_wholesale_cancel_on_a_booking_with_no_series_cancels_just_it(engine, 
 def test_an_unresearched_cancel_scope_is_refused(engine, room, booking):
     with pytest.raises(DomainError) as caught:
         engine.cancel(
-            room["id"], booking["data"]["uid"], {"scope": "everything", "actor_email": "a@x.example"}, source=SOURCE
+            room["id"],
+            booking["data"]["uid"],
+            {"scope": "everything", "actor_email": "a@x.example"},
+            source=SOURCE,
         )
     assert "everything" in str(caught.value)
 
@@ -1989,7 +2114,10 @@ def test_a_cancel_that_never_happened_writes_nothing(engine, room, booking, stor
 def test_a_cancelled_booking_records_only_the_first_cancellation_reason(engine, room, booking):
     """The second attempt is refused, so the first reason stands unchanged."""
     engine.cancel(
-        room["id"], booking["data"]["uid"], {"actor_email": "a@x.example", "reason": "first"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"actor_email": "a@x.example", "reason": "first"},
+        source=SOURCE,
     )
     assert engine.get_booking(booking["data"]["uid"])["data"]["cancellation_reason"] == "first"
 
@@ -2004,7 +2132,10 @@ def test_a_cancellation_through_the_cancel_link_is_the_attendees(engine, room, b
     change = engine.cancel(
         room["id"],
         booking["data"]["uid"],
-        {"link_token": booking["data"]["cancel_token"], "actor_email": "priya.raman@northwind.example"},
+        {
+            "link_token": booking["data"]["cancel_token"],
+            "actor_email": "priya.raman@northwind.example",
+        },
         source=SOURCE,
     )
     assert change["data"]["via_source"] == RESCHEDULE_LINK
@@ -2033,7 +2164,10 @@ def test_a_cancellation_through_the_reschedule_link_is_still_the_attendees(engin
     change = engine.cancel(
         room["id"],
         booking["data"]["uid"],
-        {"link_token": booking["data"]["reschedule_token"], "actor_email": "priya.raman@northwind.example"},
+        {
+            "link_token": booking["data"]["reschedule_token"],
+            "actor_email": "priya.raman@northwind.example",
+        },
         source=SOURCE,
     )
     assert change["data"]["via_source"] == RESCHEDULE_LINK
@@ -2057,7 +2191,7 @@ def test_a_cancel_with_no_actor_email_falls_back_to_the_attendee_on_file(engine,
 
 
 def test_a_cancel_records_the_via_source_it_arrived_through(engine, room, booking):
-    """"triggers when a user or prospect cancels the meeting from any via source"."""
+    """ "triggers when a user or prospect cancels the meeting from any via source"."""
     change = engine.cancel(
         room["id"],
         booking["data"]["uid"],
@@ -2071,7 +2205,10 @@ def test_a_cancellation_reason_longer_than_the_cap_is_refused(engine, room, book
     """The reason ships in a webhook payload, so it is bounded."""
     with pytest.raises(DomainError) as caught:
         engine.cancel(
-            room["id"], booking["data"]["uid"], {"reason": "x" * 2001, "actor_email": "a@x.example"}, source=SOURCE
+            room["id"],
+            booking["data"]["uid"],
+            {"reason": "x" * 2001, "actor_email": "a@x.example"},
+            source=SOURCE,
         )
     assert "2000" in str(caught.value)
 
@@ -2085,7 +2222,10 @@ def test_an_actor_that_is_not_an_email_is_refused(engine, room, booking):
 def test_an_unresearched_actor_kind_is_refused(engine, room, booking):
     with pytest.raises(DomainError) as caught:
         engine.cancel(
-            room["id"], booking["data"]["uid"], {"actor_email": "a@x.example", "actor_kind": "robot"}, source=SOURCE
+            room["id"],
+            booking["data"]["uid"],
+            {"actor_email": "a@x.example", "actor_kind": "robot"},
+            source=SOURCE,
         )
     assert "robot" in str(caught.value)
 
@@ -2160,20 +2300,26 @@ def test_a_cancel_pushes_the_researched_cancellation_fields():
 
 
 def test_a_change_type_with_no_researched_webhook_pushes_nothing():
-    assert webhook_envelopes(
-        change_type="reschedule_requested",
-        new_booking=None,
-        old_booking={},
-        reschedule_id=None,
-        cancellation_reason=None,
-        cancelled_by_email=None,
-        location=None,
-    ) == []
+    assert (
+        webhook_envelopes(
+            change_type="reschedule_requested",
+            new_booking=None,
+            old_booking={},
+            reschedule_id=None,
+            cancellation_reason=None,
+            cancelled_by_email=None,
+            location=None,
+        )
+        == []
+    )
 
 
 def test_a_reschedule_records_the_pushed_webhooks_readable(engine, room, booking, store):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     pushed = engine.webhooks(change_id=change["id"])
     # Compared as a set and not as a list: the fan-out order is not part of the
@@ -2186,9 +2332,14 @@ def test_a_reschedule_records_the_pushed_webhooks_readable(engine, room, booking
 
 def test_the_reschedule_webhook_carries_the_researched_payload(engine, room, booking):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
-    payload = engine.webhooks(change_id=change["id"], webhook=BOOKING_RESCHEDULED)[0]["data"]["payload"]
+    payload = engine.webhooks(change_id=change["id"], webhook=BOOKING_RESCHEDULED)[0]["data"][
+        "payload"
+    ]
     assert payload["rescheduleUid"] == booking["data"]["uid"]
     assert payload["uid"] == change["data"]["new_booking_uid"]
     assert payload["rescheduleId"] == 1
@@ -2206,9 +2357,14 @@ def test_a_cancel_records_the_cancellation_webhooks(engine, room, booking):
     assert change["data"]["webhooks_sent"] == [BOOKING_CANCELLED, "Meeting Update"]
 
 
-def test_the_workflow_trigger_fires_and_sends_on_both_channels(engine, room, meeting_type, booking, store):
+def test_the_workflow_trigger_fires_and_sends_on_both_channels(
+    engine, room, meeting_type, booking, store
+):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert change["data"]["triggers"] == ["rescheduleEvent"]
     notices = engine.notifications(change_id=change["id"])
@@ -2221,9 +2377,13 @@ def test_the_workflow_trigger_fires_and_sends_on_both_channels(engine, room, mee
 
 
 def test_a_cancellation_fires_the_other_trigger_and_the_other_template(engine, room, booking):
-    change = engine.cancel(room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE)
+    change = engine.cancel(
+        room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE
+    )
     assert change["data"]["triggers"] == ["eventCancelled"]
-    assert {note["data"]["template"] for note in engine.notifications(change_id=change["id"])} == {"cancelled"}
+    assert {note["data"]["template"] for note in engine.notifications(change_id=change["id"])} == {
+        "cancelled"
+    }
 
 
 def test_each_change_type_has_one_template_and_one_trigger():
@@ -2236,9 +2396,14 @@ def test_a_meeting_type_can_narrow_its_channels(engine, room, meeting_type, book
     narrowed = make_type(engine, room, name="Email only", notify_channels=["email"])
     record = make_booking(engine, room, narrowed, uid="bk_email", start_at=at(3, 11, 0))
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 11, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 11, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
-    assert {note["data"]["channel"] for note in engine.notifications(change_id=change["id"])} == {"email"}
+    assert {note["data"]["channel"] for note in engine.notifications(change_id=change["id"])} == {
+        "email"
+    }
 
 
 def test_channels_default_to_both_in_the_order_the_research_names_them():
@@ -2254,31 +2419,42 @@ def test_an_empty_channel_list_falls_back_to_both_rather_than_to_nobody():
 def test_a_notice_is_only_written_for_a_channel_with_a_recipient(engine, room):
     plain = make_type(engine, room, name="No attendee", reminder_offsets=[])
     record = engine.create_booking(
-        {"meeting_type_id": plain["id"], "start_at": at(3, 9, 0), "uid": "bk_solo"}, room_id=room["id"], source=SOURCE
+        {"meeting_type_id": plain["id"], "start_at": at(3, 9, 0), "uid": "bk_solo"},
+        room_id=room["id"],
+        source=SOURCE,
     )
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert change["data"]["notifications_sent"] == 2
 
 
 def test_the_crm_event_is_created_on_a_booking_that_had_none(engine, room, booking):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert change["data"]["crm_event"]["action"] == "created"
     assert change["data"]["crm_event"]["sobject"] == "Event"
 
 
 def test_a_crm_event_is_updated_rather_than_duplicated_across_moves(engine, room, booking, store):
-    """"CRM Event update/delete" is one object changing, not one per move.
+    """ "CRM Event update/delete" is one object changing, not one per move.
 
     Two moves, one Salesforce Event. A second Event on a chain would put the same
     meeting on two calendars - the failure this workflow prevents on the DSR side,
     reproduced on the CRM side.
     """
     first = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     event_id = first["data"]["crm_event"]["event_id"]
     second = engine.reschedule(
@@ -2295,22 +2471,30 @@ def test_a_crm_event_is_updated_rather_than_duplicated_across_moves(engine, room
 def test_a_moved_meeting_carries_both_event_ids_forward(engine, room, booking):
     """The new booking points at the events that moved, so a reader can follow them."""
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     moved = engine.get_booking(change["data"]["new_booking_uid"])
     assert moved["data"]["calendar_event_id"] == change["data"]["calendar"]["event_id"]
     assert moved["data"]["crm_event_id"] == change["data"]["crm_event"]["event_id"]
 
 
-def test_a_calendar_event_is_moved_rather_than_duplicated_when_one_exists(engine, room, booking, store):
-    """"calendar event moved/cancelled" is one event changing time, not two events.
+def test_a_calendar_event_is_moved_rather_than_duplicated_when_one_exists(
+    engine, room, booking, store
+):
+    """ "calendar event moved/cancelled" is one event changing time, not two events.
 
     A meeting moved three times has exactly one calendar event carrying the third
     time, which is what a calendar looks like and what a subscriber to that event
     needs in order to keep receiving updates.
     """
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert change["data"]["calendar"]["action"] == "created"
     event_id = change["data"]["calendar"]["event_id"]
@@ -2340,7 +2524,10 @@ def test_a_calendar_event_that_existed_is_updated_not_replaced(engine, room, boo
         source=SOURCE,
     )
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert change["data"]["calendar"]["action"] == "updated"
     assert change["data"]["calendar"]["record_id"] == seeded["id"]
@@ -2351,7 +2538,10 @@ def test_a_calendar_event_that_existed_is_updated_not_replaced(engine, room, boo
 
 def test_the_calendar_event_takes_the_new_times(engine, room, booking, store):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     # Pointed at the booking this change leaves in force, and identified by the
     # meeting's chain. The new booking also inherits the event id, so a downstream
@@ -2368,16 +2558,23 @@ def test_the_calendar_event_takes_the_new_times(engine, room, booking, store):
 
 def test_a_cancelled_booking_s_calendar_event_is_cancelled(engine, room, booking, store):
     """A cancel with no event yet creates one, so the gap is visible."""
-    change = engine.cancel(room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE)
+    change = engine.cancel(
+        room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE
+    )
     row = store.find(CALENDAR_EVENT_COLLECTION, {"booking_uid": booking["data"]["uid"]}, limit=1)[0]
     assert row["data"]["status"] == "cancelled"
     assert change["data"]["calendar"]["action"] == "created"
 
 
-def test_a_cancelled_meetings_calendar_event_is_cancelled_after_a_reschedule(engine, room, booking, store):
+def test_a_cancelled_meetings_calendar_event_is_cancelled_after_a_reschedule(
+    engine, room, booking, store
+):
     """The one event the move created is the one the cancel marks cancelled."""
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     cancelled = engine.cancel(
         room["id"], change["data"]["new_booking_uid"], {"actor_email": "a@x.example"}, source=SOURCE
@@ -2406,7 +2603,10 @@ def test_delete_event_on_removes_the_crm_event_on_a_cancel(engine, room):
     strict = make_type(engine, room, name="Strict", delete_event=True)
     record = make_booking(engine, room, strict, uid="bk_del_on")
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     cancelled = engine.cancel(
         room["id"], change["data"]["new_booking_uid"], {"actor_email": "a@x.example"}, source=SOURCE
@@ -2419,7 +2619,10 @@ def test_delete_event_off_keeps_the_crm_event_cancelled(engine, room):
     permissive = make_type(engine, room, name="Keep", delete_event=False)
     record = make_booking(engine, room, permissive, uid="bk_keep")
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     cancelled = engine.cancel(
         room["id"], change["data"]["new_booking_uid"], {"actor_email": "a@x.example"}, source=SOURCE
@@ -2429,10 +2632,15 @@ def test_delete_event_off_keeps_the_crm_event_cancelled(engine, room):
     assert rows[0]["data"]["status"] == "cancelled"
 
 
-def test_a_deletion_is_recorded_inside_the_change_s_own_transaction(engine, room, meeting_type, booking):
+def test_a_deletion_is_recorded_inside_the_change_s_own_transaction(
+    engine, room, meeting_type, booking
+):
     """It is a status, not a store delete, so it cannot half-apply."""
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     new_uid = change["data"]["new_booking_uid"]
     cancelled = engine.cancel(room["id"], new_uid, {"actor_email": "a@x.example"}, source=SOURCE)
@@ -2478,7 +2686,9 @@ def test_propagating_a_crm_event_to_nothing_is_a_skipped_row(store, db):
 # --------------------------------------------------------------------------- #
 
 
-def test_a_request_reschedule_cancels_the_booking_and_raises_a_request(engine, room, booking, store):
+def test_a_request_reschedule_cancels_the_booking_and_raises_a_request(
+    engine, room, booking, store
+):
     """Both sentences of the researched sentence are load-bearing."""
     request = engine.request_reschedule(
         room["id"],
@@ -2525,12 +2735,16 @@ def test_a_requests_token_survives_even_where_the_booking_link_would_not(engine,
     assert engine.link_state(request["data"]["token"]).expired is False
 
 
-def test_completing_a_request_creates_the_new_booking_and_the_history_row(engine, room, meeting_type, booking):
+def test_completing_a_request_creates_the_new_booking_and_the_history_row(
+    engine, room, meeting_type, booking
+):
     request = engine.request_reschedule(
         room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE
     )
     target = next(
-        slot["start_at"] for slot in engine.host_slots(meeting_type["id"], now=NOW) if not slot["in_past"]
+        slot["start_at"]
+        for slot in engine.host_slots(meeting_type["id"], now=NOW)
+        if not slot["in_past"]
     )
     change = engine.complete_request(request["id"], {"start_at": target}, source=SOURCE)
     assert change["data"]["type"] == "rescheduled"
@@ -2540,7 +2754,9 @@ def test_completing_a_request_creates_the_new_booking_and_the_history_row(engine
     assert engine.get_request(request["id"])["data"]["status"] == "completed"
 
 
-def test_a_completed_request_pushes_the_reschedule_webhook_not_only_the_cancel(engine, room, booking):
+def test_a_completed_request_pushes_the_reschedule_webhook_not_only_the_cancel(
+    engine, room, booking
+):
     """Churn alerting counts moves; a cancellation would look like a release."""
     request = engine.request_reschedule(
         room["id"], booking["data"]["uid"], {"actor_email": "a@x.example"}, source=SOURCE
@@ -2612,7 +2828,12 @@ def test_completing_a_request_with_no_meeting_type_is_refused(engine, store, roo
     """A request that outlived its type has no availability to recompute against."""
     orphan = store.create(
         REQUEST_COLLECTION,
-        {"token": "tok_orphan", "status": "pending", "original_uid": "bk_orphan", "chain_root": "bk_orphan"},
+        {
+            "token": "tok_orphan",
+            "status": "pending",
+            "original_uid": "bk_orphan",
+            "chain_root": "bk_orphan",
+        },
         room_id=room["id"],
         source=SOURCE,
     )
@@ -2696,7 +2917,10 @@ def test_a_reschedule_writes_its_rows_in_one_transaction(engine, room, booking, 
     """The audit log is only complete if the change and its consequences commit together."""
     before = store.db.audit_count()
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     rows = store.db.audit(request_id=None, limit=1000)
     written = [row for row in rows if row["source"] == SOURCE and row["ts"] >= change["created_at"]]
@@ -2718,7 +2942,9 @@ def test_a_refused_change_rolls_everything_back(engine, room, booking, store):
     assert store.db.audit_count() == before_audit
 
 
-def test_a_wholesale_cancel_rolls_back_entirely_when_one_target_fails(engine, room, meeting_type, store):
+def test_a_wholesale_cancel_rolls_back_entirely_when_one_target_fails(
+    engine, room, meeting_type, store
+):
     """A half-cancelled series is the one outcome nobody can recover from."""
     for index, day in enumerate((3, 4), start=1):
         make_booking(
@@ -2760,7 +2986,10 @@ def test_a_plan_writes_nothing_at_all(engine, room, booking, store):
 def test_a_plan_says_the_same_webhooks_the_write_will_push(engine, room, booking, store):
     plan = engine.plan(room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0)})
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert plan["webhooks"] == change["data"]["webhooks_sent"]
     assert plan["triggers"] == change["data"]["triggers"]
@@ -2769,7 +2998,10 @@ def test_a_plan_says_the_same_webhooks_the_write_will_push(engine, room, booking
 def test_a_plan_predicts_the_reschedule_id_the_write_uses(engine, room, booking):
     plan = engine.plan(room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0)})
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert plan["reschedule_id"] == change["data"]["reschedule_id"]
 
@@ -2849,7 +3081,7 @@ def test_a_plan_names_the_actor_the_write_will_record(engine, room, booking):
 
 
 def test_a_plan_of_a_request_reschedule_says_both_of_its_halves(engine, room, booking):
-    """"The booking will be cancelled **and** the attendee will receive a link."
+    """ "The booking will be cancelled **and** the attendee will receive a link."
 
     A plan that described only the reschedule half would tell the caller one
     thing and then get them another - and the cancellation is the destructive half.
@@ -2873,7 +3105,10 @@ def test_a_plan_of_a_cancel_names_the_actor_the_write_will_record(engine, room, 
     change = engine.cancel(
         room["id"],
         booking["data"]["uid"],
-        {"link_token": booking["data"]["cancel_token"], "actor_email": "priya.raman@northwind.example"},
+        {
+            "link_token": booking["data"]["cancel_token"],
+            "actor_email": "priya.raman@northwind.example",
+        },
         source=SOURCE,
     )
     assert plan["actor_email"] == change["data"]["actor_email"]
@@ -2889,7 +3124,11 @@ def test_the_summary_counts_changes_by_type_and_source(engine, room, booking):
     engine.reschedule(
         room["id"],
         booking["data"]["uid"],
-        {"start_at": at(4, 9, 0), "actor_email": "a@x.example", "reschedule_source": "calendar_event"},
+        {
+            "start_at": at(4, 9, 0),
+            "actor_email": "a@x.example",
+            "reschedule_source": "calendar_event",
+        },
         source=SOURCE,
     )
     summary = engine.summary()
@@ -2898,18 +3137,25 @@ def test_the_summary_counts_changes_by_type_and_source(engine, room, booking):
     assert summary["by_reschedule_source"] == {"calendar_event": 1}
 
 
-def test_the_summary_counts_only_the_cancellation_reasons_that_were_given(engine, room, meeting_type, booking):
+def test_the_summary_counts_only_the_cancellation_reasons_that_were_given(
+    engine, room, meeting_type, booking
+):
     make_booking(engine, room, meeting_type, uid="bk_sum2", start_at=at(4, 11, 0))
     engine.cancel(
-        room["id"], booking["data"]["uid"], {"reason": "cannot make it", "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"reason": "cannot make it", "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     engine.cancel(room["id"], "bk_sum2", {"actor_email": "a@x.example"}, source=SOURCE)
     assert engine.summary()["with_cancellation_reason"] == 1
 
 
-def test_a_room_scoped_summary_cannot_be_misread_as_a_product_wide_one(engine, room, other_room, meeting_type):
+def test_a_room_scoped_summary_cannot_be_misread_as_a_product_wide_one(
+    engine, room, other_room, meeting_type
+):
     make_booking(engine, room, meeting_type, uid="bk_room1")
-    other = make_booking(engine, other_room, meeting_type, uid="bk_room2", start_at=at(4, 11, 0))
+    make_booking(engine, other_room, meeting_type, uid="bk_room2", start_at=at(4, 11, 0))
     engine.cancel(room["id"], "bk_room1", {"actor_email": "a@x.example"}, source=SOURCE)
     assert engine.summary()["changes"] == 1
     assert engine.summary(room_id=other_room["id"])["changes"] == 0
@@ -2917,7 +3163,10 @@ def test_a_room_scoped_summary_cannot_be_misread_as_a_product_wide_one(engine, r
 
 def test_changes_can_be_filtered_by_chain_to_answer_the_churn_question(engine, room, booking):
     first = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     engine.reschedule(
         room["id"],
@@ -2948,7 +3197,10 @@ def test_an_unresearched_change_type_filter_is_refused(engine):
 
 def test_webhooks_can_be_filtered_by_name_and_status(engine, room, booking):
     engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert engine.webhooks(webhook=BOOKING_RESCHEDULED)
     assert engine.webhooks(webhook="Nonexistent") == []
@@ -2959,7 +3211,10 @@ def test_webhooks_can_be_filtered_by_name_and_status(engine, room, booking):
 def test_a_bookings_history_falls_back_to_its_chain(engine, room, booking):
     """A booking that was moved once has no rows of its own; its chain does."""
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     fresh = engine.get_booking(change["data"]["new_booking_uid"])
     assert engine.changes(booking_uid=fresh["data"]["uid"]) == []
@@ -3081,16 +3336,20 @@ def test_a_meeting_type_can_be_created_read_patched_and_deleted(http, live):
     record = created.json()
     assert record["data"]["expire_reschedule_link"] is True
     assert http.get(f"{PREFIX}/meeting-types/{record['id']}").status_code == 200
-    assert http.patch(f"{PREFIX}/meeting-types/{record['id']}", json={"delete_event": False}).json()["data"][
-        "delete_event"
-    ] is False
+    assert (
+        http.patch(f"{PREFIX}/meeting-types/{record['id']}", json={"delete_event": False}).json()[
+            "data"
+        ]["delete_event"]
+        is False
+    )
     assert http.delete(f"{PREFIX}/meeting-types/{record['id']}").status_code == 204
     assert http.get(f"{PREFIX}/meeting-types/{record['id']}").status_code == 404
 
 
 def test_a_duplicate_meeting_type_name_is_allowed_but_a_bad_one_is_not(http, live):
     bad = http.post(
-        f"{PREFIX}/meeting-types?room_id={live['room']['id']}", json={"name": "Bad", "host_email": "nope"}
+        f"{PREFIX}/meeting-types?room_id={live['room']['id']}",
+        json={"name": "Bad", "host_email": "nope"},
     )
     assert bad.status_code == 400
     assert bad.json()["error"] == "meeting_change_error"
@@ -3102,7 +3361,10 @@ def test_bookings_can_be_listed_filtered_and_fetched(http, live):
     assert http.get(f"{PREFIX}/bookings/bk_http_1").json()["data"]["uid"] == "bk_http_1"
     assert http.get(f"{PREFIX}/bookings?status=booked").json()["count"] == 1
     assert http.get(f"{PREFIX}/bookings?status=cancelled").json()["count"] == 0
-    assert http.get(f"{PREFIX}/bookings?attendee_email=priya.raman@northwind.example").json()["count"] == 1
+    assert (
+        http.get(f"{PREFIX}/bookings?attendee_email=priya.raman@northwind.example").json()["count"]
+        == 1
+    )
 
 
 def test_an_unknown_booking_is_a_404(http):
@@ -3141,7 +3403,9 @@ def test_the_availability_endpoint_answers_with_the_researched_parameter_name(ht
 
 def test_the_availability_endpoint_withholds_the_release_when_it_is_not_named(http, live):
     start, end = booking_window(live)
-    body = http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={start}&to={end}").json()
+    body = http.get(
+        f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={start}&to={end}"
+    ).json()
     assert body["slots"], "the control failed: there were no slots to withhold a release from"
     assert not any(slot["original_slot"] for slot in body["slots"])
 
@@ -3171,7 +3435,9 @@ def test_the_availability_endpoint_falls_back_to_the_default_meeting_type(http, 
 
 
 def test_an_unreadable_availability_range_is_a_400_with_the_field_named(http, live):
-    body = http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from=soon&to=later")
+    body = http.get(
+        f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from=soon&to=later"
+    )
     assert body.status_code == 400
     assert "from" in body.json()["detail"]
 
@@ -3179,7 +3445,9 @@ def test_an_unreadable_availability_range_is_a_400_with_the_field_named(http, li
 def test_an_offset_aware_timestamp_survives_the_query_string(http, live):
     """The `+` in `+00:00` must not decode to a space and read as a malformed date."""
     start, end = booking_window(live)
-    body = http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={start}&to={end}")
+    body = http.get(
+        f"{PREFIX}/availability?meeting_type_id={live['type']['id']}&from={start}&to={end}"
+    )
     assert body.status_code == 200
     assert body.json()["slots"]
 
@@ -3218,7 +3486,10 @@ def test_a_reschedule_over_http_returns_the_history_row(http, live):
 def test_a_cancel_over_http_returns_the_history_row(http, live):
     response = http.post(
         f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/cancel",
-        json={"reason": "I am no longer able to attend this session.", "actor_email": "priya.raman@northwind.example"},
+        json={
+            "reason": "I am no longer able to attend this session.",
+            "actor_email": "priya.raman@northwind.example",
+        },
     )
     assert response.status_code == 201
     assert response.json()["data"]["type"] == "cancelled"
@@ -3240,16 +3511,17 @@ def test_the_two_step_path_completes_over_http(http, live):
         f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_http_1/request-reschedule",
         json={"actor_email": "priya.raman@northwind.example"},
     ).json()
-    slots = http.get(
-        f"{PREFIX}/availability?meeting_type_id={live['type']['id']}"
-    ).json()["slots"]
+    slots = http.get(f"{PREFIX}/availability?meeting_type_id={live['type']['id']}").json()["slots"]
     target = next(slot["start_at"] for slot in slots if not slot["in_past"])
     completed = http.post(
         f"{PREFIX}/reschedule-requests/{request['id']}/complete", json={"start_at": target}
     )
     assert completed.status_code == 201
     assert completed.json()["data"]["reschedule_source"] == RESCHEDULE_LINK
-    assert http.get(f"{PREFIX}/reschedule-requests/{request['id']}").json()["data"]["status"] == "completed"
+    assert (
+        http.get(f"{PREFIX}/reschedule-requests/{request['id']}").json()["data"]["status"]
+        == "completed"
+    )
 
 
 def test_an_unknown_reschedule_request_is_a_404(http):
@@ -3260,7 +3532,8 @@ def test_the_crm_event_list_includes_the_deleted_ones_by_default(http, live):
     move_to(http, live)
     new_uid = http.get(f"{PREFIX}/bookings?status=booked").json()["bookings"][0]["data"]["uid"]
     http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/{new_uid}/cancel", json={"actor_email": "a@x.example"}
+        f"{PREFIX}/rooms/{live['room']['id']}/bookings/{new_uid}/cancel",
+        json={"actor_email": "a@x.example"},
     )
     rows = http.get(f"{PREFIX}/crm-events").json()["crm_events"]
     assert any(row["data"]["status"] == "deleted" for row in rows)
@@ -3321,7 +3594,9 @@ def test_the_summary_endpoint_answers_over_http(http, live):
 
 
 def test_an_expired_link_over_http_is_a_410_with_the_settings_reason(http, live):
-    http.patch(f"{PREFIX}/meeting-types/{live['type']['id']}", json={"expire_reschedule_link": True})
+    http.patch(
+        f"{PREFIX}/meeting-types/{live['type']['id']}", json={"expire_reschedule_link": True}
+    )
     token = live["booking"]["data"]["reschedule_token"]
     state = http.get(f"{PREFIX}/links/{token}").json()
     assert state["expired"] is False
@@ -3352,7 +3627,8 @@ def test_a_conflict_over_http_is_a_409(http, live):
 
 def test_an_unknown_booking_change_is_a_404_over_http(http, live):
     response = http.post(
-        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_nope/cancel", json={"actor_email": "a@x.example"}
+        f"{PREFIX}/rooms/{live['room']['id']}/bookings/bk_nope/cancel",
+        json={"actor_email": "a@x.example"},
     )
     assert response.status_code == 404
     # The domain's own code, not the core's `not_found`: a missing booking is
@@ -3400,9 +3676,14 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted(http, 
 
     entries = http.get("/api/audit?limit=1000").json()["entries"]
     served = all_served_routes(http)
-    ours = [entry for entry in entries if entry["source"] and entry["source"].startswith("POST /api/wf-064")
-            or (entry["source"] and entry["source"].startswith("PATCH /api/wf-064"))
-            or (entry["source"] and entry["source"].startswith("DELETE /api/wf-064"))]
+    ours = [
+        entry
+        for entry in entries
+        if entry["source"]
+        and entry["source"].startswith("POST /api/wf-064")
+        or (entry["source"] and entry["source"].startswith("PATCH /api/wf-064"))
+        or (entry["source"] and entry["source"].startswith("DELETE /api/wf-064"))
+    ]
     assert ours, "no wf-064 writes were recorded"
     for entry in ours:
         assert source_names_a_mounted_route(entry["source"], served), (
@@ -3420,16 +3701,14 @@ def test_every_write_route_passes_a_source_built_from_its_own_prefix(http, live)
     assert written, "no route builds a source from router.prefix"
     for template in written:
         method, _, path = template.partition(" ")
-        concrete = (
-            f"{method} "
-            + path.replace("{router.prefix}", PREFIX)
-            .replace("{room_id}", live["room"]["id"])
-            .replace("{uid}", "bk_http_1")
-            .replace("{meeting_type_id}", live["type"]["id"])
-            .replace("{change_id}", "change_x")
-            .replace("{request_id}", "request_x")
+        concrete = f"{method} " + path.replace("{router.prefix}", PREFIX).replace(
+            "{room_id}", live["room"]["id"]
+        ).replace("{uid}", "bk_http_1").replace("{meeting_type_id}", live["type"]["id"]).replace(
+            "{change_id}", "change_x"
+        ).replace("{request_id}", "request_x")
+        assert source_names_a_mounted_route(concrete, served), (
+            f"no mounted route matches {template!r}"
         )
-        assert source_names_a_mounted_route(concrete, served), f"no mounted route matches {template!r}"
 
 
 def test_no_source_string_in_the_module_is_a_bare_path_without_a_method(http):
@@ -3437,9 +3716,10 @@ def test_no_source_string_in_the_module_is_a_bare_path_without_a_method(http):
     module_source = Path(load_feature(MODULE).__file__).read_text(encoding="utf-8")
     for match in re.findall(r'source=(f?)"([^"]+)"', module_source):
         literal = match[1]
-        assert literal.startswith(("POST ", "PATCH ", "DELETE ", "GET ")) or "{router.prefix}" in literal, (
-            f"source {literal!r} does not name a method and a path"
-        )
+        assert (
+            literal.startswith(("POST ", "PATCH ", "DELETE ", "GET "))
+            or "{router.prefix}" in literal
+        ), f"source {literal!r} does not name a method and a path"
 
 
 def test_the_domain_never_hardcodes_a_url_as_a_source():
@@ -3485,7 +3765,10 @@ def test_a_write_with_no_source_cannot_be_made(engine, room, booking):
 
 def test_the_audit_row_names_the_actor_and_the_route_together(store, engine, room, booking):
     change = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     entries = store.db.audit(record_id=change["id"], limit=10)
     assert entries
@@ -3584,7 +3867,10 @@ def test_the_expire_default_inference_matches_the_code():
 
 
 def test_the_reschedule_id_inference_starts_at_one():
-    assert scheduling_inferences.by_id("reschedule-id-is-a-per-chain-sequence")["value"]["starts_at"] == 1
+    assert (
+        scheduling_inferences.by_id("reschedule-id-is-a-per-chain-sequence")["value"]["starts_at"]
+        == 1
+    )
 
 
 def test_the_scope_names_inference_matches_the_published_names():
@@ -3609,7 +3895,10 @@ def test_the_trigger_inference_matches_the_notice_channels(engine, room, meeting
     assert set(entry["value"]["channels"]) == set(DEFAULT_CHANNELS)
     record = make_booking(engine, room, meeting_type, uid="bk_trig")
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     notices = engine.notifications(change_id=change["id"])
     assert {note["data"]["channel"] for note in notices} == set(entry["value"]["channels"])
@@ -3622,10 +3911,15 @@ def test_the_notice_shape_inference_matches_what_is_written(engine, room, meetin
     entry = scheduling_inferences.by_id("one-notice-per-channel-per-recipient")
     record = make_booking(engine, room, meeting_type, uid="bk_notice")
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     notices = engine.notifications(change_id=change["id"])
-    assert len(notices) == len(entry["value"]["default_channels"]) * len(entry["value"]["recipients"])
+    assert len(notices) == len(entry["value"]["default_channels"]) * len(
+        entry["value"]["recipients"]
+    )
     roles = {note["data"]["recipient_role"] for note in notices}
     assert roles == set(entry["value"]["recipients"])
     assert {note["data"]["template"] for note in notices} == {"rescheduled"}
@@ -3634,11 +3928,12 @@ def test_the_notice_shape_inference_matches_what_is_written(engine, room, meetin
 def test_a_booking_with_no_attendee_address_notifies_only_the_host(engine, room):
     """A notice addressed to nobody is indistinguishable from a failure in a log."""
     plain = make_type(engine, room, name="No attendee")
-    record = make_booking(
-        engine, room, plain, uid="bk_nobody", attendee_name="", attendee_email=""
-    )
+    record = make_booking(engine, room, plain, uid="bk_nobody", attendee_name="", attendee_email="")
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     notices = engine.notifications(change_id=change["id"])
     assert {note["data"]["recipient_role"] for note in notices} == {"host"}
@@ -3651,7 +3946,10 @@ def test_the_templates_are_named_and_not_rendered(engine, room, meeting_type):
     assert entry["value"]["rendered"] is False
     record = make_booking(engine, room, meeting_type, uid="bk_tmpl")
     change = engine.reschedule(
-        room["id"], record["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        record["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     for note in engine.notifications(change_id=change["id"]):
         assert note["data"]["template"] in NOTIFICATION_TEMPLATE_NAMES
@@ -3664,7 +3962,10 @@ def test_the_chain_keying_inference_matches_what_is_written(engine, room, bookin
     assert entry["value"]["keyed_by"] == "chain_root"
     chain = booking["data"]["chain_root"]
     first = engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     second = engine.reschedule(
         room["id"],
@@ -3696,7 +3997,9 @@ def test_the_source_and_actor_inference_matches_the_code(engine, room, booking):
     )
     assert through_link["data"]["actor_kind"] == "attendee"
 
-    explicit = make_booking(engine, room, engine.list_meeting_types()[0], uid="bk_explicit", start_at=at(4, 11, 0))
+    explicit = make_booking(
+        engine, room, engine.list_meeting_types()[0], uid="bk_explicit", start_at=at(4, 11, 0)
+    )
     from_panel = engine.reschedule(
         room["id"],
         explicit["data"]["uid"],
@@ -3808,7 +4111,9 @@ def test_the_seed_leaves_both_link_states_reachable(seeded, store, engine):
     """A demo that only shows working links cannot show the setting working."""
     states = {record["data"]["status"] for record in store.list(BOOKING_COLLECTION)}
     assert BOOKED in states and CANCELLED in states and RESCHEDULED in states
-    links = [record for record in store.list(BOOKING_COLLECTION) if record["data"]["status"] == BOOKED]
+    links = [
+        record for record in store.list(BOOKING_COLLECTION) if record["data"]["status"] == BOOKED
+    ]
     assert links
 
 
@@ -3889,7 +4194,9 @@ def test_a_second_seed_run_adds_a_second_demo_rather_than_failing(store, room):
     report.
     """
     module = load_feature(MODULE)
-    first = module.seed(store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None})
+    first = module.seed(
+        store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None}
+    )
     assert "refused:" not in first
     assert store.count_where(BOOKING_COLLECTION, {"uid": "bk_northwind_enterprise"}) == 1
 
@@ -3907,17 +4214,37 @@ def test_no_collection_is_a_typed_column_the_feature_depends_on(store, engine, r
     team adds later would.
     """
     engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     booking_fields = {row["path"] for row in store.fields(BOOKING_COLLECTION)}
-    assert {"uid", "status", "start_at", "end_at", "chain_root", "reschedule_token"} <= booking_fields
+    assert {
+        "uid",
+        "status",
+        "start_at",
+        "end_at",
+        "chain_root",
+        "reschedule_token",
+    } <= booking_fields
     change_fields = {row["path"] for row in store.fields(CHANGE_COLLECTION)}
-    assert {"type", "actor_email", "at", "reschedule_source", "from.start_at", "to.start_at"} <= change_fields
+    assert {
+        "type",
+        "actor_email",
+        "at",
+        "reschedule_source",
+        "from.start_at",
+        "to.start_at",
+    } <= change_fields
 
 
 def test_a_nested_json_path_is_queryable_through_the_dynamic_index(store, engine, room, booking):
     engine.reschedule(
-        room["id"], booking["data"]["uid"], {"start_at": at(4, 9, 0), "actor_email": "a@x.example"}, source=SOURCE
+        room["id"],
+        booking["data"]["uid"],
+        {"start_at": at(4, 9, 0), "actor_email": "a@x.example"},
+        source=SOURCE,
     )
     assert store.count_where(CHANGE_COLLECTION, {"from.start_at": at(3, 9, 0)}) == 1
     assert store.count_where(CHANGE_COLLECTION, {"to.start_at": at(4, 9, 0)}) == 1

@@ -49,8 +49,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "unconfirmed-is-a-state",
         "topic": "what a row means when the CRM confirms nothing",
         "basis": (
-            "The research quotes Dataverse: \"The `UpsertMultiple` action returns "
-            "`204 NoContent`\", and the data flow says the room updates `synced_at` / "
+            'The research quotes Dataverse: "The `UpsertMultiple` action returns '
+            '`204 NoContent`", and the data flow says the room updates `synced_at` / '
             "`crm_record_id` per row. A 204 with no body therefore carries no per-item "
             "success flag, and the research says nothing about how to record a row it "
             "cannot confirm."
@@ -84,9 +84,9 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "positional-result-matching",
         "topic": "how a per-item result is tied back to a room row",
         "basis": (
-            "The research states the guarantee twice: \"Objects are created or updated in "
+            'The research states the guarantee twice: "Objects are created or updated in '
             "the order they're listed in the request body. The `UpsertResult` objects are "
-            "returned in the same order.\" It does not say what to do when a response "
+            'returned in the same order." It does not say what to do when a response '
             "arrives with the wrong number of results."
         ),
         "value": {
@@ -102,8 +102,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "reported success."
         ),
         "change_it": (
-            "dsr/crm_upsert/runs.py::interpret_items. The mismatch text is "
-            "RESULT_COUNT_MISMATCH."
+            "dsr/crm_upsert/runs.py::interpret_items. The mismatch text is RESULT_COUNT_MISMATCH."
         ),
         "blast_radius": "Every run that sends a chunk.",
     },
@@ -111,8 +110,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "dataverse-batch-size",
         "topic": "how many rows one Dataverse UpsertMultiple request may carry",
         "basis": (
-            "The research quotes the caps for Salesforce (\"up to 200 objects\") and "
-            "HubSpot (\"Batch operations are limited to 100 records at a time\") and is "
+            'The research quotes the caps for Salesforce ("up to 200 objects") and '
+            'HubSpot ("Batch operations are limited to 100 records at a time") and is '
             "silent about Dataverse's. This build uses 1000."
         ),
         "value": {"max_batch_size": 1000},
@@ -134,8 +133,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "hubspot-response-shape",
         "topic": "the envelope HubSpot's batch upsert answers with",
         "basis": (
-            "The research quotes the endpoint and the parameter - \"include the "
-            "`idProperty` parameter\" - and the data flow's \"per-item `success` flag + "
+            'The research quotes the endpoint and the parameter - "include the '
+            '`idProperty` parameter" - and the data flow\'s "per-item `success` flag + '
             "`errors` array in the response\". It does not quote HubSpot's own response "
             "envelope, nor its per-item `new` flag."
         ),
@@ -160,7 +159,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "hubspot-single-row-path",
         "topic": "HubSpot's single-row upsert, used by the researched fallback",
         "basis": (
-            "The fallback rule is sourced - \"it auto-falls back from `UpsertMultiple` to "
+            'The fallback rule is sourced - "it auto-falls back from `UpsertMultiple` to '
             "per-row `PATCH` for tables that don't support bulk upsert\" - but the research "
             "documents only HubSpot's batch endpoint. The per-row path below is inferred "
             "from the same API version."
@@ -180,10 +179,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "opportunistic-threshold",
-        "topic": "the N in \"when the queue exceeds N rows\"",
+        "topic": 'the N in "when the queue exceeds N rows"',
         "basis": (
-            "The rule is quoted - \"the room may also upsert opportunistically when the "
-            "queue exceeds N rows\" - and N is not given."
+            'The rule is quoted - "the room may also upsert opportunistically when the '
+            'queue exceeds N rows" - and N is not given.'
         ),
         "value": {"opportunistic_threshold": 25},
         "why": (
@@ -197,10 +196,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "queue-target-is-the-vendor-cap",
-        "topic": "what \"up to 200 pending engagement rows\" is a number of",
+        "topic": 'what "up to 200 pending engagement rows" is a number of',
         "basis": (
             "\"The room's queue accumulates up to 200 pending engagement rows (or the "
-            "nightly backlog)\", and separately \"The list can contain up to 200 objects\" "
+            'nightly backlog)", and separately "The list can contain up to 200 objects" '
             "for a Salesforce request. The two 200s are in different sentences about "
             "different things."
         ),
@@ -218,7 +217,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "rejected-and-failed-rows-stay-queued",
         "topic": "what happens to a row this connector refuses, or that the CRM refuses",
         "basis": (
-            "The research says \"Per-row outcomes are written back to the room; failures "
+            'The research says "Per-row outcomes are written back to the room; failures '
             "appear in the sync log with the row's error text\", and it names no retry, no "
             "dead-letter queue, and no give-up rule."
         ),
@@ -257,7 +256,12 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "authentication scheme, and no base URL for any of the four."
         ),
         "value": {
-            "ships": ["OutboundRequest", "OutboundResponse", "Transport protocol", "ScriptedTransport"],
+            "ships": [
+                "OutboundRequest",
+                "OutboundResponse",
+                "Transport protocol",
+                "ScriptedTransport",
+            ],
             "does_not_ship": "an HTTP client",
         },
         "why": (
@@ -277,8 +281,8 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "id": "mixed-object-types-refused",
         "topic": "what a chunk carrying two object types should do",
         "basis": (
-            "\"The list can contain objects only of the type indicated in the request "
-            "URI\", and the data flow says \"single object type\". Whether to split the "
+            '"The list can contain objects only of the type indicated in the request '
+            'URI", and the data flow says "single object type". Whether to split the '
             "chunk or refuse the run is not stated."
         ),
         "value": {"action": "refuse the run", "split": False},

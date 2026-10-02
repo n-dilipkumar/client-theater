@@ -48,8 +48,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase, RecordNotFound
 from dsr.features import load_feature
@@ -63,14 +61,16 @@ from dsr.plays import (
     PlayEngine,
     PlayError,
     PlayNotFound,
+    UndeclaredTrigger,
     UnknownSignal,
     UnknownSignalRegistration,
-    UndeclaredTrigger,
     activation_state,
     amendment_findings,
     build_task,
     delivery,
+    events as event_rules,
     match_plays,
+    matching as matching_rules,
     missing_for,
     next_attempt_at,
     normalise_framework,
@@ -79,10 +79,7 @@ from dsr.plays import (
     resolve_assignment,
     signal_indicator_keys,
 )
-from dsr.plays import events as event_rules
-from dsr.plays import matching as matching_rules
-from dsr.plays.assignment import RULES as ASSIGNMENT_RULES
-from dsr.plays.assignment import describe as describe_assignment
+from dsr.plays.assignment import RULES as ASSIGNMENT_RULES, describe as describe_assignment
 from dsr.plays.inferences import INFERENCES, by_id
 from dsr.plays.vocabulary import (
     ACTIVATION_PATH,
@@ -109,6 +106,7 @@ from dsr.plays.vocabulary import (
     resolve_locale,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -238,7 +236,9 @@ def signal_payload(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
-def roster(score: int = 91, engaged_minutes: float = 60 * 24 * 3, **overrides: Any) -> list[dict[str, Any]]:
+def roster(
+    score: int = 91, engaged_minutes: float = 60 * 24 * 3, **overrides: Any
+) -> list[dict[str, Any]]:
     """One Account candidate, in the shape the researched fallback reads."""
     entry = {
         "person_id": "per_000042",
@@ -300,7 +300,11 @@ def registration(store):
     registration cannot drift apart without a test failing.
     """
     return store.create(
-        "signal_registration", dict(REGISTRATION), record_id=REGISTRATION_ID, actor="dana", source=SOURCE
+        "signal_registration",
+        dict(REGISTRATION),
+        record_id=REGISTRATION_ID,
+        actor="dana",
+        source=SOURCE,
     )
 
 
@@ -383,9 +387,9 @@ def test_the_prefix_is_ours_alone(http):
     for feature in body["features"]:
         if feature["id"] == FEATURE_ID:
             continue
-        assert not any(
-            route["path"].startswith(PREFIX) for route in feature["routes"]
-        ), f"{feature['id']} also serves under {PREFIX}"
+        assert not any(route["path"].startswith(PREFIX) for route in feature["routes"]), (
+            f"{feature['id']} also serves under {PREFIX}"
+        )
 
 
 def test_feature_module_does_not_import_the_shared_app():
@@ -507,7 +511,12 @@ def test_a_task_type_outside_the_vocabulary_is_refused(value):
 def test_the_event_types_include_the_four_the_research_says_to_track():
     for name in ("task_created", "task_completed", "step_created", "success_created"):
         assert name in EVENT_TYPES
-    assert set(PLAY_EVENT_TYPES) == {"task_created", "task_completed", "step_created", "success_created"}
+    assert set(PLAY_EVENT_TYPES) == {
+        "task_created",
+        "task_completed",
+        "step_created",
+        "success_created",
+    }
 
 
 def test_the_event_type_vocabulary_is_the_researched_list():
@@ -577,7 +586,12 @@ def test_english_is_the_second_fallback():
 
 def test_a_locale_view_says_when_it_fell_back():
     view = locale_view({"en": "Call the buyer"}, "de-AT")
-    assert view == {"locale": "en", "fell_back": True, "available": ["en"], "text": "Call the buyer"}
+    assert view == {
+        "locale": "en",
+        "fell_back": True,
+        "available": ["en"],
+        "text": "Call the buyer",
+    }
 
 
 def test_a_bare_event_type_is_accepted_and_normalised():
@@ -625,12 +639,19 @@ def test_a_well_formed_play_is_registered_and_stored(engine, registration):
 
 
 def test_a_play_normalises_to_the_researched_fields(registered):
-    for field in ("signal_registration_id", "name", "label", "description", "indicators", "attributes"):
+    for field in (
+        "signal_registration_id",
+        "name",
+        "label",
+        "description",
+        "indicators",
+        "attributes",
+    ):
         assert field in registered, field
 
 
 def test_a_play_is_registered_disabled_and_says_the_researched_note(registered):
-    """"After registration, the registered Play must be enabled in the Salesloft UI"."""
+    """ "After registration, the registered Play must be enabled in the Salesloft UI"."""
     assert registered["enabled"] is False
     assert registered["state"] == "disabled"
     assert registered["enabled_at"] is None
@@ -659,7 +680,7 @@ def test_registration_alone_creates_no_task_at_all(engine, registered, room):
 
 
 def test_a_second_play_on_one_registration_is_allowed(engine, registration):
-    """"An application can create more than one framework per signal registration"."""
+    """ "An application can create more than one framework per signal registration"."""
     first = engine.register(play_payload(), actor="dana", source=SOURCE)["play"]
     second = engine.register(email_play_payload(), actor="dana", source=SOURCE)["play"]
 
@@ -681,7 +702,9 @@ def test_a_play_against_a_registration_that_does_not_exist_is_refused(engine):
 def test_a_play_against_a_registration_in_another_collection_is_refused(engine, room):
     """A room id is not a registration id, and the lookup checks the collection."""
     with pytest.raises(UnknownSignalRegistration):
-        engine.register(play_payload(signal_registration_id=room["id"]), actor="dana", source=SOURCE)
+        engine.register(
+            play_payload(signal_registration_id=room["id"]), actor="dana", source=SOURCE
+        )
 
 
 def test_a_trigger_the_registration_does_not_declare_is_refused(engine, registration):
@@ -787,7 +810,7 @@ def test_the_sourced_attributes_are_the_researched_five():
 
 
 def test_the_unsourced_attribute_is_published_as_unsourced():
-    """"Add Person to a Cadence" has no researched attribute naming a cadence."""
+    """ "Add Person to a Cadence" has no researched attribute naming a cadence."""
     assert UNSOURCED_ATTRIBUTE_KEYS == ("cadence_id",)
     assert "cadence_id" in ALL_ATTRIBUTE_KEYS
     assert "cadence_id" not in ATTRIBUTE_KEYS
@@ -795,9 +818,7 @@ def test_the_unsourced_attribute_is_published_as_unsourced():
 
 def test_a_call_needs_a_task_subject():
     with pytest.raises(FrameworkError) as caught:
-        normalise_framework(
-            play_payload(attributes={"task_type": "call"})
-        )
+        normalise_framework(play_payload(attributes={"task_type": "call"}))
     assert "task_subject" in str(caught.value)
 
 
@@ -805,9 +826,7 @@ def test_an_email_needs_its_own_email_subject_not_a_task_subject():
     """The researched list carries two subjects; each type uses its own."""
     with pytest.raises(FrameworkError) as caught:
         normalise_framework(
-            play_payload(
-                attributes={"task_type": "email", "task_subject": "Call them"}
-            )
+            play_payload(attributes={"task_type": "email", "task_subject": "Call them"})
         )
     assert "email_subject" in str(caught.value)
 
@@ -886,14 +905,18 @@ def test_a_reminder_that_is_not_whole_non_negative_hours_is_refused(value):
 
 def test_a_whole_float_reminder_is_accepted_as_hours():
     data, _ = normalise_framework(
-        play_payload(attributes={"task_type": "call", "task_subject": "Ring", "task_reminder_hours": 4.0})
+        play_payload(
+            attributes={"task_type": "call", "task_subject": "Ring", "task_reminder_hours": 4.0}
+        )
     )
     assert data["attributes"]["task_reminder_hours"] == 4
 
 
 def test_a_zero_reminder_is_accepted():
     data, _ = normalise_framework(
-        play_payload(attributes={"task_type": "call", "task_subject": "Ring", "task_reminder_hours": 0})
+        play_payload(
+            attributes={"task_type": "call", "task_subject": "Ring", "task_reminder_hours": 0}
+        )
     )
     assert data["attributes"]["task_reminder_hours"] == 0
 
@@ -912,7 +935,7 @@ def test_find_dynamic_fields_ignores_a_string_with_no_field():
 
 
 def test_the_supported_dynamic_field_is_name_and_only_name():
-    """"The only exception here is that task_subject supports name"."""
+    """ "The only exception here is that task_subject supports name"."""
     assert SUPPORTED_DYNAMIC_FIELDS == ("name",)
 
 
@@ -932,7 +955,7 @@ def test_task_subject_may_not_carry_any_other_field():
 
 
 def test_email_subject_may_not_carry_a_dynamic_field_at_all():
-    """"Dynamic Fields are not supported outside of email templates"."""
+    """ "Dynamic Fields are not supported outside of email templates"."""
     with pytest.raises(FrameworkError) as caught:
         normalise_framework(
             play_payload(
@@ -1063,9 +1086,13 @@ def test_enabling_a_destroyed_record_is_refused_by_the_activation_rule(store):
     from dsr.plays import activation
 
     with pytest.raises(ActivationError):
-        activation.enable({"deleted_at": "2026-09-27T09:00:00+00:00"}, actor="dana", now=lambda: "now")
+        activation.enable(
+            {"deleted_at": "2026-09-27T09:00:00+00:00"}, actor="dana", now=lambda: "now"
+        )
     with pytest.raises(ActivationError):
-        activation.disable({"deleted_at": "2026-09-27T09:00:00+00:00"}, actor="dana", now=lambda: "now")
+        activation.disable(
+            {"deleted_at": "2026-09-27T09:00:00+00:00"}, actor="dana", now=lambda: "now"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -1081,6 +1108,7 @@ def test_adding_a_locale_is_allowed_and_merges(engine, registered):
         source=SOURCE,
     )
     assert amended["label"] == {"en": "Call engaged buyer", "fr": "Appeler l'acheteur"}
+
 
 def test_adding_a_locale_is_allowed_even_once_the_play_is_live(engine, live, room):
     engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
@@ -1279,26 +1307,34 @@ def test_a_signal_with_no_indicators_matches_nothing():
 
 
 def test_a_matching_signal_fires_an_enabled_play():
-    decisions = match_plays([{"id": "p1", "indicators": ["k"], "enabled": True}], {"indicators": ["k"]})
+    decisions = match_plays(
+        [{"id": "p1", "indicators": ["k"], "enabled": True}], {"indicators": ["k"]}
+    )
     assert decisions[0]["fired"] is True
     assert decisions[0]["reason"] == "matched"
     assert decisions[0]["overlap"] == ["k"]
 
 
 def test_a_disabled_play_does_not_fire_and_says_which_door_it_stopped_at():
-    decisions = match_plays([{"id": "p1", "indicators": ["k"], "enabled": False}], {"indicators": ["k"]})
+    decisions = match_plays(
+        [{"id": "p1", "indicators": ["k"], "enabled": False}], {"indicators": ["k"]}
+    )
     assert decisions[0]["fired"] is False
     assert decisions[0]["reason"] == "not_enabled"
     assert "enabled in the Salesloft UI" in decisions[0]["detail"]
 
 
 def test_a_live_play_with_no_overlap_does_not_fire():
-    decisions = match_plays([{"id": "p1", "indicators": ["k"], "enabled": True}], {"indicators": ["other"]})
+    decisions = match_plays(
+        [{"id": "p1", "indicators": ["k"], "enabled": True}], {"indicators": ["other"]}
+    )
     assert decisions[0]["reason"] == "no_overlap"
 
 
 def test_a_signal_with_no_indicators_does_not_fire_anything():
-    decisions = match_plays([{"id": "p1", "indicators": ["k"], "enabled": True}], {"indicators": []})
+    decisions = match_plays(
+        [{"id": "p1", "indicators": ["k"], "enabled": True}], {"indicators": []}
+    )
     assert decisions[0]["reason"] == "no_indicators"
 
 
@@ -1313,7 +1349,14 @@ def test_a_signal_from_another_registration_does_not_fire_the_play():
 def test_a_signal_naming_no_registration_matches_on_its_type():
     """Without the fallback an inline signal would match nothing at all."""
     decisions = match_plays(
-        [{"id": "p1", "indicators": ["k"], "enabled": True, "signal_registration_id": "document_engagement"}],
+        [
+            {
+                "id": "p1",
+                "indicators": ["k"],
+                "enabled": True,
+                "signal_registration_id": "document_engagement",
+            }
+        ],
         {"indicators": ["k"], "type": "document_engagement"},
     )
     assert decisions[0]["fired"] is True
@@ -1333,7 +1376,13 @@ def test_only_the_indicator_list_participates_in_the_match():
 
 
 def test_every_reason_match_can_return_is_published():
-    for reason in ("matched", "not_enabled", "registration_mismatch", "no_indicators", "no_overlap"):
+    for reason in (
+        "matched",
+        "not_enabled",
+        "registration_mismatch",
+        "no_indicators",
+        "no_overlap",
+    ):
         assert reason in matching_rules.MATCH_REASONS
 
 
@@ -1391,7 +1440,12 @@ def test_account_is_last_and_brings_its_own_rule():
 def test_the_researched_precedence_is_exactly_user_content_person_account():
     from dsr.plays.vocabulary import ASSIGNMENT_OBJECT, ASSIGNMENT_PRECEDENCE
 
-    assert ASSIGNMENT_PRECEDENCE == ("user_guid", "email_tracked_content_id", "person_id", "account_id")
+    assert ASSIGNMENT_PRECEDENCE == (
+        "user_guid",
+        "email_tracked_content_id",
+        "person_id",
+        "account_id",
+    )
     assert [ASSIGNMENT_OBJECT[key] for key in ASSIGNMENT_PRECEDENCE] == [
         "User",
         "Content",
@@ -1488,7 +1542,9 @@ def test_engagement_older_than_the_window_does_not_count():
 
 def test_engagement_inside_the_window_on_its_last_day_counts():
     edge = (NOW - timedelta(days=ENGAGEMENT_WINDOW_DAYS, minutes=-1)).isoformat()
-    candidates = [{"person_id": "per_edge", "engagement_score": 7, "engaged_at": edge, "seller": "dana"}]
+    candidates = [
+        {"person_id": "per_edge", "engagement_score": 7, "engaged_at": edge, "seller": "dana"}
+    ]
     resolved = resolve_assignment({"account_id": "acc_1"}, candidates=candidates, now=NOW)
     assert resolved["person_id"] == "per_edge"
 
@@ -1507,7 +1563,12 @@ def test_an_unscored_candidate_inside_the_window_is_skipped_and_reported():
     """The research names a score and does not publish a formula, so none is invented."""
     candidates = [
         {"person_id": "per_unscored", "engaged_at": ago(60), "seller": "sam"},
-        {"person_id": "per_scored", "engagement_score": 3, "engaged_at": ago(120), "seller": "dana"},
+        {
+            "person_id": "per_scored",
+            "engagement_score": 3,
+            "engaged_at": ago(120),
+            "seller": "dana",
+        },
     ]
     resolved = resolve_assignment({"account_id": "acc_1"}, candidates=candidates, now=NOW)
     assert resolved["person_id"] == "per_scored"
@@ -1515,7 +1576,7 @@ def test_an_unscored_candidate_inside_the_window_is_skipped_and_reported():
 
 
 def test_with_no_engagement_the_last_person_the_account_owner_contacted_wins():
-    """"If there is no engagement, relate the task to the last person whose most
+    """ "If there is no engagement, relate the task to the last person whose most
     recent contact was with the Account Owner"."""
     candidates = [
         {
@@ -1582,7 +1643,9 @@ def test_the_assignment_description_publishes_the_researched_fallback():
 
 
 def test_a_matching_signal_creates_exactly_one_task(engine, live, room):
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
 
     assert result["created_count"] == 1
     task = result["created"][0]
@@ -1592,18 +1655,24 @@ def test_a_matching_signal_creates_exactly_one_task(engine, live, room):
 
 
 def test_the_task_records_that_no_human_was_in_the_loop(engine, live, room):
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert "no human in the loop" in result["created"][0]["room_note"]
     assert result["automation_note"] == AUTOMATION_NOTE
 
 
 def test_the_task_carries_the_renders_researched_subject(engine, live, room):
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert result["created"][0]["subject"] == "Follow up with Priya on the security pack"
 
 
 def test_the_task_keeps_the_unrendered_subject_too(engine, live, room):
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     task = result["created"][0]
     assert task["attributes"]["task_subject"] == "Follow up with {name} on the security pack"
     assert task["subject"] != task["attributes"]["task_subject"]
@@ -1622,7 +1691,9 @@ def test_a_subject_with_no_field_renders_as_it_is():
 
 
 def test_the_task_carries_its_resolved_assignment(engine, live, room):
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     assignment = result["created"][0]["assignment"]
     assert assignment["object"] == "User"
     assert assignment["seller"] == "usr_1042"
@@ -1631,14 +1702,18 @@ def test_the_task_carries_its_resolved_assignment(engine, live, room):
 
 def test_the_reminder_hours_travel_to_the_task(engine, registered, registration, room):
     engine.enable(registered["id"], actor="dana", source=SOURCE)
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert result["created"][0]["reminder_hours"] == 4
 
 
 def test_an_email_play_creates_an_email_task(engine, registration, room):
     play = engine.register(email_play_payload(), actor="dana", source=SOURCE)["play"]
     engine.enable(play["id"], actor="dana", source=SOURCE)
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
 
     task = result["created"][0]
     assert task["task_type"] == "email"
@@ -1649,14 +1724,18 @@ def test_an_email_play_creates_an_email_task(engine, registration, room):
 def test_a_cadence_play_with_no_cadence_creates_an_unroutable_task_and_says_why(
     engine, registration, room
 ):
-    """"Add Person to a Cadence" has nowhere to add anyone, and the task says so."""
+    """ "Add Person to a Cadence" has nowhere to add anyone, and the task says so."""
     play = engine.register(
-        play_payload(attributes={"task_type": "add-to-cadence", "task_subject": "Keep talking to {name}"}),
+        play_payload(
+            attributes={"task_type": "add-to-cadence", "task_subject": "Keep talking to {name}"}
+        ),
         actor="dana",
         source=SOURCE,
     )["play"]
     engine.enable(play["id"], actor="dana", source=SOURCE)
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
 
     task = result["created"][0]
     assert task["routable"] is False
@@ -1677,7 +1756,9 @@ def test_a_cadence_play_with_a_cadence_is_routable(engine, registration, room):
         source=SOURCE,
     )["play"]
     engine.enable(play["id"], actor="dana", source=SOURCE)
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert result["created"][0]["routable"] is True
 
 
@@ -1691,7 +1772,11 @@ def test_a_call_needs_nothing_further():
 
 
 def test_build_task_keeps_the_triggered_indicators():
-    play = {"id": "p1", "label": {"en": "Call"}, "attributes": {"task_type": "call", "task_subject": "Call"}}
+    play = {
+        "id": "p1",
+        "label": {"en": "Call"},
+        "attributes": {"task_type": "call", "task_subject": "Call"},
+    }
     task = build_task(
         play,
         signal_payload(),
@@ -1719,7 +1804,9 @@ def test_a_task_records_only_the_indicator_that_fired_its_own_play(engine, regis
     engine.enable(email["id"], actor="dana", source=SOURCE)
     engine.enable(call["id"], actor="dana", source=SOURCE)
 
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     for task in result["created"]:
         assert task["triggered_by"] == ["spent_more_than_30s_on_site"]
 
@@ -1732,10 +1819,16 @@ def test_a_task_records_only_the_indicator_that_fired_its_own_play(engine, regis
 def test_a_repeated_signal_reports_the_task_that_exists(engine, live, room):
     key = uuid4()
     first = engine.dispatch(
-        {"signal": signal_payload(idempotency_key=key)}, room_id=room["id"], actor="dana", source=SOURCE
+        {"signal": signal_payload(idempotency_key=key)},
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     second = engine.dispatch(
-        {"signal": signal_payload(idempotency_key=key)}, room_id=room["id"], actor="dana", source=SOURCE
+        {"signal": signal_payload(idempotency_key=key)},
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
 
     assert first["created_count"] == 1
@@ -1747,7 +1840,10 @@ def test_a_repeat_leaves_one_row_not_two(engine, live, room):
     key = uuid4()
     for _ in range(3):
         engine.dispatch(
-            {"signal": signal_payload(idempotency_key=key)}, room_id=room["id"], actor="dana", source=SOURCE
+            {"signal": signal_payload(idempotency_key=key)},
+            room_id=room["id"],
+            actor="dana",
+            source=SOURCE,
         )
     assert len(engine.generated_tasks(room_id=room["id"])) == 1
 
@@ -1756,7 +1852,10 @@ def test_the_dropped_repeats_are_counted_on_the_task(engine, live, room):
     key = uuid4()
     for _ in range(4):
         engine.dispatch(
-            {"signal": signal_payload(idempotency_key=key)}, room_id=room["id"], actor="dana", source=SOURCE
+            {"signal": signal_payload(idempotency_key=key)},
+            room_id=room["id"],
+            actor="dana",
+            source=SOURCE,
         )
     assert engine.generated_tasks(room_id=room["id"])[0]["duplicate_attempts"] == 3
 
@@ -1788,13 +1887,17 @@ def test_a_stored_signal_dispatched_twice_is_still_one_off(engine, live, room, s
         "intent_signal", signal_payload(), room_id=room["id"], actor="dana", source=SOURCE
     )
     for _ in range(2):
-        engine.dispatch({"signal_id": stored["id"]}, room_id=room["id"], actor="dana", source=SOURCE)
+        engine.dispatch(
+            {"signal_id": stored["id"]}, room_id=room["id"], actor="dana", source=SOURCE
+        )
     assert len(engine.generated_tasks(room_id=room["id"])) == 1
 
 
 def test_an_unreadable_signal_id_is_refused(engine, live, room):
     with pytest.raises(UnknownSignal):
-        engine.dispatch({"signal_id": "intent_signal_nope"}, room_id=room["id"], actor="dana", source=SOURCE)
+        engine.dispatch(
+            {"signal_id": "intent_signal_nope"}, room_id=room["id"], actor="dana", source=SOURCE
+        )
 
 
 def test_a_dispatch_naming_no_signal_at_all_is_refused(engine, live, room):
@@ -1830,8 +1933,12 @@ def test_a_signal_that_fires_nothing_raises_nothing_and_says_why(engine, live, r
     assert result["decisions"][0]["reason"] == "no_overlap"
 
 
-def test_a_dispatch_against_an_empty_registry_says_the_registry_is_empty(engine, room, registration):
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+def test_a_dispatch_against_an_empty_registry_says_the_registry_is_empty(
+    engine, room, registration
+):
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert result["outcome"] == "no_plays_registered"
     assert result["created_count"] == 0
 
@@ -1842,7 +1949,9 @@ def test_two_plays_on_one_registration_both_fire_one_signal(engine, registration
     engine.enable(call["id"], actor="dana", source=SOURCE)
     engine.enable(email["id"], actor="dana", source=SOURCE)
 
-    result = engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
+    result = engine.dispatch(
+        {"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     assert result["created_count"] == 2
     assert {task["task_type"] for task in result["created"]} == {"call", "email"}
 
@@ -1926,9 +2035,12 @@ def test_the_outcome_events_a_completion_returns_are_addressable(engine, live, r
 
     event = result["events"][0]
     assert event["id"].startswith("play_event_")
-    assert engine.record_attempt(
-        event["id"], {"status_code": 200}, room_id=room["id"], actor="dana", source=SOURCE
-    )["delivered"] is True
+    assert (
+        engine.record_attempt(
+            event["id"], {"status_code": 200}, room_id=room["id"], actor="dana", source=SOURCE
+        )["delivered"]
+        is True
+    )
 
 
 def test_a_cadence_step_records_step_created_and_success_created(engine, registration, room):
@@ -1956,7 +2068,9 @@ def test_the_task_is_not_created_twice_by_completion(engine, live, room):
     engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
     task = engine.generated_tasks(room_id=room["id"])[0]
     engine.complete_task(task["id"], None, room_id=room["id"], actor="dana", source=SOURCE)
-    assert [e["event_type"] for e in engine.outcome_events(room_id=room["id"])].count("task_created") == 1
+    assert [e["event_type"] for e in engine.outcome_events(room_id=room["id"])].count(
+        "task_created"
+    ) == 1
 
 
 def test_completing_twice_writes_nothing(engine, live, room, store):
@@ -1982,7 +2096,9 @@ def test_a_completion_note_must_be_a_string(engine, live, room):
     engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
     task = engine.generated_tasks(room_id=room["id"])[0]
     with pytest.raises(PlayError):
-        engine.complete_task(task["id"], {"note": 7}, room_id=room["id"], actor="dana", source=SOURCE)
+        engine.complete_task(
+            task["id"], {"note": 7}, room_id=room["id"], actor="dana", source=SOURCE
+        )
 
 
 def test_an_event_carries_a_researched_meaning():
@@ -2019,7 +2135,7 @@ def test_three_failures_still_have_one_retry_left():
 
 
 def test_four_failures_is_marked_failed_and_stops():
-    """"retried three additional times ... before being marked as failed"."""
+    """ "retried three additional times ... before being marked as failed"."""
     history = [{"at": ago(0), "ok": False} for _ in range(WEBHOOK_RETRY_ATTEMPTS + 1)]
     state = delivery(history)
     assert state["state"] == "failed"
@@ -2040,9 +2156,9 @@ def test_a_success_after_failures_is_delivered_and_says_so():
 
 
 def test_the_next_attempt_is_fifteen_seconds_after_the_last():
-    assert next_attempt_at(ago(0)) == (NOW + timedelta(seconds=WEBHOOK_RETRY_SPACING_SECONDS)).isoformat(
-        timespec="milliseconds"
-    )
+    assert next_attempt_at(ago(0)) == (
+        NOW + timedelta(seconds=WEBHOOK_RETRY_SPACING_SECONDS)
+    ).isoformat(timespec="milliseconds")
 
 
 def test_a_pending_delivery_is_due_immediately():
@@ -2164,7 +2280,9 @@ def test_an_event_in_another_room_cannot_have_an_attempt_recorded(engine, live, 
     event = engine.outcome_events(room_id=room["id"])[0]
     other = store.create("room", {"name": "Elsewhere"}, actor="dana", source=SOURCE)
     with pytest.raises(PlayError):
-        engine.record_attempt(event["id"], {"ok": True}, room_id=other["id"], actor="dana", source=SOURCE)
+        engine.record_attempt(
+            event["id"], {"ok": True}, room_id=other["id"], actor="dana", source=SOURCE
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -2213,7 +2331,9 @@ def test_an_unknown_subscription_field_is_refused():
 
 
 def test_a_subscription_can_be_removed(engine):
-    created = engine.subscribe({"event_types": ["task_created"]}, actor="dana", source=SOURCE)["subscription"]
+    created = engine.subscribe({"event_types": ["task_created"]}, actor="dana", source=SOURCE)[
+        "subscription"
+    ]
     removed = engine.unsubscribe(created["id"], actor="dana", source=SOURCE)
     assert removed["unsubscribed"] is True
     assert engine.subscriptions() == []
@@ -2271,7 +2391,9 @@ def test_an_unknown_task_type_filter_is_refused(engine):
 
 def test_tasks_can_be_filtered_by_state_and_assignment(engine, live, room):
     engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
-    engine.dispatch({"signal": signal_payload(attribution={})}, room_id=room["id"], actor="dana", source=SOURCE)
+    engine.dispatch(
+        {"signal": signal_payload(attribution={})}, room_id=room["id"], actor="dana", source=SOURCE
+    )
 
     assert len(engine.generated_tasks(room_id=room["id"], state="open")) == 2
     assert len(engine.generated_tasks(room_id=room["id"], assigned=False)) == 1
@@ -2321,8 +2443,13 @@ def test_the_summary_counts_by_task_type_and_by_event_type(engine, registration,
     engine.dispatch({"signal": signal_payload()}, room_id=room["id"], actor="dana", source=SOURCE)
 
     summary = engine.summary(room_id=room["id"])
-    assert {row["task_type"]: row["count"] for row in summary["by_task_type"]} == {"call": 1, "email": 1}
-    assert {row["event_type"]: row["count"] for row in summary["by_event_type"]} == {"task_created": 2}
+    assert {row["task_type"]: row["count"] for row in summary["by_task_type"]} == {
+        "call": 1,
+        "email": 1,
+    }
+    assert {row["event_type"]: row["count"] for row in summary["by_event_type"]} == {
+        "task_created": 2
+    }
 
 
 def test_the_summary_counts_the_unassigned_and_unroutable(engine, registration, room):
@@ -2421,11 +2548,16 @@ def test_a_task_is_audited_against_the_dispatch_route(store, engine, live, room)
     assert entries[0]["source"] == SOURCE
 
 
-def test_the_duplicate_increment_is_audited_as_an_update_against_the_dispatch_route(store, engine, live, room):
+def test_the_duplicate_increment_is_audited_as_an_update_against_the_dispatch_route(
+    store, engine, live, room
+):
     key = uuid4()
     for _ in range(2):
         engine.dispatch(
-            {"signal": signal_payload(idempotency_key=key)}, room_id=room["id"], actor="dana", source=SOURCE
+            {"signal": signal_payload(idempotency_key=key)},
+            room_id=room["id"],
+            actor="dana",
+            source=SOURCE,
         )
     entries = store.audit(collection="play_task")
     assert [entry["action"] for entry in entries] == ["update", "insert"]
@@ -2433,7 +2565,9 @@ def test_the_duplicate_increment_is_audited_as_an_update_against_the_dispatch_ro
 
 
 def test_enabling_is_audited_to_the_enable_route(store, engine, registered):
-    engine.enable(registered["id"], actor="dana", source="POST /api/wf-028/play-frameworks/{play_id}/enable")
+    engine.enable(
+        registered["id"], actor="dana", source="POST /api/wf-028/play-frameworks/{play_id}/enable"
+    )
     entry = store.audit(collection="play_framework")[0]
     assert entry["action"] == "update"
     assert entry["source"] == "POST /api/wf-028/play-frameworks/{play_id}/enable"
@@ -2455,7 +2589,9 @@ def test_a_write_audits_the_route_template_not_one_requests_url(http, http_regis
 
     sources = {
         entry["source"]
-        for entry in http.get("/api/audit", params={"collection": "play_framework"}).json()["entries"]
+        for entry in http.get("/api/audit", params={"collection": "play_framework"}).json()[
+            "entries"
+        ]
     }
     assert sources == {
         f"POST {PREFIX}/play-frameworks",
@@ -2506,7 +2642,9 @@ def test_every_write_method_demands_a_source():
     ):
         method = getattr(PlayEngine, name)
         assert "source" in inspect.signature(method).parameters, name
-        assert inspect.signature(method).parameters["source"].default is inspect.Parameter.empty, name
+        assert inspect.signature(method).parameters["source"].default is inspect.Parameter.empty, (
+            name
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -2558,7 +2696,8 @@ def test_registering_over_http_returns_201_and_a_disabled_play(http, http_regist
 
 def test_a_registration_against_nothing_is_409_over_http(http):
     response = http.post(
-        f"{PREFIX}/play-frameworks", json=play_payload(signal_registration_id="signal_registration_nope")
+        f"{PREFIX}/play-frameworks",
+        json=play_payload(signal_registration_id="signal_registration_nope"),
     )
     assert response.status_code == 409
     assert response.json()["error"] == "signal_registration_not_found"
@@ -2605,7 +2744,9 @@ def test_reading_an_unknown_play_is_404_over_http(http):
 
 
 def test_enabling_over_http_returns_the_actor_and_the_stamp(http, http_play):
-    response = http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
+    response = http.post(
+        f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"}
+    )
     body = response.json()
     assert response.status_code == 200
     assert body["outcome"] == "enabled"
@@ -2615,7 +2756,9 @@ def test_enabling_over_http_returns_the_actor_and_the_stamp(http, http_play):
 
 def test_enabling_twice_over_http_is_a_no_op(http, http_play):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
-    response = http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
+    response = http.post(
+        f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"}
+    )
     assert response.json()["outcome"] == "already_enabled"
 
 
@@ -2629,6 +2772,7 @@ def test_amending_a_label_over_http_adds_a_locale(http, http_play):
     )
     assert response.status_code == 200
     assert response.json()["label"]["fr"] == "Appeler"
+
 
 def test_amending_to_activation_is_409_over_http(http, http_play):
     response = http.patch(f"{PREFIX}/play-frameworks/{http_play['id']}", json={"enabled": True})
@@ -2659,7 +2803,9 @@ def test_a_dispatch_over_http_creates_a_task(http, http_registration, http_room,
     assert body["created"][0]["task_type"] == "call"
 
 
-def test_a_dispatch_on_a_disabled_play_creates_nothing_over_http(http, http_registration, http_room, http_play):
+def test_a_dispatch_on_a_disabled_play_creates_nothing_over_http(
+    http, http_registration, http_room, http_play
+):
     response = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
         json={"signal": signal_payload(registration_id=http_registration["id"])},
@@ -2675,13 +2821,13 @@ def test_a_dispatch_with_an_unreadable_signal_is_409_over_http(http, http_room):
 
 
 def test_a_dispatch_naming_nothing_is_400_over_http(http, http_room):
-    response = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/dispatch", json={}
-    )
+    response = http.post(f"{PREFIX}/rooms/{http_room['id']}/dispatch", json={})
     assert response.status_code == 400
 
 
-def test_listing_tasks_over_http_reports_unassigned_and_unroutable(http, http_registration, http_room, http_play):
+def test_listing_tasks_over_http_reports_unassigned_and_unroutable(
+    http, http_registration, http_room, http_play
+):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2704,7 +2850,9 @@ def test_reading_a_task_carries_its_events_over_http(http, http_registration, ht
     assert [event["event_type"] for event in body["events"]] == ["task_created"]
 
 
-def test_reading_a_task_of_another_room_is_404_over_http(http, http_room, http_registration, http_play):
+def test_reading_a_task_of_another_room_is_404_over_http(
+    http, http_room, http_registration, http_play
+):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     dispatched = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2717,7 +2865,9 @@ def test_reading_a_task_of_another_room_is_404_over_http(http, http_room, http_r
     )
 
 
-def test_completing_a_task_over_http_records_the_outcome(http, http_registration, http_room, http_play):
+def test_completing_a_task_over_http_records_the_outcome(
+    http, http_registration, http_room, http_play
+):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     dispatched = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2740,7 +2890,9 @@ def test_completing_an_unknown_task_over_http_is_404(http, http_room):
     assert response.status_code == 404
 
 
-def test_listing_events_over_http_counts_the_failing_ones(http, http_registration, http_room, http_play):
+def test_listing_events_over_http_counts_the_failing_ones(
+    http, http_registration, http_room, http_play
+):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2761,13 +2913,16 @@ def test_recording_a_delivery_over_http_answers_201(http, http_registration, htt
     event = http.get(f"{PREFIX}/rooms/{http_room['id']}/events").json()["events"][0]
 
     response = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries", json={"status_code": 200}
+        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries",
+        json={"status_code": 200},
     )
     assert response.status_code == 201
     assert response.json()["event"]["state"] == "delivered"
 
 
-def test_a_delivery_route_refuses_an_attempt_with_no_outcome(http, http_registration, http_room, http_play):
+def test_a_delivery_route_refuses_an_attempt_with_no_outcome(
+    http, http_registration, http_room, http_play
+):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2790,12 +2945,14 @@ def test_a_delivery_route_refuses_a_retry_on_a_finished_delivery(
     )
     event = http.get(f"{PREFIX}/rooms/{http_room['id']}/events").json()["events"][0]
     first = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries", json={"status_code": 200}
+        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries",
+        json={"status_code": 200},
     )
     assert first.status_code == 201
 
     response = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries", json={"status_code": 503}
+        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries",
+        json={"status_code": 503},
     )
     assert response.status_code == 409
     assert "no further attempts" in response.json()["detail"]
@@ -2812,10 +2969,12 @@ def test_a_delivery_route_refuses_an_early_retry_over_http(
     )
     event = http.get(f"{PREFIX}/rooms/{http_room['id']}/events").json()["events"][0]
     http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries", json={"status_code": 503}
+        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries",
+        json={"status_code": 503},
     )
     response = http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries", json={"status_code": 503}
+        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries",
+        json={"status_code": 503},
     )
     assert response.status_code == 409
     assert "not due until" in response.json()["detail"]
@@ -2853,12 +3012,8 @@ def test_the_room_summary_route_serves_the_automation_note(http, http_room):
 
 
 def test_the_registry_route_accepts_a_where_style_filter(http, http_registration, http_play):
-    assert http.get(
-        f"{PREFIX}/play-frameworks", params={"task_type": "call"}
-    ).json()["count"] == 1
-    assert http.get(
-        f"{PREFIX}/play-frameworks", params={"task_type": "email"}
-    ).json()["count"] == 0
+    assert http.get(f"{PREFIX}/play-frameworks", params={"task_type": "call"}).json()["count"] == 1
+    assert http.get(f"{PREFIX}/play-frameworks", params={"task_type": "email"}).json()["count"] == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -2882,7 +3037,7 @@ def _matches_registered_route(source: str, served: list[dict[str, Any]]) -> bool
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -2932,7 +3087,9 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http, http_room):
         )
 
 
-def test_the_completion_route_audits_under_its_own_route(http, http_registration, http_room, http_play):
+def test_the_completion_route_audits_under_its_own_route(
+    http, http_registration, http_room, http_play
+):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     dispatched = http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2946,7 +3103,9 @@ def test_the_completion_route_audits_under_its_own_route(http, http_registration
     assert entries[0]["source"] == f"POST {PREFIX}/rooms/{{room_id}}/tasks/{{task_id}}/complete"
 
 
-def test_the_delivery_route_audits_under_its_own_route(http, http_registration, http_room, http_play):
+def test_the_delivery_route_audits_under_its_own_route(
+    http, http_registration, http_room, http_play
+):
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2954,13 +3113,16 @@ def test_the_delivery_route_audits_under_its_own_route(http, http_registration, 
     )
     event = http.get(f"{PREFIX}/rooms/{http_room['id']}/events").json()["events"][0]
     http.post(
-        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries", json={"status_code": 200}
+        f"{PREFIX}/rooms/{http_room['id']}/events/{event['id']}/deliveries",
+        json={"status_code": 200},
     )
     entries = http.get("/api/audit", params={"collection": "play_event"}).json()["entries"]
     assert entries[0]["source"].endswith("/deliveries")
 
 
-def test_writes_do_not_record_a_path_this_app_does_not_serve(http, http_registration, http_room, http_play):
+def test_writes_do_not_record_a_path_this_app_does_not_serve(
+    http, http_registration, http_room, http_play
+):
     """Explicitly: no hardcoded URL, and no salesloft.com path in the audit log.
 
     The second half matters because the researched API is
@@ -2969,7 +3131,10 @@ def test_writes_do_not_record_a_path_this_app_does_not_serve(http, http_registra
     audit row naming the vendor's URL would tell a reviewer a request went
     somewhere this app never sends one.
     """
-    http.post(f"{PREFIX}/play-frameworks", json=play_payload(signal_registration_id=http_registration["id"]))
+    http.post(
+        f"{PREFIX}/play-frameworks",
+        json=play_payload(signal_registration_id=http_registration["id"]),
+    )
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -2984,8 +3149,13 @@ def test_writes_do_not_record_a_path_this_app_does_not_serve(http, http_registra
             assert source.split(" ")[0] in {"POST", "PATCH", "DELETE", "PUT"}
 
 
-def test_the_audit_row_carries_the_actor_the_route_was_given(http, http_registration, http_room, http_play):
-    http.post(f"{PREFIX}/play-frameworks", json=play_payload(signal_registration_id=http_registration["id"]))
+def test_the_audit_row_carries_the_actor_the_route_was_given(
+    http, http_registration, http_room, http_play
+):
+    http.post(
+        f"{PREFIX}/play-frameworks",
+        json=play_payload(signal_registration_id=http_registration["id"]),
+    )
     http.post(f"{PREFIX}/play-frameworks/{http_play['id']}/enable", params={"actor": "dana"})
     http.post(
         f"{PREFIX}/rooms/{http_room['id']}/dispatch",
@@ -3015,7 +3185,9 @@ def test_the_seed_runs_and_reports_what_it_added(store, tmp_path):
 def test_the_seed_leaves_one_play_registered_and_not_enabled(store):
     """The activation sentence is the workflow's most important line; the demo shows it."""
     room = store.create("room", ROOM, actor="seed", source="seed")
-    load_feature(MODULE).seed(store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None})
+    load_feature(MODULE).seed(
+        store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None}
+    )
 
     engine = PlayEngine(store)
     assert engine.summary(room_id=room["id"])["registered_not_enabled"] == 1
@@ -3024,7 +3196,9 @@ def test_the_seed_leaves_one_play_registered_and_not_enabled(store):
 
 def test_the_seed_produces_the_states_that_are_not_all_successes(store):
     room = store.create("room", ROOM, actor="seed", source="seed")
-    load_feature(MODULE).seed(store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None})
+    load_feature(MODULE).seed(
+        store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None}
+    )
 
     engine = PlayEngine(store)
     generated = engine.generated_tasks(limit=200)
@@ -3037,7 +3211,9 @@ def test_the_seed_produces_the_states_that_are_not_all_successes(store):
 
 def test_the_seed_produces_a_delivery_that_failed_and_one_that_recovered(store):
     room = store.create("room", ROOM, actor="seed", source="seed")
-    load_feature(MODULE).seed(store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None})
+    load_feature(MODULE).seed(
+        store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None}
+    )
 
     engine = PlayEngine(store)
     recorded = engine.outcome_events(limit=200)
@@ -3062,7 +3238,11 @@ def test_the_seed_is_deterministic(tmp_path):
             room = store.create("room", ROOM, actor="seed", source="seed")
             module.seed(
                 store.db,
-                {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": _random.Random("wf028")},
+                {
+                    "room_ids": [(room["id"], "Northwind")],
+                    "now": NOW,
+                    "rng": _random.Random("wf028"),
+                },
             )
             engine = PlayEngine(store)
             # The signal key, the type, the subject and the state - the parts the
@@ -3101,7 +3281,9 @@ def test_the_seed_writes_only_through_the_audited_store(store):
     and a source outside this set is the visible sign of that.
     """
     room = store.create("room", ROOM, actor="seed", source="seed")
-    load_feature(MODULE).seed(store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None})
+    load_feature(MODULE).seed(
+        store.db, {"room_ids": [(room["id"], "Northwind")], "now": NOW, "rng": None}
+    )
 
     sources = {entry["source"] for entry in store.audit(limit=1000)}
     assert sources <= {"seed"}, f"the seed wrote outside the store's own paths: {sorted(sources)}"

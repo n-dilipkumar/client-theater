@@ -58,7 +58,8 @@ KEY_FILE = Path(
 )
 BRIDGE_SCRIPT = Path(
     os.environ.get(
-        "JEV_BRIDGE_SCRIPT", Path(os.environ.get("USERPROFILE", Path.home())) / "jev-bridge" / "server.mjs"
+        "JEV_BRIDGE_SCRIPT",
+        Path(os.environ.get("USERPROFILE", Path.home())) / "jev-bridge" / "server.mjs",
     )
 )
 AUDIT_LOG = Path(
@@ -75,7 +76,10 @@ DEFAULT_MODEL = os.environ.get("JEV_MODEL", "jev-latest")
 OVERRIDE_LOG = Path(
     os.environ.get(
         "JEV_OVERRIDE_LOG",
-        Path(__file__).resolve().parent.parent / "orchestration" / "decisions" / "human-overrides.jsonl",
+        Path(__file__).resolve().parent.parent
+        / "orchestration"
+        / "decisions"
+        / "human-overrides.jsonl",
     )
 )
 
@@ -189,8 +193,13 @@ class Decision:
             lines.append(f"selected : {self.selected}")
         for answer in self.answers.values():
             conf = "-" if answer.confidence is None else f"{answer.confidence:.2f}"
-            probs = ", ".join(f"{k}={v:.2f}" for k, v in sorted(answer.probabilities.items(), key=lambda kv: -kv[1]))
-            lines.append(f"  - {answer.name} [{answer.type}] value={answer.value} confidence={conf}")
+            probs = ", ".join(
+                f"{k}={v:.2f}"
+                for k, v in sorted(answer.probabilities.items(), key=lambda kv: -kv[1])
+            )
+            lines.append(
+                f"  - {answer.name} [{answer.type}] value={answer.value} confidence={conf}"
+            )
             if probs:
                 lines.append(f"      {probs}")
         lines.append(f"audit_id : {self.audit_id}")
@@ -222,7 +231,6 @@ class Decision:
                 for name, a in self.answers.items()
             },
         }
-
 
 
 # --------------------------------------------------------------------------- #
@@ -346,7 +354,9 @@ class Jev:
 
     # -- public API --------------------------------------------------------- #
 
-    def ask(self, state: Any, questions: dict[str, Any], model: str | None = None) -> dict[str, Answer]:
+    def ask(
+        self, state: Any, questions: dict[str, Any], model: str | None = None
+    ) -> dict[str, Answer]:
         """Ask typed questions and return normalised answers.
 
         No auditing or gating: use :meth:`decide` for anything that gates work.
@@ -415,7 +425,11 @@ class Jev:
             passed=passed,
             threshold=threshold,
             reason=reason,
-            usage={k: int(v) for k, v in (result.get("usage") or {}).items() if isinstance(v, (int, float))},
+            usage={
+                k: int(v)
+                for k, v in (result.get("usage") or {}).items()
+                if isinstance(v, (int, float))
+            },
             latency_ms=latency_ms,
             audit_id="",
             selected=selected,
@@ -441,7 +455,12 @@ class Jev:
         if mode == "confidence":
             selected = gate.value if gate.type == "choice" else None
             if gate.type != "choice":
-                return "fail", False, f"gate must be a choice for confidence gating, got {gate.type!r}", None
+                return (
+                    "fail",
+                    False,
+                    f"gate must be a choice for confidence gating, got {gate.type!r}",
+                    None,
+                )
             spread = sorted(gate.probabilities.values(), reverse=True)
             margin = spread[0] - spread[1] if len(spread) > 1 else 1.0
             if confidence >= threshold:
@@ -489,7 +508,6 @@ class Jev:
         if probability >= threshold:
             return "pass", True, f"probability {probability:.2f} >= {threshold:.2f}", None
         return "fail", False, f"probability {probability:.2f} < {threshold:.2f}", None
-
 
     def _audit(self, record: Decision) -> str:
         """Append the decision to the JSONL audit log and return its id."""
@@ -812,7 +830,9 @@ class Jev:
 def _main(argv: list[str]) -> int:
     import argparse
 
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     ask = sub.add_parser("ask", help="ask ad-hoc typed questions from a JSON file")
@@ -838,7 +858,9 @@ def _main(argv: list[str]) -> int:
         help="gate a landing with the pinned question set (ADR-0003)",
     )
     bar.add_argument("ticket", help="e.g. WF-033")
-    bar.add_argument("payload", type=Path, help="JSON: {change_summary, measurements?, unverified?}")
+    bar.add_argument(
+        "payload", type=Path, help="JSON: {change_summary, measurements?, unverified?}"
+    )
     bar.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
     bar.add_argument("--transport", default="bridge", choices=("bridge", "direct"))
     bar.add_argument("--model", default=DEFAULT_MODEL)
@@ -935,9 +957,26 @@ OVERRIDE_FIELDS = ("ticket", "unmet_criteria", "rationale", "closes", "decided_b
 # Words that name a program rather than a person. The party that wants the
 # change landed is never the party that clears it.
 _AGENT_MARKERS = {
-    "agent", "assistant", "bot", "orchestrator", "ai", "llm", "model",
-    "automation", "script", "ci", "system", "copilot", "cursor", "codex",
-    "commandcode", "command code", "claude", "chatgpt", "gpt", "opencode",
+    "agent",
+    "assistant",
+    "bot",
+    "orchestrator",
+    "ai",
+    "llm",
+    "model",
+    "automation",
+    "script",
+    "ci",
+    "system",
+    "copilot",
+    "cursor",
+    "codex",
+    "commandcode",
+    "command code",
+    "claude",
+    "chatgpt",
+    "gpt",
+    "opencode",
 }
 
 

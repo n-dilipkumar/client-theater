@@ -59,8 +59,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -103,11 +101,11 @@ from dsr.headless_booking import (
     format_slot,
     generate_token,
     host_calendar_key,
+    inferences as headless_inferences,
     mask_token,
     meeting_link,
     normalise_asset,
     normalise_credential,
-    open_session,
     parse_calendar_block,
     parse_instant,
     parse_interval,
@@ -122,7 +120,6 @@ from dsr.headless_booking import (
     tool_for,
     verify_token,
 )
-from dsr.headless_booking import inferences as headless_inferences
 from dsr.headless_booking.availability import _floor_to_grid
 from dsr.headless_booking.engine import (
     ASSET_COLLECTION,
@@ -135,6 +132,7 @@ from dsr.headless_booking.engine import (
     WEBHOOK_COLLECTION,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -271,7 +269,10 @@ def first_slot(session):
 
 
 def book_first(engine, room_id, session, **overrides):
-    payload = {"startTime": first_slot(session), "guest": {"guestEmail": "buyer@example.com"}} | overrides
+    payload = {
+        "startTime": first_slot(session),
+        "guest": {"guestEmail": "buyer@example.com"},
+    } | overrides
     return engine.book(room_id, session["routeId"], payload, actor="dana", source=BOOK_SOURCE)
 
 
@@ -337,9 +338,11 @@ def source_names_a_mounted_route(source, routes):
         if mounted_method != method:
             continue
         parts = re.split(r"(\{[^}]+\})", template)
-        pattern = "^" + "".join(
-            r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts
-        ) + "$"
+        pattern = (
+            "^"
+            + "".join(r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts)
+            + "$"
+        )
         if re.match(pattern, path):
             return True
     return False
@@ -445,7 +448,7 @@ def test_no_domain_module_imports_the_shared_app():
 
 
 def test_the_three_sections_are_the_ones_the_research_names():
-    """"choosing the Schedule permission for the relevant section (Concierge /
+    """ "choosing the Schedule permission for the relevant section (Concierge /
     Scheduling-links / Handoff)" - three surfaces, and the permission is per one."""
     assert SECTIONS == ("concierge", "links", "handoff")
 
@@ -499,7 +502,7 @@ def test_every_mcp_tool_is_named_in_the_research():
 
 
 def test_the_discovery_tools_are_the_ones_the_research_lists():
-    """"workspace-list, user-find, scheduling-link-list-round-robin|ownership|
+    """ "workspace-list, user-find, scheduling-link-list-round-robin|ownership|
     group|admin-one-on-one." """
     assert DISCOVERY_TOOLS["handoff"] == ("workspace-list", "user-find")
     assert DISCOVERY_TOOLS["links"] == (
@@ -523,37 +526,37 @@ def test_personal_is_a_link_type_with_no_discovery_tool():
 
 
 def test_the_five_link_types_are_the_ones_the_research_names():
-    """"Scheduling Links (types: Personal / Admin (one-on-one) / Round Robin /
+    """ "Scheduling Links (types: Personal / Admin (one-on-one) / Round Robin /
     Group / Ownership)" """
     assert LINK_TYPES == ("personal", "round_robin", "group", "ownership", "admin_one_on_one")
 
 
 def test_the_three_meeting_providers_are_the_ones_data_sources_names():
-    """"Zoom/GMeet/Gong providers for the meeting link." """
+    """ "Zoom/GMeet/Gong providers for the meeting link." """
     assert MEETING_PROVIDERS == ("zoom", "gmeet", "gong")
 
 
 def test_the_two_permissions_are_schedule_and_read():
-    """"choosing the Schedule permission for the relevant section ... plus Read
+    """ "choosing the Schedule permission for the relevant section ... plus Read
     where listing assets is needed" """
     assert PERMISSIONS == ("schedule", "read")
 
 
 def test_only_an_admin_may_generate_a_token():
-    """"Only users with the Admin role can generate API tokens in Command
+    """ "Only users with the Admin role can generate API tokens in Command
     Center. Workspace Managers do not have access to the credentials page." """
     assert TOKEN_GENERATOR_ROLES == ("admin",)
     assert "workspace_manager" in TOKEN_GENERATOR_REFUSED_ROLES
 
 
 def test_the_webhook_is_the_for_new_meeting_created_event():
-    """"Bookings immediately emit the For New Meeting webhook." """
+    """ "Bookings immediately emit the For New Meeting webhook." """
     assert WEBHOOK_NAME == "For New Meeting"
     assert WEBHOOK_EVENT == "Created"
 
 
 def test_the_two_calls_are_published_with_their_quotes():
-    """"1. Discover or route ... 2. Book ..." """
+    """ "1. Discover or route ... 2. Book ..." """
     assert [entry["id"] for entry in CALLS] == ["discover_or_route", "book"]
     for entry in CALLS:
         assert entry["sourced"]
@@ -561,7 +564,7 @@ def test_the_two_calls_are_published_with_their_quotes():
 
 
 def test_on_book_carries_both_documented_consequences():
-    """"Calendar invites are sent immediately" and the webhook emission."""
+    """ "Calendar invites are sent immediately" and the webhook emission."""
     assert "Calendar invites are sent immediately" in ON_BOOK
     assert "For New Meeting" in ON_BOOK
 
@@ -684,7 +687,7 @@ def test_an_empty_instant_is_refused_by_name():
 
 
 def test_the_wire_format_is_utc_with_seconds_and_a_z():
-    """"The startTime in responses is ISO-8601 UTC" - the string is the rule."""
+    """ "The startTime in responses is ISO-8601 UTC" - the string is the rule."""
     assert format_slot(datetime(2026, 10, 2, 9, 0, tzinfo=timezone.utc)) == "2026-10-02T09:00:00Z"
 
 
@@ -717,7 +720,7 @@ def test_the_same_slot_parses_back_to_the_same_instant():
 
 
 def test_the_interval_is_what_makes_this_a_booking():
-    """"the difference is whether you pass an interval" - without one there are
+    """ "the difference is whether you pass an interval" - without one there are
     no slots, so the field is required rather than ignored."""
     with pytest.raises(HeadlessBookingError) as caught:
         parse_interval(None)
@@ -892,15 +895,18 @@ def test_a_meeting_ending_exactly_when_a_block_starts_is_not_a_conflict():
     )
     # 09:00-09:30 ends exactly when the block starts: no overlap.
     assert not block.overlaps(
-        datetime(2026, 10, 5, 9, 0, tzinfo=timezone.utc), datetime(2026, 10, 5, 9, 30, tzinfo=timezone.utc)
+        datetime(2026, 10, 5, 9, 0, tzinfo=timezone.utc),
+        datetime(2026, 10, 5, 9, 30, tzinfo=timezone.utc),
     )
     # 09:15-09:45 straddles it: overlap.
     assert block.overlaps(
-        datetime(2026, 10, 5, 9, 15, tzinfo=timezone.utc), datetime(2026, 10, 5, 9, 45, tzinfo=timezone.utc)
+        datetime(2026, 10, 5, 9, 15, tzinfo=timezone.utc),
+        datetime(2026, 10, 5, 9, 45, tzinfo=timezone.utc),
     )
     # 10:00-10:30 starts exactly when the block ends: no overlap.
     assert not block.overlaps(
-        datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc), datetime(2026, 10, 5, 10, 30, tzinfo=timezone.utc)
+        datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc),
+        datetime(2026, 10, 5, 10, 30, tzinfo=timezone.utc),
     )
 
 
@@ -989,7 +995,12 @@ def test_a_finer_grid_double_booking_is_refused_at_the_book_call(engine, room, s
     """The guard that replaced the configuration refusal, and the researched
     reason it produces."""
     asset = concierge_asset(
-        engine, room["id"], duration_minutes=45, slot_minutes=30, work_start_hour=9, work_end_hour=12
+        engine,
+        room["id"],
+        duration_minutes=45,
+        slot_minutes=30,
+        work_start_hour=9,
+        work_end_hour=12,
     )
     session = discover(engine, room["id"], asset)
     offered = session["schedulingData"][0]["startTimes"]
@@ -1026,7 +1037,7 @@ def test_a_slot_grid_defaults_to_the_meeting_length_so_starts_cannot_overlap(eng
     session = discover(engine, room["id"], asset)
     offered = session["schedulingData"][0]["startTimes"]
     starts = [parse_instant(value, field="t") for value in offered]
-    gaps = [(b - a).total_seconds() / 60 for a, b in zip(starts, starts[1:])]
+    gaps = [(b - a).total_seconds() / 60 for a, b in zip(starts, starts[1:], strict=False)]
     assert gaps
     assert min(gaps) == 45
     assert all(gap % 45 == 0 for gap in gaps)
@@ -1122,9 +1133,7 @@ def test_a_calendar_block_with_no_end_is_refused():
 
 def test_a_backwards_calendar_block_is_refused():
     with pytest.raises(HeadlessBookingError):
-        parse_calendar_block(
-            {"startsAt": "2026-10-05T11:00:00Z", "endsAt": "2026-10-05T10:00:00Z"}
-        )
+        parse_calendar_block({"startsAt": "2026-10-05T11:00:00Z", "endsAt": "2026-10-05T10:00:00Z"})
 
 
 def test_a_calendar_block_must_be_an_object():
@@ -1169,7 +1178,7 @@ def test_a_scheduling_link_is_identified_by_its_id_and_type():
 
 
 def test_an_ownership_link_records_that_it_requires_a_guest_email():
-    """"For Ownership links, also pass guestEmail in the init call." """
+    """ "For Ownership links, also pass guestEmail in the init call." """
     spec = normalise_asset(
         {
             "name": "x",
@@ -1184,7 +1193,13 @@ def test_an_ownership_link_records_that_it_requires_a_guest_email():
 
 def test_a_non_ownership_link_does_not_require_a_guest_email():
     spec = normalise_asset(
-        {"name": "x", "section": "links", "link_id": "l", "link_type": "personal", "host_email": "a@example.com"}
+        {
+            "name": "x",
+            "section": "links",
+            "link_id": "l",
+            "link_type": "personal",
+            "host_email": "a@example.com",
+        }
     )
     assert spec["requires_guest_email"] is False
 
@@ -1225,7 +1240,13 @@ def test_a_handoff_asset_needs_at_least_one_path():
     """The init response *is* a list of path results; an empty one cannot render."""
     with pytest.raises(HeadlessBookingError) as caught:
         normalise_asset(
-            {"name": "x", "section": "handoff", "workspace_id": "ws", "booker_id": "u", "host_email": "a@example.com"}
+            {
+                "name": "x",
+                "section": "handoff",
+                "workspace_id": "ws",
+                "booker_id": "u",
+                "host_email": "a@example.com",
+            }
         )
     assert "at least one path" in str(caught.value)
 
@@ -1267,7 +1288,13 @@ def test_a_path_needs_a_host_because_availability_is_its_own_calendar():
 def test_a_path_may_not_be_declared_without_a_name():
     with pytest.raises(HeadlessBookingError):
         normalise_asset(
-            {"name": "x", "section": "handoff", "workspace_id": "ws", "booker_id": "u", "host_email": "a@example.com"}
+            {
+                "name": "x",
+                "section": "handoff",
+                "workspace_id": "ws",
+                "booker_id": "u",
+                "host_email": "a@example.com",
+            }
         )
 
 
@@ -1393,9 +1420,7 @@ def test_patching_an_asset_revalidates_the_merged_result(engine, room):
     """A patch cannot leave an asset that violates a configuration rule."""
     asset = concierge_asset(engine, room["id"])
     with pytest.raises(HeadlessBookingError) as caught:
-        engine.update_asset(
-            asset["id"], {"work_start_hour": 17, "work_end_hour": 9}, source=SOURCE
-        )
+        engine.update_asset(asset["id"], {"work_start_hour": 17, "work_end_hour": 9}, source=SOURCE)
     assert "must be before" in str(caught.value)
 
 
@@ -1414,7 +1439,7 @@ def test_patching_an_asset_changes_only_what_was_asked(engine, room):
 
 
 def test_a_disabled_asset_refuses_rather_than_offering_slots(engine, room, store):
-    """"A bookable asset that is switched off must refuse rather than quietly
+    """ "A bookable asset that is switched off must refuse rather than quietly
     offer slots nothing will honour." """
     asset = concierge_asset(engine, room["id"], enabled=False)
     with pytest.raises(Refusal) as caught:
@@ -1454,12 +1479,12 @@ def test_a_masked_hint_shows_a_prefix_and_the_last_four():
     assert hint["token_last4"] == token[-4:]
 
 
-def test_only_an_admin_may_generate_a_token():
+def test_the_role_guard_admits_an_admin():
     assert require_generator_role("admin") == "admin"
 
 
 def test_a_workspace_manager_is_refused_with_the_researchs_sentence():
-    """"Workspace Managers do not have access to the credentials page." """
+    """ "Workspace Managers do not have access to the credentials page." """
     with pytest.raises(PermissionDenied) as caught:
         require_generator_role("workspace_manager")
     assert "Workspace Managers do not have access" in str(caught.value)
@@ -1515,7 +1540,7 @@ def test_an_empty_scope_is_allowed_because_the_research_does_not_forbid_it():
 
 
 def test_schedule_is_granted_only_for_the_sections_the_token_is_scoped_to():
-    """"the Schedule permission for the relevant section" - per section."""
+    """ "the Schedule permission for the relevant section" - per section."""
     spec = {"sections": ["links"], "permissions": ["schedule", "read"], "enabled": True}
     assert require_scope(spec, "links", "schedule") == "links"
     with pytest.raises(PermissionDenied) as caught:
@@ -1542,7 +1567,9 @@ def test_a_read_permission_is_what_gates_listing():
 def test_a_disabled_credential_authorises_nothing():
     with pytest.raises(PermissionDenied) as caught:
         require_scope(
-            {"sections": ["links"], "permissions": ["schedule"], "enabled": False}, "links", "schedule"
+            {"sections": ["links"], "permissions": ["schedule"], "enabled": False},
+            "links",
+            "schedule",
         )
     assert "disabled" in str(caught.value)
 
@@ -1855,14 +1882,14 @@ def test_each_surface_has_a_default_ttl():
 
 
 def test_concierge_accepts_a_caller_settable_ttl():
-    """"timeoutInMS for Concierge, per-router-path" """
+    """ "timeoutInMS for Concierge, per-router-path" """
     resolved, source = resolve_timeout("concierge", 120_000, NOW)
     assert resolved == 120_000
     assert source == "caller"
 
 
 def test_links_and_handoff_use_a_server_side_ttl():
-    """"server-side TTL for links/handoff" """
+    """ "server-side TTL for links/handoff" """
     for section in ("links", "handoff"):
         resolved, source = resolve_timeout(section, None, NOW)
         assert resolved == DEFAULT_TTL_MS[section]
@@ -1888,7 +1915,7 @@ def test_a_non_numeric_ttl_is_refused():
         resolve_timeout("concierge", "soon", NOW)
 
 
-def test_an_unknown_section_is_refused_by_name():
+def test_resolve_timeout_names_the_section_it_could_not_resolve():
     with pytest.raises(HeadlessBookingError) as caught:
         resolve_timeout("chat", None, NOW)
     assert "chat" in str(caught.value)
@@ -1917,7 +1944,7 @@ def test_the_stored_records_id_is_the_route_id(engine, room, store):
 
 
 def test_the_scheduled_times_live_under_scheduling_data(engine, room):
-    """"returns a routeId and a list of startTimes under schedulingData" """
+    """ "returns a routeId and a list of startTimes under schedulingData" """
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     assert "schedulingData" in session
@@ -1933,7 +1960,7 @@ def test_a_discovered_session_is_open_and_says_how_to_use_itself(engine, room):
 
 
 def test_discover_returns_the_researched_custom_api_instructions(engine, room):
-    """"Copy for URL + starter body and a Share Instructions button" """
+    """ "Copy for URL + starter body and a Share Instructions button" """
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     steps = session["instructions"]
@@ -1991,7 +2018,11 @@ def test_discover_needs_an_interval(engine, room):
     with pytest.raises(HeadlessBookingError) as caught:
         engine.discover(
             room["id"],
-            {"section": "concierge", "asset_id": asset["id"], "guest": {"guestEmail": "a@b.example"}},
+            {
+                "section": "concierge",
+                "asset_id": asset["id"],
+                "guest": {"guestEmail": "a@b.example"},
+            },
             source=SOURCE,
         )
     assert "interval" in str(caught.value)
@@ -2014,7 +2045,7 @@ def test_discover_refuses_a_window_that_has_already_passed(engine, room):
 
 
 def test_an_ownership_link_refuses_a_session_with_no_guest_email(engine, room):
-    """"For Ownership links, also pass guestEmail in the init call - it is
+    """ "For Ownership links, also pass guestEmail in the init call - it is
     required so Chili Piper can resolve the owner from your CRM." """
     asset = link_asset(engine, room["id"], link_type="ownership")
     with pytest.raises(Refusal) as caught:
@@ -2044,7 +2075,7 @@ def test_a_personal_link_does_not_require_a_guest_email_at_discover(engine, room
 
 
 def test_a_handoff_session_returns_one_slot_list_per_path(engine, room):
-    """"one or more routing paths, each with its own pathId and startTimes" """
+    """ "one or more routing paths, each with its own pathId and startTimes" """
     asset = handoff_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     assert [entry["pathId"] for entry in session["schedulingData"]] == ["emea", "amer"]
@@ -2140,7 +2171,9 @@ def test_a_calendar_block_for_another_host_does_not_remove_slots(engine, room):
 
 def test_a_calendar_block_needs_a_host(engine, room):
     with pytest.raises(HeadlessBookingError) as caught:
-        engine.add_calendar_block(room["id"], {"startsAt": "2026-10-05T10:00:00Z", "duration": 30}, source=SOURCE)
+        engine.add_calendar_block(
+            room["id"], {"startsAt": "2026-10-05T10:00:00Z", "duration": 30}, source=SOURCE
+        )
     assert "host_email is required" in str(caught.value)
 
 
@@ -2223,7 +2256,7 @@ def test_a_meeting_records_its_provider_and_a_derived_link(engine, room):
 
 
 def test_booking_writes_the_invites_in_the_same_transaction(engine, room, store):
-    """"Calendar invites are sent immediately" - the *commit* is implemented."""
+    """ "Calendar invites are sent immediately" - the *commit* is implemented."""
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     booked = book_first(engine, room["id"], session)
@@ -2245,7 +2278,7 @@ def test_an_invite_is_recorded_and_not_claimed_as_sent(engine, room, store):
 
 
 def test_booking_emits_the_for_new_meeting_created_event(engine, room, store):
-    """"Bookings immediately emit the For New Meeting webhook." """
+    """ "Bookings immediately emit the For New Meeting webhook." """
     asset = concierge_asset(engine, room["id"], webhook_url="https://hooks.example.com/x")
     session = discover(engine, room["id"], asset)
     booked = book_first(engine, room["id"], session)
@@ -2307,7 +2340,9 @@ def test_a_booking_needs_a_guest_email(engine, room):
 
 def test_booking_an_unknown_session_is_a_404_naming_the_lesson(engine, room):
     with pytest.raises(NotFound) as caught:
-        engine.book(room["id"], "route_nope", {"startTime": "2026-10-05T09:00:00Z"}, source=BOOK_SOURCE)
+        engine.book(
+            room["id"], "route_nope", {"startTime": "2026-10-05T09:00:00Z"}, source=BOOK_SOURCE
+        )
     assert "single-use" in str(caught.value)
 
 
@@ -2325,7 +2360,7 @@ def test_booking_a_session_from_another_room_is_a_404(engine, room, other_room):
 
 
 def test_a_session_books_exactly_once(engine, room, store):
-    """"Sessions are single-use." """
+    """ "Sessions are single-use." """
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     book_first(engine, room["id"], session)
@@ -2448,7 +2483,7 @@ def test_the_summary_counts_a_retry_as_a_retry(engine, room):
 
 
 def test_a_failed_booking_spends_the_session(engine, room, store):
-    """"On a schedule failure, do not retry the schedule call with the same
+    """ "On a schedule failure, do not retry the schedule call with the same
     routeId - start again from the discover or route step." """
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
@@ -2480,14 +2515,12 @@ def test_a_refusal_before_the_scheduler_does_not_spend_the_session(engine, room,
     )
     session = discover(engine, room["id"], asset)
     with pytest.raises(PermissionDenied):
-        book_first(
-            engine, room["id"], session, credential_id=read_only["id"]
-        )
+        book_first(engine, room["id"], session, credential_id=read_only["id"])
     assert store.get(session["routeId"])["data"]["state"] == "open"
 
 
 def test_a_refused_booking_still_writes_its_call_log_row(engine, room):
-    """"Nothing happened, and here is why" is what a caller needs to read."""
+    """ "Nothing happened, and here is why" is what a caller needs to read."""
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     with pytest.raises(HeadlessBookingError):
@@ -2513,7 +2546,7 @@ def test_a_refused_booking_writes_no_invites_and_no_webhook(engine, room, store)
 
 
 def test_an_expired_session_cannot_be_booked(engine, room, store, clock):
-    """"If step 2's session expired ... the caller re-runs step 1" """
+    """ "If step 2's session expired ... the caller re-runs step 1" """
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     clock_now = NOW + timedelta(hours=1)
@@ -2574,7 +2607,7 @@ def test_reading_an_open_session_says_a_retry_is_fine(engine, room):
 
 
 def test_booking_a_slot_taken_since_discover_is_refused(engine, room, other_room, store):
-    """"If step 2's session expired or the slot was taken, the caller re-runs
+    """ "If step 2's session expired or the slot was taken, the caller re-runs
     step 1 with a fresh session." """
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
@@ -2661,9 +2694,7 @@ def test_a_taken_slot_distinguishes_the_calendar_from_our_own_bookings(engine, r
     assert "calendar" in str(caught.value)
 
 
-def test_an_unreadable_meeting_timestamp_is_skipped_not_treated_as_a_conflict(
-    engine, room, store
-):
+def test_an_unreadable_meeting_timestamp_is_skipped_not_treated_as_a_conflict(engine, room, store):
     """The bug this catches: coercing an unreadable timestamp to the epoch, which
     overlaps nothing, so a corrupt row stopped being a conflict."""
     asset = concierge_asset(engine, room["id"])
@@ -2715,7 +2746,11 @@ def test_a_handoff_meeting_records_its_own_host(engine, room, store):
     booked = engine.book(
         room["id"],
         session["routeId"],
-        {"startTime": entry["startTimes"][0], "pathId": "emea", "guest": {"guestEmail": "l@example.com"}},
+        {
+            "startTime": entry["startTimes"][0],
+            "pathId": "emea",
+            "guest": {"guestEmail": "l@example.com"},
+        },
         source=BOOK_SOURCE,
     )
     assert store.get(booked["meetingId"])["data"]["host_email"] == "aisha@example.com"
@@ -2766,7 +2801,7 @@ def test_a_handoff_path_with_no_slots_is_still_listed(engine, room):
 
 
 def test_a_crm_writeback_is_off_by_default(engine, room):
-    """"optional CRM writeback" - optional, and this build records rather than
+    """ "optional CRM writeback" - optional, and this build records rather than
     calls."""
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
@@ -2899,9 +2934,7 @@ def test_a_matching_token_and_credential_id_are_both_accepted(engine, room):
     """The same credential presented both ways is not a mismatch."""
     token = engine.create_credential({"role": "admin", "label": "x"}, source=SOURCE)
     asset = concierge_asset(engine, room["id"])
-    session = discover(
-        engine, room["id"], asset, token=token["token"], credential_id=token["id"]
-    )
+    session = discover(engine, room["id"], asset, token=token["token"], credential_id=token["id"])
     assert session["authorised_as"] == "token"
 
 
@@ -3024,7 +3057,7 @@ def test_calls_filter_by_outcome_and_route(engine, room):
 
 
 def test_a_call_row_names_the_mcp_tool_it_mirrors(engine, room):
-    """"MCP tools mirror these" - so the log names the tool, not just a verb."""
+    """ "MCP tools mirror these" - so the log names the tool, not just a verb."""
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
     book_first(engine, room["id"], session)
@@ -3156,7 +3189,11 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
     http.post(
         f"{PREFIX}/calendar",
         params={"room_id": room["id"]},
-        json={"host_email": "dana@example.com", "startTime": "2026-10-06T13:00:00Z", "duration": 60},
+        json={
+            "host_email": "dana@example.com",
+            "startTime": "2026-10-06T13:00:00Z",
+            "duration": 60,
+        },
     )
     http.patch(f"{PREFIX}/assets/{asset['id']}", json={"provider": "gong"})
     session = http.post(
@@ -3209,7 +3246,11 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
     http.post(
         f"{PREFIX}/calendar",
         params={"room_id": room["id"]},
-        json={"host_email": "dana@example.com", "startTime": "2026-10-06T13:00:00Z", "duration": 60},
+        json={
+            "host_email": "dana@example.com",
+            "startTime": "2026-10-06T13:00:00Z",
+            "duration": 60,
+        },
     )
     session = http.post(
         f"{PREFIX}/rooms/{room['id']}/sessions",
@@ -3250,8 +3291,10 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
 
     assert len(mine) >= 6, "the feature recorded fewer sources than it has write routes"
     for source in sorted(mine):
-        assert source.startswith(f"POST {PREFIX}") or source.startswith(f"PATCH {PREFIX}") or (
-            source.startswith(f"DELETE {PREFIX}")
+        assert (
+            source.startswith(f"POST {PREFIX}")
+            or source.startswith(f"PATCH {PREFIX}")
+            or (source.startswith(f"DELETE {PREFIX}"))
         ), f"{source!r} does not name a route under this feature's own prefix"
         assert source_names_a_mounted_route(source, routes), f"{source!r} names no mounted route"
 
@@ -3283,9 +3326,7 @@ def test_a_session_written_over_http_records_its_own_route(http):
     assert sources == {f"POST {PREFIX}/rooms/{room['id']}/sessions"}
 
 
-def test_a_booking_writes_five_records_and_five_audit_rows_in_one_transaction(
-    engine, store, room
-):
+def test_a_booking_writes_five_records_and_five_audit_rows_in_one_transaction(engine, store, room):
     """Meeting, two invites, the webhook, and the session move commit together.
 
     The research says a commit produces all of them, and a crash between them
@@ -3394,7 +3435,9 @@ def test_the_asset_lifecycle_over_http(http):
     assert http.get(f"{PREFIX}/assets", params={"section": "concierge"}).json()["count"] == 1
     assert http.get(f"{PREFIX}/assets", params={"section": "links"}).json()["count"] == 0
     assert http.get(f"{PREFIX}/assets/{asset['id']}").json()["data"]["provider"] == "zoom"
-    assert http.patch(f"{PREFIX}/assets/{asset['id']}", json={"provider": "gong"}).status_code == 200
+    assert (
+        http.patch(f"{PREFIX}/assets/{asset['id']}", json={"provider": "gong"}).status_code == 200
+    )
     assert http.delete(f"{PREFIX}/assets/{asset['id']}").status_code == 204
     assert http.get(f"{PREFIX}/assets/{asset['id']}").status_code == 404
 
@@ -3421,12 +3464,22 @@ def test_the_calendar_block_over_http(http):
     created = http.post(
         f"{PREFIX}/calendar",
         params={"room_id": room["id"]},
-        json={"host_email": "dana@example.com", "startTime": "2026-10-06T13:00:00Z", "duration": 60},
+        json={
+            "host_email": "dana@example.com",
+            "startTime": "2026-10-06T13:00:00Z",
+            "duration": 60,
+        },
     )
     assert created.status_code == 201
     assert http.get(f"{PREFIX}/calendar").json()["count"] == 1
-    assert http.get(f"{PREFIX}/calendar", params={"host_email": "dana@example.com"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/calendar", params={"host_email": "other@example.com"}).json()["count"] == 0
+    assert (
+        http.get(f"{PREFIX}/calendar", params={"host_email": "dana@example.com"}).json()["count"]
+        == 1
+    )
+    assert (
+        http.get(f"{PREFIX}/calendar", params={"host_email": "other@example.com"}).json()["count"]
+        == 0
+    )
 
 
 def test_a_calendar_block_with_no_end_is_a_400_over_http(http):
@@ -3486,9 +3539,12 @@ def test_the_researched_retry_is_a_400_over_http_saying_so(http):
         "startTime": session["schedulingData"][0]["startTimes"][0],
         "guest": {"guestEmail": "buyer@example.com"},
     }
-    assert http.post(
-        f"{PREFIX}/rooms/{room['id']}/sessions/{session['routeId']}/book", json=payload
-    ).status_code == 201
+    assert (
+        http.post(
+            f"{PREFIX}/rooms/{room['id']}/sessions/{session['routeId']}/book", json=payload
+        ).status_code
+        == 201
+    )
 
     retry = http.post(
         f"{PREFIX}/rooms/{room['id']}/sessions/{session['routeId']}/book", json=payload
@@ -3627,8 +3683,16 @@ def test_sessions_are_listed_and_filtered_over_http(http):
         },
     )
     assert http.get(f"{PREFIX}/rooms/{room['id']}/sessions").json()["count"] == 1
-    assert http.get(f"{PREFIX}/rooms/{room['id']}/sessions", params={"state": "open"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/rooms/{room['id']}/sessions", params={"state": "booked"}).json()["count"] == 0
+    assert (
+        http.get(f"{PREFIX}/rooms/{room['id']}/sessions", params={"state": "open"}).json()["count"]
+        == 1
+    )
+    assert (
+        http.get(f"{PREFIX}/rooms/{room['id']}/sessions", params={"state": "booked"}).json()[
+            "count"
+        ]
+        == 0
+    )
 
 
 def test_a_meeting_is_read_with_its_invites_and_webhook_over_http(http):
@@ -3681,8 +3745,12 @@ def test_a_meeting_from_another_room_is_a_404_over_http(http):
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
-    assert http.get(f"{PREFIX}/rooms/{second['id']}/meetings/{booked['meetingId']}").status_code == 404
-    assert http.get(f"{PREFIX}/rooms/{second['id']}/sessions/{session['routeId']}").status_code == 404
+    assert (
+        http.get(f"{PREFIX}/rooms/{second['id']}/meetings/{booked['meetingId']}").status_code == 404
+    )
+    assert (
+        http.get(f"{PREFIX}/rooms/{second['id']}/sessions/{session['routeId']}").status_code == 404
+    )
 
 
 def test_the_call_log_over_http_counts_outcomes(http):
@@ -3710,9 +3778,12 @@ def test_the_call_log_over_http_counts_outcomes(http):
     # The retry is its own outcome rather than a second "booked".
     assert body["by_outcome"]["booked"] == 1
     assert body["by_outcome"]["session_consumed"] == 1
-    assert http.get(
-        f"{PREFIX}/rooms/{room['id']}/calls", params={"outcome": "session_consumed"}
-    ).json()["count"] == 1
+    assert (
+        http.get(
+            f"{PREFIX}/rooms/{room['id']}/calls", params={"outcome": "session_consumed"}
+        ).json()["count"]
+        == 1
+    )
 
 
 def test_the_actor_query_parameter_reaches_the_audit_row_over_http(http):
@@ -3781,7 +3852,9 @@ def test_the_verbatim_inference_matches_what_resolve_slot_does():
     assert entry["value"]["refused_no_designator"] is True
     with pytest.raises(HeadlessBookingError):
         parse_start_time("2026-10-05T09:00:00")
-    assert build_session().resolve_slot("2026-10-05T09:00:00+00:00", None)[0] == "2026-10-05T09:00:00Z"
+    assert (
+        build_session().resolve_slot("2026-10-05T09:00:00+00:00", None)[0] == "2026-10-05T09:00:00Z"
+    )
 
 
 def test_the_grid_inference_matches_the_published_defaults():
@@ -3862,7 +3935,10 @@ def test_the_crm_writeback_inference_matches_the_meeting(engine, room):
     assert entry["value"]["off_by_default"] is True
     asset = concierge_asset(engine, room["id"])
     session = discover(engine, room["id"], asset)
-    assert book_first(engine, room["id"], session)["meeting"]["data"]["crm_writeback"]["written"] is False
+    assert (
+        book_first(engine, room["id"], session)["meeting"]["data"]["crm_writeback"]["written"]
+        is False
+    )
 
 
 def test_the_authorisation_inference_matches_what_a_bare_call_records(engine, room):
@@ -3884,7 +3960,7 @@ def test_a_token_matching_no_credential_is_refused_not_treated_as_absent(engine,
 
 
 def test_the_read_permission_inference_matches_the_two_gated_calls(engine, room):
-    """"Read where listing assets is needed" - and a single fetch leaks the same."""
+    """ "Read where listing assets is needed" - and a single fetch leaks the same."""
     entry = headless_inferences.by_id("list-and-lookup-are-one-permission")
     assert entry["value"]["read_gates"] == ["list", "read-one"]
     token = engine.create_credential(
@@ -4013,7 +4089,7 @@ def test_the_seed_produces_both_invites_and_a_webhook_for_each_meeting(seeded):
 
 
 def test_the_seed_produces_a_failed_session_not_only_a_booked_one(seeded):
-    """"demo data containing only success teaches a reviewer nothing" """
+    """ "demo data containing only success teaches a reviewer nothing" """
     store, _ = seeded
     states = {row["data"]["state"] for row in store.list(SESSION_COLLECTION)}
     assert "booked" in states
@@ -4036,9 +4112,7 @@ def test_the_seed_shows_the_ownership_guest_email_rule_being_enforced(seeded, se
     """
     store, _ = seeded
     ownership = next(
-        row
-        for row in store.list(ASSET_COLLECTION)
-        if row["data"].get("link_type") == "ownership"
+        row for row in store.list(ASSET_COLLECTION) if row["data"].get("link_type") == "ownership"
     )
     from dsr.headless_booking.engine import HeadlessBooking
 

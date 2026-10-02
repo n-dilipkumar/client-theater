@@ -12,7 +12,6 @@ import sqlite3
 import threading
 
 import pytest
-
 from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound, utcnow
 
 
@@ -437,7 +436,6 @@ def test_bulk_create_rolls_back_completely_on_failure(db):
 
     with pytest.raises(sqlite3.IntegrityError):
         with db._write() as conn:  # noqa: SLF001
-            db.bulk_create  # referenced for clarity
             conn.execute(
                 "INSERT INTO records (id, collection, data, revision, created_at, updated_at)"
                 " VALUES ('x','document','{}',1,'t','t')"
@@ -603,12 +601,18 @@ def test_bulk_delete_defaults_to_soft_and_keeps_the_index(db):
 
 
 def test_bulk_delete_of_an_empty_list_is_a_noop(db):
-    assert db.bulk_delete([]) == {"count": 0, "hard": False, "room_id": None, "ids": [], "records": []}
+    assert db.bulk_delete([]) == {
+        "count": 0,
+        "hard": False,
+        "room_id": None,
+        "ids": [],
+        "records": [],
+    }
     assert db.audit_count() == 0
 
 
 def test_bulk_delete_ignores_blank_ids(db):
-    room = db.create("room", {"name": "Acme"})
+    db.create("room", {"name": "Acme"})
 
     assert db.bulk_delete(["", None], hard=True)["count"] == 0
     assert db.count("room") == 1

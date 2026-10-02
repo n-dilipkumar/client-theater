@@ -50,6 +50,7 @@ Usage:
     .venv/Scripts/python orchestration/make_status.py
     .venv/Scripts/python orchestration/make_status.py --tests 9939,0,2
 """
+
 from __future__ import annotations
 
 import json
@@ -135,8 +136,15 @@ REEXPORT_RE = re.compile(r"export\s*\{\s*default\s*\}\s*from\s*['\"](.+?)['\"]")
 
 
 def git(*args: str, cwd: Path = ROOT) -> str:
-    p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=120)
+    p = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+    )
     return (p.stdout + p.stderr).strip()
 
 
@@ -152,8 +160,9 @@ def features_live() -> dict[str, str]:
     each picking their own spelling a single pattern cannot be relied on.
     """
     found: dict[str, str] = {}
-    for line in git("ls-tree", "-r", "--name-only", "origin/main",
-                    "backend/dsr/features").splitlines():
+    for line in git(
+        "ls-tree", "-r", "--name-only", "origin/main", "backend/dsr/features"
+    ).splitlines():
         m = FEATURE_RE.search(line)
         if m:
             found[f"WF-{m.group(1)}"] = Path(line).stem
@@ -175,13 +184,22 @@ def host_report() -> dict | None:
         "print(json.dumps({\n"
         "  'loaded': [(f['id'], f['prefix'], len(f['routes'])) for f in d['features']],\n"
         "  'failed': [(f['id'], f['error']) for f in d['failed']]}))\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     env = dict(os.environ)
     tmp = tempfile.mkdtemp(prefix="dsr-status-")
     env["DSR_DB_PATH"] = str(Path(tmp) / "s.db")
     env["DSR_AUDIT_DIR"] = str(Path(tmp) / "audit")
-    p = subprocess.run([str(PY), str(probe.name)], cwd=ROOT / "backend", capture_output=True,
-                       text=True, encoding="utf-8", errors="replace", timeout=300, env=env)
+    p = subprocess.run(
+        [str(PY), str(probe.name)],
+        cwd=ROOT / "backend",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+        env=env,
+    )
     probe.unlink(missing_ok=True)
     for line in p.stdout.splitlines():
         line = line.strip()
@@ -202,8 +220,9 @@ def frontend_features() -> dict[str, str]:
     rather than reported as missing.
     """
     found: dict[str, str] = {}
-    for line in git("ls-tree", "-r", "--name-only", "origin/main",
-                    "frontend/src/features").splitlines():
+    for line in git(
+        "ls-tree", "-r", "--name-only", "origin/main", "frontend/src/features"
+    ).splitlines():
         if not line.endswith("index.jsx"):
             continue
         text = git("show", f"origin/main:{line}")
@@ -266,20 +285,32 @@ def suite_count(argv: list[str]):
     for i, a in enumerate(argv):
         if a == "--tests" and i + 1 < len(argv):
             parts = argv[i + 1].split(",")
-            return (int(parts[0]), int(parts[1]),
-                    (int(parts[2]) if len(parts) > 2 else 0), "supplied")
+            return (
+                int(parts[0]),
+                int(parts[1]),
+                (int(parts[2]) if len(parts) > 2 else 0),
+                "supplied",
+            )
         if a.startswith("--tests="):
             parts = a.split("=", 1)[1].split(",")
-            return (int(parts[0]), int(parts[1]),
-                    (int(parts[2]) if len(parts) > 2 else 0), "supplied")
+            return (
+                int(parts[0]),
+                int(parts[1]),
+                (int(parts[2]) if len(parts) > 2 else 0),
+                "supplied",
+            )
 
     if SUITE_CACHE.exists():
         try:
             d = json.loads(SUITE_CACHE.read_text(encoding="utf-8"))
             age = time.time() - d.get("at", 0)
             if age < 3600 and d.get("passed"):
-                return (d["passed"], d.get("failed", 0), d.get("xfailed", 0),
-                        f"measured {int(age // 60)} min ago")
+                return (
+                    d["passed"],
+                    d.get("failed", 0),
+                    d.get("xfailed", 0),
+                    f"measured {int(age // 60)} min ago",
+                )
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
 
@@ -289,8 +320,14 @@ def suite_count(argv: list[str]):
     env["DSR_AUDIT_DIR"] = str(Path(tmp) / "audit")
     p = subprocess.run(
         [str(PY), "-m", "pytest", "-p", "no:cacheprovider", "--tb=line", "-o", "addopts=", "-q"],
-        cwd=ROOT / "backend", capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=5400, env=env)
+        cwd=ROOT / "backend",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=5400,
+        env=env,
+    )
     out = p.stdout + p.stderr
     passed = failed = xfail = 0
     for line in reversed(out.splitlines()):
@@ -307,10 +344,18 @@ def suite_count(argv: list[str]):
             break
     try:
         SUITE_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        SUITE_CACHE.write_text(json.dumps(
-            {"at": time.time(), "passed": passed, "failed": failed,
-             "xfailed": xfail, "ref": git("log", "-1", "--format=%h", "origin/main")}),
-            encoding="utf-8")
+        SUITE_CACHE.write_text(
+            json.dumps(
+                {
+                    "at": time.time(),
+                    "passed": passed,
+                    "failed": failed,
+                    "xfailed": xfail,
+                    "ref": git("log", "-1", "--format=%h", "origin/main"),
+                }
+            ),
+            encoding="utf-8",
+        )
     except OSError:
         pass
     return passed, failed, xfail, "measured now"
@@ -322,7 +367,7 @@ def escape_cell(text: str) -> str:
     A pipe ends a cell, and a newline ends the row, so both have to go. The names
     in this corpus are prose, and prose contains both.
     """
-    return (str(text or "").replace("|", "\\|").replace("\n", " ").strip())
+    return str(text or "").replace("|", "\\|").replace("\n", " ").strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -351,18 +396,20 @@ def render() -> tuple[str, dict]:
         is_built = ticket in built
         prefix, n_routes = routes_by_ticket.get(ticket, ("", 0))
         tst = tests.get(ticket, [])
-        rows.append({
-            "ticket": ticket,
-            "name": e["name"],
-            "domain": e["domain_title"],
-            "criticality": e["criticality"],
-            "basis": e["criticality_basis"] or "",
-            "built": is_built,
-            "routes": n_routes,
-            "prefix": prefix,
-            "has_test": bool(tst),
-            "has_front": ticket in front,
-        })
+        rows.append(
+            {
+                "ticket": ticket,
+                "name": e["name"],
+                "domain": e["domain_title"],
+                "criticality": e["criticality"],
+                "basis": e["criticality_basis"] or "",
+                "built": is_built,
+                "routes": n_routes,
+                "prefix": prefix,
+                "has_test": bool(tst),
+                "has_front": ticket in front,
+            }
+        )
 
     done = [r for r in rows if r["built"]]
     pending = [r for r in rows if not r["built"]]
@@ -389,7 +436,7 @@ def render() -> tuple[str, dict]:
     A("<!-- GENERATED by orchestration/make_status.py. Do not edit by hand: every")
     A("     number here is measured, and a hand-edited dashboard is a stale one. -->")
     A("")
-    A(f"**Every researched workflow, its status, and who owns it.**")
+    A("**Every researched workflow, its status, and who owns it.**")
     A("")
     A("Regenerate with")
     A(f"`{PY_REL} orchestration/make_status.py`.")
@@ -403,16 +450,20 @@ def render() -> tuple[str, dict]:
     # ---- headline ---------------------------------------------------------- #
     A("## Progress")
     A("")
-    A(f"    workflows  [{'#' * int(34 * len(done) / TARGET)}"
-      f"{'.' * (34 - int(34 * len(done) / TARGET))}] {len(done)}/{TARGET}")
+    A(
+        f"    workflows  [{'#' * int(34 * len(done) / TARGET)}"
+        f"{'.' * (34 - int(34 * len(done) / TARGET))}] {len(done)}/{TARGET}"
+    )
     A(f"    routes     {total_routes}")
     A(f"    tests      {passed} passed, {failed} failed, {xfail} xfailed  ({tests_from})")
     A(f"    features   {failed_features} failed to load")
     A(f"    to go      {TARGET - len(done)}")
     A("")
-    A(f"{len(rows)} researched workflows; **{len(done)} built**, "
-      f"**{len(pending)} pending** "
-      f"({len(pending_critical)} critical, {len(pending) - len(pending_critical)} supplementary).")
+    A(
+        f"{len(rows)} researched workflows; **{len(done)} built**, "
+        f"**{len(pending)} pending** "
+        f"({len(pending_critical)} critical, {len(pending) - len(pending_critical)} supplementary)."
+    )
     A("")
 
     # ---- how status is decided --------------------------------------------- #
@@ -475,9 +526,11 @@ def render() -> tuple[str, dict]:
         criticality = escape_cell(r["criticality"])
         if r["basis"]:
             criticality += f" ({r['basis']})"
-        A(f"| `{r['ticket']}` | {escape_cell(r['name'])} | "
-          f"{escape_cell(description_of(r['ticket']))} | {criticality} | "
-          f"{escape_cell(status_of(r))} | |")
+        A(
+            f"| `{r['ticket']}` | {escape_cell(r['name'])} | "
+            f"{escape_cell(description_of(r['ticket']))} | {criticality} | "
+            f"{escape_cell(status_of(r))} | |"
+        )
     A("")
 
     # ---- what to build next ------------------------------------------------ #
@@ -525,7 +578,7 @@ def render() -> tuple[str, dict]:
     A("")
     A("No new source of truth: built-state is measured, never cached. Sections")
     A("describing agent worktrees were removed rather than printed as zeros —")
-    A("this generator cannot measure them, and a section reading \"0 in progress\"")
+    A('this generator cannot measure them, and a section reading "0 in progress"')
     A("is a claim about the world nobody re-checks.")
     A("")
     A("The Description column is read out of each workflow's own specification")
@@ -536,10 +589,16 @@ def render() -> tuple[str, dict]:
     A("")
 
     return "\n".join(L), {
-        "built": len(done), "pending": len(pending), "total": len(rows),
-        "routes": total_routes, "pending_critical": len(pending_critical),
-        "passed": passed, "failed": failed, "xfailed": xfail,
-        "tests_from": tests_from, "failed_features": failed_features,
+        "built": len(done),
+        "pending": len(pending),
+        "total": len(rows),
+        "routes": total_routes,
+        "pending_critical": len(pending_critical),
+        "passed": passed,
+        "failed": failed,
+        "xfailed": xfail,
+        "tests_from": tests_from,
+        "failed_features": failed_features,
         "head": head.split()[0] if head else "?",
         "built_tickets": [r["ticket"] for r in done],
         "pending_tickets": [r["ticket"] for r in pending],
@@ -552,8 +611,10 @@ def main() -> int:
     OUT.write_text(text, encoding="utf-8")
 
     print(f"  wrote {OUT.relative_to(ROOT)}  ({len(text):,} chars)")
-    print(f"  {stats['total']} workflows: {stats['built']} built, {stats['pending']} pending "
-          f"({stats['pending_critical']} critical)")
+    print(
+        f"  {stats['total']} workflows: {stats['built']} built, {stats['pending']} pending "
+        f"({stats['pending_critical']} critical)"
+    )
     print(f"  {stats['routes']} routes, {stats['failed_features']} features failed to load")
 
     # Assert the rendered file against what was just measured. A generator that
@@ -579,12 +640,14 @@ def main() -> int:
         "the measured test count": f"tests      {stats['passed']} passed" in back,
         "the test count's provenance is stated": f"({stats['tests_from']})" in back,
         "the measured failure count": f"features   {stats['failed_features']} failed" in back,
-        f"{stats['total']} rows carry an empty Owner cell":
-            len(owner_re.findall(section)) == stats["total"],
-        "the critical-pending table repeats only critical tickets":
-            all(f"| `{t}` |" in back for t in stats["critical_pending_tickets"]),
+        f"{stats['total']} rows carry an empty Owner cell": len(owner_re.findall(section))
+        == stats["total"],
+        "the critical-pending table repeats only critical tickets": all(
+            f"| `{t}` |" in back for t in stats["critical_pending_tickets"]
+        ),
         "main's commit named": stats["head"] in back,
-        "no removed worktree sections": "Empty shells" not in back and "Awaiting a decision" not in back,
+        "no removed worktree sections": "Empty shells" not in back
+        and "Awaiting a decision" not in back,
     }
     bad = [k for k, v in checks.items() if not v]
     for k, v in checks.items():

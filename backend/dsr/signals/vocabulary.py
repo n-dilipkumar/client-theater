@@ -113,12 +113,12 @@ def require_urgency(value: Any) -> str:
     if value is None:
         return DEFAULT_URGENCY
     if not isinstance(value, str):
-        raise EmissionError(f"urgency must be one of {', '.join(URGENCIES)}; got {type(value).__name__}")
+        raise EmissionError(
+            f"urgency must be one of {', '.join(URGENCIES)}; got {type(value).__name__}"
+        )
     normalised = value.strip().lower()
     if normalised not in URGENCY_RANK:
-        raise EmissionError(
-            f"urgency must be one of {', '.join(URGENCIES)}; got {value!r}"
-        )
+        raise EmissionError(f"urgency must be one of {', '.join(URGENCIES)}; got {value!r}")
     return normalised
 
 
@@ -185,8 +185,7 @@ def require_locale_map(value: Any, what: str) -> dict[str, str]:
         return {DEFAULT_LOCALE: value.strip()}
     if not isinstance(value, Mapping) or not value:
         raise SignalError(
-            f"{what} must be a non-empty map of locale to message, "
-            f"for example {{\"en\": \"...\"}}"
+            f'{what} must be a non-empty map of locale to message, for example {{"en": "..."}}'
         )
     result: dict[str, str] = {}
     for locale, template in value.items():

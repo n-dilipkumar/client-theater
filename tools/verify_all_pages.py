@@ -20,6 +20,7 @@ it cached at session start -- which is how a sweep reports a fix as still broken
 Exit codes: 0 every page rendered, 1 at least one did not, 2 the browser or the
 app is unavailable.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,7 +51,9 @@ PROBE = r"""
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--base", default="http://127.0.0.1:8000")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--settle", type=float, default=1.6, help="seconds to wait after routing")
@@ -82,19 +85,37 @@ def main() -> int:
             try:
                 dfb.bsk("navigate", "--session", sid, f"{base}/?cb={time.time_ns()}")
                 time.sleep(1.0)
-                dfb.bsk("evaluate", "--session", sid,
-                        f"(() => {{ location.hash = '#/{fid}'; return 1; }})()")
+                dfb.bsk(
+                    "evaluate",
+                    "--session",
+                    sid,
+                    f"(() => {{ location.hash = '#/{fid}'; return 1; }})()",
+                )
                 time.sleep(args.settle)
                 p = dfb.evaluate(sid, PROBE)
             except Exception as exc:  # noqa: BLE001
-                p = {"bodyLen": 0, "mainLen": 0, "buttons": 0, "interactive": 0,
-                     "heading": "", "err": str(exc)[:160]}
+                p = {
+                    "bodyLen": 0,
+                    "mainLen": 0,
+                    "buttons": 0,
+                    "interactive": 0,
+                    "heading": "",
+                    "err": str(exc)[:160],
+                }
             # BLANK: the document is nearly empty, so the tree did not mount.
             # SPARSE: it mounted but rendered almost nothing.
             status = "BLANK" if p["bodyLen"] < 40 else ("SPARSE" if p["mainLen"] < 20 else "ok")
-            results.append({"id": fid, "status": status, "bodyLen": p["bodyLen"],
-                            "mainLen": p["mainLen"], "buttons": p["buttons"],
-                            "interactive": p["interactive"], "heading": p["heading"]})
+            results.append(
+                {
+                    "id": fid,
+                    "status": status,
+                    "bodyLen": p["bodyLen"],
+                    "mainLen": p["mainLen"],
+                    "buttons": p["buttons"],
+                    "interactive": p["interactive"],
+                    "heading": p["heading"],
+                }
+            )
     finally:
         dfb.bsk("session", "stop", sid)
 

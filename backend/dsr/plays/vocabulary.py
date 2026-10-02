@@ -197,9 +197,9 @@ AUTOMATION_NOTE: str = (
 #: What a registered-but-disabled Play is. Registered is not enabled, and the
 #: research is explicit that the two are different moments.
 DISABLED_NOTE: str = (
-    "Registered, not enabled. \"After registration, the registered Play must be "
+    'Registered, not enabled. "After registration, the registered Play must be '
     "enabled in the Salesloft UI. You can do so by going to "
-    f"{ACTIVATION_PATH}.\" Until then it creates nothing."
+    f'{ACTIVATION_PATH}." Until then it creates nothing.'
 )
 
 #: The locale assumed when a caller does not ask for one.
@@ -221,8 +221,7 @@ def require_task_type(value: Any) -> str:
     """
     if not isinstance(value, str) or not value.strip():
         raise FrameworkError(
-            f"attributes.task_type is required: a Play generates one of "
-            f"{', '.join(TASK_TYPES)}"
+            f"attributes.task_type is required: a Play generates one of {', '.join(TASK_TYPES)}"
         )
     text = value.strip().lower().replace("_", "-").replace(" ", "-")
     for name in TASK_TYPES:
@@ -230,7 +229,7 @@ def require_task_type(value: Any) -> str:
             return name
     raise FrameworkError(
         f"attributes.task_type must be one of {', '.join(TASK_TYPES)}; got {value!r}. The "
-        "research names exactly three: \"Call, Email, Add Person to a Cadence.\""
+        'research names exactly three: "Call, Email, Add Person to a Cadence."'
     )
 
 
@@ -309,7 +308,7 @@ def require_locale_map(value: Any, what: str) -> dict[str, str]:
         return {DEFAULT_LOCALE: value.strip()}
     if not isinstance(value, Mapping) or not value:
         raise PlayError(
-            f"{what} must be a non-empty map of locale to text, for example {{\"en\": \"...\"}}"
+            f'{what} must be a non-empty map of locale to text, for example {{"en": "..."}}'
         )
     result: dict[str, str] = {}
     for locale, text in value.items():
@@ -378,9 +377,9 @@ def describe() -> dict[str, Any]:
             "exempt_attribute": DYNAMIC_FIELD_EXEMPT_ATTRIBUTE,
             "supported_attribute": DYNAMIC_FIELD_ATTRIBUTE,
             "rule": (
-                "\"At this time, Dynamic Fields are not supported outside of email "
+                '"At this time, Dynamic Fields are not supported outside of email '
                 "templates. The only exception here is that task_subject supports "
-                "name.\" Any other field outside email_template is refused rather "
+                'name." Any other field outside email_template is refused rather '
                 "than rendered empty in a seller's task list."
             ),
         },

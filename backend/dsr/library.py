@@ -218,7 +218,9 @@ def _normalise_experts(raw: Any) -> list[dict[str, Any]]:
             raise ValidationError(f"expert entries must be objects, got {item!r}")
         kind = str(item.get("type") or "").lower()
         if kind not in ("user", "group"):
-            raise ValidationError(f"expert type must be 'user' or 'group', got {item.get('type')!r}")
+            raise ValidationError(
+                f"expert type must be 'user' or 'group', got {item.get('type')!r}"
+            )
         identifier = item.get("id")
         if not identifier:
             raise ValidationError("expert entries require an id")
@@ -250,7 +252,13 @@ def _safe_segment(value: str) -> str:
 
 def _xml_escape(value: Any) -> str:
     text = str(value)
-    for needle, replacement in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&apos;")):
+    for needle, replacement in (
+        ("&", "&amp;"),
+        ("<", "&lt;"),
+        (">", "&gt;"),
+        ('"', "&quot;"),
+        ("'", "&apos;"),
+    ):
         text = text.replace(needle, replacement)
     return text
 
@@ -370,7 +378,9 @@ class ContentLibrary:
             FOLDER_COLLECTION, data, room_id=room_id, actor=actor, source=source
         )
 
-    def _resolve_folder(self, room_id: str, parent_folder_id: str | None) -> tuple[str, dict[str, Any] | None]:
+    def _resolve_folder(
+        self, room_id: str, parent_folder_id: str | None
+    ) -> tuple[str, dict[str, Any] | None]:
         """Return ``(materialized_path, folder_record)`` for a folder reference.
 
         ``None`` and ``root`` both address the room root, which has no record of
@@ -384,7 +394,9 @@ class ContentLibrary:
             raise ValidationError(f"parentFolderId {reference!r} does not name a library folder")
         if record["room_id"] != room_id:
             raise ValidationError(f"folder {reference!r} belongs to a different room")
-        return str(record["data"].get("path") or join_path("", str(record["data"].get("name") or ""))), record
+        return str(
+            record["data"].get("path") or join_path("", str(record["data"].get("name") or ""))
+        ), record
 
     # -- name collisions ---------------------------------------------------- #
 
@@ -449,14 +461,14 @@ class ContentLibrary:
         file_format = derive_format(filename) or derive_format(name)
         resolved_format = str(declared_format or file_format or "").strip().lower()
         if not resolved_format:
-            raise ValidationError(
-                "format is required and could not be derived from the filename"
-            )
+            raise ValidationError("format is required and could not be derived from the filename")
 
         parent_folder_id = fields.pop("parentFolderId", None) or ROOT_FOLDER
         folder_path, _ = self._resolve_folder(room_id, parent_folder_id)
 
-        stored_name = self._apply_name_collision(room_id, parent_folder_id, name, resolve_name_collision)
+        stored_name = self._apply_name_collision(
+            room_id, parent_folder_id, name, resolve_name_collision
+        )
 
         properties = _normalise_properties(fields.pop("properties", None))
         experts = _normalise_experts(fields.pop("experts", None))
@@ -715,7 +727,9 @@ class ContentLibrary:
             request_id=request_id,
         )
 
-    def read_version(self, document_id: str, version_id: str | None = None) -> tuple[Path, str, int | None]:
+    def read_version(
+        self, document_id: str, version_id: str | None = None
+    ) -> tuple[Path, str, int | None]:
         """Resolve a version's stored bytes to a path and its size.
 
         With no ``version_id`` this is the *current* version, taken from
@@ -740,7 +754,11 @@ class ContentLibrary:
         path = self.content_root / str(entry["key"])
         if not path.is_file():
             raise NotFound(f"stored bytes for document {document_id!r} are missing")
-        return path, str(entry.get("origFilename") or record["data"].get("name") or document_id), entry.get("bytes")
+        return (
+            path,
+            str(entry.get("origFilename") or record["data"].get("name") or document_id),
+            entry.get("bytes"),
+        )
 
     # -- thumbnails --------------------------------------------------------- #
 
@@ -884,7 +902,9 @@ class ContentLibrary:
             "documents": len(documents),
             "folders": len(self.list_folders(room_id)),
             "bytes": sum(int(d["data"].get("size") or 0) for d in documents),
-            "pending_thumbnails": sum(1 for d in documents if d["data"].get("thumbnailStatus") == "pending"),
+            "pending_thumbnails": sum(
+                1 for d in documents if d["data"].get("thumbnailStatus") == "pending"
+            ),
             "failed": sum(1 for d in documents if d["data"].get("ingestState") == "failed"),
         }
 

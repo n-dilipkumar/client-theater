@@ -67,8 +67,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.conference_links import (
     BOOKINGS,
@@ -76,11 +74,14 @@ from dsr.conference_links import (
     MEETING_LOCATIONS,
     RETRY_ATTEMPTS,
     ProvisioningEngine,
+    connections as conn_mod,
+    inferences as cl_inferences,
+    locations as loc_mod,
+    minting,
+    provider_status,
+    swapping,
+    vocabulary as vocab,
 )
-from dsr.conference_links import connections as conn_mod
-from dsr.conference_links import inferences as cl_inferences
-from dsr.conference_links import locations as loc_mod
-from dsr.conference_links import minting, provider_status, swapping, vocabulary as vocab
 from dsr.conference_links.errors import (
     BookingNotFound,
     ConferenceLinkError,
@@ -89,8 +90,8 @@ from dsr.conference_links.errors import (
     ConnectionNotFound,
     DefaultLocationRequired,
     DuplicateProviderConnection,
-    LocationUnchanged,
     LocationNotFound,
+    LocationUnchanged,
     ProviderNotConnected,
     UnknownLocation,
     UnknownLocationKind,
@@ -99,6 +100,7 @@ from dsr.conference_links.errors import (
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -263,9 +265,11 @@ def source_names_a_mounted_route(source, routes):
         if mounted_method != method:
             continue
         parts = re.split(r"(\{[^}]+\})", template)
-        pattern = "^" + "".join(
-            r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts
-        ) + "$"
+        pattern = (
+            "^"
+            + "".join(r"[^/]+" if part.startswith("{") else re.escape(part) for part in parts)
+            + "$"
+        )
         if re.match(pattern, path):
             return True
     return False
@@ -300,9 +304,7 @@ def live_count(store, collection):
 
 def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     """The routes resolve even though no shared file names this feature."""
-    entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID
-    )
+    entry = next(f for f in http.get("/api/features").json()["features"] if f["id"] == FEATURE_ID)
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-059"
     assert entry["exception_handlers"] == ["ConferenceLinkError"]
@@ -438,7 +440,9 @@ def test_cal_api_version_and_scope_are_the_researched_ones():
 def test_google_conference_data_version_is_one_and_the_field_is_create_request():
     assert vocab.GOOGLE_CONFERENCE_DATA_VERSION == 1
     assert vocab.GOOGLE_CONFERENCE_CREATE_FIELD == "createRequest"
-    assert "conferenceDataVersion" in vocab.GOOGLE_EVENTS_PATH or "events" in vocab.GOOGLE_EVENTS_PATH
+    assert (
+        "conferenceDataVersion" in vocab.GOOGLE_EVENTS_PATH or "events" in vocab.GOOGLE_EVENTS_PATH
+    )
 
 
 def test_the_two_dynamic_tags_are_the_researched_names():
@@ -569,7 +573,9 @@ def test_the_three_one_time_options_wire_to_an_integration_type():
 
 def test_conference_details_wires_to_the_link_escape_hatch():
     """extensibility calls the static link "a `link` escape hatch"."""
-    wire = loc_mod.wire_location("conference-details", {"conference_details": "https://x.example/j/1"})
+    wire = loc_mod.wire_location(
+        "conference-details", {"conference_details": "https://x.example/j/1"}
+    )
     assert wire["type"] == "link"
     assert wire["link"] == "https://x.example/j/1"
 
@@ -605,7 +611,7 @@ def test_google_meet_falls_back_to_a_stored_request_id():
 
 
 def test_gong_records_the_researched_redirect():
-    """"when clicked, Gong will redirect you to Zoom"."""
+    """ "when clicked, Gong will redirect you to Zoom"."""
     wire = loc_mod.wire_location("gong", {})
     assert wire["redirects_to"] == "zoom"
     assert wire["integration"] == "gong"
@@ -627,9 +633,12 @@ def test_missing_for_reports_a_blank_static_text_rather_than_refusing_it():
 
 
 def test_missing_for_is_empty_for_a_complete_option():
-    assert loc_mod.missing_for(
-        "conference-details", {"name": "Room", "conference_details": "https://x.example"}
-    ) == []
+    assert (
+        loc_mod.missing_for(
+            "conference-details", {"name": "Room", "conference_details": "https://x.example"}
+        )
+        == []
+    )
 
 
 def test_describe_kind_carries_the_researched_sentence():
@@ -662,7 +671,9 @@ def test_a_first_location_becomes_the_default_by_itself(engine):
 
 
 def test_a_second_location_is_not_the_default_unless_it_says_so(engine):
-    first = engine.create_location({"kind": "conference-details", "conference_details": "x"}, source="test")
+    first = engine.create_location(
+        {"kind": "conference-details", "conference_details": "x"}, source="test"
+    )
     second = engine.create_location({"kind": "in-person", "custom_text": "Room 4"}, source="test")
     assert first["is_default"] is True
     assert second["is_default"] is False
@@ -714,9 +725,7 @@ def test_removing_the_only_location_is_refused(engine):
     assert "only Location" in str(excinfo.value)
 
 
-def test_a_location_that_has_provisioned_bookings_cannot_be_removed(
-    engine, room, zoom_location
-):
+def test_a_location_that_has_provisioned_bookings_cannot_be_removed(engine, room, zoom_location):
     book(engine, room["id"], zoom_location)
     with pytest.raises(DefaultLocationRequired) as excinfo:
         engine.remove_location(zoom_location["id"], source="test")
@@ -741,9 +750,7 @@ def test_reading_an_unknown_location_is_a_404(engine):
         engine.meeting_location("nope")
 
 
-def test_amending_a_location_that_has_provisioned_freezes_its_kind(
-    engine, room, zoom_location
-):
+def test_amending_a_location_that_has_provisioned_freezes_its_kind(engine, room, zoom_location):
     book(engine, room["id"], zoom_location)
     with pytest.raises(DefaultLocationRequired) as excinfo:
         engine.amend_location(zoom_location["id"], {"kind": "gong"}, source="test")
@@ -764,7 +771,8 @@ def test_an_unprovisioned_location_may_change_its_kind(engine):
         {"kind": "in-person", "custom_text": "Room 4", "is_default": True}, source="test"
     )
     amended = engine.amend_location(
-        created["id"], {"kind": "conference-details", "conference_details": "https://x.example"},
+        created["id"],
+        {"kind": "conference-details", "conference_details": "https://x.example"},
         source="test",
     )
     assert amended["kind"] == "conference-details"
@@ -844,7 +852,12 @@ def test_a_live_connection_is_ready_and_names_what_is_missing_when_it_is_not(eng
     assert live["readiness"]["missing"] == []
 
     lapsed = engine.connect(
-        {"provider": "gong", "host": "dana@example.com", "state": "revoked", "token_present": False},
+        {
+            "provider": "gong",
+            "host": "dana@example.com",
+            "state": "revoked",
+            "token_present": False,
+        },
         source="test",
     )
     assert lapsed["readiness"]["ready"] is False
@@ -899,9 +912,7 @@ def test_reauthorising_onto_a_duplicate_is_refused(engine, zoom_connection):
         engine.reauthorize(zoom_connection["id"], {"host": "sam@example.com"}, source="test")
 
 
-def test_disconnecting_a_connection_a_location_names_is_refused(
-    engine, zoom_location
-):
+def test_disconnecting_a_connection_a_location_names_is_refused(engine, zoom_location):
     with pytest.raises(ProviderNotConnected) as excinfo:
         engine.disconnect(zoom_location["connection_id"], source="test")
     assert "still name connection" in str(excinfo.value)
@@ -912,7 +923,7 @@ def test_disconnecting_an_unnamed_connection_is_allowed(engine, zoom_connection)
 
 
 def test_the_mandatory_connection_refuses_and_names_the_tab(engine):
-    """"Connecting Zoom on the Integrations tab is mandatory for this one to work"."""
+    """ "Connecting Zoom on the Integrations tab is mandatory for this one to work"."""
     with pytest.raises(ProviderNotConnected) as excinfo:
         conn_mod.require_connected("zoom", None)
     assert "Integrations tab" in str(excinfo.value)
@@ -1030,7 +1041,7 @@ def test_a_conference_needs_a_provider_and_a_booking():
 
 
 def test_a_minted_zoom_link_is_shaped_from_the_researched_example():
-    """"https://example.zoom.us/j/1234567890" is the researched example."""
+    """ "https://example.zoom.us/j/1234567890" is the researched example."""
     minted = minting.mint("zoom", "bk_1")
     assert minted["url"].startswith("https://example.zoom.us/j/")
     assert len(minted["meeting_id"]) == 10
@@ -1079,7 +1090,7 @@ def test_the_same_booking_may_re_claim_its_own_conference():
 
 
 def test_a_conference_another_booking_holds_is_refused_and_names_both():
-    """"Reusing Google Meet conference data across different events can cause
+    """ "Reusing Google Meet conference data across different events can cause
     access issues and expose meeting details to unintended users." """
     existing = [{"conference_id": "conf_abc", "booking_uid": "bk_1"}]
     with pytest.raises(ConferenceReuse) as excinfo:
@@ -1143,18 +1154,14 @@ def test_a_booking_is_keyed_to_its_room(engine, room, other_room, zoom_location)
     assert engine.bookings(room["id"]) == []
 
 
-def test_two_bookings_on_the_same_location_never_share_a_conference(
-    engine, room, zoom_location
-):
+def test_two_bookings_on_the_same_location_never_share_a_conference(engine, room, zoom_location):
     first = book(engine, room["id"], zoom_location, who="a")
     second = book(engine, room["id"], zoom_location, who="b")
     assert first["conference_id"] != second["conference_id"]
     assert first[vocab.MEETING_LOCATION_FIELD] != second[vocab.MEETING_LOCATION_FIELD]
 
 
-def test_the_same_booking_uid_twice_lands_on_the_same_conference(
-    engine, room, zoom_location
-):
+def test_the_same_booking_uid_twice_lands_on_the_same_conference(engine, room, zoom_location):
     first = book(engine, room["id"], zoom_location, who="a")
     second = book(engine, room["id"], zoom_location, who="a")
     assert first["conference_id"] == second["conference_id"]
@@ -1201,9 +1208,7 @@ def test_an_ask_the_guest_booking_waits_rather_than_failing(engine, room):
     assert booked["guest_prompt"] == "Where shall we meet?"
 
 
-def test_a_booking_naming_no_location_uses_the_researched_default(
-    engine, room, zoom_location
-):
+def test_a_booking_naming_no_location_uses_the_researched_default(engine, room, zoom_location):
     booked = engine.book(room["id"], {"booking_uid": "bk_x"}, source="test")
     assert booked["location_id"] == zoom_location["id"]
 
@@ -1215,9 +1220,7 @@ def test_a_booking_with_no_location_in_force_is_refused_and_says_which_fixes_it(
     assert "location_id" in message and "set-default" in message
 
 
-def test_a_booking_naming_an_unknown_location_is_refused_as_a_missing_prerequisite(
-    engine, room
-):
+def test_a_booking_naming_an_unknown_location_is_refused_as_a_missing_prerequisite(engine, room):
     engine.create_location({"kind": "in-person", "custom_text": "Room 4"}, source="test")
     with pytest.raises(UnknownLocation) as excinfo:
         engine.book(room["id"], {"booking_uid": "bk_x", "location_id": "nope"}, source="test")
@@ -1234,7 +1237,12 @@ def test_a_booking_whose_provider_is_not_connected_is_refused(engine, room):
 
 def test_a_booking_whose_connection_is_revoked_is_refused(engine, room):
     lapsed = engine.connect(
-        {"provider": "zoom", "host": "dana@example.com", "state": "revoked", "token_present": False},
+        {
+            "provider": "zoom",
+            "host": "dana@example.com",
+            "state": "revoked",
+            "token_present": False,
+        },
         source="test",
     )
     location = engine.create_location(
@@ -1253,14 +1261,14 @@ def test_a_refused_provision_writes_no_booking_at_all(engine, room, store):
     assert live_count(store, BOOKINGS) == before
 
 
-def test_a_booking_records_the_connection_state_it_provisioned_through(
-    engine, room, zoom_location
-):
+def test_a_booking_records_the_connection_state_it_provisioned_through(engine, room, zoom_location):
     booked = book(engine, room["id"], zoom_location, who="a")
     assert booked["connection_state_at_provision"] == "connected"
 
 
-def test_bookings_filter_by_location_state_and_provider(engine, room, zoom_location, static_location):
+def test_bookings_filter_by_location_state_and_provider(
+    engine, room, zoom_location, static_location
+):
     book(engine, room["id"], zoom_location, who="a")
     book(engine, room["id"], static_location, who="b")
     assert len(engine.bookings(room["id"], state="provisioned")) == 1
@@ -1299,18 +1307,14 @@ def test_a_booking_read_carries_its_invite_and_history(engine, room, zoom_locati
     assert record["history"] == []
 
 
-def test_a_booking_with_no_conference_has_no_conference_to_read(
-    engine, room, static_location
-):
+def test_a_booking_with_no_conference_has_no_conference_to_read(engine, room, static_location):
     book(engine, room["id"], static_location, who="a")
     with pytest.raises(ConferenceNotFound) as excinfo:
         engine.conference(room["id"], "bk_a")
     assert "conference-details" in str(excinfo.value)
 
 
-def test_a_conference_read_says_the_outbound_request_was_not_sent(
-    engine, room, zoom_location
-):
+def test_a_conference_read_says_the_outbound_request_was_not_sent(engine, room, zoom_location):
     book(engine, room["id"], zoom_location, who="a")
     conference = engine.conference(room["id"], "bk_a")
     assert conference["outbound_not_sent"] is True
@@ -1356,9 +1360,7 @@ def test_a_minted_conference_records_the_room_it_belongs_to():
 # --------------------------------------------------------------------------- #
 
 
-def test_re_provisioning_a_booking_that_already_has_a_link_is_refused(
-    engine, room, zoom_location
-):
+def test_re_provisioning_a_booking_that_already_has_a_link_is_refused(engine, room, zoom_location):
     book(engine, room["id"], zoom_location, who="a")
     with pytest.raises(ConferenceReuse) as excinfo:
         engine.provision(room["id"], "bk_a", {}, source="test")
@@ -1372,9 +1374,7 @@ def test_re_provisioning_a_location_that_mints_nothing_is_refused(engine, room, 
     assert "does not mint a conference" in str(excinfo.value)
 
 
-def test_an_answered_ask_the_guest_location_is_recorded_as_attendee_addressed(
-    engine, room
-):
+def test_an_answered_ask_the_guest_location_is_recorded_as_attendee_addressed(engine, room):
     location = engine.create_location(
         {"kind": "attendee-defined", "attendee_prompt": "Where?", "is_default": True},
         source="test",
@@ -1398,7 +1398,9 @@ def test_a_swap_provisions_a_new_conference_and_records_the_old_location(
 ):
     booked = book(engine, room["id"], zoom_location, who="a")
     result = engine.swap(
-        room["id"], "bk_a", {"kind": "gong", "connection_id": gong_location["connection_id"]},
+        room["id"],
+        "bk_a",
+        {"kind": "gong", "connection_id": gong_location["connection_id"]},
         source="test",
     )
     assert result["state"] == "swapped"
@@ -1410,7 +1412,9 @@ def test_a_swap_provisions_a_new_conference_and_records_the_old_location(
 def test_a_swap_raises_the_researched_notification(engine, room, zoom_location, gong_location):
     book(engine, room["id"], zoom_location, who="a")
     result = engine.swap(
-        room["id"], "bk_a", {"kind": "gong", "connection_id": gong_location["connection_id"]},
+        room["id"],
+        "bk_a",
+        {"kind": "gong", "connection_id": gong_location["connection_id"]},
         source="test",
     )
     notification = result["swap"]["notification"]
@@ -1422,12 +1426,12 @@ def test_a_swap_raises_the_researched_notification(engine, room, zoom_location, 
     assert "notified of the location change by email" in notification["evidence"]
 
 
-def test_a_swap_records_the_researched_webhook_payload(
-    engine, room, zoom_location, gong_location
-):
+def test_a_swap_records_the_researched_webhook_payload(engine, room, zoom_location, gong_location):
     book(engine, room["id"], zoom_location, who="a")
     result = engine.swap(
-        room["id"], "bk_a", {"kind": "gong", "connection_id": gong_location["connection_id"]},
+        room["id"],
+        "bk_a",
+        {"kind": "gong", "connection_id": gong_location["connection_id"]},
         source="test",
     )
     webhook = result["swap"]["webhook"]
@@ -1442,7 +1446,9 @@ def test_a_swap_records_the_researched_endpoint_and_its_headers(
 ):
     book(engine, room["id"], zoom_location, who="a")
     result = engine.swap(
-        room["id"], "bk_a", {"kind": "gong", "connection_id": gong_location["connection_id"]},
+        room["id"],
+        "bk_a",
+        {"kind": "gong", "connection_id": gong_location["connection_id"]},
         source="test",
     )
     endpoint = result["swap"]["endpoint"]
@@ -1456,9 +1462,7 @@ def test_a_swap_onto_a_configured_location_option_uses_its_text(
     engine, room, zoom_location, static_location
 ):
     book(engine, room["id"], zoom_location, who="a")
-    result = engine.swap(
-        room["id"], "bk_a", {"location_id": static_location["id"]}, source="test"
-    )
+    result = engine.swap(room["id"], "bk_a", {"location_id": static_location["id"]}, source="test")
     assert result["location_kind"] == "conference-details"
     assert result[vocab.MEETING_LOCATION_FIELD] == "https://example.zoom.us/j/9876543210"
     # The old conference is cleared, not left behind: a booking holding both a
@@ -1468,16 +1472,12 @@ def test_a_swap_onto_a_configured_location_option_uses_its_text(
     assert result["provisions_conferences"] is False
 
 
-def test_a_swap_to_the_same_static_link_is_refused(
-    engine, room, zoom_location, static_location
-):
+def test_a_swap_to_the_same_static_link_is_refused(engine, room, zoom_location, static_location):
     """The researched notification would email every attendee that nothing changed."""
     book(engine, room["id"], zoom_location, who="a")
     engine.swap(room["id"], "bk_a", {"location_id": static_location["id"]}, source="test")
     with pytest.raises(LocationUnchanged) as excinfo:
-        engine.swap(
-            room["id"], "bk_a", {"location_id": static_location["id"]}, source="test"
-        )
+        engine.swap(room["id"], "bk_a", {"location_id": static_location["id"]}, source="test")
     assert "nothing changed" in str(excinfo.value)
 
 
@@ -1495,23 +1495,28 @@ def test_a_same_provider_swap_is_refused_because_the_link_would_not_change(
     book(engine, room["id"], zoom_location, who="a")
     with pytest.raises(LocationUnchanged) as excinfo:
         engine.swap(
-            room["id"], "bk_a", {"kind": "zoom", "connection_id": zoom_location["connection_id"]},
+            room["id"],
+            "bk_a",
+            {"kind": "zoom", "connection_id": zoom_location["connection_id"]},
             source="test",
         )
     assert "nothing changed" in str(excinfo.value)
     assert zoom_location["connection_id"] in str(excinfo.value) or True
 
 
-def test_a_swap_to_a_provider_on_the_same_host_is_still_a_change(engine, room, zoom_location, gong_connection):
+def test_a_swap_to_a_provider_on_the_same_host_is_still_a_change(
+    engine, room, zoom_location, gong_connection
+):
     """A different provider mints a different conference, so the link differs."""
     book(engine, room["id"], zoom_location, who="a")
     result = engine.swap(
         room["id"], "bk_a", {"kind": "gong", "connection_id": gong_connection["id"]}, source="test"
     )
     assert result["state"] == "swapped"
-    assert result["swap"]["location"][vocab.MEETING_LOCATION_FIELD] != result["swap"][
-        "previous_location"
-    ][vocab.MEETING_LOCATION_FIELD]
+    assert (
+        result["swap"]["location"][vocab.MEETING_LOCATION_FIELD]
+        != result["swap"]["previous_location"][vocab.MEETING_LOCATION_FIELD]
+    )
 
 
 def test_a_link_host_on_the_connection_shapes_every_join_url(engine, room):
@@ -1542,9 +1547,15 @@ def test_a_calendar_id_is_never_used_as_a_link_host(engine, room):
 
 
 def test_gong_to_zoom_counts_as_a_change_even_though_gong_redirects_there():
-    """"Gong will redirect you to Zoom" - two different links to one meeting."""
-    gong = {"location_provider": "gong", vocab.MEETING_LOCATION_FIELD: "https://example.zoom.us/g/1"}
-    zoom = {"location_provider": "zoom", vocab.MEETING_LOCATION_FIELD: "https://example.zoom.us/j/1"}
+    """ "Gong will redirect you to Zoom" - two different links to one meeting."""
+    gong = {
+        "location_provider": "gong",
+        vocab.MEETING_LOCATION_FIELD: "https://example.zoom.us/g/1",
+    }
+    zoom = {
+        "location_provider": "zoom",
+        vocab.MEETING_LOCATION_FIELD: "https://example.zoom.us/j/1",
+    }
     assert swapping.same_location(gong, zoom) is False
 
 
@@ -1586,11 +1597,17 @@ def test_the_swap_history_is_kept_oldest_first(engine, room, zoom_location, gong
     assert entry["notification"]["channel"] == "email"
 
 
-def test_the_swap_history_survives_a_second_swap(engine, room, zoom_location, gong_connection, meet_connection):
+def test_the_swap_history_survives_a_second_swap(
+    engine, room, zoom_location, gong_connection, meet_connection
+):
     book(engine, room["id"], zoom_location, who="a")
-    engine.swap(room["id"], "bk_a", {"kind": "gong", "connection_id": gong_connection["id"]}, source="test")
     engine.swap(
-        room["id"], "bk_a", {"kind": "google-meet", "connection_id": meet_connection["id"]},
+        room["id"], "bk_a", {"kind": "gong", "connection_id": gong_connection["id"]}, source="test"
+    )
+    engine.swap(
+        room["id"],
+        "bk_a",
+        {"kind": "google-meet", "connection_id": meet_connection["id"]},
         source="test",
     )
     trail = engine.history(room["id"], "bk_a")
@@ -1601,9 +1618,7 @@ def test_the_swap_history_survives_a_second_swap(engine, room, zoom_location, go
     assert trail[-1][vocab.PREVIOUS_LOCATION_FIELD]["location_provider"] == "gong"
 
 
-def test_a_swap_onto_a_provider_that_is_not_connected_is_refused(
-    engine, room, zoom_location
-):
+def test_a_swap_onto_a_provider_that_is_not_connected_is_refused(engine, room, zoom_location):
     """An inline swap resolves its connection by provider, never by inheritance."""
     book(engine, room["id"], zoom_location, who="a")
     with pytest.raises(ProviderNotConnected) as excinfo:
@@ -1616,7 +1631,12 @@ def test_a_swap_onto_a_provider_whose_credential_was_revoked_is_refused(
 ):
     book(engine, room["id"], zoom_location, who="a")
     engine.connect(
-        {"provider": "gong", "host": "dana@example.com", "state": "revoked", "token_present": False},
+        {
+            "provider": "gong",
+            "host": "dana@example.com",
+            "state": "revoked",
+            "token_present": False,
+        },
         source="test",
     )
     with pytest.raises(ProviderNotConnected):
@@ -1659,7 +1679,9 @@ def test_a_read_carries_the_latest_provider_report_as_a_write_does(engine, room,
     """A field the write returns and the read does not is a bad API, not a small one."""
     book(engine, room["id"], zoom_location, who="a")
     engine.report_provider_status(
-        room["id"], "bk_a", {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
+        room["id"],
+        "bk_a",
+        {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
         source="test",
     )
     read_back = engine.booking(room["id"], "bk_a")
@@ -1713,7 +1735,9 @@ def test_the_location_token_is_not_in_the_researched_dynamic_tag_list():
 
 def test_a_caller_supplied_url_wins_over_the_derived_one():
     rendered = swapping.render_invite(
-        {"booking_uid": "bk_a"}, reschedule_url="https://x.example/r/9", cancel_url="https://x.example/c/9"
+        {"booking_uid": "bk_a"},
+        reschedule_url="https://x.example/r/9",
+        cancel_url="https://x.example/c/9",
     )
     assert "https://x.example/r/9" in rendered["body"]
     assert "https://x.example/c/9" in rendered["body"]
@@ -1762,7 +1786,8 @@ def test_a_booking_read_renders_its_own_invite(engine, room, zoom_location):
 
 def test_an_in_person_booking_s_invite_carries_its_place_not_a_link(engine, room):
     location = engine.create_location(
-        {"kind": "in-person", "custom_text": "Level 12 boardroom", "is_default": True}, source="test"
+        {"kind": "in-person", "custom_text": "Level 12 boardroom", "is_default": True},
+        source="test",
     )
     book(engine, room["id"], location, who="a")
     invite = engine.invite(room["id"], "bk_a")
@@ -1839,7 +1864,12 @@ def test_a_report_naming_several_apps_keeps_each_one():
     verdict = provider_status.judge(
         [
             {"appName": "zoom", "success": True, "failures": 0, "errors": []},
-            {"appName": "google-meet", "success": False, "failures": 1, "errors": ["quotaExceeded"]},
+            {
+                "appName": "google-meet",
+                "success": False,
+                "failures": 1,
+                "errors": ["quotaExceeded"],
+            },
         ]
     )
     assert verdict["apps_succeeded"] == ["zoom"]
@@ -1913,7 +1943,9 @@ def test_recording_a_failure_report_keeps_a_working_link_and_records_the_failure
     """
     book(engine, room["id"], zoom_location, who="a")
     result = engine.report_provider_status(
-        room["id"], "bk_a", {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
+        room["id"],
+        "bk_a",
+        {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
         source="test",
     )
     assert result["state"] == "provisioned"
@@ -1944,7 +1976,9 @@ def test_recording_a_failure_report_marks_a_linkless_booking_as_provision_failed
         source="test",
     )
     result = engine.report_provider_status(
-        room["id"], "bk_a", {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
+        room["id"],
+        "bk_a",
+        {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
         source="test",
     )
     assert result["state"] == "provision-failed"
@@ -1955,9 +1989,13 @@ def test_recording_a_retrying_report_on_a_linkless_booking_still_leaves_it_retry
     engine, room, store, zoom_location
 ):
     booked = book(engine, room["id"], zoom_location, who="a")
-    store.update(booked["id"], {"conference_id": None, "provisions_conferences": False}, source="test")
+    store.update(
+        booked["id"], {"conference_id": None, "provisions_conferences": False}, source="test"
+    )
     result = engine.report_provider_status(
-        room["id"], "bk_a", {"appsStatus": [{"appName": "zoom", "success": False, "failures": 1}]},
+        room["id"],
+        "bk_a",
+        {"appsStatus": [{"appName": "zoom", "success": False, "failures": 1}]},
         source="test",
     )
     assert result["state"] == "provision-failed"
@@ -1977,7 +2015,9 @@ def test_a_booking_with_no_configured_static_link_falls_back_to_the_guest(
 ):
     book(engine, room["id"], zoom_location, who="a")
     result = engine.report_provider_status(
-        room["id"], "bk_a", {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
+        room["id"],
+        "bk_a",
+        {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
         source="test",
     )
     assert result["fallback"]["fallback"] == "ask-the-guest"
@@ -2020,9 +2060,7 @@ def test_the_summary_separates_links_from_outcomes_that_never_had_one(
     assert summary["missing_links"] == 0
 
 
-def test_the_summary_counts_a_one_time_booking_that_has_no_link(
-    engine, room, store, zoom_location
-):
+def test_the_summary_counts_a_one_time_booking_that_has_no_link(engine, room, store, zoom_location):
     """A provider that failed after the row was written: no link, no re-mint yet."""
     booked = book(engine, room["id"], zoom_location, who="a")
     store.update(
@@ -2041,7 +2079,9 @@ def test_the_summary_counts_a_provider_failure_apart_from_a_missing_link(
     """Two different problems, and a seller needs to tell them apart."""
     book(engine, room["id"], zoom_location, who="a")
     engine.report_provider_status(
-        room["id"], "bk_a", {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
+        room["id"],
+        "bk_a",
+        {"appsStatus": [{"appName": "zoom", "success": False, "failures": 99}]},
         source="test",
     )
     summary = engine.summary(room["id"])
@@ -2059,8 +2099,12 @@ def test_the_summary_names_the_locations_that_cannot_provision(engine, room):
     assert "connection" in summary["stranded_locations"][0]["missing"]
 
 
-def test_the_summary_lists_connected_and_required_providers(engine, zoom_connection, gong_connection):
-    engine.reauthorize(gong_connection["id"], {"state": "revoked", "token_present": False}, source="test")
+def test_the_summary_lists_connected_and_required_providers(
+    engine, zoom_connection, gong_connection
+):
+    engine.reauthorize(
+        gong_connection["id"], {"state": "revoked", "token_present": False}, source="test"
+    )
     summary = engine.summary("r1")
     assert summary["providers_connected"] == ["zoom"]
     assert summary["providers_required"] == list(vocab.PICKER_PROVIDERS)
@@ -2097,7 +2141,9 @@ def test_a_bookings_state_is_derived_from_its_fields(data, expected):
 def test_a_link_wins_over_a_state_saying_it_failed():
     from dsr.conference_links import booking_state
 
-    assert booking_state({"conference_id": "c", "location_state": "provision-failed"}) == "provisioned"
+    assert (
+        booking_state({"conference_id": "c", "location_state": "provision-failed"}) == "provisioned"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -2172,18 +2218,29 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
     gong = http.post(
         f"{PREFIX}/connections", json={"provider": "gong", "host": "dana@example.com"}
     ).json()
-    zoom = http.post(f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}).json()
-    gong_loc = http.post(f"{PREFIX}/meeting-locations", json={"kind": "gong", "name": "Gong", "connection_id": gong["id"]}).json()
+    zoom = http.post(
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
+    ).json()
+    gong_loc = http.post(
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "gong", "name": "Gong", "connection_id": gong["id"]},
+    ).json()
     static = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
 
     http.patch(f"{PREFIX}/meeting-locations/{static['id']}", json={"name": "Static room"})
     http.post(f"{PREFIX}/meeting-locations/{static['id']}/set-default")
 
-    booked = http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": zoom["id"], "booking_uid": "bk_a"}
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": zoom["id"], "booking_uid": "bk_a"},
     ).json()
     http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/location",
@@ -2198,13 +2255,18 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
         f"{PREFIX}/meeting-locations",
         json={"kind": "attendee-defined", "name": "Ask", "is_default": False},
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": waiting["id"], "booking_uid": "bk_g"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": waiting["id"], "booking_uid": "bk_g"},
+    )
     http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings/bk_g/provision",
         json={"guest_location": "https://guest.example/1"},
     )
 
-    http.post(f"{PREFIX}/connections/{gong['id']}/reauthorize", json={"host": "dana@northwind.example"})
+    http.post(
+        f"{PREFIX}/connections/{gong['id']}/reauthorize", json={"host": "dana@northwind.example"}
+    )
     http.delete(f"{PREFIX}/meeting-locations/{gong_loc['id']}")
     http.post(f"{PREFIX}/connections", json={"provider": "jitsi", "host": "ops@example.com"})
     jitsi = http.get(f"{PREFIX}/connections?provider=jitsi").json()["connections"][0]
@@ -2233,10 +2295,17 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
         f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
     location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
-    http.post(f"{PREFIX}/connections/{connection['id']}/reauthorize", json={"host": "dana@northwind.example"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
+    http.post(
+        f"{PREFIX}/connections/{connection['id']}/reauthorize",
+        json={"host": "dana@northwind.example"},
+    )
     http.patch(f"{PREFIX}/meeting-locations/{location['id']}", json={"name": "Zoom (recorded)"})
 
     store = RecordStore(client_store(http))
@@ -2249,8 +2318,10 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
 
     assert len(mine) >= 4, "the feature recorded fewer sources than it has write routes"
     for source in sorted(mine):
-        assert source.startswith(f"POST {PREFIX}") or source.startswith(f"PATCH {PREFIX}") or (
-            source.startswith(f"DELETE {PREFIX}")
+        assert (
+            source.startswith(f"POST {PREFIX}")
+            or source.startswith(f"PATCH {PREFIX}")
+            or (source.startswith(f"DELETE {PREFIX}"))
         ), f"{source!r} does not name a route under this feature's own prefix"
         assert source_names_a_mounted_route(source, routes), f"{source!r} names no mounted route"
 
@@ -2261,9 +2332,13 @@ def test_a_booking_written_over_http_records_its_own_route(http):
         f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
     location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
 
     store = RecordStore(client_store(http))
     sources = {row["source"] for row in store.audit(collection=BOOKINGS)}
@@ -2318,7 +2393,9 @@ def test_the_provider_catalogue_is_served_over_http(http):
 
 
 def test_creating_a_location_over_http_is_a_201_and_becomes_the_default(http):
-    response = http.post(f"{PREFIX}/meeting-locations", json={"kind": "in-person", "custom_text": "Room 4"})
+    response = http.post(
+        f"{PREFIX}/meeting-locations", json={"kind": "in-person", "custom_text": "Room 4"}
+    )
     assert response.status_code == 201
     assert response.json()["is_default"] is True
 
@@ -2335,9 +2412,12 @@ def test_a_second_default_over_http_is_a_409(http):
 
 def test_booking_without_a_connection_over_http_is_a_409_naming_the_tab(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    location = http.post(f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom"}).json()
+    location = http.post(
+        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom"}
+    ).json()
     response = http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"}
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
     )
     assert response.status_code == 409
     assert response.json()["error"] == "provider_not_connected"
@@ -2350,10 +2430,12 @@ def test_booking_over_http_returns_201_with_both_researched_fields(http):
         f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
     location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
     response = http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"}
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
     )
     assert response.status_code == 201
     body = response.json()
@@ -2363,7 +2445,9 @@ def test_booking_over_http_returns_201_with_both_researched_fields(http):
 
 def test_a_duplicate_connection_over_http_is_a_409(http):
     http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"})
-    response = http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"})
+    response = http.post(
+        f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
+    )
     assert response.status_code == 409
     assert response.json()["error"] == "provider_already_connected"
 
@@ -2382,14 +2466,25 @@ def test_the_bookings_list_over_http_separates_links_from_outcomes(http):
         f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
     zoom = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
     static = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": zoom["id"], "booking_uid": "bk_a"})
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": static["id"], "booking_uid": "bk_b"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": zoom["id"], "booking_uid": "bk_a"},
+    )
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": static["id"], "booking_uid": "bk_b"},
+    )
 
     body = http.get(f"{PREFIX}/rooms/{room['id']}/bookings").json()
     assert body["count"] == 2
@@ -2405,10 +2500,17 @@ def test_the_bookings_list_over_http_is_scoped_to_its_room(http):
         f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
     location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
-    http.post(f"{PREFIX}/rooms/{one['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
-    http.post(f"{PREFIX}/rooms/{two['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_b"})
+    http.post(
+        f"{PREFIX}/rooms/{one['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
+    http.post(
+        f"{PREFIX}/rooms/{two['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_b"},
+    )
     assert http.get(f"{PREFIX}/rooms/{one['id']}/bookings").json()["count"] == 1
 
 
@@ -2419,9 +2521,13 @@ def test_a_booking_in_another_room_over_http_is_a_404(http):
         f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
     location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
-    http.post(f"{PREFIX}/rooms/{one['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{one['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     assert http.get(f"{PREFIX}/rooms/{two['id']}/bookings/bk_a").status_code == 404
 
 
@@ -2434,7 +2540,10 @@ def test_the_conference_read_over_http_carries_the_google_request(http):
         f"{PREFIX}/meeting-locations",
         json={"kind": "google-meet", "name": "Meet", "connection_id": connection["id"]},
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     body = http.get(f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/conference").json()
     assert body["create_request"]["query"] == {"conferenceDataVersion": 1}
     assert body["outbound_not_sent"] is True
@@ -2444,9 +2553,16 @@ def test_a_static_booking_has_no_conference_over_http(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     location = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     response = http.get(f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/conference")
     assert response.status_code == 404
     assert response.json()["error"] == "conference_not_found"
@@ -2454,14 +2570,23 @@ def test_a_static_booking_has_no_conference_over_http(http):
 
 def test_the_swap_over_http_returns_the_researched_previous_location(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    zoom_c = http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}).json()
-    gong_c = http.post(f"{PREFIX}/connections", json={"provider": "gong", "host": "dana@example.com"}).json()
-    zoom = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": zoom_c["id"]}
+    zoom_c = http.post(
+        f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": zoom["id"], "booking_uid": "bk_a"})
+    gong_c = http.post(
+        f"{PREFIX}/connections", json={"provider": "gong", "host": "dana@example.com"}
+    ).json()
+    zoom = http.post(
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": zoom_c["id"]},
+    ).json()
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": zoom["id"], "booking_uid": "bk_a"},
+    )
     response = http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/location", json={"kind": "gong", "connection_id": gong_c["id"]}
+        f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/location",
+        json={"kind": "gong", "connection_id": gong_c["id"]},
     )
     assert response.status_code == 200
     body = response.json()
@@ -2472,15 +2597,25 @@ def test_the_swap_over_http_returns_the_researched_previous_location(http):
 
 def test_the_swap_to_the_same_location_over_http_is_a_409(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    connection = http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}).json()
+    connection = http.post(
+        f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
+    ).json()
     zoom = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
     static = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": zoom["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": zoom["id"], "booking_uid": "bk_a"},
+    )
     first = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/location", json={"location_id": static["id"]}
     )
@@ -2495,11 +2630,17 @@ def test_the_swap_to_the_same_location_over_http_is_a_409(http):
 
 def test_re_provisioning_a_linked_booking_over_http_is_a_409(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    connection = http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}).json()
-    location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+    connection = http.post(
+        f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    location = http.post(
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
+    ).json()
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     response = http.post(f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/provision", json={})
     assert response.status_code == 409
     assert response.json()["error"] == "conference_already_in_use"
@@ -2507,14 +2648,24 @@ def test_re_provisioning_a_linked_booking_over_http_is_a_409(http):
 
 def test_the_apps_status_report_over_http_is_recorded_and_judged(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    connection = http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}).json()
-    location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+    connection = http.post(
+        f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    location = http.post(
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
+    ).json()
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     response = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/apps-status",
-        json={"appsStatus": [{"appName": "zoom", "success": False, "failures": 99, "errors": ["down"]}]},
+        json={
+            "appsStatus": [
+                {"appName": "zoom", "success": False, "failures": 99, "errors": ["down"]}
+            ]
+        },
     )
     assert response.status_code == 200
     body = response.json()
@@ -2532,9 +2683,16 @@ def test_the_apps_status_report_with_no_apps_over_http_is_a_400(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     location = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     response = http.post(f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/apps-status", json={})
     assert response.status_code == 400
     assert "appName" in response.json()["detail"]
@@ -2544,9 +2702,16 @@ def test_the_invite_over_http_resolves_both_researched_tags(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     location = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     body = http.get(f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/invite").json()
     assert vocab.RESCHEDULE_TAG not in body["body"]
     assert "/bookings/bk_a/cancel" in body["body"]
@@ -2566,16 +2731,23 @@ def test_the_history_over_http_is_empty_before_any_swap(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     location = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     body = http.get(f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/history").json()
     assert body == {"room_id": room["id"], "booking_uid": "bk_a", "count": 0, "history": []}
 
 
 def test_the_summary_over_http_counts_the_three_numbers_that_matter(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    location = http.post(f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom"}).json()
+    http.post(f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom"}).json()
     body = http.get(f"{PREFIX}/rooms/{room['id']}/summary").json()
     assert body["count"] == 0
     assert body["one_time_linked"] == 0
@@ -2587,7 +2759,12 @@ def test_the_connections_list_over_http_counts_ready_separately(http):
     http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"})
     http.post(
         f"{PREFIX}/connections",
-        json={"provider": "gong", "host": "dana@example.com", "state": "revoked", "token_present": False},
+        json={
+            "provider": "gong",
+            "host": "dana@example.com",
+            "state": "revoked",
+            "token_present": False,
+        },
     )
     body = http.get(f"{PREFIX}/connections").json()
     assert body["count"] == 2
@@ -2604,7 +2781,9 @@ def test_the_connections_list_over_http_filters_by_provider_and_readiness(http):
 
 
 def test_disconnecting_a_named_connection_over_http_is_a_409(http):
-    connection = http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}).json()
+    connection = http.post(
+        f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
+    ).json()
     http.post(
         f"{PREFIX}/meeting-locations",
         json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
@@ -2635,7 +2814,10 @@ def test_the_set_default_route_over_http_is_a_200_and_leaves_one_default(http):
         f"{PREFIX}/meeting-locations",
         json={"kind": "conference-details", "conference_details": "https://x.example/j/1"},
     ).json()
-    assert http.post(f"{PREFIX}/meeting-locations/{second['id']}/set-default").json()["is_default"] is True
+    assert (
+        http.post(f"{PREFIX}/meeting-locations/{second['id']}/set-default").json()["is_default"]
+        is True
+    )
     listed = http.get(f"{PREFIX}/meeting-locations").json()
     assert listed["defaults"] == 1
     assert listed["meeting_locations"][0]["id"] in (first["id"], second["id"])
@@ -2643,11 +2825,17 @@ def test_the_set_default_route_over_http_is_a_200_and_leaves_one_default(http):
 
 def test_amending_a_location_that_has_provisioned_over_http_is_a_409(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
-    connection = http.post(f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}).json()
-    location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+    connection = http.post(
+        f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    location = http.post(
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
+    ).json()
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     response = http.patch(f"{PREFIX}/meeting-locations/{location['id']}", json={"kind": "gong"})
     assert response.status_code == 409
     assert "already provisioned" in response.json()["detail"]
@@ -2676,9 +2864,13 @@ def test_a_booking_is_readable_only_from_the_room_it_was_taken_in(http):
         f"{PREFIX}/connections", json={"provider": "zoom", "host": "dana@example.com"}
     ).json()
     location = http.post(
-        f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]}
+        f"{PREFIX}/meeting-locations",
+        json={"kind": "zoom", "name": "Zoom", "connection_id": connection["id"]},
     ).json()
-    http.post(f"{PREFIX}/rooms/{real['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{real['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
 
     assert http.get(f"{PREFIX}/rooms/{real['id']}/bookings/bk_a").status_code == 200
     assert http.get(f"{PREFIX}/rooms/{other['id']}/bookings/bk_a").status_code == 404
@@ -2823,7 +3015,9 @@ def test_the_location_type_inference_covers_every_kind():
 
 
 def test_the_reuse_inference_matches_what_the_code_actually_does():
-    entry = next(e for e in cl_inferences.INFERENCES if e["id"] == "reuse-across-bookings-is-refused")
+    entry = next(
+        e for e in cl_inferences.INFERENCES if e["id"] == "reuse-across-bookings-is-refused"
+    )
     assert entry["value"]["status"] == ConferenceReuse.status
     assert entry["value"]["claim"] == "refused"
 
@@ -2848,7 +3042,9 @@ def test_the_connection_readiness_inference_matches_the_code():
 
 
 def test_the_outbound_inference_admits_it_sends_nothing():
-    entry = next(e for e in cl_inferences.INFERENCES if e["id"] == "outbound-requests-are-built-not-sent")
+    entry = next(
+        e for e in cl_inferences.INFERENCES if e["id"] == "outbound-requests-are-built-not-sent"
+    )
     assert entry["value"]["sends"] is False
     assert "did not read" in cl_inferences.PROVIDER_API_GAP
 
@@ -2920,7 +3116,11 @@ def test_a_booking_may_carry_its_own_reschedule_and_cancel_urls(engine, room, zo
 
 def test_a_location_read_renders_its_wire_form_and_what_it_needs(engine):
     created = engine.create_location(
-        {"kind": "conference-details", "name": "Room", "conference_details": "https://x.example/j/1"},
+        {
+            "kind": "conference-details",
+            "name": "Room",
+            "conference_details": "https://x.example/j/1",
+        },
         source="test",
     )
     assert created["wire_location"] == {"type": "link", "link": "https://x.example/j/1"}
@@ -2962,7 +3162,9 @@ def test_meeting_number_is_ten_digits_for_any_identity():
 
 
 def test_a_join_link_can_be_shaped_on_a_known_host():
-    assert minting.link_for("zoom", "conf_1", host="acme.zoom.us").startswith("https://acme.zoom.us/j/")
+    assert minting.link_for("zoom", "conf_1", host="acme.zoom.us").startswith(
+        "https://acme.zoom.us/j/"
+    )
     assert minting.link_for("zoom", "conf_1", host="http://acme.internal").startswith(
         "http://acme.internal/j/"
     )
@@ -2992,9 +3194,7 @@ def test_a_connection_filter_on_an_unknown_provider_is_refused_by_name(engine):
 
 def test_the_outbound_request_for_a_known_host_uses_it(engine, room, zoom_location):
     """The host is recorded on the connection, so every link follows one setting."""
-    engine.reauthorize(
-        zoom_location["connection_id"], {"link_host": "acme.zoom.us"}, source="test"
-    )
+    engine.reauthorize(zoom_location["connection_id"], {"link_host": "acme.zoom.us"}, source="test")
     location = engine.meeting_location(zoom_location["id"])
     booked = book(engine, room["id"], location, who="a")
     assert booked[vocab.MEETING_LOCATION_FIELD].startswith("https://acme.zoom.us/j/")
@@ -3029,18 +3229,21 @@ def test_a_booking_read_raises_before_it_looks_for_a_conference(engine, room):
         engine.booking(room["id"], "bk_absent")
 
 
-def test_the_audit_log_records_a_swap_with_its_own_source(engine, store, room, zoom_location, gong_connection):
+def test_the_audit_log_records_a_swap_with_its_own_source(
+    engine, store, room, zoom_location, gong_connection
+):
     book(engine, room["id"], zoom_location, who="a")
     engine.swap(
-        room["id"], "bk_a", {"kind": "gong", "connection_id": gong_connection["id"]}, source="swap-source"
+        room["id"],
+        "bk_a",
+        {"kind": "gong", "connection_id": gong_connection["id"]},
+        source="swap-source",
     )
     sources = {row["source"] for row in store.audit(collection=BOOKINGS)}
     assert sources == {"test", "swap-source"}
 
 
-def test_the_audit_log_records_a_set_default_as_two_rows_in_one_transaction(
-    engine, store, db
-):
+def test_the_audit_log_records_a_set_default_as_two_rows_in_one_transaction(engine, store, db):
     engine.create_location({"kind": "in-person", "custom_text": "Room 4"}, source="test")
     second = engine.create_location(
         {"kind": "conference-details", "conference_details": "https://x.example"}, source="test"
@@ -3101,9 +3304,16 @@ def test_the_apps_status_history_over_http_is_empty_before_any_report(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     location = http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Static", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Static",
+            "conference_details": "https://x.example/j/1",
+        },
     ).json()
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings", json={"location_id": location["id"], "booking_uid": "bk_a"})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings",
+        json={"location_id": location["id"], "booking_uid": "bk_a"},
+    )
     body = http.get(f"{PREFIX}/rooms/{room['id']}/bookings/bk_a/provider-status").json()
     assert body["count"] == 0
 
@@ -3111,7 +3321,11 @@ def test_the_apps_status_history_over_http_is_empty_before_any_report(http):
 def test_the_meeting_locations_list_over_http_reports_gaps_and_one_times(http):
     http.post(
         f"{PREFIX}/meeting-locations",
-        json={"kind": "conference-details", "name": "Room", "conference_details": "https://x.example/j/1"},
+        json={
+            "kind": "conference-details",
+            "name": "Room",
+            "conference_details": "https://x.example/j/1",
+        },
     )
     http.post(f"{PREFIX}/meeting-locations", json={"kind": "zoom", "name": "Zoom"})
     body = http.get(f"{PREFIX}/meeting-locations").json()

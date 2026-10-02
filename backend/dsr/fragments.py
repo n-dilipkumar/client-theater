@@ -89,11 +89,18 @@ DOCUMENT_SLOT_RE = re.compile(r"^document_(\d+)$")
 #: The Document Gallery Block's documented fixed number of selectors.
 DOCUMENT_GALLERY_SLOTS = 4
 
-_OWNERSHIP_HELP = "Takes one file from the room's documents, the same files listed in the room's Documents view."
+_OWNERSHIP_HELP = (
+    "Takes one file from the room's documents, the same files listed in the room's Documents view."
+)
 
 
 def _document_slot(position: int) -> dict[str, Any]:
-    return {"key": f"document_{position}", "label": f"Document {position}", "type": "document", "help": _OWNERSHIP_HELP}
+    return {
+        "key": f"document_{position}",
+        "label": f"Document {position}",
+        "type": "document",
+        "help": _OWNERSHIP_HELP,
+    }
 
 
 def _analytics_fragment(key: str, name: str, summary: str, icon: str) -> dict[str, Any]:
@@ -311,23 +318,44 @@ FRAGMENTS: list[dict[str, Any]] = [
         "documented_fields": False,
         "fields": [],
     },
-
     # -- Digital Sales Room Analytics (10) ----------------------------------- #
     _analytics_fragment("activity-log", "Activity Log", "A log of room activity.", "activity-log"),
     _analytics_fragment(
-        "documents-statistics", "Documents Statistics", "Statistics for the room's documents.", "documents-statistics"
+        "documents-statistics",
+        "Documents Statistics",
+        "Statistics for the room's documents.",
+        "documents-statistics",
     ),
-    _analytics_fragment("engagement-chart", "Engagement Chart", "Engagement over time.", "engagement-chart"),
-    _analytics_fragment("frequency-chart", "Frequency Chart", "How often the room is visited.", "frequency-chart"),
-    _analytics_fragment("latest-activity", "Latest Activity", "The most recent buyer actions.", "latest-activity"),
     _analytics_fragment(
-        "most-active-visitors", "Most Active Visitors", "Individuals ranked by their total actions.", "most-active-visitors"
+        "engagement-chart", "Engagement Chart", "Engagement over time.", "engagement-chart"
     ),
-    _analytics_fragment("navigation", "Navigation", "Navigation between analytics blocks.", "navigation"),
-    _analytics_fragment("room-general", "Room General", "General room information.", "room-general"),
-    _analytics_fragment("room-statistics", "Room Statistics", "View time, visits, visitors and actions.", "room-statistics"),
-    _analytics_fragment("room-trend", "Room Trend", "Engagement health: cold, warm or hot.", "room-trend"),
-
+    _analytics_fragment(
+        "frequency-chart", "Frequency Chart", "How often the room is visited.", "frequency-chart"
+    ),
+    _analytics_fragment(
+        "latest-activity", "Latest Activity", "The most recent buyer actions.", "latest-activity"
+    ),
+    _analytics_fragment(
+        "most-active-visitors",
+        "Most Active Visitors",
+        "Individuals ranked by their total actions.",
+        "most-active-visitors",
+    ),
+    _analytics_fragment(
+        "navigation", "Navigation", "Navigation between analytics blocks.", "navigation"
+    ),
+    _analytics_fragment(
+        "room-general", "Room General", "General room information.", "room-general"
+    ),
+    _analytics_fragment(
+        "room-statistics",
+        "Room Statistics",
+        "View time, visits, visitors and actions.",
+        "room-statistics",
+    ),
+    _analytics_fragment(
+        "room-trend", "Room Trend", "Engagement health: cold, warm or hot.", "room-trend"
+    ),
     # -- DSR Fragments (4) --------------------------------------------------- #
     {
         "key": "page-bar",
@@ -471,7 +499,9 @@ def normalise_field(fragment_key: str, payload: Mapping[str, Any]) -> dict[str, 
     if field_type == "select":
         options = payload.get("options")
         if not isinstance(options, Sequence) or isinstance(options, (str, bytes)) or not options:
-            raise FragmentError(f"select field {fragment_key}.{key} needs a non-empty 'options' list")
+            raise FragmentError(
+                f"select field {fragment_key}.{key} needs a non-empty 'options' list"
+            )
         field["options"] = [str(option) for option in options]
     return field
 
@@ -527,10 +557,10 @@ def fragment_catalogue(
             entry["record_id"] = record.get("id")
         fragments[entry["key"]] = entry
 
-    ordered_sets = sorted(sets.values(), key=lambda item: (item["source"] != "shipped", item["key"]))
-    ordered_fragments = sorted(
-        fragments.values(), key=lambda item: (item["set"], item["key"])
+    ordered_sets = sorted(
+        sets.values(), key=lambda item: (item["source"] != "shipped", item["key"])
     )
+    ordered_fragments = sorted(fragments.values(), key=lambda item: (item["set"], item["key"]))
     for entry in ordered_sets:
         entry["fragments"] = [f["key"] for f in ordered_fragments if f["set"] == entry["key"]]
 
@@ -580,7 +610,9 @@ def _coerce_number(fragment_key: str, field: Mapping[str, Any], value: Any) -> f
         )
     minimum, maximum = field.get("min"), field.get("max")
     if minimum is not None and value < minimum:
-        raise FragmentError(f"{fragment_key}.{field['key']} must be at least {minimum}, got {value}")
+        raise FragmentError(
+            f"{fragment_key}.{field['key']} must be at least {minimum}, got {value}"
+        )
     if maximum is not None and value > maximum:
         raise FragmentError(f"{fragment_key}.{field['key']} must be at most {maximum}, got {value}")
     return int(value) if float(value).is_integer() else value
@@ -597,9 +629,7 @@ def _coerce_text(fragment_key: str, field: Mapping[str, Any], value: Any) -> str
 def _coerce_url(fragment_key: str, field: Mapping[str, Any], value: Any) -> str:
     text = _coerce_text(fragment_key, field, value).strip()
     if text and not text.lower().startswith(("http://", "https://")):
-        raise FragmentError(
-            f"{fragment_key}.{field['key']} must be an http(s) URL, got {text!r}"
-        )
+        raise FragmentError(f"{fragment_key}.{field['key']} must be an http(s) URL, got {text!r}")
     return text
 
 

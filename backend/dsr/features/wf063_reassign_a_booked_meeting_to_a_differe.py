@@ -151,7 +151,9 @@ def _meeting_state_error(request: Request, exc: MeetingStateError) -> JSONRespon
     Distinct from a plain refusal because the fix is different: a 400 says
     change the request, a 409 says this meeting is over.
     """
-    return JSONResponse(status_code=409, content={"error": "meeting_state_error", "detail": str(exc)})
+    return JSONResponse(
+        status_code=409, content={"error": "meeting_state_error", "detail": str(exc)}
+    )
 
 
 EXCEPTION_HANDLERS = {
@@ -247,7 +249,10 @@ def create_distribution(
     """
     body = normalise_distribution(payload)
     return engine.store.create(
-        DISTRIBUTION_COLLECTION, body, room_id=room_id, actor=actor,
+        DISTRIBUTION_COLLECTION,
+        body,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/distributions",
     )
 
@@ -297,7 +302,10 @@ def create_host(
     """
     body = normalise_host(payload)
     return engine.store.create(
-        HOST_COLLECTION, body, room_id=room_id, actor=actor,
+        HOST_COLLECTION,
+        body,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/hosts",
     )
 
@@ -379,7 +387,10 @@ def create_meeting(
     body["invite"] = invite_for(host["data"])
     engine.require_slot_within_bounds(body, host["id"])
     return engine.store.create(
-        MEETING_COLLECTION, body, room_id=room_id, actor=actor,
+        MEETING_COLLECTION,
+        body,
+        room_id=room_id,
+        actor=actor,
         source=f"POST {router.prefix}/rooms/{room_id}/meetings",
     )
 
@@ -404,7 +415,17 @@ def export_meetings(
     dicts is not a CSV anybody opens.
     """
     records = engine.meeting_activity(room_id, tab)
-    header = ["meeting_id", "title", "status", "meeting_type", "workspace", "host_id", "booker", "starts_at", "product_source"]
+    header = [
+        "meeting_id",
+        "title",
+        "status",
+        "meeting_type",
+        "workspace",
+        "host_id",
+        "booker",
+        "starts_at",
+        "product_source",
+    ]
     lines = [",".join(header)]
     for record in records:
         data = record["data"]
@@ -428,7 +449,9 @@ def export_meetings(
 
 
 @router.get("/rooms/{room_id}/meetings/{meeting_id}", summary="Read one meeting")
-def read_meeting(room_id: str, meeting_id: str, engine: ReassignEngine = EngineDep) -> dict[str, Any]:
+def read_meeting(
+    room_id: str, meeting_id: str, engine: ReassignEngine = EngineDep
+) -> dict[str, Any]:
     """One meeting, with its current host, its invite, and its reassignment count.
 
     Registered after ``export.csv`` and deliberately so: see the note there.
@@ -454,12 +477,16 @@ def _csv_cell(value: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-@router.get("/rooms/{room_id}/meetings/{meeting_id}/availability", summary="Who could take this booking")
+@router.get(
+    "/rooms/{room_id}/meetings/{meeting_id}/availability", summary="Who could take this booking"
+)
 def availability(
     room_id: str,
     meeting_id: str,
     kind: str = Query(default="individual", description="individual | team | distribution"),
-    starts_at: str | None = Query(default=None, description="a new slot, for the Edit Meeting path"),
+    starts_at: str | None = Query(
+        default=None, description="a new slot, for the Edit Meeting path"
+    ),
     engine: ReassignEngine = EngineDep,
 ) -> dict[str, Any]:
     """The candidates for the researched "known and free" pick.
@@ -476,7 +503,9 @@ def availability(
     return engine.availability(meeting_id, request)
 
 
-@router.post("/rooms/{room_id}/meetings/{meeting_id}/preview", summary="What a reassignment would do")
+@router.post(
+    "/rooms/{room_id}/meetings/{meeting_id}/preview", summary="What a reassignment would do"
+)
 def preview(
     room_id: str,
     meeting_id: str,
@@ -536,7 +565,9 @@ def _require_room_meeting(engine: ReassignEngine, room_id: str, meeting_id: str)
     """
     meeting = engine.get_meeting(meeting_id)
     if meeting is None or meeting.get("room_id") != room_id:
-        raise HTTPException(status_code=404, detail=f"meeting {meeting_id} not found on room {room_id}")
+        raise HTTPException(
+            status_code=404, detail=f"meeting {meeting_id} not found on room {room_id}"
+        )
     return meeting
 
 
@@ -567,7 +598,9 @@ def read_reassignment(
     """One reassignment, with the invite before and after and the webhooks it fired."""
     record = engine.get_reassignment(reassignment_id)
     if record is None or record.get("room_id") != room_id:
-        raise HTTPException(status_code=404, detail=f"reassignment {reassignment_id} not found on room {room_id}")
+        raise HTTPException(
+            status_code=404, detail=f"reassignment {reassignment_id} not found on room {room_id}"
+        )
     return record
 
 
@@ -601,7 +634,9 @@ def events_history(
     }
 
 
-@router.get("/rooms/{room_id}/meetings/{meeting_id}/history", summary="One meeting's reassignment history")
+@router.get(
+    "/rooms/{room_id}/meetings/{meeting_id}/history", summary="One meeting's reassignment history"
+)
 def meeting_history(
     room_id: str, meeting_id: str, engine: ReassignEngine = EngineDep
 ) -> dict[str, Any]:
@@ -642,9 +677,7 @@ def upcoming(
     from dsr.reassign import parse_instant
 
     records = [
-        record
-        for record in engine.meetings()
-        if parse_instant(record["data"]["starts_at"]) >= now
+        record for record in engine.meetings() if parse_instant(record["data"]["starts_at"]) >= now
     ]
     records.sort(key=lambda record: (record["data"]["starts_at"], record["id"]))
     return {"count": min(len(records), limit), "meetings": records[:limit]}
@@ -1045,7 +1078,9 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     for spec in DEMO_DISTRIBUTIONS:
         body = {k: v for k, v in spec.items() if k not in ("key", "member_keys")}
         body["member_ids"] = [host_ids[key] for key in spec["member_keys"]]
-        store.create(DISTRIBUTION_COLLECTION, normalise_distribution(body), actor="dana", source=source)
+        store.create(
+            DISTRIBUTION_COLLECTION, normalise_distribution(body), actor="dana", source=source
+        )
 
     def room_at(index: int) -> str:
         return rooms[index % len(rooms)][0]
@@ -1110,9 +1145,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         except ReassignError:
             refused.append(str(spec["label"]))
 
-    bypassed = sum(
-        1 for r in engine.reassignments() if r["data"].get("bounds_bypassed")
-    )
+    bypassed = sum(1 for r in engine.reassignments() if r["data"].get("bounds_bypassed"))
     return (
         f"{len(DEMO_HOSTS)} hosts, {len(DEMO_DISTRIBUTIONS)} distributions, {len(DEMO_MEETINGS)} meetings, "
         f"{len(outcomes)} reassignments ({bypassed} bypassing a bound), {len(refused)} refusals, "

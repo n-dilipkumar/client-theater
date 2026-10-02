@@ -14,6 +14,7 @@ product:
   3. the host actually LOADS it - the host skips a feature that fails to import
      and reports it, so a broken feature otherwise looks like a green build
 """
+
 import json
 import os
 import re
@@ -35,7 +36,7 @@ for _s in (sys.stdout, sys.stderr):
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACES = Path(os.environ.get("DSR_WORKSPACES") or ROOT.parent)
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
-if not PY.exists():                       # a venv elsewhere on PATH, or POSIX layout
+if not PY.exists():  # a venv elsewhere on PATH, or POSIX layout
     PY = Path(sys.executable)
 
 # One definition of the shared-file list, in tools/contract.py. This review gate
@@ -57,8 +58,16 @@ TARGETS = [
 
 
 def run(args, cwd, timeout=900, env=None):
-    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout, env=env)
+    p = subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=env,
+    )
     return p.returncode, (p.stdout + p.stderr)
 
 
@@ -77,7 +86,8 @@ def host_report(wt, env):
         "print(json.dumps({\n"
         "  'loaded': [(f['id'], f['prefix'], len(f['routes'])) for f in d['features']],\n"
         "  'failed': [(f['id'], f['error']) for f in d['failed']]}))\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     _, out = run([str(PY), str(probe)], wt / "backend", env=env)
     probe.unlink(missing_ok=True)
     for line in out.splitlines():
@@ -102,14 +112,16 @@ def main():
         files = [f for f in out.splitlines() if f.strip()]
         _, ahead = run(["git", "rev-list", "--count", "origin/main..HEAD"], wt)
         _, dirty = run(["git", "status", "--porcelain"], wt)
-        dirty_n = len([l for l in dirty.splitlines() if l.strip()])
+        dirty_n = len([ln for ln in dirty.splitlines() if ln.strip()])
 
         if not files:
             print(f"  no commits yet ({dirty_n} uncommitted file(s)) - agent still working")
             continue
 
         offenders = sorted(set(files) & SHARED)
-        print(f"  commits      : {ahead.strip()} ahead, {len(files)} file(s) changed, {dirty_n} uncommitted")
+        print(
+            f"  commits      : {ahead.strip()} ahead, {len(files)} file(s) changed, {dirty_n} uncommitted"
+        )
         print(f"  shared files : {offenders if offenders else 'NONE'}")
 
         tmp = tempfile.mkdtemp(prefix=f"dsr-{ticket}-")
@@ -117,8 +129,21 @@ def main():
         env["DSR_DB_PATH"] = str(Path(tmp) / "v.db")
         env["DSR_AUDIT_DIR"] = str(Path(tmp) / "audit")
 
-        _, out = run([str(PY), "-m", "pytest", "-p", "no:cacheprovider", "--tb=line",
-                      "-o", "addopts=", "-q"], wt / "backend", env=env)
+        _, out = run(
+            [
+                str(PY),
+                "-m",
+                "pytest",
+                "-p",
+                "no:cacheprovider",
+                "--tb=line",
+                "-o",
+                "addopts=",
+                "-q",
+            ],
+            wt / "backend",
+            env=env,
+        )
         passed = failed = 0
         for line in reversed(out.splitlines()):
             m = re.search(r"(\d+) passed", line)
@@ -149,8 +174,13 @@ def main():
                 print("  failed       : none")
 
         ok = not offenders and failed == 0 and reg is not None and not reg["failed"]
-        results[ticket] = {"ok": ok, "passed": passed, "failed": failed,
-                           "offenders": offenders, "files": len(files)}
+        results[ticket] = {
+            "ok": ok,
+            "passed": passed,
+            "failed": failed,
+            "offenders": offenders,
+            "files": len(files),
+        }
         print(f"  VERDICT      : {'PASS' if ok else 'NEEDS WORK'}")
         print()
 
@@ -162,10 +192,13 @@ def main():
         if not r:
             print(f"  {ticket}  (still working)")
         else:
-            print(f"  {ticket}  {r['passed']:>4} passed  {r['failed']} failed  "
-                  f"shared={r['offenders'] or 'none'}  -> {'PASS' if r['ok'] else 'NEEDS WORK'}")
+            print(
+                f"  {ticket}  {r['passed']:>4} passed  {r['failed']} failed  "
+                f"shared={r['offenders'] or 'none'}  -> {'PASS' if r['ok'] else 'NEEDS WORK'}"
+            )
     (ROOT / "data" / "verify_set2_set3.json").write_text(
-        json.dumps(results, indent=2), encoding="utf-8")
+        json.dumps(results, indent=2), encoding="utf-8"
+    )
     return 0
 
 

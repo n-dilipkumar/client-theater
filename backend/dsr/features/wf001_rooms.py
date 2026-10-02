@@ -149,8 +149,7 @@ def list_accounts(
 def _searchable_text(record: Any) -> str:
     data = record.get("data") or {}
     return " ".join(
-        str(data.get(key, ""))
-        for key in ("name", "friendly_url", "account_name", "template_name")
+        str(data.get(key, "")) for key in ("name", "friendly_url", "account_name", "template_name")
     ).lower()
 
 
@@ -249,7 +248,9 @@ def accounts(
 def create_room_endpoint(
     payload: dict[str, Any] = Body(default_factory=dict),
     actor: str | None = Query(default=None),
-    request_id: str | None = Query(default=None, description="read this submission's writes back as a unit"),
+    request_id: str | None = Query(
+        default=None, description="read this submission's writes back as a unit"
+    ),
     store: RecordStore = StoreDep,
 ) -> dict[str, Any]:
     """Wizard steps 1-3: create a room from an account and a template.
@@ -355,8 +356,20 @@ ACCOUNTS: tuple[dict[str, Any], ...] = (
 #: given an explicit operator-typed URL and the others are derived from the name,
 #: so both branches of the friendly-URL rule are visible without interaction.
 DEMO_ROOMS: tuple[tuple[str, str, str, str | None, str], ...] = (
-    ("Northwind Traders", "tpl_guided_evaluation", "Northwind Traders - Enterprise Evaluation", None, "active"),
-    ("Contoso Health", "tpl_technical_review", "Contoso Health - Security Review", "contoso-security", "active"),
+    (
+        "Northwind Traders",
+        "tpl_guided_evaluation",
+        "Northwind Traders - Enterprise Evaluation",
+        None,
+        "active",
+    ),
+    (
+        "Contoso Health",
+        "tpl_technical_review",
+        "Contoso Health - Security Review",
+        "contoso-security",
+        "active",
+    ),
     ("Fabrikam Logistics", "tpl_standard", "Fabrikam Logistics - Renewal", None, "active"),
     ("Northwind Traders", "tpl_standard", "Northwind Traders - Pilot (2025)", None, "archived"),
 )

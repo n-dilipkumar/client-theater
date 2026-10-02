@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timezone
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from dsr.permissions import ROOM_ARCHIVED, Capabilities, capabilities
 from dsr.store import RecordStore
@@ -162,7 +162,9 @@ def guess_format(name: str, explicit: str | None = None) -> str:
         return str(explicit).strip().lower()
     suffix = str(name or "").rsplit(".", 1)
     if len(suffix) == 2:
-        return _EXTENSION_FORMATS.get(suffix[1].strip().lower(), suffix[1].strip().lower() or "file")
+        return _EXTENSION_FORMATS.get(
+            suffix[1].strip().lower(), suffix[1].strip().lower() or "file"
+        )
     return "file"
 
 
@@ -325,9 +327,7 @@ class DocumentLibrary:
             "total": total,
             "search": search or "",
             "status": status,
-            "capabilities": capabilities(
-                role, room_status=room_status, actor=actor
-            ).to_dict(),
+            "capabilities": capabilities(role, room_status=room_status, actor=actor).to_dict(),
         }
 
     def get_document(
@@ -377,7 +377,10 @@ class DocumentLibrary:
                 "last_modified_at": data.get("last_modified_at") or record.get("updated_at"),
                 # Sourced: rendering is asynchronous, so an empty url is a real
                 # state rather than a missing value.
-                "thumbnail": {"state": "ready" if thumbnail_url else "pending", "url": thumbnail_url or None},
+                "thumbnail": {
+                    "state": "ready" if thumbnail_url else "pending",
+                    "url": thumbnail_url or None,
+                },
                 "expires_at": expires_at,
                 "expired": _is_expired(expires_at),
                 "open_in_new_tab": bool(data.get("open_in_new_tab", True)),
@@ -478,7 +481,9 @@ class DocumentLibrary:
 
         data = {k: v for k, v in dict(patch or {}).items() if k not in _IMMUTABLE_KEYS}
         if "status" in data:
-            self._check_transition(str(record.get("data", {}).get("status") or DEFAULT_STATUS), str(data["status"]))
+            self._check_transition(
+                str(record.get("data", {}).get("status") or DEFAULT_STATUS), str(data["status"])
+            )
         if "expires_at" in data:
             data["expires_at"] = _validate_expiry(data["expires_at"])
 
@@ -577,7 +582,9 @@ class DocumentLibrary:
         return {
             "default": DEFAULT_STATUS,
             "known": sorted(KNOWN_STATUSES),
-            "transitions": {state: sorted(next_states) for state, next_states in ALLOWED_TRANSITIONS.items()},
+            "transitions": {
+                state: sorted(next_states) for state, next_states in ALLOWED_TRANSITIONS.items()
+            },
             "open": bool(ALLOWED_TRANSITIONS),
         }
 
@@ -676,7 +683,11 @@ class DocumentLibrary:
                 {
                     "id": found["id"],
                     "name": str(found.get("data", {}).get("name") or found["id"]),
-                    "title": str(found.get("data", {}).get("title") or found.get("data", {}).get("name") or found["id"]),
+                    "title": str(
+                        found.get("data", {}).get("title")
+                        or found.get("data", {}).get("name")
+                        or found["id"]
+                    ),
                     "format": guess_format(
                         str(found.get("data", {}).get("name") or ""),
                         found.get("data", {}).get("format"),

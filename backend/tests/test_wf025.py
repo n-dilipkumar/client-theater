@@ -48,17 +48,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase, RecordNotFound
-from dsr.event_stream import EventStream
-from dsr.event_stream import filters as filter_module
+from dsr.event_stream import EventStream, filters as filter_module
 from dsr.event_stream.backfill import DEFAULT_LIMIT, RateLimiter, require_properties
 from dsr.event_stream.delivery import (
     DEFAULT_TIMEOUT,
-    RETRYABLE_STATUS,
     RETRY_AFTER_CAP,
+    RETRYABLE_STATUS,
     DeliveryResult,
     attempt_delivery,
     attempts_remaining,
@@ -81,10 +78,10 @@ from dsr.event_stream.payloads import (
     WEBHOOK_EVENT_OBJECT,
     build_event_payload,
     is_anonymous,
+    normalise_asset_snapshot,
     normalise_associated_objects,
     normalise_form_questions,
     normalise_form_responses,
-    normalise_asset_snapshot,
     render_associated_objects,
 )
 from dsr.event_stream.registry import (
@@ -95,8 +92,6 @@ from dsr.event_stream.registry import (
     EndpointBook,
     SubscriptionBook,
     compile_for,
-    summarise_subscription,
-    summarise_webhook,
 )
 from dsr.event_stream.signing import (
     PREVIOUS_SIGNATURE_HEADER,
@@ -123,9 +118,9 @@ from dsr.event_stream.targets import (
 )
 from dsr.event_stream.vocabulary import (
     ALWAYS_ASSOCIATED,
-    ASSOCIATED_OBJECTS,
     ASSET_EVENTS,
     ASSET_SNAPSHOT_FIELDS,
+    ASSOCIATED_OBJECTS,
     EVENT_TYPES,
     FILE_UPLOAD_QUESTION,
     FORM_EVENTS,
@@ -145,6 +140,7 @@ from dsr.event_stream.vocabulary import (
 )
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -256,7 +252,9 @@ def stream(store, transport):
 
 @pytest.fixture()
 def webhook(stream):
-    return stream.create_webhook("Northwind to warehouse", TARGET, role=ROLE_ADMIN, source=SOURCE)["webhook"]
+    return stream.create_webhook("Northwind to warehouse", TARGET, role=ROLE_ADMIN, source=SOURCE)[
+        "webhook"
+    ]
 
 
 @pytest.fixture()
@@ -273,9 +271,9 @@ def http(monkeypatch, transport):
     monkeypatch.setenv("DSR_AUDIT_DIR", str(Path(tmp.name) / "audit"))
     monkeypatch.setattr("dsr.api.FRONTEND_DIST", Path(tmp.name) / "absent-frontend")
     with TestClient(app) as client:
-        app.dependency_overrides[load_feature("wf025_stream_workspace_activity_events_to_yo").get_stream] = (
-            lambda: EventStream(client.app.state.store, transport=transport, now=NOW)
-        )
+        app.dependency_overrides[
+            load_feature("wf025_stream_workspace_activity_events_to_yo").get_stream
+        ] = lambda: EventStream(client.app.state.store, transport=transport, now=NOW)
         # The scripted transport is reachable from a test body, so a test can
         # make the next call fail without rebuilding the service.
         client.transport = transport  # type: ignore[attr-defined]
@@ -290,7 +288,11 @@ def http(monkeypatch, transport):
 def http_room(http):
     return http.post(
         "/api/records/room",
-        json={"name": "Northwind — Enterprise Evaluation", "account": "Northwind Traders", "stage": "evaluation"},
+        json={
+            "name": "Northwind — Enterprise Evaluation",
+            "account": "Northwind Traders",
+            "stage": "evaluation",
+        },
     ).json()
 
 
@@ -309,7 +311,10 @@ def objects(workspace: str = "ws_1", account: str = "acc_1", user: str | None = 
 
 def subscribe(stream, webhook_id: str, types=None, **kwargs):
     return stream.create_subscription(
-        webhook_id, types or ["workspace.viewed"], source=f"POST {PREFIX}/webhooks/x/subscriptions", **kwargs
+        webhook_id,
+        types or ["workspace.viewed"],
+        source=f"POST {PREFIX}/webhooks/x/subscriptions",
+        **kwargs,
     )
 
 
@@ -325,9 +330,7 @@ def record(stream, event: str = "workspace.viewed", **kwargs):
 
 def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     """The routes resolve even though no shared file names this feature."""
-    entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["ticket"] == "WF-025"
-    )
+    entry = next(f for f in http.get("/api/features").json()["features"] if f["ticket"] == "WF-025")
     assert entry["prefix"] == PREFIX
     assert entry["id"] == "wf-025-stream-workspace-activity-events-to-yo"
     assert entry["exception_handlers"] == ["EventStreamError"]
@@ -518,7 +521,11 @@ def test_require_types_refuses_an_empty_subscription():
 
 
 def test_required_objects_for_a_page_view_names_the_workspace_page():
-    assert required_objects_for("workspace.page.viewed") == ("workspace", "account", "workspacePage")
+    assert required_objects_for("workspace.page.viewed") == (
+        "workspace",
+        "account",
+        "workspacePage",
+    )
     assert required_objects_for("workspace.section_navigation.clicked")[-1] == "workspaceSection"
     assert required_objects_for("workspace.form.submitted")[-1] == "workspaceForm"
     assert required_objects_for("course.completed")[-1] == "workspacePlanTask"
@@ -637,7 +644,9 @@ def test_the_researched_example_works_against_a_top_level_payload():
 
 
 def test_alternation_is_an_or():
-    compiled = filter_module.compile_filter("$.associatedObjects.account | $.associatedObjects.user")
+    compiled = filter_module.compile_filter(
+        "$.associatedObjects.account | $.associatedObjects.user"
+    )
     assert compiled.to_dict()["alternatives"] == 2
     assert compiled.matches({"associatedObjects": {"user": {"id": "u_1"}}})
     assert not compiled.matches({"associatedObjects": {"file": {"id": "f_1"}}})
@@ -935,7 +944,10 @@ def test_an_event_missing_the_objects_its_type_names_is_refused():
 
 
 def test_associated_objects_must_be_objects_or_ids():
-    assert normalise_associated_objects({"workspace": "w1", "account": "a1"})["workspace"]["id"] == "w1"
+    assert (
+        normalise_associated_objects({"workspace": "w1", "account": "a1"})["workspace"]["id"]
+        == "w1"
+    )
     with pytest.raises(EventPayloadError):
         normalise_associated_objects({"workspace": {"id": "w"}, "account": ["a"]})
     with pytest.raises(EventPayloadError):
@@ -1060,7 +1072,9 @@ def test_a_question_type_outside_the_one_named_is_accepted():
 def test_a_file_upload_response_must_carry_its_expiry():
     questions = normalise_form_questions([{"id": "q2", "type": FILE_UPLOAD_QUESTION}])
     with pytest.raises(EventPayloadError) as caught:
-        normalise_form_responses([{"questionId": "q2", "value": {"url": "https://x.example/a"}}], questions)
+        normalise_form_responses(
+            [{"questionId": "q2", "value": {"url": "https://x.example/a"}}], questions
+        )
     assert caught.value.code == "file_upload_expiry_missing"
     with pytest.raises(EventPayloadError) as caught:
         normalise_form_responses([{"questionId": "q2", "value": {"expiresAt": "x"}}], questions)
@@ -1083,7 +1097,15 @@ def test_a_file_upload_response_records_whether_its_url_has_expired():
     assert fresh[0]["presigned"]["key"] == "a.pdf"
 
     stale = normalise_form_responses(
-        [{"questionId": "q2", "value": {"url": "https://x.example/a", "expiresAt": "2026-08-28T18:40:00.000+00:00"}}],
+        [
+            {
+                "questionId": "q2",
+                "value": {
+                    "url": "https://x.example/a",
+                    "expiresAt": "2026-08-28T18:40:00.000+00:00",
+                },
+            }
+        ],
         questions,
         now=LATER,
     )
@@ -1144,7 +1166,9 @@ def test_attempts_remaining_counts_down_to_zero():
 
 
 def test_a_successful_attempt_is_delivered_and_schedules_nothing():
-    report = attempt_delivery(FakeTransport(ok()), TARGET, {"a": 1}, event="e", delivery_id="d", now=NOW)
+    report = attempt_delivery(
+        FakeTransport(ok()), TARGET, {"a": 1}, event="e", delivery_id="d", now=NOW
+    )
     assert report.state == "delivered"
     assert report.retry_in_seconds is None
     assert report.next_attempt_at is None
@@ -1432,10 +1456,14 @@ def test_a_filter_is_compiled_when_the_subscription_is_created(stream, webhook):
 
 def test_a_paused_subscription_still_lists_and_still_has_its_counters(stream, webhook):
     subscription = subscribe(stream, webhook["id"])
-    paused = stream.update_subscription(subscription["id"], {"active": False}, source=SOURCE, now=NOW)
+    paused = stream.update_subscription(
+        subscription["id"], {"active": False}, source=SOURCE, now=NOW
+    )
     assert paused["active"] is False
     assert paused["paused_at"]
-    resumed = stream.update_subscription(subscription["id"], {"active": True}, source=SOURCE, now=NOW)
+    resumed = stream.update_subscription(
+        subscription["id"], {"active": True}, source=SOURCE, now=NOW
+    )
     assert resumed["active"] is True
     assert resumed["resumed_at"]
 
@@ -1457,7 +1485,10 @@ def test_a_subscription_can_be_retyped_and_refiltered(stream, webhook):
 def test_an_empty_patch_is_a_no_op_rather_than_an_audit_row(stream, webhook):
     subscription = subscribe(stream, webhook["id"])
     before = len(store_audit(stream))
-    assert stream.update_subscription(subscription["id"], {}, source=SOURCE)["id"] == subscription["id"]
+    assert (
+        stream.update_subscription(subscription["id"], {}, source=SOURCE)["id"]
+        == subscription["id"]
+    )
     assert len(store_audit(stream)) == before
 
 
@@ -1479,7 +1510,9 @@ def test_unsubscribing_is_a_soft_delete(stream, webhook):
     subscription = subscribe(stream, webhook["id"])
     stream.unsubscribe(subscription["id"], source=SOURCE)
     assert stream.subscriptions.get(subscription["id"]) is None
-    found = stream.store.find(SUBSCRIPTION_COLLECTION, {"id": subscription["id"]}, include_deleted=True)
+    found = stream.store.find(
+        SUBSCRIPTION_COLLECTION, {"id": subscription["id"]}, include_deleted=True
+    )
     assert stream.store.get(subscription["id"]) is None
     assert found is not None
 
@@ -1548,7 +1581,7 @@ def test_a_subscription_viewed_in_detail_carries_its_filter_and_its_deliveries(s
 
 
 def test_compile_for_returns_none_for_an_unfiltered_subscription(store):
-    book = SubscriptionBook(store)
+    SubscriptionBook(store)
     assert compile_for({"data": {"filter": None}}) is None
 
 
@@ -1567,7 +1600,9 @@ def test_recording_an_event_stores_it_before_anything_is_sent(stream, webhook, s
 
 def test_the_fan_out_reports_one_line_per_delivery(stream, webhook):
     subscribe(stream, webhook["id"], ["workspace.viewed"])
-    second = stream.create_webhook("Second", SECOND_TARGET, role=ROLE_ADMIN, source=SOURCE)["webhook"]
+    second = stream.create_webhook("Second", SECOND_TARGET, role=ROLE_ADMIN, source=SOURCE)[
+        "webhook"
+    ]
     subscribe(stream, second["id"], ["workspace.viewed"])
     result = record(stream)
     assert len(result["deliveries"]) == 2
@@ -1584,6 +1619,7 @@ def test_a_paused_subscription_produces_a_skip_row_not_nothing(stream, webhook):
     assert result["deliveries"][0]["reason"] == "subscription_paused"
     assert result["deliveries"][0]["attempted"] is False
     assert result["deliveries"][0]["http_status"] is None
+
 
 def test_a_paused_webhook_produces_its_own_skip_reason(stream, webhook):
     subscribe(stream, webhook["id"], ["workspace.viewed"])
@@ -1799,7 +1835,9 @@ def test_a_retry_of_a_delivered_payload_is_refused(stream, webhook):
         stream.retry_delivery(delivery, source=SOURCE)
 
 
-def test_a_retry_only_counts_the_first_attempt_towards_the_webhook_totals(stream, webhook, transport):
+def test_a_retry_only_counts_the_first_attempt_towards_the_webhook_totals(
+    stream, webhook, transport
+):
     subscribe(stream, webhook["id"], ["workspace.viewed"])
     transport.scripted.append(server_error())
     delivery = record(stream)["deliveries"][0]["delivery_id"]
@@ -1819,7 +1857,9 @@ def test_a_successful_delivery_closes_a_key_rotation_overlap(stream, webhook, tr
     assert stream.read_webhook(webhook["id"])["rotation_in_progress"] is False
 
 
-def test_a_retried_delivery_goes_out_with_both_signatures_during_the_overlap(stream, webhook, transport):
+def test_a_retried_delivery_goes_out_with_both_signatures_during_the_overlap(
+    stream, webhook, transport
+):
     subscribe(stream, webhook["id"], ["workspace.viewed"])
     transport.scripted.append(server_error())
     delivery = record(stream)["deliveries"][0]["delivery_id"]
@@ -1869,7 +1909,9 @@ def test_test_events_go_out_once_per_subscribed_type(stream, webhook, transport)
     assert transport.calls[-1]["body"]["test"] is True
 
 
-def test_a_test_event_carries_no_user_which_is_the_anonymous_rule_demonstrated(stream, webhook, transport):
+def test_a_test_event_carries_no_user_which_is_the_anonymous_rule_demonstrated(
+    stream, webhook, transport
+):
     stream.create_subscription(webhook["id"], ["workspace.viewed"], source=SOURCE)
     stream.send_test_events(webhook["id"], source=SOURCE)
     assert "user" not in transport.calls[-1]["body"]["associatedObjects"]
@@ -1883,7 +1925,9 @@ def test_a_test_event_is_marked_tested_and_gets_its_own_delivery_row(stream, web
     assert row["data"]["test"] is True
 
 
-def test_a_failed_test_event_is_visible_in_the_same_place_as_a_real_failure(stream, webhook, transport):
+def test_a_failed_test_event_is_visible_in_the_same_place_as_a_real_failure(
+    stream, webhook, transport
+):
     transport.scripted.append(ok())
     transport.scripted.append(not_found())
     stream.create_subscription(webhook["id"], ["workspace.viewed", "asset.viewed"], source=SOURCE)
@@ -1922,7 +1966,9 @@ def test_omitting_properties_returns_only_id_object_and_url(stream, store):
 def test_an_empty_properties_parameter_also_means_the_minimum(stream, store):
     store.create("room", {"name": "N"}, actor="dana")
     for value in ("", "   ", ","):
-        assert stream.backfill("workspaces", properties=value)["properties"] == list(MINIMAL_PROPERTIES)
+        assert stream.backfill("workspaces", properties=value)["properties"] == list(
+            MINIMAL_PROPERTIES
+        )
 
 
 def test_properties_selects_fields_and_dedupes(stream, store):
@@ -2011,7 +2057,9 @@ def test_assets_and_plan_tasks_pull_from_their_own_collections(stream, store):
     store.create("document", {"title": "Deck", "kind": "deck"}, actor="dana")
     store.create("plan_task", {"title": "Task", "status": "done"}, actor="dana")
     assert stream.backfill("assets", properties="title")["results"] == [{"title": "Deck"}]
-    assert stream.backfill("workspace-plan-tasks", properties="title")["results"] == [{"title": "Task"}]
+    assert stream.backfill("workspace-plan-tasks", properties="title")["results"] == [
+        {"title": "Task"}
+    ]
 
 
 def test_the_pull_response_reports_the_vendor_path_it_stands_for(stream, store):
@@ -2124,7 +2172,12 @@ def test_the_streams_collections_are_discoverable_with_their_own_fields(store, s
     stream.create_subscription(webhook["id"], ["workspace.viewed"], source=SOURCE)
     record(stream)
     collections = {row["collection"] for row in store.collections()}
-    assert {WEBHOOK_COLLECTION, SUBSCRIPTION_COLLECTION, EVENT_COLLECTION, DELIVERY_COLLECTION} <= collections
+    assert {
+        WEBHOOK_COLLECTION,
+        SUBSCRIPTION_COLLECTION,
+        EVENT_COLLECTION,
+        DELIVERY_COLLECTION,
+    } <= collections
     delivery = store.fields(DELIVERY_COLLECTION)
     assert {field["path"] for field in delivery} >= {
         "state",
@@ -2195,9 +2248,13 @@ def test_the_role_may_also_arrive_as_a_header(http):
 
 
 def test_a_refusal_over_http_carries_the_code_the_remediation_and_a_correlation_id(http):
-    response = http.post(f"{PREFIX}/webhooks", json={"name": "x", "targetUrl": "http://nope.example/x"})
+    response = http.post(
+        f"{PREFIX}/webhooks", json={"name": "x", "targetUrl": "http://nope.example/x"}
+    )
     assert response.status_code == 403  # the role is checked first
-    created = http.post(f"{PREFIX}/webhooks?role=admin", json={"name": "x", "targetUrl": "http://nope.example/x"})
+    created = http.post(
+        f"{PREFIX}/webhooks?role=admin", json={"name": "x", "targetUrl": "http://nope.example/x"}
+    )
     assert created.status_code == 400
     body = created.json()
     assert body["error"] == "invalid_target"
@@ -2218,9 +2275,9 @@ def test_a_refusal_status_travels_with_the_error(http):
 def test_a_rate_limited_backfill_answers_429_with_a_retry_after_header(http, store, app_store):
     limiter = RateLimiter(limit=1, window=60.0, now=lambda: 1000.0)
     stream = EventStream(app_store, transport=FakeTransport(), rate_limiter=limiter, now=NOW)
-    app.dependency_overrides[load_feature("wf025_stream_workspace_activity_events_to_yo").get_stream] = (
-        lambda: stream
-    )
+    app.dependency_overrides[
+        load_feature("wf025_stream_workspace_activity_events_to_yo").get_stream
+    ] = lambda: stream
     try:
         assert http.get(f"{PREFIX}/backfill/workspaces").status_code == 200
         limited = http.get(f"{PREFIX}/backfill/workspaces")
@@ -2282,7 +2339,10 @@ def test_the_full_http_journey(http):
     assert rotated.status_code == 200
     assert rotated.json()["secret"] != secret
 
-    assert http.post(f"{PREFIX}/webhooks/{webhook_id}/key").json()["secret"] == rotated.json()["secret"]
+    assert (
+        http.post(f"{PREFIX}/webhooks/{webhook_id}/key").json()["secret"]
+        == rotated.json()["secret"]
+    )
 
     assert http.delete(f"{PREFIX}/subscriptions/{subscription_id}?actor=dana").status_code == 204
     assert http.get(f"{PREFIX}/subscriptions/{subscription_id}").status_code == 404
@@ -2303,9 +2363,7 @@ def test_the_backfill_routes_answer(http, http_room):
     assert set(minimal["results"][0]) == {"id", "object", "url"}
     assert minimal["results"][0]["id"] == http_room["id"]
 
-    selected = http.get(
-        f"{PREFIX}/backfill/workspaces", params={"properties": "name,stage"}
-    ).json()
+    selected = http.get(f"{PREFIX}/backfill/workspaces", params={"properties": "name,stage"}).json()
     assert selected["results"][0]["name"] == http_room["data"]["name"]
 
     one = http.get(f"{PREFIX}/backfill/workspaces/{http_room['id']}").json()
@@ -2359,7 +2417,11 @@ def test_a_delivery_retry_over_http_answers_409_for_a_delivered_row(http):
     webhook_id = created["webhook"]["id"]
     http.post(f"{PREFIX}/webhooks/{webhook_id}/subscriptions", json={"types": ["workspace.viewed"]})
     event = http.post(
-        f"{PREFIX}/events", json={"event": "workspace.viewed", "associatedObjects": {"workspace": {"id": "w"}, "account": {"id": "a"}}}
+        f"{PREFIX}/events",
+        json={
+            "event": "workspace.viewed",
+            "associatedObjects": {"workspace": {"id": "w"}, "account": {"id": "a"}},
+        },
     ).json()
     delivery_id = event["deliveries"][0]["delivery_id"]
     assert http.post(f"{PREFIX}/deliveries/{delivery_id}/retry").status_code == 409
@@ -2368,7 +2430,11 @@ def test_a_delivery_retry_over_http_answers_409_for_a_delivered_row(http):
 
 def test_recording_an_event_over_http_refuses_a_presentation_without_a_share_link(http):
     response = http.post(
-        f"{PREFIX}/events", json={"event": "presentation.viewed", "associatedObjects": {"workspace": {"id": "w"}, "account": {"id": "a"}}}
+        f"{PREFIX}/events",
+        json={
+            "event": "presentation.viewed",
+            "associatedObjects": {"workspace": {"id": "w"}, "account": {"id": "a"}},
+        },
     )
     assert response.status_code == 400
     assert response.json()["error"] == "share_link_required"
@@ -2418,7 +2484,7 @@ def _matches_registered_route(source: str, routes: list[dict]) -> bool:
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -2440,9 +2506,7 @@ def test_every_write_audit_row_names_a_route_the_app_serves(http):
     ).json()
     http.patch(f"{PREFIX}/webhooks/{webhook_id}?actor=dana", json={"name": "Renamed"})
     http.post(f"{PREFIX}/webhooks/{webhook_id}/key/rotate?actor=dana")
-    http.patch(
-        f"{PREFIX}/subscriptions/{subscription['id']}?actor=dana", json={"active": False}
-    )
+    http.patch(f"{PREFIX}/subscriptions/{subscription['id']}?actor=dana", json={"active": False})
     event = http.post(
         f"{PREFIX}/events?actor=dana",
         json={
@@ -2498,7 +2562,9 @@ def test_the_fan_out_rows_name_the_route_that_caused_them(http):
         },
     )
 
-    delivery_rows = http.get("/api/audit", params={"collection": DELIVERY_COLLECTION}).json()["entries"]
+    delivery_rows = http.get("/api/audit", params={"collection": DELIVERY_COLLECTION}).json()[
+        "entries"
+    ]
     assert delivery_rows[0]["source"] == f"POST {PREFIX}/events"
 
     subscription_rows = http.get(
@@ -2561,7 +2627,13 @@ def test_every_writing_method_takes_a_source(store, webhook_record):
 def webhook_record(store):
     return store.create(
         WEBHOOK_COLLECTION,
-        {"name": "x", "target_url": TARGET, "active": True, "secret": "whsec_x", "subscriptions": 0},
+        {
+            "name": "x",
+            "target_url": TARGET,
+            "active": True,
+            "secret": "whsec_x",
+            "subscriptions": 0,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -2577,12 +2649,24 @@ def test_the_seed_produces_the_states_the_research_makes_matter(tmp_path):
     db = AuditedDatabase(tmp_path / "seed.db", mirror_dir=tmp_path / "audit")
     try:
         rooms = [
-            (db.create("room", {"name": "Northwind", "account": "Northwind Traders"}, actor="dana")["id"],
-             "Northwind Traders"),
-            (db.create("room", {"name": "Contoso", "account": "Contoso Health"}, actor="dana")["id"],
-             "Contoso Health"),
-            (db.create("room", {"name": "Fabrikam", "account": "Fabrikam Logistics"}, actor="dana")["id"],
-             "Fabrikam Logistics"),
+            (
+                db.create(
+                    "room", {"name": "Northwind", "account": "Northwind Traders"}, actor="dana"
+                )["id"],
+                "Northwind Traders",
+            ),
+            (
+                db.create("room", {"name": "Contoso", "account": "Contoso Health"}, actor="dana")[
+                    "id"
+                ],
+                "Contoso Health",
+            ),
+            (
+                db.create(
+                    "room", {"name": "Fabrikam", "account": "Fabrikam Logistics"}, actor="dana"
+                )["id"],
+                "Fabrikam Logistics",
+            ),
         ]
         summary = load_feature("wf025_stream_workspace_activity_events_to_yo").seed(
             db, {"room_ids": rooms, "now": NOW, "rng": None}

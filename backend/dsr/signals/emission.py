@@ -133,7 +133,9 @@ def canonical_emission(payload: Any) -> dict[str, Any]:
     for key, value in payload.items():
         name = str(key)
         if name in RESERVED_EMISSION_FIELDS:
-            raise EmissionError(f"{name!r} is set by this product and cannot be supplied by a caller")
+            raise EmissionError(
+                f"{name!r} is set by this product and cannot be supplied by a caller"
+            )
         target = EMISSION_ALIASES.get(name)
         if target is None:
             raise EmissionError(
@@ -173,7 +175,9 @@ def parse_timestamp(value: Any, field: str) -> str:
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise EmissionError(f"{field} must be an ISO 8601 timestamp; got {value!r} ({exc})") from exc
+        raise EmissionError(
+            f"{field} must be an ISO 8601 timestamp; got {value!r} ({exc})"
+        ) from exc
     if parsed.tzinfo is None:
         # A naive timestamp is a real hazard rather than a nit: a signal with no
         # zone sorts wrongly in the feed and reads wrongly to a seller in another
@@ -268,9 +272,7 @@ def resolve_receiver(
     }
 
 
-def check_indicators(
-    declared: list[Mapping[str, Any]], supplied: Any
-) -> list[dict[str, Any]]:
+def check_indicators(declared: list[Mapping[str, Any]], supplied: Any) -> list[dict[str, Any]]:
     """Check the indicators on a signal against the registration.
 
     A signal with no indicators is refused. The data flow matches every
@@ -338,7 +340,8 @@ def check_indicators(
                 "metadata": dict(metadata),
                 "qualification": {
                     "reason": decision["reason"],
-                    "checked": decision["reason"] not in ("no_bound_claimed", "bound_unresolvable", "bound_unverifiable"),
+                    "checked": decision["reason"]
+                    not in ("no_bound_claimed", "bound_unresolvable", "bound_unverifiable"),
                     "claim": decision["claim"],
                     "observation": decision["observation"],
                 },
@@ -372,7 +375,9 @@ def normalise_emission(
 
     type_name = fields.get("type")
     if not isinstance(type_name, str) or not type_name.strip():
-        raise EmissionError("type is required: it names the signal registration this signal follows")
+        raise EmissionError(
+            "type is required: it names the signal registration this signal follows"
+        )
     if type_name.strip() != str(registration.get("type")):
         raise EmissionError(
             f"type {type_name.strip()!r} does not match the registration it was resolved "
@@ -386,12 +391,12 @@ def normalise_emission(
         raise EmissionError("data must be an object; the registration's data_shape describes it")
     findings = schema.validate(registration.get("data_shape") or {}, dict(data))
     if findings:
-        detail = "; ".join(
-            f"{finding['path']} {finding['message']}" for finding in findings
-        )
+        detail = "; ".join(f"{finding['path']} {finding['message']}" for finding in findings)
         raise EmissionError(f"data does not satisfy the registration's data_shape: {detail}")
 
-    checked_indicators = check_indicators(list(registration.get("indicators") or []), fields.get("indicators"))
+    checked_indicators = check_indicators(
+        list(registration.get("indicators") or []), fields.get("indicators")
+    )
 
     urgency = require_urgency(fields.get("urgency"))
     warnings: list[str] = []
@@ -408,9 +413,7 @@ def normalise_emission(
         fields.get("attribution"), list(registration.get("attribution") or [])
     )
     warnings.extend(attribution_warnings)
-    warnings.extend(
-        warning for entry in checked_indicators for warning in entry["warnings"]
-    )
+    warnings.extend(warning for entry in checked_indicators for warning in entry["warnings"])
 
     broadcast = fields.get("broadcast_notification")
     if broadcast is None:

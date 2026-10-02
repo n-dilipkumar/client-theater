@@ -13,6 +13,7 @@ Both defects are designed out here rather than fixed after the fact:
 The prompt is a single line of plain words. There is nothing in it for a shell to
 misinterpret.
 """
+
 import json
 import re
 import subprocess
@@ -51,8 +52,15 @@ UNSAFE = set("`$%&|<>^")
 
 
 def orca(args, timeout=150):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         d = json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -70,15 +78,38 @@ def main():
             print(f"  REFUSING TO SEND: prompt contains {bad}")
             continue
 
-        wt = orca(["orca", "worktree", "create", "--name", dirname,
-                   "--setup", "skip", "--no-parent", "--json"])
+        wt = orca(
+            [
+                "orca",
+                "worktree",
+                "create",
+                "--name",
+                dirname,
+                "--setup",
+                "skip",
+                "--no-parent",
+                "--json",
+            ]
+        )
         if not wt.get("ok"):
             print(f"  worktree failed: {str(wt)[:160]}")
             continue
         wt_id = wt["result"]["worktree"]["id"]
 
-        term = orca(["orca", "terminal", "create", "--worktree", wt_id,
-                     "--title", title, "--command", "opencode", "--json"])
+        term = orca(
+            [
+                "orca",
+                "terminal",
+                "create",
+                "--worktree",
+                wt_id,
+                "--title",
+                title,
+                "--command",
+                "opencode",
+                "--json",
+            ]
+        )
         if not term.get("ok"):
             print(f"  terminal failed: {str(term)[:160]}")
             continue
@@ -86,22 +117,57 @@ def main():
 
         # A fresh TUI drops an early prompt. Wait for idle before sending.
         time.sleep(10)
-        orca(["orca", "terminal", "wait", "--terminal", handle,
-              "--for", "tui-idle", "--timeout-ms", "45000", "--json"], timeout=70)
+        orca(
+            [
+                "orca",
+                "terminal",
+                "wait",
+                "--terminal",
+                handle,
+                "--for",
+                "tui-idle",
+                "--timeout-ms",
+                "45000",
+                "--json",
+            ],
+            timeout=70,
+        )
 
-        send = orca(["orca", "terminal", "send", "--terminal", handle,
-                     "--text", text, "--enter", "--wait-submit", "25", "--json"], timeout=100)
+        send = orca(
+            [
+                "orca",
+                "terminal",
+                "send",
+                "--terminal",
+                handle,
+                "--text",
+                text,
+                "--enter",
+                "--wait-submit",
+                "25",
+                "--json",
+            ],
+            timeout=100,
+        )
         if not send.get("ok"):
             print(f"  send failed: {str(send)[:160]}")
             continue
         print(f"  tab {handle}  brief sent")
 
-        launched.append({"ticket": ticket, "handle": handle, "worktree": dirname,
-                         "worktree_id": wt_id, "title": title,
-                         "brief": f"orchestration/ports/{brief}.md"})
+        launched.append(
+            {
+                "ticket": ticket,
+                "handle": handle,
+                "worktree": dirname,
+                "worktree_id": wt_id,
+                "title": title,
+                "brief": f"orchestration/ports/{brief}.md",
+            }
+        )
 
     (ROOT / "data" / "dispatched_set3.json").write_text(
-        json.dumps(launched, indent=2), encoding="utf-8")
+        json.dumps(launched, indent=2), encoding="utf-8"
+    )
 
     print()
     print(f"=== {len(launched)} agent tab(s) launched ===")
@@ -125,8 +191,9 @@ def main():
         mangled = re.search(r"'Read' is not recognized", text) is not None
         got_brief = "ports/" in text
         working = re.search(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]|Thought|Explored|pytest", text) is not None
-        print(f"  {a['ticket']}: prompt_mangled={mangled}  "
-              f"brief_echoed={got_brief}  active={working}")
+        print(
+            f"  {a['ticket']}: prompt_mangled={mangled}  brief_echoed={got_brief}  active={working}"
+        )
 
     return 0 if len(launched) == len(SET3) else 1
 

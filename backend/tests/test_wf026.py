@@ -34,8 +34,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -98,8 +96,8 @@ from dsr.outreach_feed.vocabulary import (
     SIGNATURE_HEADER,
     WEBHOOKS_ENDPOINT,
     build_event_payload,
-    describe_adjacent_surfaces,
     describe as describe_vocabulary,
+    describe_adjacent_surfaces,
     parse_event_name,
     placeholders_in,
     require_absolute_url,
@@ -110,6 +108,7 @@ from dsr.outreach_feed.vocabulary import (
     unknown_placeholders,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -180,7 +179,9 @@ def ok() -> PostResult:
 
 
 def rate_limited() -> PostResult:
-    return PostResult(ok=False, status=429, body="slow down", error="HTTP 429", retryable=True, retry_after=0)
+    return PostResult(
+        ok=False, status=429, body="slow down", error="HTTP 429", retryable=True, retry_after=0
+    )
 
 
 def server_error() -> PostResult:
@@ -243,7 +244,10 @@ def event_type(feed, app_row):
 @pytest.fixture()
 def linked(feed, room):
     return feed.link_prospect(
-        room["id"], {"prospect_id": "p_123", "label": "Procurement lead"}, actor="dana", source=SOURCE
+        room["id"],
+        {"prospect_id": "p_123", "label": "Procurement lead"},
+        actor="dana",
+        source=SOURCE,
     )
 
 
@@ -252,7 +256,11 @@ def quiet(store, room):
     """A room with one ``viewed`` event and nothing else configured."""
     store.create(
         "activity",
-        {"person": "buyer@northwind.example", "action": "viewed", "target": "Enterprise Overview Deck"},
+        {
+            "person": "buyer@northwind.example",
+            "action": "viewed",
+            "target": "Enterprise Overview Deck",
+        },
         room_id=room["id"],
         actor="system",
     )
@@ -281,8 +289,8 @@ def http(monkeypatch, transport):
     monkeypatch.setenv("DSR_AUDIT_DIR", str(Path(tmp.name) / "audit"))
     monkeypatch.setattr("dsr.api.FRONTEND_DIST", Path(tmp.name) / "absent-frontend")
     with TestClient(app) as client:
-        app.dependency_overrides[load_feature(MODULE).get_publisher] = (
-            lambda: engine(client.app.state.store, transport)
+        app.dependency_overrides[load_feature(MODULE).get_publisher] = lambda: engine(
+            client.app.state.store, transport
         )
         try:
             yield client
@@ -299,7 +307,9 @@ def http_room(http):
 def test_feature_is_discovered_and_mounted_without_editing_the_host(http):
     """The route resolves even though no shared file names this feature."""
     entry = next(
-        f for f in http.get("/api/features").json()["features"] if f["id"] == "wf-026-write-dsr-events-into-the-seller-activ"
+        f
+        for f in http.get("/api/features").json()["features"]
+        if f["id"] == "wf-026-write-dsr-events-into-the-seller-activ"
     )
     assert entry["prefix"] == PREFIX
     assert entry["ticket"] == "WF-026"
@@ -415,7 +425,18 @@ def test_event_names_are_app_scoped():
 
 @pytest.mark.parametrize(
     "name",
-    ["nocolon", ":leading", "trailing:", "two:colons:here", "has space:x", "  ", "", None, 7, "a:" + "b" * 0],
+    [
+        "nocolon",
+        ":leading",
+        "trailing:",
+        "two:colons:here",
+        "has space:x",
+        "  ",
+        "",
+        None,
+        7,
+        "a:" + "b" * 0,
+    ],
 )
 def test_a_malformed_event_name_is_refused_with_the_format_in_the_message(name):
     with pytest.raises(EventNameError) as excinfo:
@@ -509,7 +530,10 @@ def test_the_body_is_optional_and_omitted_rather_than_null():
     assert set(payload["data"]["attributes"]) == {"name", "externalUrl"}
 
     blank = build_event_payload(
-        name="my-app:my-event", external_url="https://rooms.example/r/1", prospect_id="p", body="   "
+        name="my-app:my-event",
+        external_url="https://rooms.example/r/1",
+        prospect_id="p",
+        body="   ",
     )
     assert "body" not in blank["data"]["attributes"]
 
@@ -529,7 +553,9 @@ def test_the_payload_always_carries_a_prospect_relationship():
     assert payload["data"]["relationships"]["prospect"]["data"]["id"] == "p"
 
 
-@pytest.mark.parametrize("url", ["", None, "javascript:alert(1)", "data:text/html,x", "/rooms/1", "rooms.example"])
+@pytest.mark.parametrize(
+    "url", ["", None, "javascript:alert(1)", "data:text/html,x", "/rooms/1", "rooms.example"]
+)
 def test_a_deep_link_must_be_an_absolute_http_url(url):
     """The card links a seller straight out of the feed, so it has to be real."""
     with pytest.raises(FeedError):
@@ -674,7 +700,9 @@ def test_delivery_uses_the_sourced_five_second_timeout(transport):
 
 def test_a_rate_limit_is_retried_and_both_attempts_are_recorded(transport):
     transport.scripted = [rate_limited(), ok()]
-    report = post_json(transport, EVENTS_ENDPOINT, {}, max_attempts=3, backoff=0, sleep=lambda _s: None)
+    report = post_json(
+        transport, EVENTS_ENDPOINT, {}, max_attempts=3, backoff=0, sleep=lambda _s: None
+    )
     assert report.attempts == 2
     assert [entry.status for entry in report.history] == [429, 201]
     assert [entry["attempt"] for entry in report.to_dict()["attempt_log"]] == [1, 2]
@@ -898,7 +926,10 @@ def test_patching_an_app_rotates_the_token_without_resending_it(feed, app_row, s
 
 
 def test_patching_an_app_can_blank_the_webhook_secret(feed, app_row, store):
-    assert feed.update_app(app_row["id"], {"webhook_secret": ""}, source=SOURCE)["has_webhook_secret"] is False
+    assert (
+        feed.update_app(app_row["id"], {"webhook_secret": ""}, source=SOURCE)["has_webhook_secret"]
+        is False
+    )
     assert store.get(app_row["id"])["data"]["webhook_secret"] == ""
 
 
@@ -1147,7 +1178,9 @@ def test_the_event_stream_is_read_through_discovered_field_locations():
 
 
 def test_an_app_field_map_overrides_the_default_locations(store, room):
-    store.create("activity", {"behaviour": "viewed", "who": "b@x.example"}, room_id=room["id"], actor="s")
+    store.create(
+        "activity", {"behaviour": "viewed", "who": "b@x.example"}, room_id=room["id"], actor="s"
+    )
     record = store.list("activity", room_id=room["id"])[0]
     event = normalise_stream_event(record, {"action": ["behaviour"], "person": ["who"]})
     assert event["action"] == "viewed"
@@ -1179,7 +1212,9 @@ def test_the_card_text_joins_the_two_halves_this_build_controls():
 # --------------------------------------------------------------------------- #
 
 
-def test_a_qualifying_event_is_posted_with_the_researched_payload(feed, quiet, event_type, linked, transport):
+def test_a_qualifying_event_is_posted_with_the_researched_payload(
+    feed, quiet, event_type, linked, transport
+):
     ledger = feed.publish(quiet["id"], source=SOURCE)
     assert ledger["counts"]["sent"] == 1
     call = transport.calls[0]
@@ -1206,7 +1241,10 @@ def test_an_event_with_no_body_omits_it_on_the_wire(feed, store, quiet, app_row,
     )
     feed.publish(quiet["id"], source=SOURCE)
     attributes = [call["body"]["data"]["attributes"] for call in transport.calls]
-    assert {"name": "dsr:silent", "externalUrl": f"https://rooms.example/r/{quiet['id']}"} in attributes
+    assert {
+        "name": "dsr:silent",
+        "externalUrl": f"https://rooms.example/r/{quiet['id']}",
+    } in attributes
 
 
 def test_a_disabled_custom_event_claims_nothing(feed, quiet, event_type, linked, transport):
@@ -1217,18 +1255,30 @@ def test_a_disabled_custom_event_claims_nothing(feed, quiet, event_type, linked,
     assert ledger["counts"]["unmapped_events"] == 1
 
 
-def test_a_buyer_action_nobody_configured_falls_through_and_is_counted(store, feed, quiet, event_type, linked):
-    store.create("activity", {"action": "commented", "person": "b@x.example"}, room_id=quiet["id"], actor="s")
-    store.create("activity", {"action": "commented", "person": "c@x.example"}, room_id=quiet["id"], actor="s")
+def test_a_buyer_action_nobody_configured_falls_through_and_is_counted(
+    store, feed, quiet, event_type, linked
+):
+    store.create(
+        "activity", {"action": "commented", "person": "b@x.example"}, room_id=quiet["id"], actor="s"
+    )
+    store.create(
+        "activity", {"action": "commented", "person": "c@x.example"}, room_id=quiet["id"], actor="s"
+    )
     ledger = feed.publish(quiet["id"], source=SOURCE)
     assert ledger["counts"]["sent"] == 1
     assert ledger["unmapped_actions"] == [
-        {"action": "commented", "count": 2, "example_events": ledger["unmapped_actions"][0]["example_events"]}
+        {
+            "action": "commented",
+            "count": 2,
+            "example_events": ledger["unmapped_actions"][0]["example_events"],
+        }
     ]
     assert len(ledger["unmapped_actions"][0]["example_events"]) == 2
 
 
-def test_an_action_that_cannot_be_read_is_reported_as_unreadable(store, feed, quiet, event_type, linked):
+def test_an_action_that_cannot_be_read_is_reported_as_unreadable(
+    store, feed, quiet, event_type, linked
+):
     store.create("activity", {"something": "else"}, room_id=quiet["id"], actor="s")
     ledger = feed.publish(quiet["id"], source=SOURCE)
     assert ledger["unmapped_actions"][0]["action"] == "(unreadable)"
@@ -1268,7 +1318,9 @@ def test_linking_the_prospect_and_running_again_sends_what_was_waiting(feed, qui
     second = feed.publish(quiet["id"], source=SOURCE)
     assert second["counts"]["sent"] == 1
     assert second["counts"]["skipped"] == 0
-    assert second["deliveries"] != [blocked_id], "the delivered row is keyed by the prospect it reached"
+    assert second["deliveries"] != [blocked_id], (
+        "the delivered row is keyed by the prospect it reached"
+    )
 
     rows = feed.deliveries(room_id=quiet["id"])
     assert {row["status"] for row in rows} == {STATUS_SKIPPED, STATUS_DELIVERED}
@@ -1292,7 +1344,9 @@ def test_a_disabled_app_skips_with_a_reason(store, feed, quiet, event_type, link
     assert ledger["skipped"][0]["reason"] == "app_disabled"
 
 
-def test_an_app_with_no_base_url_and_a_link_with_no_explicit_url_skips(store, feed, quiet, event_type, linked):
+def test_an_app_with_no_base_url_and_a_link_with_no_explicit_url_skips(
+    store, feed, quiet, event_type, linked
+):
     store.update(event_type["app_id"], {"room_base_url": ""}, source=SOURCE)
     ledger = feed.publish(quiet["id"], source=SOURCE)
     assert ledger["skipped"][0]["reason"] == "no_room_base_url"
@@ -1300,7 +1354,11 @@ def test_an_app_with_no_base_url_and_a_link_with_no_explicit_url_skips(store, fe
 
 def test_a_link_may_carry_its_own_deep_link(feed, store, quiet, event_type, app_row):
     store.update(app_row["id"], {"room_base_url": ""}, source=SOURCE)
-    feed.link_prospect(quiet["id"], {"prospect_id": "p_slug", "external_url": "https://deals.example/northwind"}, source=SOURCE)
+    feed.link_prospect(
+        quiet["id"],
+        {"prospect_id": "p_slug", "external_url": "https://deals.example/northwind"},
+        source=SOURCE,
+    )
     ledger = feed.publish(quiet["id"], source=SOURCE)
     assert ledger["counts"]["sent"] == 1
     assert ledger["sent"][0]["external_url"] == "https://deals.example/northwind"
@@ -1326,7 +1384,9 @@ def test_one_event_fans_out_to_every_linked_prospect(feed, quiet, event_type, tr
     assert {entry["prospect_id"] for entry in ledger["sent"]} == {"p_a", "p_b"}
 
 
-def test_a_second_publish_does_not_resend_what_was_delivered(feed, quiet, event_type, linked, transport):
+def test_a_second_publish_does_not_resend_what_was_delivered(
+    feed, quiet, event_type, linked, transport
+):
     feed.publish(quiet["id"], source=SOURCE)
     assert len(transport.calls) == 1
     second = feed.publish(quiet["id"], source=SOURCE)
@@ -1336,7 +1396,9 @@ def test_a_second_publish_does_not_resend_what_was_delivered(feed, quiet, event_
     assert "already delivered" in second["duplicate"][0]["detail"]
 
 
-def test_a_failed_delivery_is_retried_by_the_next_publish(feed, store, quiet, event_type, linked, transport):
+def test_a_failed_delivery_is_retried_by_the_next_publish(
+    feed, store, quiet, event_type, linked, transport
+):
     transport.scripted = [not_found(), ok()]
     first = feed.publish(quiet["id"], source=SOURCE)
     assert first["counts"]["failed"] == 1
@@ -1345,12 +1407,16 @@ def test_a_failed_delivery_is_retried_by_the_next_publish(feed, store, quiet, ev
     assert second["deliveries"] == first["deliveries"]
 
 
-def test_publishing_can_be_narrowed_to_one_configured_event(feed, quiet, app_row, linked, transport):
+def test_publishing_can_be_narrowed_to_one_configured_event(
+    feed, quiet, app_row, linked, transport
+):
     first = feed.create_event_type(
-        {"app_id": app_row["id"], "name": "dsr:one", "template": "t", "actions": ["viewed"]}, source=SOURCE
+        {"app_id": app_row["id"], "name": "dsr:one", "template": "t", "actions": ["viewed"]},
+        source=SOURCE,
     )
     feed.create_event_type(
-        {"app_id": app_row["id"], "name": "dsr:two", "template": "t", "actions": ["viewed"]}, source=SOURCE
+        {"app_id": app_row["id"], "name": "dsr:two", "template": "t", "actions": ["viewed"]},
+        source=SOURCE,
     )
     ledger = feed.publish(quiet["id"], source=SOURCE, only=[first["id"]])
     assert {entry["event_name"] for entry in ledger["sent"]} == {"dsr:one"}
@@ -1365,7 +1431,12 @@ def test_the_ledger_reports_the_blockers_alongside_the_counts(feed, quiet, event
 
 def test_the_publish_budget_is_bounded(feed, store, quiet, event_type, linked):
     for _ in range(5):
-        store.create("activity", {"action": "viewed", "person": "b@x.example"}, room_id=quiet["id"], actor="s")
+        store.create(
+            "activity",
+            {"action": "viewed", "person": "b@x.example"},
+            room_id=quiet["id"],
+            actor="s",
+        )
     ledger = feed.publish(quiet["id"], source=SOURCE, limit=2)
     assert ledger["scanned"] == 2
     assert ledger["scanned_total"] == 6
@@ -1417,7 +1488,9 @@ def test_a_delivery_row_records_what_was_sent(feed, store, quiet, event_type, li
     assert row["needs_manual_update"] is False
 
 
-def test_a_permanent_failure_is_marked_as_needing_a_human(feed, quiet, event_type, linked, transport):
+def test_a_permanent_failure_is_marked_as_needing_a_human(
+    feed, quiet, event_type, linked, transport
+):
     transport.scripted = [not_found()]
     feed.publish(quiet["id"], source=SOURCE)
     row = feed.deliveries(room_id=quiet["id"])[0]
@@ -1522,7 +1595,8 @@ def test_the_delivery_log_filters_by_needing_a_human(feed, quiet, event_type, li
 
 def test_the_delivery_log_filters_by_event_name(feed, quiet, app_row, linked, transport):
     feed.create_event_type(
-        {"app_id": app_row["id"], "name": "dsr:second", "template": "t", "actions": ["viewed"]}, source=SOURCE
+        {"app_id": app_row["id"], "name": "dsr:second", "template": "t", "actions": ["viewed"]},
+        source=SOURCE,
     )
     feed.publish(quiet["id"], source=SOURCE)
     assert len(feed.deliveries(event_name="dsr:second")) == 1
@@ -1532,7 +1606,9 @@ def test_the_delivery_log_scopes_to_a_room(feed, store, room, event_type, transp
     other = store.create("room", {"name": "Other"}, actor="dana")
     for target in (room["id"], other["id"]):
         feed.link_prospect(target, {"prospect_id": f"p_{target[-4:]}"}, source=SOURCE)
-        store.create("activity", {"action": "viewed", "person": "b@x.example"}, room_id=target, actor="s")
+        store.create(
+            "activity", {"action": "viewed", "person": "b@x.example"}, room_id=target, actor="s"
+        )
     feed.publish(room["id"], source=SOURCE)
     feed.publish(other["id"], source=SOURCE)
     assert len(feed.deliveries(room_id=room["id"])) == 1
@@ -1542,7 +1618,10 @@ def test_the_delivery_log_scopes_to_a_room(feed, store, room, event_type, transp
 def test_a_row_is_queryable_with_where_by_its_delivery_key(feed, store, quiet, event_type, linked):
     feed.publish(quiet["id"], source=SOURCE)
     key = feed.deliveries()[0]["event_key"]
-    assert store.find(DELIVERY_COLLECTION, {"event_key": key})[0]["data"]["event_name"] == "dsr:room-viewed"
+    assert (
+        store.find(DELIVERY_COLLECTION, {"event_key": key})[0]["data"]["event_name"]
+        == "dsr:room-viewed"
+    )
 
 
 def test_a_manual_retry_appends_rather_than_overwrites(feed, quiet, event_type, linked, transport):
@@ -1638,7 +1717,9 @@ def test_retrying_a_row_whose_custom_event_was_retired_says_so(feed, event_type,
     assert feed.deliveries()[0]["status"] == STATUS_SKIPPED
 
 
-def test_retrying_a_row_whose_custom_event_was_soft_deleted_says_so(feed, event_type, linked, quiet):
+def test_retrying_a_row_whose_custom_event_was_soft_deleted_says_so(
+    feed, event_type, linked, quiet
+):
     first = feed.publish(quiet["id"], source=SOURCE)
     feed.delete_event_type(event_type["id"], source=SOURCE)
     retried = feed.retry_delivery(first["deliveries"][0], source=SOURCE)
@@ -1684,7 +1765,9 @@ def test_the_room_feed_counts_by_status(feed, store, quiet, event_type, linked, 
 
 
 def test_the_room_feed_reports_the_fall_through(feed, store, quiet, event_type, linked):
-    store.create("activity", {"action": "commented", "person": "b@x.example"}, room_id=quiet["id"], actor="s")
+    store.create(
+        "activity", {"action": "commented", "person": "b@x.example"}, room_id=quiet["id"], actor="s"
+    )
     feed.publish(quiet["id"], source=SOURCE)
     view = feed.room_feed(quiet["id"])
     assert view["unmapped_actions"][0]["action"] == "commented"
@@ -1752,7 +1835,10 @@ def test_a_delivery_for_an_unlinked_prospect_is_recorded_not_dropped(feed, store
         "type": "mailing.bounced",
         "sequence": 1,
         "payloadVersion": 2,
-        "data": {"id": "m", "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_unknown"}}}},
+        "data": {
+            "id": "m",
+            "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_unknown"}}},
+        },
     }
     result = feed.receive_webhook(body_of(payload), signed("whsec-xyz", payload), source=SOURCE)
     assert result["status"] == "recorded"
@@ -1760,7 +1846,9 @@ def test_a_delivery_for_an_unlinked_prospect_is_recorded_not_dropped(feed, store
     assert store.list(SIGNAL_COLLECTION)[0]["room_id"] is None
 
 
-def test_a_resource_outside_the_documented_family_is_ignored_and_still_accepted(feed, store, app_row):
+def test_a_resource_outside_the_documented_family_is_ignored_and_still_accepted(
+    feed, store, app_row
+):
     """[sourced] Outreach does not retry, so a refusal would be permanent data loss."""
     payload = {"type": "sequence.created", "sequence": 2, "payloadVersion": 2, "data": {"id": "s"}}
     result = feed.receive_webhook(body_of(payload), signed("whsec-xyz", payload), source=SOURCE)
@@ -1803,7 +1891,11 @@ def test_a_payload_version_this_build_does_not_speak_is_refused(feed, store, app
 
 def test_a_body_that_is_not_json_is_refused(feed, app_row):
     with pytest.raises(FeedError):
-        feed.receive_webhook(b"not json", {SIGNATURE_HEADER: webhooks.compute_signature("whsec-xyz", b"not json")}, source=SOURCE)
+        feed.receive_webhook(
+            b"not json",
+            {SIGNATURE_HEADER: webhooks.compute_signature("whsec-xyz", b"not json")},
+            source=SOURCE,
+        )
 
 
 def test_a_delivery_with_no_configured_secret_is_not_configured(feed):
@@ -1815,7 +1907,9 @@ def test_a_delivery_with_no_configured_secret_is_not_configured(feed):
 
 def test_a_delivery_verifies_against_any_registered_app_secret(store, feed):
     feed.register_app(APP, source=SOURCE)
-    second = feed.register_app(APP | {"app_identifier": "other", "webhook_secret": "whsec-two"}, source=SOURCE)
+    second = feed.register_app(
+        APP | {"app_identifier": "other", "webhook_secret": "whsec-two"}, source=SOURCE
+    )
     payload = {"type": "mailing.opened", "payloadVersion": 2, "data": {"id": "m"}}
     result = feed.receive_webhook(body_of(payload), signed("whsec-two", payload), source=SOURCE)
     assert result["status"] == "recorded"
@@ -1824,7 +1918,12 @@ def test_a_delivery_verifies_against_any_registered_app_secret(store, feed):
 
 def test_the_signal_log_filters_by_type_and_status(feed, app_row):
     for kind in ("opened", "replied"):
-        payload = {"type": f"mailing.{kind}", "sequence": 1, "payloadVersion": 2, "data": {"id": f"m_{kind}"}}
+        payload = {
+            "type": f"mailing.{kind}",
+            "sequence": 1,
+            "payloadVersion": 2,
+            "data": {"id": f"m_{kind}"},
+        }
         feed.receive_webhook(body_of(payload), signed("whsec-xyz", payload), source=SOURCE)
     assert len(feed.signals(signal_type="replied")) == 1
     assert len(feed.signals(status="recorded")) == 2
@@ -1836,7 +1935,10 @@ def test_the_signal_log_scopes_to_a_room(feed, store, room, app_row, linked):
         "type": "mailing.opened",
         "sequence": 1,
         "payloadVersion": 2,
-        "data": {"id": "m", "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_123"}}}},
+        "data": {
+            "id": "m",
+            "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_123"}}},
+        },
     }
     feed.receive_webhook(body_of(payload), signed("whsec-xyz", payload), source=SOURCE)
     assert len(feed.signals(room_id=room["id"])) == 1
@@ -1848,7 +1950,10 @@ def test_the_room_feed_carries_the_signals_recorded_against_it(feed, room, app_r
         "type": "mailing.opened",
         "sequence": 1,
         "payloadVersion": 2,
-        "data": {"id": "m", "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_123"}}}},
+        "data": {
+            "id": "m",
+            "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_123"}}},
+        },
     }
     feed.receive_webhook(body_of(payload), signed("whsec-xyz", payload), source=SOURCE)
     view = feed.room_feed(room["id"])
@@ -1892,7 +1997,10 @@ def test_the_event_type_routes(http):
     type_id = created.json()["id"]
     assert http.get(f"{PREFIX}/event-types").json()["count"] == 1
     assert http.get(f"{PREFIX}/event-types/{type_id}").json()["name"] == "dsr:room-viewed"
-    assert http.patch(f"{PREFIX}/event-types/{type_id}", json={"enabled": False}).json()["enabled"] is False
+    assert (
+        http.patch(f"{PREFIX}/event-types/{type_id}", json={"enabled": False}).json()["enabled"]
+        is False
+    )
     assert http.delete(f"{PREFIX}/event-types/{type_id}").status_code == 204
 
 
@@ -1941,7 +2049,11 @@ def test_unlinking_a_link_from_the_wrong_room_over_http_is_400(http, http_room):
 
 
 def test_an_unknown_room_over_http_is_404(http):
-    for path in (f"{PREFIX}/rooms/room_nope/feed", f"{PREFIX}/rooms/room_nope/prospects", f"{PREFIX}/rooms/room_nope/signals"):
+    for path in (
+        f"{PREFIX}/rooms/room_nope/feed",
+        f"{PREFIX}/rooms/room_nope/prospects",
+        f"{PREFIX}/rooms/room_nope/signals",
+    ):
         assert http.get(path).status_code == 404
     assert http.post(f"{PREFIX}/rooms/room_nope/publish", json={}).status_code == 404
     assert http.post(f"{PREFIX}/rooms/room_nope/preview").status_code == 404
@@ -1956,7 +2068,9 @@ def test_the_publish_route_returns_the_ledger(http, http_room, transport):
         json={"action": "viewed", "person": "b@x.example"},
         params={"room_id": http_room["id"]},
     )
-    ledger = http.post(f"{PREFIX}/rooms/{http_room['id']}/publish", json={}, params={"actor": "dana"}).json()
+    ledger = http.post(
+        f"{PREFIX}/rooms/{http_room['id']}/publish", json={}, params={"actor": "dana"}
+    ).json()
     assert ledger["counts"]["sent"] == 1
     assert len(transport.calls) == 1
 
@@ -2014,7 +2128,9 @@ def test_the_deliveries_route_summarises_over_the_rows_it_returns(http, http_roo
 
     filtered = http.get(f"{PREFIX}/deliveries", params={"status": "failed"}).json()
     assert filtered["count"] == 0
-    assert filtered["summary"]["failed"] == 0, "the summary covers the rows returned, not the whole log"
+    assert filtered["summary"]["failed"] == 0, (
+        "the summary covers the rows returned, not the whole log"
+    )
 
     scoped = http.get(f"{PREFIX}/deliveries", params={"room_id": http_room["id"]}).json()
     assert scoped["count"] == 1
@@ -2030,8 +2146,13 @@ def test_the_deliveries_route_filters_by_event_name_and_manual_need(http, http_r
         params={"room_id": http_room["id"]},
     )
     http.post(f"{PREFIX}/rooms/{http_room['id']}/publish", json={})
-    assert http.get(f"{PREFIX}/deliveries", params={"event_name": "dsr:room-viewed"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/deliveries", params={"needs_manual_update": True}).json()["count"] == 0
+    assert (
+        http.get(f"{PREFIX}/deliveries", params={"event_name": "dsr:room-viewed"}).json()["count"]
+        == 1
+    )
+    assert (
+        http.get(f"{PREFIX}/deliveries", params={"needs_manual_update": True}).json()["count"] == 0
+    )
 
 
 def test_the_retry_route(http, http_room, transport):
@@ -2061,7 +2182,10 @@ def test_the_webhook_route_accepts_a_signed_delivery(http, http_room):
         "type": "mailing.replied",
         "sequence": 1,
         "payloadVersion": 2,
-        "data": {"id": "m", "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_1"}}}},
+        "data": {
+            "id": "m",
+            "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_1"}}},
+        },
     }
     body = body_of(payload)
     response = http.post(
@@ -2076,7 +2200,9 @@ def test_the_webhook_route_accepts_a_signed_delivery(http, http_room):
 
 def test_the_webhook_route_refuses_an_unverifiable_delivery_with_401(http):
     http.post(f"{PREFIX}/apps", json=APP)
-    response = http.post(f"{PREFIX}/webhooks/outreach", content=b"{}", headers={SIGNATURE_HEADER: "sha256=no"})
+    response = http.post(
+        f"{PREFIX}/webhooks/outreach", content=b"{}", headers={SIGNATURE_HEADER: "sha256=no"}
+    )
     assert response.status_code == 401
     assert response.json()["error"] == "bad_signature"
 
@@ -2127,7 +2253,10 @@ def test_the_signals_routes(http, http_room):
         "type": "mailing.opened",
         "sequence": 1,
         "payloadVersion": 2,
-        "data": {"id": "m", "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_1"}}}},
+        "data": {
+            "id": "m",
+            "relationships": {"prospect": {"data": {"type": "prospect", "id": "p_1"}}},
+        },
     }
     body = body_of(payload)
     http.post(
@@ -2157,7 +2286,9 @@ def test_the_room_signals_route_scopes(http, http_room):
 def test_every_write_is_audited(http, http_room):
     app_id = http.post(f"{PREFIX}/apps", json=APP).json()["id"]
     type_id = http.post(f"{PREFIX}/event-types", json=EVENT_TYPE).json()["id"]
-    link_id = http.post(f"{PREFIX}/rooms/{http_room['id']}/prospects", json={"prospect_id": "p_1"}).json()["id"]
+    link_id = http.post(
+        f"{PREFIX}/rooms/{http_room['id']}/prospects", json={"prospect_id": "p_1"}
+    ).json()["id"]
     http.post(
         "/api/records/activity",
         json={"action": "viewed", "person": "b@x.example"},
@@ -2198,7 +2329,9 @@ def test_audit_rows_name_the_route_that_actually_served_the_write(http, http_roo
     app_id = http.post(f"{PREFIX}/apps", json=APP).json()["id"]
     type_id = http.post(f"{PREFIX}/event-types", json=EVENT_TYPE).json()["id"]
     room_id = http_room["id"]
-    link_id = http.post(f"{PREFIX}/rooms/{room_id}/prospects", json={"prospect_id": "p_1"}).json()["id"]
+    link_id = http.post(f"{PREFIX}/rooms/{room_id}/prospects", json={"prospect_id": "p_1"}).json()[
+        "id"
+    ]
     http.post(
         "/api/records/activity",
         json={"action": "viewed", "person": "b@x.example"},
@@ -2260,7 +2393,9 @@ def test_no_audit_source_names_another_features_prefix(http, http_room):
     http.post(f"{PREFIX}/event-types", json=EVENT_TYPE)
     http.post(f"{PREFIX}/rooms/{http_room['id']}/prospects", json={"prospect_id": "p_1"})
     http.post(f"{PREFIX}/rooms/{http_room['id']}/publish", json={})
-    sources = [entry["source"] for entry in http.get("/api/audit", params={"limit": 200}).json()["entries"]]
+    sources = [
+        entry["source"] for entry in http.get("/api/audit", params={"limit": 200}).json()["entries"]
+    ]
     ours = [source for source in sources if PREFIX in source]
     assert ours
     for other in ("/api/crm", "/api/analytics", "/api/wf-016"):
@@ -2300,7 +2435,9 @@ def test_the_domain_methods_that_write_require_a_source():
         signature = inspect.signature(getattr(FeedPublisher, name))
         parameter = signature.parameters["source"]
         assert parameter.default is inspect.Parameter.empty, f"{name} has an optional source"
-        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, f"{name} should take source as a keyword"
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (
+            f"{name} should take source as a keyword"
+        )
 
 
 def test_the_publisher_never_opens_the_database_itself():
@@ -2386,7 +2523,11 @@ def seeded(tmp_path, room_count: int = 4):
         # Explicit ids, because the seeder hands the feature the ids it created and
         # a mismatch would silently skip every room-scoped row.
         store.create(
-            "room", {"name": account, "account": account}, record_id=room_id, actor="dana", source="seed"
+            "room",
+            {"name": account, "account": account},
+            record_id=room_id,
+            actor="dana",
+            source="seed",
         )
         for action in ("viewed", "downloaded", "commented", "shared"):
             store.create(
@@ -2421,7 +2562,9 @@ def test_the_seed_covers_the_states_a_reviewer_needs(tmp_path):
         rows = [delivery_summary_shape(row) for row in store.list(DELIVERY_COLLECTION, limit=1000)]
         assert any(row["status"] == STATUS_DELIVERED for row in rows)
         assert any(row["status"] == STATUS_FAILED and row["needs_manual_update"] for row in rows)
-        assert any(row["status"] == STATUS_SKIPPED and row["skip_reason"] == "no_prospect" for row in rows)
+        assert any(
+            row["status"] == STATUS_SKIPPED and row["skip_reason"] == "no_prospect" for row in rows
+        )
         assert any(row["attempts"] > 1 for row in rows), "the demo must show a retried delivery"
     finally:
         db.close()
@@ -2457,8 +2600,15 @@ def test_the_seed_never_opens_a_socket(tmp_path):
 def test_the_seed_never_leaves_the_token_in_a_delivery_row(tmp_path):
     db, store, _ = seeded(tmp_path)
     try:
-        for collection in (DELIVERY_COLLECTION, EVENT_TYPE_COLLECTION, PROSPECT_COLLECTION, SIGNAL_COLLECTION):
-            assert "demo-s2s-token" not in json.dumps(store.list(collection, limit=1000), default=str)
+        for collection in (
+            DELIVERY_COLLECTION,
+            EVENT_TYPE_COLLECTION,
+            PROSPECT_COLLECTION,
+            SIGNAL_COLLECTION,
+        ):
+            assert "demo-s2s-token" not in json.dumps(
+                store.list(collection, limit=1000), default=str
+            )
     finally:
         db.close()
 
@@ -2530,4 +2680,6 @@ def test_the_demo_transport_draws_its_line_on_the_prospect_id():
     assert send("pros_retired").retryable is False
     first = send("pros_limited")
     assert (first.status, first.retryable) == (429, True)
-    assert send("pros_limited").ok is True, "the retry succeeds, which is the retried row in the demo"
+    assert send("pros_limited").ok is True, (
+        "the retry succeeds, which is the retried row in the demo"
+    )

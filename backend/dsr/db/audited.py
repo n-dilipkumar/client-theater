@@ -29,7 +29,6 @@ Guarantees
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import threading
 import time
@@ -44,7 +43,9 @@ _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 # Keys that live in dedicated columns are not duplicated into the JSON payload
 # on the way out, so callers get one consistent dict shape.
-_RESERVED = frozenset({"id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at"})
+_RESERVED = frozenset(
+    {"id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at"}
+)
 
 
 def utcnow() -> str:
@@ -324,7 +325,8 @@ class AuditedDatabase:
         """Fetch one record by id."""
         with self._lock:
             row = self._conn.execute(
-                "SELECT * FROM records WHERE id = ?" + ("" if include_deleted else " AND deleted_at IS NULL"),
+                "SELECT * FROM records WHERE id = ?"
+                + ("" if include_deleted else " AND deleted_at IS NULL"),
                 (record_id,),
             ).fetchone()
             return self._hydrate(row) if row else None
@@ -335,7 +337,9 @@ class AuditedDatabase:
             raise RecordNotFound(record_id)
         return record
 
-    def count(self, collection: str, *, room_id: str | None = None, include_deleted: bool = False) -> int:
+    def count(
+        self, collection: str, *, room_id: str | None = None, include_deleted: bool = False
+    ) -> int:
         sql = "SELECT COUNT(*) AS n FROM records WHERE collection = ?"
         params: list[Any] = [collection]
         if room_id is not None:
@@ -361,7 +365,7 @@ class AuditedDatabase:
         allowed_order = {"updated_at", "created_at", "id", "revision"}
         if order_by not in allowed_order:
             raise ValueError(f"order_by must be one of {sorted(allowed_order)}")
-        sql = f"SELECT * FROM records WHERE collection = ?"
+        sql = "SELECT * FROM records WHERE collection = ?"
         params: list[Any] = [collection]
         if room_id is not None:
             sql += " AND room_id = ?"
@@ -450,7 +454,14 @@ class AuditedDatabase:
                     " WHERE i.record_id = r.id AND i.path = ? AND i.value_text = ?)"
                 )
                 params.extend(
-                    [path, "true" if expected is True else "false" if expected is False else str(expected)]
+                    [
+                        path,
+                        "true"
+                        if expected is True
+                        else "false"
+                        if expected is False
+                        else str(expected),
+                    ]
                 )
         sql = "SELECT r.* FROM records r WHERE r.collection = ?"
         if not include_deleted:
@@ -515,14 +526,16 @@ class AuditedDatabase:
         if numeric:
             column, needle = "value_num", float(value)
         else:
-            column, needle = "value_text", ("true" if value is True else "false" if value is False else str(value))
+            column, needle = (
+                "value_text",
+                ("true" if value is True else "false" if value is False else str(value)),
+            )
         with self._lock:
             rows = self._conn.execute(
                 f"SELECT record_id FROM record_index WHERE path = ? AND {column} = ?",  # noqa: S608
                 (path, needle),
             ).fetchall()
         return [r["record_id"] for r in rows]
-
 
     # -- writes (always audited) -------------------------------------------- #
 
@@ -746,7 +759,14 @@ class AuditedDatabase:
                 "room_id": row["room_id"],
                 "hard": hard,
             }
-        self._mirror({"action": "delete", "collection": result["collection"], "record_id": record_id, "before": current})
+        self._mirror(
+            {
+                "action": "delete",
+                "collection": result["collection"],
+                "record_id": record_id,
+                "before": current,
+            }
+        )
         return result
 
     def restore(
@@ -787,7 +807,9 @@ class AuditedDatabase:
             )
             fresh = conn.execute("SELECT * FROM records WHERE id = ?", (record_id,)).fetchone()
         record = self._hydrate(fresh)
-        self._mirror({"action": "restore", "collection": record["collection"], "record_id": record_id})
+        self._mirror(
+            {"action": "restore", "collection": record["collection"], "record_id": record_id}
+        )
         return record
 
     def bulk_create(
@@ -818,11 +840,30 @@ class AuditedDatabase:
                     "INSERT INTO records"
                     " (id, collection, room_id, data, revision, created_at, updated_at, actor, source)"
                     " VALUES (?,?,?,?,1,?,?,?,?)",
-                    (rid, collection, room_id, _dumps(payload), now, now, actor or self.actor, source),
+                    (
+                        rid,
+                        collection,
+                        room_id,
+                        _dumps(payload),
+                        now,
+                        now,
+                        actor or self.actor,
+                        source,
+                    ),
                 )
                 self._reindex(conn, rid, payload)
-                created.append({"id": rid, "collection": collection, "room_id": room_id, "data": payload,
-                                "revision": 1, "created_at": now, "updated_at": now, "deleted_at": None})
+                created.append(
+                    {
+                        "id": rid,
+                        "collection": collection,
+                        "room_id": room_id,
+                        "data": payload,
+                        "revision": 1,
+                        "created_at": now,
+                        "updated_at": now,
+                        "deleted_at": None,
+                    }
+                )
             self._audit(
                 conn,
                 action="insert",
@@ -998,8 +1039,12 @@ class AuditedDatabase:
         """Summary counts used by the dashboard header."""
         with self._lock:
             conn = self._conn
-            live = conn.execute("SELECT COUNT(*) AS n FROM records WHERE deleted_at IS NULL").fetchone()["n"]
-            deleted = conn.execute("SELECT COUNT(*) AS n FROM records WHERE deleted_at IS NOT NULL").fetchone()["n"]
+            live = conn.execute(
+                "SELECT COUNT(*) AS n FROM records WHERE deleted_at IS NULL"
+            ).fetchone()["n"]
+            deleted = conn.execute(
+                "SELECT COUNT(*) AS n FROM records WHERE deleted_at IS NOT NULL"
+            ).fetchone()["n"]
             audits = conn.execute("SELECT COUNT(*) AS n FROM audit_log").fetchone()["n"]
             by_collection = {
                 r["collection"]: r["n"]

@@ -44,7 +44,12 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Protocol
 
-from dsr.crm_engagement.payloads import CreateRequest, error_detail, extract_record_id, success_codes
+from dsr.crm_engagement.payloads import (
+    CreateRequest,
+    error_detail,
+    extract_record_id,
+    success_codes,
+)
 from dsr.crm_engagement.vocabulary import (
     BODY_SAMPLE,
     DEFAULT_BACKOFF,

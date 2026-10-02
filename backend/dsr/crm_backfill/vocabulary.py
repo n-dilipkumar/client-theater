@@ -192,9 +192,7 @@ NUMBERS: dict[str, dict[str, Any]] = {
 #: drop. Salesforce: "Because both Bulk APIs are asynchronous, Salesforce doesn't
 #: guarantee a service level agreement." It is why this package reports progress
 #: and never an ETA.
-NO_SLA_QUOTE = (
-    "Because both Bulk APIs are asynchronous, Salesforce doesn't guarantee a service level agreement."
-)
+NO_SLA_QUOTE = "Because both Bulk APIs are asynchronous, Salesforce doesn't guarantee a service level agreement."
 
 #: The scope HubSpot's exports API needs before it will produce a file, and the
 #: privilege the research names as a prerequisite for granting it.
@@ -223,7 +221,9 @@ def describe() -> dict[str, Any]:
         "strategies": [
             {"value": value, "meaning": STRATEGY_MEANING[value]} for value in STRATEGIES
         ],
-        "directions": [{"value": value, "meaning": DIRECTION_MEANING[value]} for value in DIRECTIONS],
+        "directions": [
+            {"value": value, "meaning": DIRECTION_MEANING[value]} for value in DIRECTIONS
+        ],
         "scopes": list(SCOPES),
         "run_states": [
             {"value": value, "terminal": value in TERMINAL_STATES} for value in RUN_STATES

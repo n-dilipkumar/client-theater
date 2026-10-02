@@ -212,7 +212,9 @@ def applies_to_entity(event: Mapping[str, Any], channel: Mapping[str, Any]) -> N
         )
 
 
-def enriched_fields_in_effect(event: Mapping[str, Any], channel: Mapping[str, Any]) -> dict[str, Any]:
+def enriched_fields_in_effect(
+    event: Mapping[str, Any], channel: Mapping[str, Any]
+) -> dict[str, Any]:
     """The enriched fields this event may actually use.
 
     The research draws the line by change type, not by transport: "Fields that
@@ -231,9 +233,7 @@ def enriched_fields_in_effect(event: Mapping[str, Any], channel: Mapping[str, An
         return {}
     if not vocabulary.is_enriched_change_type(change_type):
         return {}
-    selected = {
-        str(name) for name in (channel.get("enriched_fields") or [])
-    }
+    selected = {str(name) for name in (channel.get("enriched_fields") or [])}
     return {name: value for name, value in supplied.items() if name in selected}
 
 

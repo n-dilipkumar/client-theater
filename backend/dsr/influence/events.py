@@ -26,8 +26,8 @@ from typing import Any, Mapping
 from dsr.influence.errors import InfluenceError, UnknownAsset, UnknownRoom
 from dsr.influence.vocab import (
     ACTION_ALIASES,
-    ACTIVITY_COLLECTION,
     ACTIONS,
+    ACTIVITY_COLLECTION,
     AUDIENCES,
     DOWNLOADED,
     EVENT_COLLECTION,
@@ -113,9 +113,7 @@ def _resolve_asset(
         )
     needle = str(wanted).strip()
     matches = [
-        record
-        for record in scan(store, "document").records
-        if asset_title(record) == needle
+        record for record in scan(store, "document").records if asset_title(record) == needle
     ]
     if not matches:
         raise UnknownAsset(needle)
@@ -149,9 +147,7 @@ def _audience(payload: Mapping[str, Any], action: str) -> str:
     if declared is not None and declared != "":
         text = str(declared).strip().lower()
         if text not in AUDIENCES:
-            raise InfluenceError(
-                f"audience {declared!r} is not one of {', '.join(AUDIENCES)}"
-            )
+            raise InfluenceError(f"audience {declared!r} is not one of {', '.join(AUDIENCES)}")
         return text
     if "internal" in payload:
         return INTERNAL if payload["internal"] else EXTERNAL
@@ -239,9 +235,12 @@ def record_event(
         title=body.get("title"),
     )
 
-    at = parse_time(
-        body.get("occurred_at") or body.get("at") or body.get("timestamp"), "occurred_at"
-    ) or utcnow()
+    at = (
+        parse_time(
+            body.get("occurred_at") or body.get("at") or body.get("timestamp"), "occurred_at"
+        )
+        or utcnow()
+    )
 
     # The event belongs to a workspace. A share straight from the library has
     # none, and the research's report spans "all workspaces", so an event with
@@ -389,7 +388,13 @@ def load_events(
         if at is None:
             continue
         events.append(
-            {**data, "action": action, "id": record["id"], "room_id": record.get("room_id"), "_at": at}
+            {
+                **data,
+                "action": action,
+                "id": record["id"],
+                "room_id": record.get("room_id"),
+                "_at": at,
+            }
         )
     return events, rows.truncated
 

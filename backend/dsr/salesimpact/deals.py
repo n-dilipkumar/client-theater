@@ -108,7 +108,9 @@ class DealBook:
                     collections.get("engagement"), DEFAULT_COLLECTIONS["engagement"]
                 ),
             },
-            "fields": {concept: list(keys) for concept, keys in fields.items() if concept != "stage"},
+            "fields": {
+                concept: list(keys) for concept, keys in fields.items() if concept != "stage"
+            },
             "stages": {
                 "won": [as_text(value) for value in (stages.get("won") or []) if as_text(value)],
                 "lost": [as_text(value) for value in (stages.get("lost") or []) if as_text(value)],
@@ -175,7 +177,9 @@ class DealBook:
                 merged.pop("connected_at", None)
             out["integration"] = merged
 
-        collections_in = body.get("collections") if isinstance(body.get("collections"), Mapping) else {}
+        collections_in = (
+            body.get("collections") if isinstance(body.get("collections"), Mapping) else {}
+        )
         flat_collections = {
             key: value for key, value in body.items() if key in {"rooms", "engagement"}
         }
@@ -383,11 +387,11 @@ def _now() -> str:
     return utcnow()
 
 
-def deal_amount(record: Mapping[str, Any], synonyms: Mapping[str, Sequence[str]] | None = None) -> float | None:
+def deal_amount(
+    record: Mapping[str, Any], synonyms: Mapping[str, Sequence[str]] | None = None
+) -> float | None:
     """A deal's amount, or ``None``. The rollup treats those two differently."""
-    return as_number(
-        pick((record.get("data") or {}), (), synonyms=synonyms, concept="amount")
-    )
+    return as_number(pick((record.get("data") or {}), (), synonyms=synonyms, concept="amount"))
 
 
 def view_deal(
@@ -415,7 +419,9 @@ def view_deal(
     )
     own_owner = as_text(pick(data, (), concept="owner"))
     owner_source = "deal" if own_owner else "room"
-    owner = own_owner or (as_text(pick((room or {}).get("data") or {}, (), concept="room_owner")) if room else "")
+    owner = own_owner or (
+        as_text(pick((room or {}).get("data") or {}, (), concept="room_owner")) if room else ""
+    )
     if not owner:
         owner_source = "unassigned"
     return {

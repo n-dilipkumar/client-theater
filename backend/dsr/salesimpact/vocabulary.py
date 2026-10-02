@@ -417,6 +417,8 @@ def describe() -> dict[str, Any]:
             },
         },
         "api_constraints": dict(API_CONSTRAINTS),
-        "properties_selection": {name: list(values) for name, values in PROPERTIES_SELECTION.items()},
+        "properties_selection": {
+            name: list(values) for name, values in PROPERTIES_SELECTION.items()
+        },
         "note": "This build calls none of the above endpoints. It is a local mirror.",
     }

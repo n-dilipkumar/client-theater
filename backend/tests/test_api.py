@@ -7,14 +7,12 @@ as observed from outside the process.
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
@@ -226,7 +224,9 @@ def test_audit_entry_exposes_before_after_and_diff(client):
     room = client.post("/api/records/room", json={"stage": "demo"}).json()
     client.patch(f"/api/records/room/{room['id']}", json={"stage": "pilot"})
 
-    entry = client.get("/api/audit", params={"record_id": room["id"], "action": "update"}).json()["entries"][0]
+    entry = client.get("/api/audit", params={"record_id": room["id"], "action": "update"}).json()[
+        "entries"
+    ][0]
 
     assert entry["before_state"]["stage"] == "demo"
     assert entry["after_state"]["stage"] == "pilot"

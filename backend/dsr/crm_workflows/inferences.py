@@ -152,7 +152,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "fallback": "any other text is compared whole",
         },
         "why": (
-            "It makes \"completed task 'Intro call'\" and \"Intro call\" name the same "
+            'It makes "completed task \'Intro call\'" and "Intro call" name the same '
             "criterion, which is what a person means when they type either. The whole-text "
             "fallback means a literal string this product did not document still works "
             "rather than being refused for being unfamiliar."
@@ -305,7 +305,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "The research mentions no window at all, so both the setting and its reference "
             "point are this build's."
         ),
-        "value": {"measured_from": "the evaluation's clock", "alternative": "the contact's most recent event"},
+        "value": {
+            "measured_from": "the evaluation's clock",
+            "alternative": "the contact's most recent event",
+        },
         "why": (
             "Measured from the latest event, a single old event always satisfies any window, "
             "so the setting would appear to do nothing exactly when somebody was using it to "
@@ -383,7 +386,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "a deal/account.' The research makes the check a step; it does not say what "
             "happens if it fails."
         ),
-        "value": {"publish": "refused with 409", "register": "refused with 404-equivalent", "lint": "still reports it"},
+        "value": {
+            "publish": "refused with 409",
+            "register": "refused with 404-equivalent",
+            "lint": "still reports it",
+        },
         "why": (
             "Publishing would create a rule that silently never fires, and a seller cannot "
             "diagnose that from a workflow list. The connection to a deal is per-room and so "
@@ -401,7 +408,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "connected to a deal/account. The research does not say which of them a "
             "workflow can do without."
         ),
-        "value": {"evaluation": "reports room_not_connected for every workflow", "enrollment": "none"},
+        "value": {
+            "evaluation": "reports room_not_connected for every workflow",
+            "enrollment": "none",
+        },
         "why": (
             "The activities are tied to the contact record, and a contact with no deal has "
             "no stage to change and no pipeline to notify - so the researched action set "

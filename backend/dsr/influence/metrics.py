@@ -56,7 +56,6 @@ from dsr.influence.vocab import (
 )
 from dsr.store import RecordStore
 
-
 # --------------------------------------------------------------------------- #
 # Rows
 # --------------------------------------------------------------------------- #
@@ -297,9 +296,7 @@ def compile_report(store: RecordStore, filters: Filters | None = None) -> Report
     # empty, and so the room's own record is on the report for a caller to read.
     room = _require_room(store, active.room_id) if active.room_id else None
 
-    events, truncated = load_events(
-        store, room_id=active.room_id if active.room_id else None
-    )
+    events, truncated = load_events(store, room_id=active.room_id if active.room_id else None)
     selected: list[dict[str, Any]] = []
     for event in events:
         if active.room_id and event.get("room_id") != active.room_id:
@@ -310,9 +307,7 @@ def compile_report(store: RecordStore, filters: Filters | None = None) -> Report
             continue
         selected.append(event)
 
-    scoped_assets = (
-        {str(event.get("asset_id")) for event in selected} if active.room_id else None
-    )
+    scoped_assets = {str(event.get("asset_id")) for event in selected} if active.room_id else None
     rows, library_size, assets_truncated = _asset_rows(store, active, only=scoped_assets)
     index = {row.asset_id: row for row in rows}
 
@@ -511,7 +506,7 @@ def top_content(
     offset: int = 0,
     filters: Filters | None = None,
 ) -> dict[str, Any]:
-    """"Top content", sorted by any column.
+    """ "Top content", sorted by any column.
 
     "The top content report is organized by most viewed content, but also shows
     additional reporting such as amount of shares, total time spent, download
@@ -631,9 +626,7 @@ def collections(store: RecordStore) -> dict[str, Any]:
         "collections": names,
         "count": len(names),
         "assets": len(scanned.records),
-        "unfiled_assets": sum(
-            1 for record in scanned.records if not asset_collections(record)
-        ),
+        "unfiled_assets": sum(1 for record in scanned.records if not asset_collections(record)),
         "truncated": scanned.truncated,
     }
 

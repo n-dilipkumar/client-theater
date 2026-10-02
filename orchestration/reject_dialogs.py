@@ -28,6 +28,7 @@ modal dialog goes into the dialog.
 
 Idempotent: an agent with no dialog is skipped, so this can run any time.
 """
+
 import json
 import re
 import subprocess
@@ -65,8 +66,15 @@ ASKING = re.compile(r"(?:external directory|read|edit)\s+~?/?([^\s│]+)", re.I)
 
 
 def orca(args, timeout=180):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         return json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -92,18 +100,28 @@ def permissions():
 def grants(path_fragment):
     """Does the config currently allow anything matching this fragment?"""
     frag = path_fragment.lower().rstrip("/*").lower()
-    return [r for r in permissions()
-            if r.get("action") in ("external_directory", "read", "edit", "write")
-            and frag and frag in str(r.get("resource", "")).lower()]
+    return [
+        r
+        for r in permissions()
+        if r.get("action") in ("external_directory", "read", "edit", "write")
+        and frag
+        and frag in str(r.get("resource", "")).lower()
+    ]
 
 
 def revoke(path_fragment):
     frag = path_fragment.lower().rstrip("/*").lower()
     cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
     before = len(cfg.get("permissions") or [])
-    kept = [r for r in cfg["permissions"]
-            if not (r.get("action") in ("external_directory", "read", "edit", "write")
-                    and frag and frag in str(r.get("resource", "")).lower())]
+    kept = [
+        r
+        for r in cfg["permissions"]
+        if not (
+            r.get("action") in ("external_directory", "read", "edit", "write")
+            and frag
+            and frag in str(r.get("resource", "")).lower()
+        )
+    ]
     cfg["permissions"] = kept
     CONFIG.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     return before - len(kept)
@@ -181,8 +199,22 @@ def main():
             if bad:
                 print(f"  REFUSING to send the note, contains {bad}")
                 continue
-            orca(["orca", "terminal", "send", "--terminal", a["handle"],
-                  "--text", NOTE, "--enter", "--wait-submit", "25", "--json"], timeout=100)
+            orca(
+                [
+                    "orca",
+                    "terminal",
+                    "send",
+                    "--terminal",
+                    a["handle"],
+                    "--text",
+                    NOTE,
+                    "--enter",
+                    "--wait-submit",
+                    "25",
+                    "--json",
+                ],
+                timeout=100,
+            )
             print("  told it where scratch files belong")
             fixed.append(a["ticket"])
         else:
@@ -194,7 +226,7 @@ def main():
     print("=" * 78)
     print(f"  dialogs found      : {len(blocked)}  {blocked}")
     print(f"  rejected and told  : {len(fixed)}  {fixed}")
-    print(f"  grants left behind : 0 by construction - verified above")
+    print("  grants left behind : 0 by construction - verified above")
     print(f"  permissions in opencode.json: {len(permissions())}")
     return 0
 

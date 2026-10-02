@@ -167,7 +167,9 @@ class ReportFilter:
             return True
         return normalise(team) in {normalise(value) for value in self.teams}
 
-    def matches_deal(self, *, created: date | None, stage_class: str, stage_text: str, owner: str, team: str) -> bool:
+    def matches_deal(
+        self, *, created: date | None, stage_class: str, stage_text: str, owner: str, team: str
+    ) -> bool:
         """The whole filter, as one predicate, for a deal."""
         return (
             self.in_deal_range(created)
@@ -222,7 +224,9 @@ def parse_filters(
     resolved_limit = max(1, min(int(requested_limit or default_limit), 1000))
 
     known = {"from", "to", "stage", "owner", "team", "limit", "bucket", "room_id", "actor"}
-    extras = {key: value for key, value in params.items() if key not in known and value not in (None, "")}
+    extras = {
+        key: value for key, value in params.items() if key not in known and value not in (None, "")
+    }
 
     return ReportFilter(
         date_from=date_from,
@@ -289,8 +293,10 @@ def date_range(
     caller who needs that should ask for weeks or months instead of receiving it.
     """
     present = sorted({moment for moment in moments if moment is not None})
-    start = bucket_start(date_from, bucket) if date_from else (
-        bucket_start(present[0], bucket) if present else None
+    start = (
+        bucket_start(date_from, bucket)
+        if date_from
+        else (bucket_start(present[0], bucket) if present else None)
     )
     end = date_to or (present[-1] if present else None)
     if start is None or end is None or end < (date_from or start):

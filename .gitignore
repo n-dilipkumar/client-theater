@@ -4,8 +4,10 @@ node_modules/
 venv/
 
 # Build output
-frontend/dist/
+dist/
 build/
+coverage/
+*.log
 
 # Runtime data: the SQLite database and its audit mirror are generated state,
 # not source. The schema in backend/dsr/db/schema.sql is the source of truth.
@@ -22,6 +24,15 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 *.egg-info/
+.ruff_cache/
+
+# Agent and tooling state
+# .commandcode/ is the commandcode CLI's own directory.
+# .scratch/ is where agents are told to put scratch files (see
+# orchestration/make_build_briefs.py and docs/agents/issue-tracker.md); the
+# archived local-dev-loop map lives there and is history only.
+.commandcode/
+.scratch/
 
 # Editors and OS
 .DS_Store

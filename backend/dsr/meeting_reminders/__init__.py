@@ -54,7 +54,7 @@ from dsr.meeting_reminders.engine import (
     ReminderEngine,
 )
 from dsr.meeting_reminders.errors import ConfigurationRefused, ReminderError
-from dsr.meeting_reminders.inferences import INFERENCES, describe, by_id
+from dsr.meeting_reminders.inferences import INFERENCES, by_id, describe
 
 __all__ = [
     "ATTACHMENT_COLLECTION",

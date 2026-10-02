@@ -78,7 +78,16 @@ OAUTH_SCOPES: tuple[str, ...] = (
 #: in the error rather than silently dropped: a person who pastes a token into
 #: ``client_secret`` needs to be told, not quietly stored.
 SECRET_FIELD_NAMES: frozenset[str] = frozenset(
-    {"client_secret", "clientSecret", "access_token", "accessToken", "secret", "password", "api_key", "apiKey"}
+    {
+        "client_secret",
+        "clientSecret",
+        "access_token",
+        "accessToken",
+        "secret",
+        "password",
+        "api_key",
+        "apiKey",
+    }
 )
 
 
@@ -114,7 +123,9 @@ def normalise_oauth_client(spec: Mapping[str, Any], *, field: str = "client") ->
         raise EmbedConfigError(f"{field}.client_id is required; {OAUTH_FLOW_QUOTE}")
     redirect_uri = str(body.get("redirect_uri") or body.get("redirectUri") or "").strip()
     if not redirect_uri:
-        raise EmbedConfigError(f"{field}.redirect_uri is required; an OAuth client needs one to return to")
+        raise EmbedConfigError(
+            f"{field}.redirect_uri is required; an OAuth client needs one to return to"
+        )
 
     raw_scopes = body.get("scopes")
     if isinstance(raw_scopes, str):
@@ -268,7 +279,9 @@ def normalise_embed(
         # component step 5 requires to mean anything.
         components = ["booker"]
     elif isinstance(raw_components, Sequence) and not isinstance(raw_components, (str, bytes)):
-        components = [require_component(str(name).strip()) for name in raw_components if str(name).strip()]
+        components = [
+            require_component(str(name).strip()) for name in raw_components if str(name).strip()
+        ]
     else:
         raise EmbedConfigError(f"{field}.components must be a list of published component names")
 
@@ -310,7 +323,9 @@ def normalise_embed(
         "theme": body.get("theme") or "dark",
         "reservationDuration": body.get("reservationDuration"),
         "durationMinutes": body.get("durationMinutes") or body.get("duration_minutes"),
-        "hideBookerCalendar": bool(body.get("hideBookerCalendar") or body.get("hide_booker_calendar")),
+        "hideBookerCalendar": bool(
+            body.get("hideBookerCalendar") or body.get("hide_booker_calendar")
+        ),
         "layout": body.get("layout") or "month_view",
     }
     return payload

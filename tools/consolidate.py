@@ -104,7 +104,9 @@ def parse_file(path: Path) -> list[Workflow]:
         for line in body:
             field_match = BOLD_FIELD.match(line) or BULLET_FIELD.match(line)
             if field_match:
-                buffer_key = _clean(field_match.group(1).lower().replace(" ", "_").replace("/", "_"))
+                buffer_key = _clean(
+                    field_match.group(1).lower().replace(" ", "_").replace("/", "_")
+                )
                 fields[buffer_key] = _clean(field_match.group(2))
             elif buffer_key and line.strip() and not line.startswith("#"):
                 fields[buffer_key] = (fields[buffer_key] + " " + line.strip()).strip()
@@ -114,7 +116,9 @@ def parse_file(path: Path) -> list[Workflow]:
         sources_blob = "\n".join(body)
         sources = sorted({u.rstrip(".,;") for u in URL_RE.findall(sources_blob)})
         if "sources" in fields:
-            sources = sorted({u.rstrip(".,;") for u in URL_RE.findall(fields["sources"])} | set(sources))
+            sources = sorted(
+                {u.rstrip(".,;") for u in URL_RE.findall(fields["sources"])} | set(sources)
+            )
 
         workflows.append(
             Workflow(

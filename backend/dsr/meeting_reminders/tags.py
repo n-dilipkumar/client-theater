@@ -115,7 +115,11 @@ def _first_guest(booking: Mapping[str, Any]) -> Mapping[str, Any]:
 
 def _guests(booking: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     guests = booking.get("guests")
-    return [guest for guest in guests if isinstance(guest, Mapping)] if isinstance(guests, list) else []
+    return (
+        [guest for guest in guests if isinstance(guest, Mapping)]
+        if isinstance(guests, list)
+        else []
+    )
 
 
 def _start(booking: Mapping[str, Any]):
@@ -200,17 +204,18 @@ CP_TAGS: dict[str, Callable[[Mapping[str, Any]], str]] = {
     "CP.Meeting.RescheduleUrl": lambda booking: _text(booking.get("rescheduleUrl")),
     "CP.Meeting.CancelUrl": lambda booking: _text(booking.get("cancelUrl")),
     # -- the rest of the guest, the same prefix and the same fields -------- #
-    "CP.Guest.LastName": lambda booking: _full_name(_first_guest(booking)).split(" ")[-1]
-    if len(_full_name(_first_guest(booking)).split(" ")) > 1
-    else "",
+    "CP.Guest.LastName": lambda booking: (
+        _full_name(_first_guest(booking)).split(" ")[-1]
+        if len(_full_name(_first_guest(booking)).split(" ")) > 1
+        else ""
+    ),
     "CP.Guest.FullName": lambda booking: _full_name(_first_guest(booking)),
     "CP.Guest.Email": lambda booking: _person_email(_first_guest(booking)),
     "CP.Guest.Phone": lambda booking: _text(_first_guest(booking).get("phone")),
     "CP.Guest.Company": lambda booking: _text(_first_guest(booking).get("company")),
     "CP.Guest.Timezone": lambda booking: _text(booking.get("timezone")),
     "CP.Guest.ResponseStatus": lambda booking: _text(
-        _first_guest(booking).get("responseStatus")
-        or booking.get("responseStatus")
+        _first_guest(booking).get("responseStatus") or booking.get("responseStatus")
     ),
     # -- the meeting -------------------------------------------------------- #
     "CP.Meeting.Name": lambda booking: _text(booking.get("title")),
@@ -248,9 +253,12 @@ CP_TAG_DETAIL: dict[str, str] = {
 
 CAL_TOKENS: dict[str, Callable[[Mapping[str, Any]], str]] = {
     "EVENT_NAME": lambda booking: _text(booking.get("title")),
-    "ORGANIZER": lambda booking: _full_name(booking.get("host")) or _person_email(booking.get("host")),
-    "ATTENDEE": lambda booking: _person_email(_first_guest(booking))
-    or _full_name(_first_guest(booking)),
+    "ORGANIZER": lambda booking: (
+        _full_name(booking.get("host")) or _person_email(booking.get("host"))
+    ),
+    "ATTENDEE": lambda booking: (
+        _person_email(_first_guest(booking)) or _full_name(_first_guest(booking))
+    ),
     "LOCATION": lambda booking: _text(booking.get("location")) or _text(booking.get("meetingUrl")),
     "MEETING_URL": lambda booking: _text(booking.get("meetingUrl")),
     # `{START_TIME_h:mma}` is Cal's "time, 12-hour clock, lowercase am/pm".
@@ -324,7 +332,11 @@ def token_catalog() -> dict[str, Any]:
             "pattern": "{TOKEN}",
             "count": len(CAL_TOKENS),
             "tokens": [
-                {"token": "{%s}" % inner, "example": resolver(sample), "origin": "quoted in apis_hit"}
+                {
+                    "token": "{%s}" % inner,
+                    "example": resolver(sample),
+                    "origin": "quoted in apis_hit",
+                }
                 for inner, resolver in sorted(CAL_TOKENS.items())
             ],
         },
@@ -384,9 +396,7 @@ def render(text: Any, booking: Mapping[str, Any]) -> dict[str, Any]:
     return {"text": rendered, "resolved": resolved, "missing": sorted(missing)}
 
 
-def render_message(
-    subject: Any, body: Any, booking: Mapping[str, Any]
-) -> dict[str, Any]:
+def render_message(subject: Any, body: Any, booking: Mapping[str, Any]) -> dict[str, Any]:
     """Render both halves of a reminder, and merge their missing-tag reports."""
     rendered_subject = render(subject, booking)
     rendered_body = render(body, booking)

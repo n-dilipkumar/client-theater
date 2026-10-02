@@ -42,22 +42,21 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
-from dsr.db.audited import AuditError, AuditedDatabase, RecordNotFound, utcnow
+from dsr.db.audited import AuditedDatabase, AuditError, RecordNotFound, utcnow
 from dsr.features import load_feature
 from dsr.publishing import (
     EVENT_REVIVED_LIVE,
     EVENT_SET_LIVE,
     EVENT_STATUS_CHANGED,
-    PublishingService,
     PublishConflict,
+    PublishingService,
     expiry_state,
     hash_password,
     redact,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: This feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -143,7 +142,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
     module = load_feature("wf011_publishing")
 
     assert module.FEATURE["id"] in text
-    assert f'id: {module.FEATURE["id"]!r}' in text
+    assert f"id: {module.FEATURE['id']!r}" in text
 
 
 def test_feature_module_does_not_import_the_shared_app():
@@ -806,9 +805,7 @@ def test_delivery_reaches_a_real_http_endpoint(tmp_path):
     thread.start()
     try:
         db = AuditedDatabase(tmp_path / "http.db", mirror_dir=tmp_path / "http-mirror")
-        service = PublishingService(
-            RecordStore(db), base_url="https://rooms.example", timeout=5.0
-        )
+        service = PublishingService(RecordStore(db), base_url="https://rooms.example", timeout=5.0)
         service.subscribe(
             source="test",
             name="Local",
@@ -962,9 +959,7 @@ def test_setting_the_same_status_again_is_a_no_op(client):
     client.post(f"{PREFIX}/rooms/{room['id']}/status", json={"status": "live"})
     before = client.get("/api/stats").json()["audit_entries"]
 
-    body = client.post(
-        f"{PREFIX}/rooms/{room['id']}/status", json={"status": "live"}
-    ).json()
+    body = client.post(f"{PREFIX}/rooms/{room['id']}/status", json={"status": "live"}).json()
 
     assert body["transition"]["changed"] is False
     assert body["event"] is None
@@ -1004,8 +999,7 @@ def test_a_template_cannot_be_published(client):
 
 def test_publishing_an_unknown_room_is_404(client):
     assert (
-        client.post(f"{PREFIX}/rooms/room_nope/status", json={"status": "live"}).status_code
-        == 404
+        client.post(f"{PREFIX}/rooms/room_nope/status", json={"status": "live"}).status_code == 404
     )
 
 
@@ -1016,9 +1010,7 @@ def test_a_missing_status_is_400(client):
 
 def test_an_unknown_status_value_is_400(client):
     room = make_room_over_http(client)
-    response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/status", json={"status": "pending"}
-    )
+    response = client.post(f"{PREFIX}/rooms/{room['id']}/status", json={"status": "pending"})
     assert response.status_code == 400
 
 
@@ -1112,10 +1104,7 @@ def test_what_reaches_storage_is_a_salted_hash_not_the_password(client):
 
     stored = client.get(f"/api/records/room/{room['id']}").json()["data"]["access"]
     assert stored["password_hash"].startswith("pbkdf2_sha256$")
-    assert (
-        client.get(f"{PREFIX}/rooms/{room['id']}").json()["access"]["password_protected"]
-        is True
-    )
+    assert client.get(f"{PREFIX}/rooms/{room['id']}").json()["access"]["password_protected"] is True
 
 
 def test_a_password_can_be_cleared(client):
@@ -1125,8 +1114,7 @@ def test_a_password_can_be_cleared(client):
     client.patch(f"{PREFIX}/rooms/{room['id']}/access", json={"clear_password": True})
 
     assert (
-        client.get(f"{PREFIX}/rooms/{room['id']}").json()["access"]["password_protected"]
-        is False
+        client.get(f"{PREFIX}/rooms/{room['id']}").json()["access"]["password_protected"] is False
     )
 
 
@@ -1217,10 +1205,7 @@ def test_subscriptions_are_listed_and_cancelled(client):
 
     assert client.delete(f"{PREFIX}/webhooks/{subscription['id']}").status_code == 200
     assert client.get(f"{PREFIX}/webhooks").json()["count"] == 0
-    assert (
-        client.get(f"{PREFIX}/webhooks", params={"include_cancelled": True}).json()["count"]
-        == 1
-    )
+    assert client.get(f"{PREFIX}/webhooks", params={"include_cancelled": True}).json()["count"] == 1
 
 
 def test_subscribing_validates_its_input(client):
@@ -1303,7 +1288,7 @@ def _matches_registered_route(source: str, routes: list[dict]) -> bool:
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=False)
         ):
             return True
     return False
@@ -1311,7 +1296,7 @@ def _matches_registered_route(source: str, routes: list[dict]) -> bool:
 
 def _publishing_audit_sources(client) -> set[str]:
     """Every distinct ``source`` written by this feature's HTTP layer."""
-    served = [
+    [
         route
         for feature in client.get("/api/features").json()["features"]
         for route in feature["routes"]
@@ -1402,9 +1387,7 @@ def test_seed_produces_a_board_with_every_state_and_a_failed_delivery():
     now = datetime(2026, 9, 26, 12, 0, tzinfo=timezone.utc)
 
     with tempfile.TemporaryDirectory() as tmp:
-        with AuditedDatabase(
-            Path(tmp) / "seed.db", mirror_dir=Path(tmp) / "audit"
-        ) as db:
+        with AuditedDatabase(Path(tmp) / "seed.db", mirror_dir=Path(tmp) / "audit") as db:
             room_ids = [
                 db.create("room", {"name": f"Room {i}"}, actor="dana", source="seed")["id"]
                 for i in range(4)
@@ -1434,8 +1417,6 @@ def test_seed_produces_a_board_with_every_state_and_a_failed_delivery():
             assert len(deliveries) == 4
             assert {d["data"]["status"] for d in deliveries} == {"failed"}
             # Nothing the seeder wrote claims a route was served.
-            assert all(
-                row["source"] == "seed" for row in db.audit(limit=200) if row["record_id"]
-            )
+            assert all(row["source"] == "seed" for row in db.audit(limit=200) if row["record_id"])
 
     assert "1 webhook subscriber" in summary

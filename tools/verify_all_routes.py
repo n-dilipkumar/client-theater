@@ -17,6 +17,7 @@ is invisible to the import check, which only proves a module loaded.
 
 Exit codes: 0 nothing wrong, 1 at least one route 5xx'd, 2 the app is not up.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -151,7 +152,9 @@ def call(base: str, method: str, path: str) -> tuple[int, str]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--base", default="http://127.0.0.1:8000")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
@@ -176,8 +179,9 @@ def main() -> int:
     results = []
     for fid, method, path in targets:
         status, body = call(base, method, substitute(path, room_id))
-        results.append({"feature": fid, "method": method, "path": path,
-                        "status": status, "body": body})
+        results.append(
+            {"feature": fid, "method": method, "path": path, "status": status, "body": body}
+        )
 
     faults = [r for r in results if r["status"] == 0 or 500 <= r["status"] < 600]
     by_status: dict[int, int] = {}
@@ -185,8 +189,11 @@ def main() -> int:
         by_status[r["status"]] = by_status.get(r["status"], 0) + 1
 
     if args.json:
-        print(json.dumps({"checked": len(results), "by_status": by_status,
-                          "faults": faults}, indent=2))
+        print(
+            json.dumps(
+                {"checked": len(results), "by_status": by_status, "faults": faults}, indent=2
+            )
+        )
     else:
         print(f"routes called: {len(results)} across {len(reg.get('features', [])) - 1} features")
         for status in sorted(by_status):

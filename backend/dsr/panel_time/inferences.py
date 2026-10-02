@@ -345,8 +345,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         "topic": "What the frontend does with a confidence number",
         "basis": "[not sourced]",
         "value": (
-            "Four bands - 100, 75-99, 50-74, below 50 - each with a text label, never colour "
-            "alone."
+            "Four bands - 100, 75-99, 50-74, below 50 - each with a text label, never colour alone."
         ),
         "why": (
             "The design system requires 4.5:1 contrast and a text label beside every "

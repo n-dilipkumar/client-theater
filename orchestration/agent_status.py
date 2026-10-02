@@ -14,6 +14,7 @@ An agent that is quiet, has no commits, and has not pushed is stalled. An agent
 with a commit on a branch containing a shared file has failed the contract even
 if it reports success, so that is called out separately and loudly.
 """
+
 import json
 import os
 import re
@@ -53,8 +54,15 @@ if isinstance(agents, dict):
 
 
 def run(args, cwd=ROOT, timeout=60):
-    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     return (p.stdout + p.stderr).strip()
 
 
@@ -62,9 +70,15 @@ def screen(handle):
     # utf-8 with replacement, not the platform default: the TUI paints box-drawing
     # and braille characters, and cp1252 raises UnicodeDecodeError on them, which
     # surfaces as a confusing NoneType further down rather than as an encoding bug.
-    p = subprocess.run(["orca", "terminal", "read", "--terminal", handle, "--json"],
-                       cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=60)
+    p = subprocess.run(
+        ["orca", "terminal", "read", "--terminal", handle, "--json"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
     if not p.stdout:
         return []
     try:
@@ -136,18 +150,24 @@ for a in agents:
     branch = a.get("branch") or run(["git", "rev-parse", "--abbrev-ref", "HEAD"], path)
     ahead = run(["git", "rev-list", "--count", "origin/main..HEAD"], path)
     dirty = run(["git", "status", "--porcelain"], path)
-    files = [f for f in run(["git", "diff", "--name-only", "origin/main...HEAD"], path).splitlines() if f]
-    dirty_n = len([l for l in dirty.splitlines() if l.strip()])
+    files = [
+        f for f in run(["git", "diff", "--name-only", "origin/main...HEAD"], path).splitlines() if f
+    ]
+    dirty_n = len([ln for ln in dirty.splitlines() if ln.strip()])
 
     pushed = run(["git", "rev-parse", "--verify", "--quiet", f"origin/{branch}"], path)
-    untracked = [l for l in dirty.splitlines() if l.startswith("??")]
+    untracked = [ln for ln in dirty.splitlines() if ln.startswith("??")]
 
     print(f"    branch  : {branch}")
-    print(f"    commits : {ahead or '0'} ahead of origin/main, "
-          f"{len(files)} file(s) changed, {dirty_n} uncommitted")
+    print(
+        f"    commits : {ahead or '0'} ahead of origin/main, "
+        f"{len(files)} file(s) changed, {dirty_n} uncommitted"
+    )
     if untracked:
-        print(f"    new     : {', '.join(l[3:] for l in untracked[:4])}"
-              + (f" (+{len(untracked) - 4} more)" if len(untracked) > 4 else ""))
+        print(
+            f"    new     : {', '.join(ln[3:] for ln in untracked[:4])}"
+            + (f" (+{len(untracked) - 4} more)" if len(untracked) > 4 else "")
+        )
     print(f"    pushed  : {'yes' if pushed else 'NOT YET'}")
 
     # -- the one thing that must never happen

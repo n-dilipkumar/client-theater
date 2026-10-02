@@ -19,12 +19,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr import analytics
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 # 2026-09-26 is a Saturday, which the week-grain assertions depend on.
 NOW = datetime(2026, 9, 26, 12, 0, tzinfo=timezone.utc)
@@ -303,7 +302,9 @@ def test_a_deadline_that_has_passed_does_not_raise_an_alert(store):
     connect(store, thresholds={"alert_after_days": 0})
     room = make_room(store, "Adventure Works", stage="evaluation", won_at="2026-08-30")
     for index in range(4):
-        make_event(store, room["id"], person="a@b.example", action="viewed", occurred_at=at(minutes=index))
+        make_event(
+            store, room["id"], person="a@b.example", action="viewed", occurred_at=at(minutes=index)
+        )
 
     payload = analytics.overview(store, as_of=AS_OF)
     kinds = {alert["kind"] for alert in payload["alerts"] if alert["room_id"] == room["id"]}
@@ -383,7 +384,9 @@ def test_most_engaged_documents_carry_the_sourced_columns(wired):
 
 
 def test_latest_activity_is_newest_first_with_user_action_and_time(wired):
-    rows = analytics.room_engagement(wired["store"], wired["hot"]["id"], as_of=AS_OF)["latest_activity"]
+    rows = analytics.room_engagement(wired["store"], wired["hot"]["id"], as_of=AS_OF)[
+        "latest_activity"
+    ]
     assert rows[0]["person"] == "buyer0@northwind.example"
     assert rows[0]["action"] == "downloaded"
     assert rows[0]["occurred_at"] == at(minutes=30)
@@ -412,9 +415,9 @@ def test_visit_frequency_supports_day_and_week_grain(wired):
     daily = analytics.room_engagement(wired["store"], wired["hot"]["id"], as_of=AS_OF)[
         "visit_frequency"
     ]
-    weekly = analytics.room_engagement(wired["store"], wired["hot"]["id"], grain="week", as_of=AS_OF)[
-        "visit_frequency"
-    ]
+    weekly = analytics.room_engagement(
+        wired["store"], wired["hot"]["id"], grain="week", as_of=AS_OF
+    )["visit_frequency"]
     assert daily[-1]["visits"] == 2
     assert [p["bucket_start"] for p in weekly] == ["2026-09-07", "2026-09-14", "2026-09-21"]
     assert weekly[-1]["visits"] == 2
@@ -479,7 +482,9 @@ def test_timeline_preserves_fields_it_does_not_recognise(wired):
 def test_timeline_is_scoped_to_one_room(wired):
     store = wired["store"]
     analytics.add_note(store, wired["quiet"]["id"], {"summary": "Chased twice"}, actor="sam")
-    entries = analytics.timeline(store, analytics.load_config(store), room_id=wired["hot"]["id"], now=NOW)
+    entries = analytics.timeline(
+        store, analytics.load_config(store), room_id=wired["hot"]["id"], now=NOW
+    )
     assert all(entry["room_id"] == wired["hot"]["id"] for entry in entries)
 
 
@@ -542,7 +547,11 @@ def test_a_completely_unrecognisable_room_still_aggregates(store):
 
 def test_event_payload_is_stored_verbatim_and_queryable(wired):
     record = make_event(
-        wired["store"], wired["hot"]["id"], person="x@y.example", action="viewed", cohort="enterprise"
+        wired["store"],
+        wired["hot"]["id"],
+        person="x@y.example",
+        action="viewed",
+        cohort="enterprise",
     )
     assert record["data"]["cohort"] == "enterprise"
     found = wired["store"].find("activity", {"cohort": "enterprise"})
@@ -584,7 +593,9 @@ def client(monkeypatch):
 def seed(client):
     """One connected room with four events, via the public API only."""
     client.patch("/api/wf-006/config", json=TOKEN)
-    room = client.post("/api/records/room", json={"name": "Northwind", "stage": "evaluation"}).json()
+    room = client.post(
+        "/api/records/room", json={"name": "Northwind", "stage": "evaluation"}
+    ).json()
     for index in range(4):
         client.post(
             "/api/wf-006/events",
@@ -714,9 +725,7 @@ def test_http_event_ingest_to_unknown_room_is_404(client):
 def test_http_alerts_endpoint_scopes(client):
     room = seed(client)
     everything = client.get("/api/wf-006/alerts", params={"as_of": AS_OF}).json()
-    scoped = client.get(
-        "/api/wf-006/alerts", params={"room_id": room["id"], "as_of": AS_OF}
-    ).json()
+    scoped = client.get("/api/wf-006/alerts", params={"room_id": room["id"], "as_of": AS_OF}).json()
     assert scoped["count"] == len(scoped["alerts"])
     assert all(alert["room_id"] == room["id"] for alert in scoped["alerts"])
     assert everything["scope"]["label"] == "All Rooms"

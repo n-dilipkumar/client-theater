@@ -9,6 +9,7 @@ pointer prompt contained backticks around the brief path, and backticks written
 into a cmd.exe pty are command substitution, so cmd tried to *execute* the first
 word. WF-007's screen showed exactly that.
 """
+
 import json
 import os
 import re
@@ -41,8 +42,15 @@ NAMES = [
 
 
 def run(args, cwd=ROOT, timeout=90):
-    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     return (p.stdout + p.stderr).strip()
 
 
@@ -72,8 +80,11 @@ def main():
             continue
 
         terms = jrun(["orca", "terminal", "list", "--worktree", wt["id"], "--json"])
-        agents = [t for t in (terms["result"]["terminals"] if terms else [])
-                  if t.get("agentIdentity") == "opencode"]
+        agents = [
+            t
+            for t in (terms["result"]["terminals"] if terms else [])
+            if t.get("agentIdentity") == "opencode"
+        ]
         if not agents:
             print(f"  {name}: no opencode terminal")
             continue
@@ -98,15 +109,21 @@ def main():
         path = Path(wt["path"])
         ahead = run(["git", "rev-list", "--count", "origin/main..HEAD"], path)
         dirty = run(["git", "status", "--porcelain"], path)
-        dirty_n = len([l for l in dirty.splitlines() if l.strip()])
-        files = [f for f in run(["git", "diff", "--name-only", "origin/main...HEAD"], path).splitlines() if f]
+        dirty_n = len([ln for ln in dirty.splitlines() if ln.strip()])
+        files = [
+            f
+            for f in run(["git", "diff", "--name-only", "origin/main...HEAD"], path).splitlines()
+            if f
+        ]
         offenders = sorted(set(files) & SHARED)
 
         print(f"  {name}")
         print(f"    handle  : {handle}")
-        print(f"    branch  : {wt.get('branch','').replace('refs/heads/','')}")
+        print(f"    branch  : {wt.get('branch', '').replace('refs/heads/', '')}")
         print(f"    state   : {', '.join(f for f in flags if f)}")
-        print(f"    commits : {ahead or 0} ahead, {len(files)} file(s) changed, {dirty_n} uncommitted")
+        print(
+            f"    commits : {ahead or 0} ahead, {len(files)} file(s) changed, {dirty_n} uncommitted"
+        )
         if offenders:
             print(f"    !! SHARED FILES: {offenders}")
         else:

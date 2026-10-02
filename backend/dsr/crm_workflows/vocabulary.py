@@ -337,8 +337,7 @@ def require_family(name: Any) -> str:
     """Resolve a family name, or refuse it naming the five."""
     if not isinstance(name, str) or not name.strip():
         raise UnknownFilterFamily(
-            f"a filter must name one of the five published families: "
-            f"{', '.join(FILTER_FAMILIES)}"
+            f"a filter must name one of the five published families: {', '.join(FILTER_FAMILIES)}"
         )
     candidate = name.strip().lower()
     if candidate not in FILTER_FAMILIES:
@@ -488,8 +487,7 @@ def describe() -> dict[str, Any]:
         "enrollment_types": list(ENROLLMENT_TYPES),
         "delivery_paths": list(DELIVERY_PATHS),
         "action_kinds": [
-            {"kind": kind, "label": ACTION_LABEL[kind], "resolvable": True}
-            for kind in ACTION_KINDS
+            {"kind": kind, "label": ACTION_LABEL[kind], "resolvable": True} for kind in ACTION_KINDS
         ],
         "action_kind_note": (
             "The four kinds above are the ones this build resolves. Any other kind is "

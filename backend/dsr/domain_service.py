@@ -63,7 +63,7 @@ rather than quietly writing a plausible-looking but wrong audit row.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from dsr.db.audited import AuditError, utcnow
 from dsr.domains import (
@@ -140,7 +140,9 @@ class DomainService:
                 domains.append(domain)
         return domains
 
-    def domain_holder(self, domain: str, *, exclude_room: str | None = None) -> dict[str, Any] | None:
+    def domain_holder(
+        self, domain: str, *, exclude_room: str | None = None
+    ) -> dict[str, Any] | None:
         """The live room already holding ``domain``, if any.
 
         Uses ``find`` on the dynamic index rather than a scan, which is the
@@ -491,7 +493,9 @@ class DomainService:
         if _host_matches(host, room_data.get("domain") or ""):
             return True
         try:
-            candidate = normalise_domain(host.strip().lower().rsplit(":", 1)[0] if host.count(":") == 1 else host)
+            candidate = normalise_domain(
+                host.strip().lower().rsplit(":", 1)[0] if host.count(":") == 1 else host
+            )
         except DomainError:
             return False
         return self.domain_holder(candidate) is not None
@@ -525,7 +529,9 @@ class DomainService:
         return {
             "room": room,
             "served_on_custom_domain": bool(
-                data.get("domain") and data.get("domain_status") == "verified" and host
+                data.get("domain")
+                and data.get("domain_status") == "verified"
+                and host
                 and _host_matches(host, data["domain"])
             ),
         }

@@ -117,12 +117,12 @@ def transform_key(name: str, version: int | None = None) -> str:
 # --------------------------------------------------------------------------- #
 
 RESEARCHED = (
-    "WF-035 research: \"a transform (lowercase email, ISO-8601 date, picklist label -> "
-    "internal option value, number coercion)\"."
+    'WF-035 research: "a transform (lowercase email, ISO-8601 date, picklist label -> '
+    'internal option value, number coercion)".'
 )
 
 _ENUMERATION_RULE = (
-    "WF-035 research, quoted: \"When including enumeration properties, you must use internal "
+    'WF-035 research, quoted: "When including enumeration properties, you must use internal '
     "names to set values.\" The label side of the table is the sales room's own wording; the "
     "value side is the CRM's internal option value."
 )
@@ -380,9 +380,7 @@ class Registry:
         if version is not None:
             return self._items.get(transform_key(text, int(version)))
         versions = [
-            transform
-            for key, transform in self._items.items()
-            if key.rsplit("@", 1)[0] == text
+            transform for key, transform in self._items.items() if key.rsplit("@", 1)[0] == text
         ]
         if not versions:
             return None
@@ -400,7 +398,9 @@ class Registry:
         """Every registered version of a name, ascending."""
         text = str(name or "").strip()
         return tuple(
-            sorted(int(key.rsplit("@", 1)[1]) for key in self._items if key.rsplit("@", 1)[0] == text)
+            sorted(
+                int(key.rsplit("@", 1)[1]) for key in self._items if key.rsplit("@", 1)[0] == text
+            )
         )
 
     def latest(self) -> tuple[Transform, ...]:

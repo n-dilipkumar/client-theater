@@ -44,8 +44,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr import client_engagement as ce
 from dsr.client_engagement import (
     EngagementReportError,
@@ -57,6 +55,7 @@ from dsr.client_engagement import (
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-024"
 MODULE = "wf024_roll_up_client_engagement_and_multi_th"
@@ -79,7 +78,9 @@ def at(days: float = 0, hours: float = 0) -> str:
 def store():
     """A store over a throwaway audited database, for the domain tests."""
     tmp = tempfile.TemporaryDirectory()
-    db = AuditedDatabase(Path(tmp.name) / "wf024.db", mirror_dir=Path(tmp.name) / "audit", actor="test")
+    db = AuditedDatabase(
+        Path(tmp.name) / "wf024.db", mirror_dir=Path(tmp.name) / "audit", actor="test"
+    )
     yield RecordStore(db)
     db.close()
     tmp.cleanup()
@@ -103,7 +104,9 @@ def _app():
     return app
 
 
-def room(store: RecordStore, account: str, *, owner: str = "", team: str = "", name: str = "") -> dict:
+def room(
+    store: RecordStore, account: str, *, owner: str = "", team: str = "", name: str = ""
+) -> dict:
     data: dict = {"name": name or f"{account} room", "account": account}
     if owner:
         data["owner"] = owner
@@ -129,7 +132,9 @@ def event(
     return store.create("activity", data, room_id=room_id, actor="system", source="test")
 
 
-def internal(store: RecordStore, room_id: str | None, person: str, action: str = "viewed", **extra) -> dict:
+def internal(
+    store: RecordStore, room_id: str | None, person: str, action: str = "viewed", **extra
+) -> dict:
     return event(store, room_id, person, action, user_type="internal", **extra)
 
 
@@ -183,7 +188,12 @@ def test_no_other_feature_serves_a_path_under_this_prefix():
     """
     import dsr.features as host
 
-    mine = {route["path"] for feature in host.REGISTRY.features if feature.id == FEATURE_ID for route in feature.routes}
+    mine = {
+        route["path"]
+        for feature in host.REGISTRY.features
+        if feature.id == FEATURE_ID
+        for route in feature.routes
+    }
     assert mine
     for feature in host.REGISTRY.features:
         if feature.id == FEATURE_ID:
@@ -205,7 +215,17 @@ def test_the_domain_module_depends_on_nothing_but_the_store():
     source = Path(ce.__file__).read_text(encoding="utf-8")
     imports = [line for line in source.splitlines() if line.startswith(("import ", "from "))]
     assert imports == ["from __future__ import annotations"] + [
-        line for line in imports if line in ("import re", "from collections import defaultdict", "from dataclasses import dataclass", "from datetime import datetime, timedelta, timezone", "from typing import Any, Iterable, Mapping, Sequence", "from dsr.store import RecordStore")
+        line
+        for line in imports
+        if line
+        in (
+            "import re",
+            "from collections import defaultdict",
+            "from dataclasses import dataclass",
+            "from datetime import datetime, timedelta, timezone",
+            "from typing import Any, Iterable, Mapping, Sequence",
+            "from dsr.store import RecordStore",
+        )
     ], imports
 
 
@@ -278,10 +298,14 @@ def test_no_migration_and_no_new_envelope_field():
 def test_an_explicit_user_type_field_wins_over_anything_else(store):
     config = ce.load_config(store)
     assert ce.classify_audience("dana", {"user_type": "internal"}, config) == ce.AUDIENCE_INTERNAL
-    assert ce.classify_audience("a.buyer", {"user_type": "external"}, config) == ce.AUDIENCE_EXTERNAL
+    assert (
+        ce.classify_audience("a.buyer", {"user_type": "external"}, config) == ce.AUDIENCE_EXTERNAL
+    )
 
 
-@pytest.mark.parametrize("value", ["EXTERNAL", "external", " External ", "client", "buyer", "guest"])
+@pytest.mark.parametrize(
+    "value", ["EXTERNAL", "external", " External ", "client", "buyer", "guest"]
+)
 def test_the_user_type_match_is_case_and_space_insensitive(store, value):
     config = ce.load_config(store)
     assert ce.classify_audience("a.buyer", {"user_type": value}, config) == ce.AUDIENCE_EXTERNAL
@@ -373,7 +397,9 @@ def test_internal_activity_never_reaches_a_client_total(store):
 def test_an_anonymous_event_is_reported_in_coverage_and_left_out_of_totals(store):
     one = room(store, "Acme")
     event(store, one["id"], "a.buyer", "viewed")
-    store.create("activity", {"action": "viewed", "occurred_at": at(1)}, room_id=one["id"], source="test")
+    store.create(
+        "activity", {"action": "viewed", "occurred_at": at(1)}, room_id=one["id"], source="test"
+    )
 
     body = report(store)
     assert body["totals"]["client_actions"] == 1
@@ -824,9 +850,9 @@ def test_the_owner_filter_narrows_the_workspaces(store):
     body = report(store, filters=ce.resolve_filters(owners=["dana"]))
     assert body["totals"]["workspaces"] == 1
     assert body["totals"]["client_actions"] == 1
-    filtered = ce.account_list(
-        store, filters=ce.resolve_filters(owners=["dana"]), as_of=AS_OF
-    )["accounts"]
+    filtered = ce.account_list(store, filters=ce.resolve_filters(owners=["dana"]), as_of=AS_OF)[
+        "accounts"
+    ]
     assert [row["account"] for row in filtered] == ["Acme"]
 
 
@@ -900,7 +926,9 @@ def test_the_filter_echo_names_what_was_asked_for(store):
 def test_an_event_with_no_timestamp_falls_back_to_its_record_timestamp(store):
     """A team that never wrote a timestamp still gets a dated report."""
     one = room(store, "Acme")
-    store.create("activity", {"person": "a.buyer", "action": "viewed"}, room_id=one["id"], source="test")
+    store.create(
+        "activity", {"person": "a.buyer", "action": "viewed"}, room_id=one["id"], source="test"
+    )
     body = report(store)
     assert body["totals"]["client_actions"] == 1
     assert body["coverage"]["undated_events"] == 0
@@ -969,7 +997,9 @@ def test_sorting_ascending_and_descending_are_opposites(store):
         event(store, first["id"], "a.buyer", "viewed")
     event(store, second["id"], "b.buyer", "viewed")
 
-    down = ce.account_list(store, filters=no_filters(), sort="actions", descending=True, as_of=AS_OF)
+    down = ce.account_list(
+        store, filters=no_filters(), sort="actions", descending=True, as_of=AS_OF
+    )
     up = ce.account_list(store, filters=no_filters(), sort="actions", descending=False, as_of=AS_OF)
     assert [row["account"] for row in down["accounts"]] == ["Acme", "Globex"]
     assert [row["account"] for row in up["accounts"]] == ["Globex", "Acme"]
@@ -988,15 +1018,23 @@ def test_an_unknown_sort_column_is_a_value_error(store):
 
 
 def test_a_blank_sort_key_falls_back_to_the_default(store):
-    assert ce.account_list(store, filters=no_filters(), sort="   ", as_of=AS_OF)["sort"] == ce.DEFAULT_SORT
-    assert ce.account_list(store, filters=no_filters(), sort=None, as_of=AS_OF)["sort"] == ce.DEFAULT_SORT
+    assert (
+        ce.account_list(store, filters=no_filters(), sort="   ", as_of=AS_OF)["sort"]
+        == ce.DEFAULT_SORT
+    )
+    assert (
+        ce.account_list(store, filters=no_filters(), sort=None, as_of=AS_OF)["sort"]
+        == ce.DEFAULT_SORT
+    )
 
 
 def test_ties_break_on_the_account_name_so_reads_are_stable(store):
     for account in ("Zeta", "Alpha", "Mu"):
         space = room(store, account)
         event(store, space["id"], "a.buyer", "viewed")
-    rows = ce.account_list(store, filters=no_filters(), sort="actions", descending=True, as_of=AS_OF)
+    rows = ce.account_list(
+        store, filters=no_filters(), sort="actions", descending=True, as_of=AS_OF
+    )
     assert [row["account"] for row in rows["accounts"]] == ["Alpha", "Mu", "Zeta"]
 
 
@@ -1005,7 +1043,9 @@ def test_sorting_by_champion_orders_by_who_the_champion_is(store):
     second = room(store, "Globex")
     event(store, first["id"], "zoe.buyer", "viewed")
     event(store, second["id"], "adam.buyer", "viewed")
-    rows = ce.account_list(store, filters=no_filters(), sort="champion", descending=False, as_of=AS_OF)
+    rows = ce.account_list(
+        store, filters=no_filters(), sort="champion", descending=False, as_of=AS_OF
+    )
     assert [row["account"] for row in rows["accounts"]] == ["Globex", "Acme"]
 
 
@@ -1059,9 +1099,12 @@ def test_every_account_row_carries_a_key_that_resolves(store):
         event(store, space["id"], "a.buyer", "viewed")
     rows = ce.account_list(store, filters=no_filters(), as_of=AS_OF)["accounts"]
     for row in rows:
-        assert ce.account_detail(store, row["account_key"], filters=no_filters(), as_of=AS_OF)["account"] == row[
-            "account"
-        ]
+        assert (
+            ce.account_detail(store, row["account_key"], filters=no_filters(), as_of=AS_OF)[
+                "account"
+            ]
+            == row["account"]
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -1118,9 +1161,7 @@ def test_an_account_filtered_out_of_scope_is_not_resolvable(store):
     one = room(store, "Acme", owner="dana")
     event(store, one["id"], "a.buyer", "viewed")
     with pytest.raises(UnknownAccount):
-        ce.account_detail(
-            store, "Acme", filters=ce.resolve_filters(owners=["sam"]), as_of=AS_OF
-        )
+        ce.account_detail(store, "Acme", filters=ce.resolve_filters(owners=["sam"]), as_of=AS_OF)
 
 
 def test_a_client_row_carries_what_they_looked_at_and_where(store):
@@ -1311,7 +1352,7 @@ def test_team_usage_counts_a_reps_own_activity_separately(store):
 
 def test_team_usage_reports_the_coverage_risk_per_owner(store):
     first = room(store, "Acme", owner="dana")
-    second = room(store, "Globex", owner="dana")
+    room(store, "Globex", owner="dana")
     event(store, first["id"], "a.buyer", "viewed")
     event(store, first["id"], "b.buyer", "viewed")
 
@@ -1331,7 +1372,9 @@ def test_team_usage_names_an_internal_person_who_owns_nothing(store):
     one = room(store, "Acme", owner="dana")
     ce.save_config(store, {"audience": {"internal_people": ["kai"]}}, source="test")
     internal(store, one["id"], "kai", "viewed")
-    assert ce.team_usage(store, filters=no_filters(), as_of=AS_OF)["unattributed_internal_people"] == ["kai"]
+    assert ce.team_usage(store, filters=no_filters(), as_of=AS_OF)[
+        "unattributed_internal_people"
+    ] == ["kai"]
 
 
 def test_team_usage_is_empty_but_well_formed_with_no_owners(store):
@@ -1360,7 +1403,14 @@ def implementation(store: RecordStore, **data) -> dict:
 
 def test_implementations_counts_total_active_and_completed(store):
     room(store, "Acme")
-    implementation(store, account="Acme", status="completed", started_at=at(60), completed_at=at(30), due_at=at(40))
+    implementation(
+        store,
+        account="Acme",
+        status="completed",
+        started_at=at(60),
+        completed_at=at(30),
+        due_at=at(40),
+    )
     implementation(store, account="Acme", status="active", started_at=at(20), due_at=at(-5))
     implementation(store, account="Acme", status="in_progress", started_at=at(5))
 
@@ -1372,23 +1422,70 @@ def test_implementations_counts_total_active_and_completed(store):
 
 def test_implementations_averages_the_time_to_completion(store):
     room(store, "Acme")
-    implementation(store, account="Acme", status="completed", started_at=at(60), completed_at=at(30), due_at=at(45))
-    implementation(store, account="Acme", status="completed", started_at=at(50), completed_at=at(40), due_at=at(45))
-    assert ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["time_to_completion_days"] == 20.0
+    implementation(
+        store,
+        account="Acme",
+        status="completed",
+        started_at=at(60),
+        completed_at=at(30),
+        due_at=at(45),
+    )
+    implementation(
+        store,
+        account="Acme",
+        status="completed",
+        started_at=at(50),
+        completed_at=at(40),
+        due_at=at(45),
+    )
+    assert (
+        ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"][
+            "time_to_completion_days"
+        ]
+        == 20.0
+    )
 
 
 def test_implementations_reports_no_average_rather_than_a_wrong_one(store):
     room(store, "Acme")
     implementation(store, account="Acme", status="completed", completed_at=at(30))
-    assert ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["time_to_completion_days"] is None
+    assert (
+        ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"][
+            "time_to_completion_days"
+        ]
+        is None
+    )
 
 
 def test_implementations_reports_the_percentage_completed_on_time(store):
     room(store, "Acme")
-    implementation(store, account="Acme", status="completed", started_at=at(60), completed_at=at(30), due_at=at(40))
-    implementation(store, account="Acme", status="completed", started_at=at(60), completed_at=at(50), due_at=at(40))
-    implementation(store, account="Acme", status="completed", started_at=at(60), completed_at=at(45), due_at=at(40))
-    implementation(store, account="Acme", status="completed", started_at=at(60), completed_at=at(20))
+    implementation(
+        store,
+        account="Acme",
+        status="completed",
+        started_at=at(60),
+        completed_at=at(30),
+        due_at=at(40),
+    )
+    implementation(
+        store,
+        account="Acme",
+        status="completed",
+        started_at=at(60),
+        completed_at=at(50),
+        due_at=at(40),
+    )
+    implementation(
+        store,
+        account="Acme",
+        status="completed",
+        started_at=at(60),
+        completed_at=at(45),
+        due_at=at(40),
+    )
+    implementation(
+        store, account="Acme", status="completed", started_at=at(60), completed_at=at(20)
+    )
     body = ce.implementations(store, filters=no_filters(), as_of=AS_OF)
     assert body["totals"]["completed_on_time_percent"] == pytest.approx(66.67, abs=0.01)
     assert body["missing_dates"]["no_due_date"] == 1
@@ -1396,15 +1493,25 @@ def test_implementations_reports_the_percentage_completed_on_time(store):
 
 def test_implementations_reports_no_percentage_rather_than_a_wrong_one(store):
     room(store, "Acme")
-    implementation(store, account="Acme", status="completed", started_at=at(60), completed_at=at(30))
-    assert ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["completed_on_time_percent"] is None
+    implementation(
+        store, account="Acme", status="completed", started_at=at(60), completed_at=at(30)
+    )
+    assert (
+        ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"][
+            "completed_on_time_percent"
+        ]
+        is None
+    )
 
 
 def test_implementations_groups_by_owner_with_an_unassigned_bucket(store):
     room(store, "Acme")
     implementation(store, account="Acme", status="active", owner="dana", due_at=at(-1))
     implementation(store, account="Acme", status="active", started_at=at(3))
-    by_owner = {row["owner"]: row for row in ce.implementations(store, filters=no_filters(), as_of=AS_OF)["by_owner"]}
+    by_owner = {
+        row["owner"]: row
+        for row in ce.implementations(store, filters=no_filters(), as_of=AS_OF)["by_owner"]
+    }
     assert by_owner["dana"]["total"] == 1
     assert by_owner["(unassigned)"]["total"] == 1
 
@@ -1433,7 +1540,14 @@ def test_an_overdue_active_implementation_is_at_risk(store):
 
 def test_an_implementation_completed_late_is_at_risk(store):
     room(store, "Acme")
-    implementation(store, account="Acme", status="completed", started_at=at(90), completed_at=at(30), due_at=at(45))
+    implementation(
+        store,
+        account="Acme",
+        status="completed",
+        started_at=at(90),
+        completed_at=at(30),
+        due_at=at(45),
+    )
     row = ce.implementations(store, filters=no_filters(), as_of=AS_OF)["implementations_detail"][0]
     assert row["at_risk"] is True
     assert row["completed_on_time"] is False
@@ -1459,7 +1573,9 @@ def test_an_implementation_due_next_week_is_not_at_risk(store):
 def test_an_implementation_marked_active_with_a_completion_date_is_named(store):
     room(store, "Acme")
     implementation(store, account="Acme", status="active", started_at=at(20), completed_at=at(2))
-    reasons = ce.implementations(store, filters=no_filters(), as_of=AS_OF)["at_risk"][0]["at_risk_reasons"]
+    reasons = ce.implementations(store, filters=no_filters(), as_of=AS_OF)["at_risk"][0][
+        "at_risk_reasons"
+    ]
     assert "marked active but carries a completion date" in reasons
 
 
@@ -1483,7 +1599,10 @@ def test_an_implementation_with_no_status_at_all_is_still_a_row(store):
 def test_an_implementation_for_an_account_out_of_scope_is_not_counted(store):
     room(store, "Acme")
     implementation(store, account="Globex", status="active", due_at=at(-1))
-    assert ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["implementations"] == 0
+    assert (
+        ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["implementations"]
+        == 0
+    )
 
 
 def test_implementations_is_empty_but_well_formed_with_no_records(store):
@@ -1497,9 +1616,15 @@ def test_implementations_is_empty_but_well_formed_with_no_records(store):
 def test_the_implementation_collection_is_configurable(store):
     room(store, "Acme")
     store.create("delivery", {"account": "Acme", "status": "active"}, source="test")
-    assert ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["implementations"] == 0
+    assert (
+        ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["implementations"]
+        == 0
+    )
     ce.save_config(store, {"implementation": {"collection": "delivery"}}, source="test")
-    assert ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["implementations"] == 1
+    assert (
+        ce.implementations(store, filters=no_filters(), as_of=AS_OF)["totals"]["implementations"]
+        == 1
+    )
 
 
 def test_the_implementation_state_vocabulary_is_configurable(store):
@@ -1526,7 +1651,13 @@ def test_the_implementation_field_names_are_discovered(store):
     )
     store.create(
         "delivery",
-        {"customer": "Acme", "status": "completed", "kicked_off": at(40), "landed": at(20), "promised": at(10)},
+        {
+            "customer": "Acme",
+            "status": "completed",
+            "kicked_off": at(40),
+            "landed": at(20),
+            "promised": at(10),
+        },
         source="test",
     )
     body = ce.implementations(store, filters=no_filters(), as_of=AS_OF)
@@ -1590,7 +1721,9 @@ def test_save_config_requires_a_source():
 
 def test_an_unclassified_event_is_recorded_as_client_activity(store):
     one = room(store, "Acme")
-    body = ce.record_event(store, {"person": "a.buyer", "action": "viewed"}, room_id=one["id"], source="test")
+    body = ce.record_event(
+        store, {"person": "a.buyer", "action": "viewed"}, room_id=one["id"], source="test"
+    )
     assert body["counted_as"] == ce.AUDIENCE_EXTERNAL
     assert body["in_client_engagement"] is True
     assert body["event"]["data"]["user_type"] == "external"
@@ -1599,7 +1732,10 @@ def test_an_unclassified_event_is_recorded_as_client_activity(store):
 def test_an_internal_event_is_recorded_but_kept_out_of_the_client_report(store):
     one = room(store, "Acme")
     body = ce.record_event(
-        store, {"person": "dana", "user_type": "internal", "action": "viewed"}, room_id=one["id"], source="test"
+        store,
+        {"person": "dana", "user_type": "internal", "action": "viewed"},
+        room_id=one["id"],
+        source="test",
     )
     assert body["counted_as"] == ce.AUDIENCE_INTERNAL
     assert body["in_client_engagement"] is False
@@ -1645,7 +1781,10 @@ def test_an_event_on_an_unknown_workspace_is_refused(store):
 def test_a_recorded_event_reaches_the_report(store):
     one = room(store, "Acme")
     ce.record_event(
-        store, {"person": "a.buyer", "action": "viewed", "occurred_at": at(1)}, room_id=one["id"], source="test"
+        store,
+        {"person": "a.buyer", "action": "viewed", "occurred_at": at(1)},
+        room_id=one["id"],
+        source="test",
     )
     assert report(store)["totals"]["client_views"] == 1
 
@@ -1662,7 +1801,9 @@ def make_room(client, account="Acme", **payload) -> dict:
 
 def make_event(client, room_id, person, action="viewed", **payload) -> dict:
     return client.post(
-        f"{PREFIX}/events", json={"person": person, "action": action, **payload}, params={"room_id": room_id}
+        f"{PREFIX}/events",
+        json={"person": person, "action": action, **payload},
+        params={"room_id": room_id},
     ).json()["event"]
 
 
@@ -1702,7 +1843,10 @@ def test_every_tile_expands_to_a_url_the_app_serves(client):
     for tile in client.get(f"{PREFIX}/report").json()["tiles"]:
         href = tile["accounts_href"]
         path, _, query = href.partition("?")
-        assert client.get(path, params=dict(item.split("=") for item in query.split("&"))).status_code == 200
+        assert (
+            client.get(path, params=dict(item.split("=") for item in query.split("&"))).status_code
+            == 200
+        )
 
 
 def test_the_account_list_route_sorts_and_pages(client):
@@ -1810,7 +1954,11 @@ def test_the_config_patch_route_merges_and_changes_the_report(client):
 
 def test_the_events_route_records_a_client_interaction(client):
     one = make_room(client)
-    response = client.post(f"{PREFIX}/events", json={"person": "a.buyer", "action": "viewed"}, params={"room_id": one["id"]})
+    response = client.post(
+        f"{PREFIX}/events",
+        json={"person": "a.buyer", "action": "viewed"},
+        params={"room_id": one["id"]},
+    )
     assert response.status_code == 201
     assert response.json()["counted_as"] == "external"
     assert client.get(f"{PREFIX}/report").json()["totals"]["client_actions"] == 1
@@ -1821,7 +1969,9 @@ def test_the_events_route_refuses_an_empty_payload(client):
 
 
 def test_the_events_route_refuses_an_unknown_workspace(client):
-    response = client.post(f"{PREFIX}/events", json={"person": "a.buyer"}, params={"room_id": "room_missing"})
+    response = client.post(
+        f"{PREFIX}/events", json={"person": "a.buyer"}, params={"room_id": "room_missing"}
+    )
     assert response.status_code == 404
     assert response.json()["error"] == "unknown_workspace"
 
@@ -1838,7 +1988,10 @@ def test_the_owner_and_team_filters_reach_every_read_route(client):
     assert client.get(f"{PREFIX}/accounts", params=params).json()["total"] == 1
     assert client.get(f"{PREFIX}/reports/team-usage", params=params).json()["totals"]["owners"] == 1
     assert client.get(f"{PREFIX}/reports/implementations", params=params).json()["count"] == 1
-    assert client.get(f"{PREFIX}/report", params={"team": "Enterprise"}).json()["totals"]["workspaces"] == 1
+    assert (
+        client.get(f"{PREFIX}/report", params={"team": "Enterprise"}).json()["totals"]["workspaces"]
+        == 1
+    )
 
 
 def test_the_date_filters_reach_every_read_route(client):
@@ -1848,8 +2001,16 @@ def test_the_date_filters_reach_every_read_route(client):
     params = {"date_from": "2026-09-15", "date_to": "2026-09-27"}
     assert client.get(f"{PREFIX}/report", params=params).json()["totals"]["client_actions"] == 1
     assert client.get(f"{PREFIX}/accounts", params=params).json()["total"] == 1
-    assert client.get(f"{PREFIX}/reports/team-usage", params=params).json()["coverage"]["external_events"] == 1
-    assert client.get(f"{PREFIX}/reports/implementations", params=params).json()["filters"]["from"] is not None
+    assert (
+        client.get(f"{PREFIX}/reports/team-usage", params=params).json()["coverage"][
+            "external_events"
+        ]
+        == 1
+    )
+    assert (
+        client.get(f"{PREFIX}/reports/implementations", params=params).json()["filters"]["from"]
+        is not None
+    )
 
 
 def test_a_bad_date_range_is_422_on_every_filtered_read_route(client):
@@ -1900,8 +2061,14 @@ def audit_sources(client) -> set[str]:
 
 def test_every_write_audits_the_path_this_router_serves(client):
     one = make_room(client)
-    client.post(f"{PREFIX}/events", json={"person": "a.buyer", "action": "viewed"}, params={"room_id": one["id"]})
-    client.patch(f"{PREFIX}/config", json={"thresholds": {"chart_days": 14}}, params={"actor": "dana"})
+    client.post(
+        f"{PREFIX}/events",
+        json={"person": "a.buyer", "action": "viewed"},
+        params={"room_id": one["id"]},
+    )
+    client.patch(
+        f"{PREFIX}/config", json={"thresholds": {"chart_days": 14}}, params={"actor": "dana"}
+    )
     assert audit_sources(client) == {f"POST {PREFIX}/events", f"PATCH {PREFIX}/config"}
 
 
@@ -1976,7 +2143,7 @@ def serves(mounted: dict[str, list[list[str]]], method: str, path: str) -> bool:
             continue
         if all(
             expected.startswith("{") or expected == actual or RECORD_ID.match(actual)
-            for expected, actual in zip(candidate, recorded)
+            for expected, actual in zip(candidate, recorded, strict=False)
         ):
             return True
     return False
@@ -2036,8 +2203,12 @@ def test_the_audit_row_carries_the_room_scope_and_the_new_state(client):
 
 
 def test_the_config_write_is_audited_with_the_actor(client):
-    client.patch(f"{PREFIX}/config", json={"thresholds": {"chart_days": 7}}, params={"actor": "dana"})
-    entry = client.get("/api/audit", params={"collection": ce.COLLECTION_CONFIG}).json()["entries"][0]
+    client.patch(
+        f"{PREFIX}/config", json={"thresholds": {"chart_days": 7}}, params={"actor": "dana"}
+    )
+    entry = client.get("/api/audit", params={"collection": ce.COLLECTION_CONFIG}).json()["entries"][
+        0
+    ]
     assert entry["source"] == f"PATCH {PREFIX}/config"
     assert entry["actor"] == "dana"
     assert entry["after_state"]["thresholds"]["chart_days"] == 7
@@ -2046,7 +2217,9 @@ def test_the_config_write_is_audited_with_the_actor(client):
 def test_the_audit_row_survives_a_config_update_rather_than_creating_a_second_record(client):
     client.patch(f"{PREFIX}/config", json={"thresholds": {"chart_days": 7}})
     client.patch(f"{PREFIX}/config", json={"thresholds": {"chart_days": 21}})
-    entries = client.get("/api/audit", params={"collection": ce.COLLECTION_CONFIG}).json()["entries"]
+    entries = client.get("/api/audit", params={"collection": ce.COLLECTION_CONFIG}).json()[
+        "entries"
+    ]
     assert {entry["action"] for entry in entries} == {"insert", "update"}
     assert len({entry["record_id"] for entry in entries}) == 1
 
@@ -2065,18 +2238,33 @@ def seeded(tmp_path, monkeypatch):
     rooms = [
         db.create(
             "room",
-            {"name": "Northwind room", "account": "Northwind Traders", "owner": "dana", "team": "Enterprise"},
+            {
+                "name": "Northwind room",
+                "account": "Northwind Traders",
+                "owner": "dana",
+                "team": "Enterprise",
+            },
             source="test",
         ),
         db.create(
             "room",
-            {"name": "Contoso room", "account": "Contoso Health", "owner": "sam", "team": "Mid-Market"},
+            {
+                "name": "Contoso room",
+                "account": "Contoso Health",
+                "owner": "sam",
+                "team": "Mid-Market",
+            },
             source="test",
         ),
     ]
     feature = load_feature(MODULE)
     summary = feature.seed(
-        db, {"room_ids": [(rooms[0]["id"], "Northwind Traders"), (rooms[1]["id"], "Contoso Health")], "now": NOW, "rng": random.Random("wf024")}
+        db,
+        {
+            "room_ids": [(rooms[0]["id"], "Northwind Traders"), (rooms[1]["id"], "Contoso Health")],
+            "now": NOW,
+            "rng": random.Random("wf024"),
+        },
     )
     yield RecordStore(db), summary
     db.close()
@@ -2181,7 +2369,10 @@ def test_the_seed_creates_an_unassigned_implementation(seeded):
 
 def test_the_seed_creates_a_rep_who_owns_nothing(seeded):
     store, _summary = seeded
-    assert "kai" in ce.team_usage(store, filters=no_filters(), as_of=AS_OF)["unattributed_internal_people"]
+    assert (
+        "kai"
+        in ce.team_usage(store, filters=no_filters(), as_of=AS_OF)["unattributed_internal_people"]
+    )
 
 
 def test_the_seed_runs_every_report_without_raising(seeded):
@@ -2209,11 +2400,17 @@ def test_the_seed_does_not_reuse_a_room_from_another_account(tmp_path, monkeypat
     monkeypatch.setenv("DSR_DB_PATH", str(tmp_path / "reuse.db"))
     monkeypatch.setenv("DSR_AUDIT_DIR", str(tmp_path / "audit"))
     db = AuditedDatabase(tmp_path / "reuse.db", mirror_dir=tmp_path / "audit", actor="test")
-    northwind = db.create("room", {"name": "Northwind", "account": "Northwind Traders"}, source="test")
+    northwind = db.create(
+        "room", {"name": "Northwind", "account": "Northwind Traders"}, source="test"
+    )
     feature = load_feature(MODULE)
     feature.seed(
         db,
-        {"room_ids": [(northwind["id"], "Northwind Traders")], "now": NOW, "rng": random.Random("y")},
+        {
+            "room_ids": [(northwind["id"], "Northwind Traders")],
+            "now": NOW,
+            "rng": random.Random("y"),
+        },
     )
     store = RecordStore(db)
     accounts = accounts_of(store)
@@ -2229,7 +2426,11 @@ def test_the_seeder_writes_through_the_audited_store(tmp_path, monkeypatch):
     feature = load_feature(MODULE)
     feature.seed(
         db,
-        {"room_ids": [(db.list("room")[0]["id"], "Northwind Traders")], "now": NOW, "rng": random.Random("z")},
+        {
+            "room_ids": [(db.list("room")[0]["id"], "Northwind Traders")],
+            "now": NOW,
+            "rng": random.Random("z"),
+        },
     )
     rows = db.audit(limit=10_000)
     assert rows, "the seeder wrote nothing to the audit log"

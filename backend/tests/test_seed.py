@@ -14,14 +14,13 @@ output and the empty demo dataset was nearly attributed to something else.
 The test runs the real seeder as a subprocess into a nested path whose parent
 does not exist, and asserts both that it exits 0 and that it actually wrote rooms.
 """
+
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
 from pathlib import Path
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SEED = ROOT / "backend" / "seed.py"
@@ -44,15 +43,21 @@ def test_seed_creates_missing_parent_directories(tmp_path):
 
     result = subprocess.run(
         [str(PYTHON), str(SEED)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        env=env, timeout=300,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=300,
     )
 
     assert result.returncode == 0, (
         f"seeder failed with exit {result.returncode}\n"
         f"stdout:\n{result.stdout[-2000:]}\nstderr:\n{result.stderr[-2000:]}"
     )
-    assert nested_db.exists(), f"seeder reported success but wrote no database\n{result.stdout[-1500:]}"
+    assert nested_db.exists(), (
+        f"seeder reported success but wrote no database\n{result.stdout[-1500:]}"
+    )
     assert "room " in result.stdout, (
         f"seeder wrote a database but no rooms, so the demo would be empty:\n{result.stdout[-1500:]}"
     )
@@ -73,12 +78,18 @@ def test_seed_still_refuses_to_overwrite_a_seeded_database(tmp_path):
         env["DSR_AUDIT_DIR"] = str(audit)
         return subprocess.run(
             [str(PYTHON), str(SEED)],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            env=env, timeout=300,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=300,
         )
 
     first = run()
-    assert first.returncode == 0, f"first seed failed:\n{first.stdout[-1500:]}\n{first.stderr[-1500:]}"
+    assert first.returncode == 0, (
+        f"first seed failed:\n{first.stdout[-1500:]}\n{first.stderr[-1500:]}"
+    )
 
     second = run()
     assert second.returncode == 1, (

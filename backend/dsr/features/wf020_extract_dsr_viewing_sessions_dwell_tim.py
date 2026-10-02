@@ -196,7 +196,9 @@ def _high_frequency(store: RecordStore, now: datetime) -> bool:
     if not landed:
         return False
     moment = reporting.parse_instant(landed, field="landed_at", require_offset=False)
-    return moment is not None and (now - moment).total_seconds() < reporting.REFRESH_SLA_HOURS * 3600
+    return (
+        moment is not None and (now - moment).total_seconds() < reporting.REFRESH_SLA_HOURS * 3600
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -363,9 +365,7 @@ def extract(
     """
     now = _now()
     window = reporting.build_window(payload, resource="viewing_sessions")
-    rows = reporting.require_rows(
-        payload.get("rows", payload.get("sessions")), what="session"
-    )
+    rows = reporting.require_rows(payload.get("rows", payload.get("sessions")), what="session")
     fmt = reporting.negotiate_format(None, payload.get("format"))
     run_id = str(payload.get("run_id") or "").strip() or None
     # Read before this request writes anything, or the run this request is about
@@ -405,7 +405,11 @@ def extract(
         source=f"POST {router.prefix}/extract",
     )
     reporting.close_run(
-        store, run["id"], counters, finished=now, actor=actor,
+        store,
+        run["id"],
+        counters,
+        finished=now,
+        actor=actor,
         source=f"POST {router.prefix}/extract",
     )
 
@@ -434,7 +438,9 @@ def list_rooms(
     """
     rows = [
         {**(record.get("data") or {}), "id": record["id"], "updated_at": record.get("updated_at")}
-        for record in store.list(reporting.ROOMS, limit=limit, order_by="created_at", descending=False)
+        for record in store.list(
+            reporting.ROOMS, limit=limit, order_by="created_at", descending=False
+        )
     ]
     return {
         "count": len(rows),
@@ -847,7 +853,9 @@ def seed(db, context: dict[str, Any]) -> str:
             "digitalSalesRoomId": room_at(room),
             "roomDurationSeconds": seconds,
             "sessionStartedAt": _iso(started),
-            "sessionEndedAt": _iso(ended if ended is not None else started + timedelta(seconds=seconds)),
+            "sessionEndedAt": _iso(
+                ended if ended is not None else started + timedelta(seconds=seconds)
+            ),
             **_viewer_row(viewer),
             "ipAddress": f"203.0.113.{rng.randint(2, 250)}",
         }
@@ -858,16 +866,24 @@ def seed(db, context: dict[str, Any]) -> str:
 
     # Room 1: a buyer who worked through it in several tabs.
     for step in range(3):
-        add(0, 0, started=landed_at - timedelta(hours=5, minutes=step * 11),
-            seconds=rng.randint(240, 900))
+        add(
+            0,
+            0,
+            started=landed_at - timedelta(hours=5, minutes=step * 11),
+            seconds=rng.randint(240, 900),
+        )
     # Room 1: a one-second session - the value in the API's own example - and a
     # long one, a tab left open.
     add(1, 0, started=landed_at - timedelta(hours=4), seconds=1)
     add(1, 0, started=landed_at - timedelta(hours=3), seconds=4210)
     # Room 2: procurement, several short sessions the same morning.
     for step in range(4):
-        add(2, 1, started=landed_at - timedelta(hours=2, minutes=step * 7),
-            seconds=rng.randint(30, 240))
+        add(
+            2,
+            1,
+            started=landed_at - timedelta(hours=2, minutes=step * 7),
+            seconds=rng.randint(30, 240),
+        )
     # Room 2: the seller's own preview. Internal dwell is not buyer engagement, and
     # the demo has to show the split being real rather than all-external.
     add(4, 1, started=landed_at - timedelta(hours=1, minutes=30), seconds=95)

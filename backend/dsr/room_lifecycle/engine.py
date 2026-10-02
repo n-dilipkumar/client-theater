@@ -111,9 +111,7 @@ class RoomLifecycle:
             # Naming the state the room is actually in is what makes this
             # debuggable: "archive applies to active rooms; room X is archived"
             # says which of the two halves of the check failed.
-            raise RoomConflict(
-                f"{action} applies to {expected} rooms; room {room_id} is {status}"
-            )
+            raise RoomConflict(f"{action} applies to {expected} rooms; room {room_id} is {status}")
 
         # The only field written is `status`. Every other consequence is
         # derived, so there is nothing left behind for a restore to clean up.

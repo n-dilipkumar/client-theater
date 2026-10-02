@@ -34,14 +34,12 @@ from dsr.dedupe.rules import (
     BLOCKED,
     CREATED_DUPLICATE,
     ESCALATED,
-    HARD_BLOCKED,
     NEEDS_HUMAN,
     UPDATED,
 )
 from dsr.dedupe.vocabulary import (
     DEFAULT_POLICY,
     DEFAULT_UNIQUE_KEYS,
-    DEFAULT_VENDOR,
     POLICIES,
     require_keys,
     require_policy,

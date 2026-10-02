@@ -90,7 +90,7 @@ def missing_for(task_type: str, attributes: Mapping[str, Any]) -> list[dict[str,
                     {
                         "field": "attributes.cadence_id",
                         "detail": (
-                            "An \"Add Person to a Cadence\" Play has nowhere to add the buyer: "
+                            'An "Add Person to a Cadence" Play has nowhere to add the buyer: '
                             "the researched attributes list (task_type, task_subject, "
                             "task_reminder_hours, email_subject, email_template) names no "
                             "cadence. Register the Play with attributes.cadence_id and it is "

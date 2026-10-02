@@ -113,7 +113,9 @@ def normalise(payload: Mapping[str, Any] | None) -> dict[str, Any]:
             duration_minutes if DEFAULT_SLOT_FALLS_BACK_TO_MEETING else DEFAULT_SLOT_MINUTES,
             "slot_minutes",
         ),
-        "work_start_hour": _hour(body.get("work_start_hour"), DEFAULT_WORK_START_HOUR, "work_start_hour"),
+        "work_start_hour": _hour(
+            body.get("work_start_hour"), DEFAULT_WORK_START_HOUR, "work_start_hour"
+        ),
         "work_end_hour": _hour(body.get("work_end_hour"), DEFAULT_WORK_END_HOUR, "work_end_hour"),
         "work_days": _work_days(body.get("work_days")),
         "utc_offset_minutes": _offset(body.get("utc_offset_minutes")),
@@ -247,10 +249,14 @@ def _work_days(value: Any) -> list[int]:
         except (TypeError, ValueError) as exc:
             raise HeadlessBookingError(f"work_days entry {part!r} is not an integer 0-6") from exc
         if not 0 <= day <= 6:
-            raise HeadlessBookingError("work_days entries must be between 0 (Monday) and 6 (Sunday)")
+            raise HeadlessBookingError(
+                "work_days entries must be between 0 (Monday) and 6 (Sunday)"
+            )
         days.append(day)
     if not days:
-        raise HeadlessBookingError("work_days cannot be empty; an asset with no working days yields no slots")
+        raise HeadlessBookingError(
+            "work_days cannot be empty; an asset with no working days yields no slots"
+        )
     return sorted(set(days))
 
 
@@ -324,7 +330,9 @@ def _paths(value: Any) -> list[dict[str, Any]]:
     return paths
 
 
-def host_calendar_key(section: str, spec: Mapping[str, Any], path: Mapping[str, Any] | None = None) -> str:
+def host_calendar_key(
+    section: str, spec: Mapping[str, Any], path: Mapping[str, Any] | None = None
+) -> str:
     """The key a busy block is filed under.
 
     Calendar blocks are shared: a host's Google or Outlook calendar is the same

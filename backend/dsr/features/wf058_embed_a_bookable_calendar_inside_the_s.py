@@ -83,9 +83,9 @@ from dsr.inroom_scheduling import (
     SchedulingEngine,
     SchedulingError,
     UnknownEventType,
+    inferences as scheduling_inferences,
     published_vocabulary,
 )
-from dsr.inroom_scheduling import inferences as scheduling_inferences
 from dsr.inroom_scheduling.routing import OPERATORS
 from dsr.store import RecordStore
 
@@ -135,7 +135,18 @@ def _scheduling_error(request: Request, exc: SchedulingError) -> JSONResponse:
     404, and two handlers for one type is a collision the host refuses.
     """
     body: dict[str, Any] = {"error": "scheduling_error", "detail": str(exc)}
-    for field in ("reason", "limit", "maximum", "value", "key", "uid", "until", "expires_at", "kind", "event_type"):
+    for field in (
+        "reason",
+        "limit",
+        "maximum",
+        "value",
+        "key",
+        "uid",
+        "until",
+        "expires_at",
+        "kind",
+        "event_type",
+    ):
         value = getattr(exc, field, None)
         if value is not None:
             body[field] = value
@@ -297,7 +308,10 @@ def grant_oauth_token(
     when it lapses - which is all the product needs to answer "can this room book?".
     """
     record = engine.grant(
-        client_id, payload, actor=actor, source=f"POST {router.prefix}/oauth-clients/{client_id}/grant"
+        client_id,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/oauth-clients/{client_id}/grant",
     )
     return {**record, "token_state": engine.client_token_state(record)}
 
@@ -362,7 +376,10 @@ def update_event_type(
     hours, or whose read-only field has lost the prefilled value it depends on.
     """
     return engine.update_event_type(
-        event_type_id, payload, actor=actor, source=f"PATCH {router.prefix}/event-types/{event_type_id}"
+        event_type_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/event-types/{event_type_id}",
     )
 
 
@@ -580,9 +597,7 @@ def room_slots(
 @router.get("/rooms/{room_id}/routed-slots", summary="GET /v2/routing-forms/slots")
 def room_routed_slots(
     room_id: str,
-    responses: str = Query(
-        default="{}", description='the answers, as JSON: {"topic":"security"}'
-    ),
+    responses: str = Query(default="{}", description='the answers, as JSON: {"topic":"security"}'),
     formId: str | None = Query(default=None),
     start: str | None = Query(default=None),
     end: str | None = Query(default=None),
@@ -660,9 +675,7 @@ def reserve_slot(
 
 
 @router.get("/rooms/{room_id}/holds/{uid}", summary="GET a reserved slot")
-def read_hold(
-    room_id: str, uid: str, engine: SchedulingEngine = EngineDep
-) -> dict[str, Any]:
+def read_hold(room_id: str, uid: str, engine: SchedulingEngine = EngineDep) -> dict[str, Any]:
     """One hold, read at the current moment.
 
     Scoped to the room: a hold belongs to the room that took it, so another room's
@@ -694,7 +707,11 @@ def extend_hold(
     """
     try:
         return engine.extend_hold(
-            room_id, uid, payload, actor=actor, source=f"PATCH {router.prefix}/rooms/{room_id}/holds/{uid}"
+            room_id,
+            uid,
+            payload,
+            actor=actor,
+            source=f"PATCH {router.prefix}/rooms/{room_id}/holds/{uid}",
         )
     except UnknownEventType as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -769,9 +786,7 @@ def create_booking(
 
 
 @router.get("/rooms/{room_id}/bookings/{uid}", summary="Read one booking")
-def read_booking(
-    room_id: str, uid: str, engine: SchedulingEngine = EngineDep
-) -> dict[str, Any]:
+def read_booking(room_id: str, uid: str, engine: SchedulingEngine = EngineDep) -> dict[str, Any]:
     """One booking, with its video link when the event type has a conference."""
     try:
         return engine.booking(room_id, uid)
@@ -1109,9 +1124,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         actor="dana",
         source=source,
     )
-    engine.grant(
-        client["id"], {"subject": "priya"}, actor="dana", source=source
-    )
+    engine.grant(client["id"], {"subject": "priya"}, actor="dana", source=source)
     # A second client with no grant, so the page shows the difference between a
     # client that can book and one that cannot, and so the "several clients, which
     # one?" refusal has something to refuse.
@@ -1233,7 +1246,11 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         {
             "eventTypeId": "evt_team_15",
             "instant": True,
-            "attendee": {"name": "Rui Silva", "email": "rui.silva@newco.example", "timeZone": "UTC"},
+            "attendee": {
+                "name": "Rui Silva",
+                "email": "rui.silva@newco.example",
+                "timeZone": "UTC",
+            },
             "metadata": {"deal_stage": "discovery"},
         },
         actor="dana",
@@ -1247,7 +1264,11 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
             "eventTypeId": "evt_team_15",
             "start": _first_free(engine, room_id, "evt_team_15", _window(thursday, 10, 13)),
             "recurrenceCount": 6,
-            "attendee": {"name": "Alba Ries", "email": "alba.ries@fabrikam.example", "timeZone": "UTC"},
+            "attendee": {
+                "name": "Alba Ries",
+                "email": "alba.ries@fabrikam.example",
+                "timeZone": "UTC",
+            },
         },
         actor="dana",
         source=source,

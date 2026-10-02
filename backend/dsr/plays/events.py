@@ -135,8 +135,8 @@ def delivery(attempts: Sequence[Mapping[str, Any]] | None) -> dict[str, Any]:
             "next_attempt_at": None,
             "detail": (
                 f"Marked failed after {failures} attempts. The research is explicit: "
-                "\"A failing webhook is retried three additional times, spaced 15 seconds "
-                "apart, before being marked as failed.\" No further attempt is scheduled."
+                '"A failing webhook is retried three additional times, spaced 15 seconds '
+                'apart, before being marked as failed." No further attempt is scheduled.'
             ),
         }
 

@@ -338,7 +338,9 @@ def library_assemble(
         raise HTTPException(status_code=400, detail="room_id is required")
     items = payload.get("items")
     if not isinstance(items, list) or not items:
-        raise HTTPException(status_code=400, detail="items must be a non-empty list of library documents")
+        raise HTTPException(
+            status_code=400, detail="items must be a non-empty list of library documents"
+        )
 
     try:
         return assembler.assemble(
@@ -524,7 +526,7 @@ def seed(db, context: dict[str, Any]) -> str:
     to those. And a couple of saved searches are created, so the saved-search
     panel is not an empty section a reviewer has to imagine the contents of.
     """
-    room_ids: list[tuple[str, str]] = context["room_ids"]
+    context["room_ids"]
     now = context["now"]
     rng = context["rng"]
 

@@ -28,6 +28,7 @@ imports another feature's package either. The two shared seams it *does* use -
 the contract names.
 """
 
+from dsr.outreach_feed import webhooks
 from dsr.outreach_feed.delivery import (
     DEFAULT_BACKOFF,
     DEFAULT_MAX_ATTEMPTS,
@@ -56,8 +57,8 @@ from dsr.outreach_feed.engine import (
     FeedPublisher,
     app_summary,
     card_text,
-    delivery_summary,
     delivery_key,
+    delivery_summary,
     event_type_summary,
     matches,
     normalise_stream_event,
@@ -76,8 +77,12 @@ from dsr.outreach_feed.errors import (
     UnknownRoom,
     WebhookError,
 )
-from dsr.outreach_feed.inferences import INFERENCES, SOURCED_QUOTES, by_id, describe as describe_inferences
-from dsr.outreach_feed import webhooks
+from dsr.outreach_feed.inferences import (
+    INFERENCES,
+    SOURCED_QUOTES,
+    by_id,
+    describe as describe_inferences,
+)
 from dsr.outreach_feed.vocabulary import (
     EVENT_NAME_FORMAT,
     EVENT_NAME_SHAPE,

@@ -145,16 +145,16 @@ from dsr.inroom_scheduling.holds import (
     normalise_duration,
     read_hold,
     require_live,
-    reservation_until,
     reservation_uid,
+    reservation_until,
 )
 from dsr.inroom_scheduling.routing import (
     OPERATORS,
     normalise_form,
     require_operator,
     route,
-    rule_matches,
     routed_slots_response,
+    rule_matches,
 )
 from dsr.inroom_scheduling.schedules import (
     EVERY_DAY,

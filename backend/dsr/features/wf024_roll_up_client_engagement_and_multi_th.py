@@ -108,13 +108,15 @@ def _report_error(request: Request, exc: EngagementReportError) -> JSONResponse:
 
 def _unknown_workspace(request: Request, exc: UnknownWorkspace) -> JSONResponse:
     return JSONResponse(
-        status_code=404, content={"error": "unknown_workspace", "detail": f"workspace {exc} not found"}
+        status_code=404,
+        content={"error": "unknown_workspace", "detail": f"workspace {exc} not found"},
     )
 
 
 def _unknown_account(request: Request, exc: UnknownAccount) -> JSONResponse:
     return JSONResponse(
-        status_code=404, content={"error": "unknown_account", "detail": f"account {exc} not in scope"}
+        status_code=404,
+        content={"error": "unknown_account", "detail": f"account {exc} not in scope"},
     )
 
 
@@ -149,9 +151,7 @@ def _with_expansion(payload: dict[str, Any]) -> dict[str, Any]:
     gets its ``source`` from the HTTP layer.
     """
     for tile in payload.get("tiles", []):
-        tile["accounts_href"] = (
-            f"{router.prefix}/accounts?sort={tile['expand']}&descending=true"
-        )
+        tile["accounts_href"] = f"{router.prefix}/accounts?sort={tile['expand']}&descending=true"
     return payload
 
 
@@ -269,12 +269,18 @@ def workspace_engagement(
     is scoped by its own id, and an owner filter here could only ever empty it.
     """
     return domain.workspace_engagement(
-        store, room_id, filters=domain.resolve_filters(date_from=date_from, date_to=date_to), grain=grain, as_of=as_of
+        store,
+        room_id,
+        filters=domain.resolve_filters(date_from=date_from, date_to=date_to),
+        grain=grain,
+        as_of=as_of,
     )
 
 
 @router.get("/filters", summary="What this report can be filtered and sorted by")
-def report_filters(as_of: str | None = Query(default=None), store: RecordStore = StoreDep) -> dict[str, Any]:
+def report_filters(
+    as_of: str | None = Query(default=None), store: RecordStore = StoreDep
+) -> dict[str, Any]:
     """The owners, teams, accounts, date bounds, grains and sort keys in scope.
 
     Sourced: "You can filter the report down by date range, owners, and/or
@@ -304,12 +310,12 @@ def team_usage_report(
     No widget vocabulary exists for it, so every column beyond a count is a
     documented inference in :mod:`dsr.client_engagement`.
     """
-    return domain.team_usage(
-        store, filters=_filters(date_from, date_to, owner, team), as_of=as_of
-    )
+    return domain.team_usage(store, filters=_filters(date_from, date_to, owner, team), as_of=as_of)
 
 
-@router.get("/reports/implementations", summary="Implementations: how long customer implementations take")
+@router.get(
+    "/reports/implementations", summary="Implementations: how long customer implementations take"
+)
 def implementations_report(
     date_from: str | None = Query(default=None),
     date_to: str | None = Query(default=None),
@@ -358,9 +364,7 @@ def update_config(
     ``source`` is built from ``router.prefix`` here, in the HTTP layer, because
     only the HTTP layer knows its own path.
     """
-    record = domain.save_config(
-        store, payload, actor=actor, source=f"PATCH {router.prefix}/config"
-    )
+    record = domain.save_config(store, payload, actor=actor, source=f"PATCH {router.prefix}/config")
     return {"updated": True, "record": record, "config": domain.load_config(store)}
 
 
@@ -407,7 +411,11 @@ def record_event(
 #: however correctly the report computed it. This feature owns its own rows, so
 #: it seeds a clean instance of the state it needs to be reviewable.
 DEMO_CLIENTS = {
-    "Northwind Traders": ["a.buyer@northwind.example", "b.buyer@northwind.example", "c.buyer@northwind.example"],
+    "Northwind Traders": [
+        "a.buyer@northwind.example",
+        "b.buyer@northwind.example",
+        "c.buyer@northwind.example",
+    ],
     "Contoso Health": ["procurement@contoso.example"],
     "Fabrikam Logistics": ["ops@fabrikam.example", "finance@fabrikam.example"],
     "Initech": ["one.person@initech.example"],
@@ -544,14 +552,14 @@ def seed(db, context: dict[str, Any]) -> str:
     rng = context["rng"]
     rooms: list[tuple[str, str]] = list(context.get("room_ids") or [])
 
-    config = domain.load_config(store)
+    domain.load_config(store)
     domain.save_config(
         store,
         {"audience": {"internal_people": list(DEMO_REPS)}},
         actor="dana",
         source="seed",
     )
-    config = domain.load_config(store)
+    domain.load_config(store)
 
     if not rooms:
         return "0 workspaces, 0 events (no demo rooms to attach activity to)"
@@ -578,7 +586,7 @@ def seed(db, context: dict[str, Any]) -> str:
             created_rooms.append((record["id"], account))
 
     events = 0
-    for index, (room_id, account) in enumerate(created_rooms):
+    for _index, (room_id, account) in enumerate(created_rooms):
         buyers = DEMO_CLIENTS.get(account, [])
         if not account or account == DEMO_QUIET_ACCOUNT:
             # The unworked account: a workspace with no client activity at all,
@@ -598,13 +606,17 @@ def seed(db, context: dict[str, Any]) -> str:
                             "account": account,
                             "action": rng.choice(CLIENT_ACTIONS),
                             "target": rng.choice(
-                                ["Enterprise Overview Deck", "Security & Compliance Pack", "Pricing One-Pager"]
+                                [
+                                    "Enterprise Overview Deck",
+                                    "Security & Compliance Pack",
+                                    "Pricing One-Pager",
+                                ]
                             ),
                             "seconds_on_page": rng.randint(20, 900),
                             "device": rng.choice(["desktop", "mobile", "tablet"]),
-                            "occurred_at": (entered + timedelta(minutes=step * rng.randint(2, 9))).isoformat(
-                                timespec="seconds"
-                            ),
+                            "occurred_at": (
+                                entered + timedelta(minutes=step * rng.randint(2, 9))
+                            ).isoformat(timespec="seconds"),
                         },
                         room_id=room_id,
                         actor="system",
@@ -662,13 +674,17 @@ def seed(db, context: dict[str, Any]) -> str:
         if spec.get("owner"):
             data["owner"] = spec["owner"]
         if "started_days_ago" in spec:
-            data["started_at"] = (now - timedelta(days=spec["started_days_ago"])).isoformat(timespec="seconds")
+            data["started_at"] = (now - timedelta(days=spec["started_days_ago"])).isoformat(
+                timespec="seconds"
+            )
         if "completed_days_ago" in spec:
-            data["completed_at"] = (
-                now - timedelta(days=spec["completed_days_ago"])
-            ).isoformat(timespec="seconds")
+            data["completed_at"] = (now - timedelta(days=spec["completed_days_ago"])).isoformat(
+                timespec="seconds"
+            )
         if "due_days_ago" in spec:
-            data["due_at"] = (now - timedelta(days=spec["due_days_ago"])).isoformat(timespec="seconds")
+            data["due_at"] = (now - timedelta(days=spec["due_days_ago"])).isoformat(
+                timespec="seconds"
+            )
         db.create("implementation", data, actor="dana", source="seed")
         implementations += 1
 

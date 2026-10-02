@@ -33,10 +33,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from dsr.partial_failures import validation
 from dsr.partial_failures.errors import InvalidRule
 from dsr.partial_failures.normalise import OVERRIDE_MATCH_KEYS, OVERRIDE_THEN_KEYS
 from dsr.partial_failures.retry import MAX_ATTEMPTS
-from dsr.partial_failures import validation
 
 #: The keys the whole record carries.
 RULE_KEYS: tuple[str, ...] = ("max_attempts", "routing", "preflight")
@@ -200,7 +200,9 @@ def merge(base: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
     if "max_attempts" in patch:
         merged["max_attempts"] = patch["max_attempts"]
     if "routing" in patch:
-        merged["routing"] = _merge_by_id(merged["routing"], patch["routing"], validate_routing_rule, "routing")
+        merged["routing"] = _merge_by_id(
+            merged["routing"], patch["routing"], validate_routing_rule, "routing"
+        )
     if "preflight" in patch:
         merged["preflight"] = validation.merge_rules(merged["preflight"], patch["preflight"])
 

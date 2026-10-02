@@ -180,18 +180,33 @@ NODE_ORDER_MESSAGE = (
 #: other node kind would have refused it.
 DECLARED_SETTING_KEYS: frozenset[str] = frozenset(
     {
-        "update", "create", "record_type", "match_on", "fields", "l2a",
-        "object", "related_object", "campaign", "child_events", "delete_event",
-        "subject", "start", "end", "activity_assigned_to", "status", "assign_to",
-        "fallback_mode", "skip_contact_owner", "crm_app_slug",
-        "crm_owner_record_type", "attribute_rules",
+        "update",
+        "create",
+        "record_type",
+        "match_on",
+        "fields",
+        "l2a",
+        "object",
+        "related_object",
+        "campaign",
+        "child_events",
+        "delete_event",
+        "subject",
+        "start",
+        "end",
+        "activity_assigned_to",
+        "status",
+        "assign_to",
+        "fallback_mode",
+        "skip_contact_owner",
+        "crm_app_slug",
+        "crm_owner_record_type",
+        "attribute_rules",
     }
 )
 
 
-def normalise_nodes(
-    raw: Any, *, vendor: str
-) -> list[dict[str, Any]]:
+def normalise_nodes(raw: Any, *, vendor: str) -> list[dict[str, Any]]:
     """Validate and canonicalise a declared node list.
 
     The vendor is taken first and everything else is checked against it, because
@@ -215,8 +230,7 @@ def normalise_nodes(
             raise InvalidNode(f"node at position {position} names no node")
         if name not in ALL_NODES:
             raise InvalidNode(
-                f"unknown node {name!r} at position {position}; this build knows "
-                f"{list(ALL_NODES)}"
+                f"unknown node {name!r} at position {position}; this build knows {list(ALL_NODES)}"
             )
         allowed = VENDOR_NODES[vendor]
         if name not in allowed:
@@ -333,8 +347,7 @@ def _field_map(entry: Mapping[str, Any]) -> list[dict[str, Any]]:
         else:
             if "value" not in item:
                 raise InvalidConfig(
-                    f"field map entry for {field!r} has neither a value nor a "
-                    "from_data_field"
+                    f"field map entry for {field!r} has neither a value nor a from_data_field"
                 )
             entry_out["value"] = item["value"]
         if item.get("object"):
@@ -481,9 +494,7 @@ def _ownership_settings(entry: Mapping[str, Any]) -> dict[str, Any]:
             )
         settings["attribute_rules"] = rules
     elif entry.get("attribute_rules"):
-        raise InvalidConfig(
-            "attribute_rules only applies to fallback_mode 'attributeRules'"
-        )
+        raise InvalidConfig("attribute_rules only applies to fallback_mode 'attributeRules'")
     return settings
 
 
@@ -500,9 +511,7 @@ def _attribute_rules(raw: Any) -> list[dict[str, Any]]:
         field = str(item.get("field") or "").strip()
         owner = str(item.get("owner") or "").strip()
         if not field or not owner:
-            raise InvalidConfig(
-                f"attribute_rules[{index}] needs a field and an owner"
-            )
+            raise InvalidConfig(f"attribute_rules[{index}] needs a field and an owner")
         out.append({"field": field, "owner": owner, "equals": item.get("equals")})
     return out
 
@@ -527,9 +536,7 @@ def validate_nodes(nodes: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     names = [str(node.get("node") or "") for node in nodes]
 
     anchors = [index for index, name in enumerate(names) if name in ANCHOR_NODES]
-    dependents = [
-        (index, name) for index, name in enumerate(names) if name in DEPENDENT_NODES
-    ]
+    dependents = [(index, name) for index, name in enumerate(names) if name in DEPENDENT_NODES]
 
     if len(anchors) > 1:
         raise InvalidConfig(
@@ -541,7 +548,7 @@ def validate_nodes(nodes: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         offender, name = dependents[0]
         raise NodeOrderError(
             f"node {name!r} at position {offender} has no 'Create or Update Record' "
-            f"node to follow, but [sourced] \"{ORDERING_QUOTE}\""
+            f'node to follow, but [sourced] "{ORDERING_QUOTE}"'
         )
 
     if anchors and dependents:
@@ -627,7 +634,7 @@ def related_requires_contact_message(record_type: str | None) -> str:
     """
     found = f"a {record_type}" if record_type else "a Lead"
     return (
-        f"[sourced] \"{RELATED_REQUIRES_CONTACT_QUOTE}\" - the flow matched {found}, "
+        f'[sourced] "{RELATED_REQUIRES_CONTACT_QUOTE}" - the flow matched {found}, '
         f"not a Contact, so the related {record_type or 'object'} was not resolved. "
         "The Event is still related to the record the create node produced, which is "
         "the researched default."

@@ -58,8 +58,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -74,12 +72,13 @@ from dsr.meeting_reminders import (
     ReminderError,
     cal,
     conditions,
+    inferences as reminder_inferences,
     tags,
     vocabulary,
 )
-from dsr.meeting_reminders import inferences as reminder_inferences
 from dsr.meeting_reminders.errors import ConfigurationRefused
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Duplicated here rather than imported so a change to
 #: the prefix has to be made deliberately in the test as well, which is the point
@@ -144,7 +143,9 @@ def configured(engine):
 
 @pytest.fixture()
 def room(store):
-    return store.create("room", {"name": "Northwind — Enterprise Evaluation", "account": "Northwind"}, actor="dana")
+    return store.create(
+        "room", {"name": "Northwind — Enterprise Evaluation", "account": "Northwind"}, actor="dana"
+    )
 
 
 def org_view(engine) -> dict:
@@ -405,7 +406,9 @@ def test_the_five_skip_reasons_are_all_produced_by_the_demo(tmp_path):
         statuses = {str(row["data"].get("status")) for row in rows}
     finally:
         database.close()
-    assert set(vocabulary.SKIP_REASONS) <= reached, f"the seed never produced {set(vocabulary.SKIP_REASONS) - reached}"
+    assert set(vocabulary.SKIP_REASONS) <= reached, (
+        f"the seed never produced {set(vocabulary.SKIP_REASONS) - reached}"
+    )
     assert set(vocabulary.STATUSES) <= statuses
 
 
@@ -437,7 +440,13 @@ def test_match_modes_come_from_the_extensibility_note():
 def test_every_published_term_carries_its_own_justification():
     """A vocabulary a reviewer cannot check against the research is a guess list."""
     published = vocabulary.published_vocabulary()
-    for key in ("condition_detail", "email_to_roles", "email_from_roles", "replies_to_roles", "sms_from_roles"):
+    for key in (
+        "condition_detail",
+        "email_to_roles",
+        "email_from_roles",
+        "replies_to_roles",
+        "sms_from_roles",
+    ):
         assert published[key], f"{key} is empty"
 
 
@@ -460,7 +469,9 @@ def test_every_offset_unit_is_honoured():
         (1, "weeks", 10080),
     ]:
         when = conditions.fire_at(reminder(offset={"value": value, "unit": unit}), book)
-        assert when == datetime(2026, 10, 19, 14, 0, tzinfo=timezone.utc) - timedelta(minutes=minutes)
+        assert when == datetime(2026, 10, 19, 14, 0, tzinfo=timezone.utc) - timedelta(
+            minutes=minutes
+        )
 
 
 def test_an_after_meeting_reminder_fires_from_the_meetings_end_not_its_start():
@@ -546,13 +557,18 @@ def test_a_declined_guest_has_responded_and_is_not_chased():
     assert "Declined" in decision.detail
 
 
-@pytest.mark.parametrize("spelling", ["needsAction", "needsaction", "NEEDSACTION", "needs_action", " needs action "])
+@pytest.mark.parametrize(
+    "spelling", ["needsAction", "needsaction", "NEEDSACTION", "needs_action", " needs action "]
+)
 def test_the_response_status_comparison_survives_a_calendar_providers_spelling(spelling):
     """A JSON payload may carry any casing; the research spells it camelCase."""
     book = booking(primaryGuest={"responseStatus": spelling})
     assert conditions.has_not_responded(book) is True
     for responded in ("accepted", "Accepted", "DECLINED", " declined "):
-        assert conditions.has_not_responded(booking(primaryGuest={"responseStatus": responded})) is False
+        assert (
+            conditions.has_not_responded(booking(primaryGuest={"responseStatus": responded}))
+            is False
+        )
 
 
 def test_an_absent_response_status_counts_as_unanswered():
@@ -587,11 +603,18 @@ def test_the_after_meeting_reminder_ignores_the_response_status_too():
 
 def test_the_weekday_gate_is_evaluated_against_the_meetings_start():
     book = booking(start="2026-10-19T14:00:00+00:00")  # a Monday
-    gate = reminder(conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["monday"]}]})
-    assert conditions.evaluate(gate, book, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)).status == vocabulary.SENT
+    gate = reminder(
+        conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["monday"]}]}
+    )
+    assert (
+        conditions.evaluate(gate, book, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)).status
+        == vocabulary.SENT
+    )
 
     # The same booking, gated on Saturday: refused, with the researched reason.
-    gate = reminder(conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["saturday"]}]})
+    gate = reminder(
+        conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["saturday"]}]}
+    )
     decision = conditions.evaluate(gate, book, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc))
     assert decision.status == vocabulary.SKIPPED
     assert decision.reason == vocabulary.VIOLATED_RESTRICTION
@@ -605,7 +628,9 @@ def test_the_weekday_gate_reads_the_meetings_day_not_the_send_days():
     is what testing the send time would have produced.
     """
     book = booking(start="2026-10-19T14:00:00+00:00")  # Monday
-    gate = reminder(conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["friday"]}]})
+    gate = reminder(
+        conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["friday"]}]}
+    )
     decision = conditions.evaluate(gate, book, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc))
     assert decision.reason == vocabulary.VIOLATED_RESTRICTION
 
@@ -617,10 +642,15 @@ def test_the_weekday_gate_uses_the_bookings_local_day_not_utc():
     must pass for that guest and fail in UTC. Getting this backwards fires every
     weekend reminder on a weekday.
     """
-    book = booking(start="2026-10-18T23:00:00+00:00", timezoneOffsetMinutes=540, timezone="Asia/Tokyo")
-    gate = reminder(conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["monday"]}]})
+    book = booking(
+        start="2026-10-18T23:00:00+00:00", timezoneOffsetMinutes=540, timezone="Asia/Tokyo"
+    )
+    gate = reminder(
+        conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["monday"]}]}
+    )
     decision = conditions.evaluate(
-        gate, {**book, "bookedAt": "2026-09-20T00:00:00+00:00"},
+        gate,
+        {**book, "bookedAt": "2026-09-20T00:00:00+00:00"},
         now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc),
     )
     assert decision.status == vocabulary.SENT
@@ -644,9 +674,14 @@ def test_the_weekday_index_is_monday_zero_as_published():
 def test_the_lead_time_gate_uses_the_researchs_own_worked_example():
     """evidence: "the reminder will be sent only if the meeting is booked one
     week in advance from the current booking date"."""
-    gate = reminder(conditions={"match": "all", "rules": [{"kind": "lead_time", "value": 1, "unit": "weeks"}]})
+    gate = reminder(
+        conditions={"match": "all", "rules": [{"kind": "lead_time", "value": 1, "unit": "weeks"}]}
+    )
     far = booking(bookedAt="2026-09-20T09:00:00+00:00")  # a month ahead
-    assert conditions.evaluate(gate, far, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)).status == vocabulary.SENT
+    assert (
+        conditions.evaluate(gate, far, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)).status
+        == vocabulary.SENT
+    )
 
     late = booking(bookedAt="2026-10-17T09:00:00+00:00")  # two days ahead
     decision = conditions.evaluate(gate, late, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc))
@@ -657,11 +692,15 @@ def test_the_lead_time_gate_uses_the_researchs_own_worked_example():
 def test_the_lead_time_gate_fails_closed_when_there_is_no_booking_date():
     """The option says send *only* if; a gate that passes when it cannot be
     checked is not a gate."""
-    gate = reminder(conditions={"match": "all", "rules": [{"kind": "lead_time", "value": 1, "unit": "weeks"}]})
+    gate = reminder(
+        conditions={"match": "all", "rules": [{"kind": "lead_time", "value": 1, "unit": "weeks"}]}
+    )
     # `decide` rather than `evaluate`: with no `bookedAt` there is no planning
     # moment to work from, so `plan` refuses the reminder first and the gate is
     # only reachable from the run phase. The gate itself is what is under test.
-    decision = conditions.decide(gate, booking(bookedAt=None), now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc))
+    decision = conditions.decide(
+        gate, booking(bookedAt=None), now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)
+    )
     assert decision.reason == vocabulary.VIOLATED_RESTRICTION
 
 
@@ -691,11 +730,16 @@ def test_a_weekday_and_a_lead_time_both_failing_records_both_verdicts():
 
 
 def test_no_restriction_passes_for_every_booking():
-    """"No Restriction" is the product's own label for an absent gate."""
+    """ "No Restriction" is the product's own label for an absent gate."""
     # Booked long enough before the reminder's fire time that "schedule in the
     # past" cannot be the answer, so an absent gate is what lets it through.
     book = booking(start="2026-10-18T02:00:00+00:00", bookedAt="2026-09-01T00:00:00+00:00")
-    assert conditions.evaluate(reminder(), book, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)).status == vocabulary.SENT
+    assert (
+        conditions.evaluate(
+            reminder(), book, now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)
+        ).status
+        == vocabulary.SENT
+    )
 
 
 def test_an_unknown_rule_kind_is_refused_rather_than_ignored():
@@ -714,7 +758,9 @@ def test_match_any_passes_on_one_satisfied_rule():
             ],
         }
     )
-    decision = conditions.evaluate(gate, booking(), now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc))
+    decision = conditions.evaluate(
+        gate, booking(), now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)
+    )
     assert decision.status == vocabulary.SENT
 
 
@@ -725,7 +771,9 @@ def test_match_none_refuses_when_any_rule_passes():
             "rules": [{"kind": "weekday", "weekdays": ["monday"]}],
         }
     )
-    decision = conditions.evaluate(gate, booking(), now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc))
+    decision = conditions.evaluate(
+        gate, booking(), now=datetime(2026, 10, 18, 15, tzinfo=timezone.utc)
+    )
     assert decision.reason == vocabulary.VIOLATED_RESTRICTION
 
 
@@ -754,7 +802,10 @@ def test_all_guests_does_not_send_the_primary_guest_twice():
     """The `guests` list usually repeats the primary guest; a double send is a
     customer receiving the same reminder twice."""
     book = booking()
-    book["guests"] = [{"email": "priya.raman@northwind.example"}, {"email": "marcus.webb@northwind.example"}]
+    book["guests"] = [
+        {"email": "priya.raman@northwind.example"},
+        {"email": "marcus.webb@northwind.example"},
+    ]
     decision = conditions.resolve_recipients(reminder(emailTo="all_guests"), book)
     assert len(decision["recipients"]) == 2
 
@@ -773,7 +824,9 @@ def test_all_guests_still_sends_to_the_addressable_ones():
 
 
 def test_an_email_reminder_with_nobody_addressable_is_recipient_not_found():
-    book = booking(primaryGuest={"name": "Wen Li", "email": ""}, guests=[{"name": "Wen Li", "email": ""}])
+    book = booking(
+        primaryGuest={"name": "Wen Li", "email": ""}, guests=[{"name": "Wen Li", "email": ""}]
+    )
     decision = conditions.resolve_recipients(reminder(emailTo="all_guests"), book)
     assert decision["reason"] == vocabulary.RECIPIENT_NOT_FOUND
     assert decision["detail"]
@@ -825,9 +878,17 @@ def test_sms_goes_to_the_primary_guest_only():
 def test_send_email_from_resolves_each_of_the_three_modes(configured):
     book = booking()
     settings = org_view(configured)
-    assert conditions.sender_for(reminder(emailFrom="host"), book, settings) == "dana@contoso.example"
-    assert conditions.sender_for(reminder(emailFrom="booker"), book, settings) == "wen.li@contoso.example"
-    assert conditions.sender_for(reminder(emailFrom="noreply"), book, settings) == "no-reply@no-reply.contoso.example"
+    assert (
+        conditions.sender_for(reminder(emailFrom="host"), book, settings) == "dana@contoso.example"
+    )
+    assert (
+        conditions.sender_for(reminder(emailFrom="booker"), book, settings)
+        == "wen.li@contoso.example"
+    )
+    assert (
+        conditions.sender_for(reminder(emailFrom="noreply"), book, settings)
+        == "no-reply@no-reply.contoso.example"
+    )
 
 
 def test_a_no_reply_sender_with_no_domain_is_refused_rather_than_sending_from_nothing(configured):
@@ -844,7 +905,10 @@ def test_a_no_reply_sender_with_no_domain_is_refused_rather_than_sending_from_no
 def test_send_sms_from_picks_the_number_the_mode_names(configured):
     book = booking()
     settings = org_view(configured)
-    assert conditions.sender_for(sms_reminder(smsFrom="local_area_number"), book, settings) == "+35315550100"
+    assert (
+        conditions.sender_for(sms_reminder(smsFrom="local_area_number"), book, settings)
+        == "+35315550100"
+    )
     assert conditions.sender_for(sms_reminder(smsFrom="any_number"), book, settings) == "+15550100"
 
 
@@ -882,7 +946,11 @@ def _every_combination() -> list[tuple[dict, dict]]:
     cases: list[tuple[dict, dict]] = []
     conditions_list = list(vocabulary.CONDITIONS)
     units = list(vocabulary.UNITS)
-    responses = [vocabulary.RESPONSE_ACCEPTED, vocabulary.RESPONSE_DECLINED, vocabulary.RESPONSE_NEEDS_ACTION]
+    responses = [
+        vocabulary.RESPONSE_ACCEPTED,
+        vocabulary.RESPONSE_DECLINED,
+        vocabulary.RESPONSE_NEEDS_ACTION,
+    ]
     # A Monday start, a weekday gate the booking cannot satisfy, and a lead-time
     # gate a late booking cannot satisfy.
     gates = [
@@ -906,7 +974,12 @@ def _every_combination() -> list[tuple[dict, dict]]:
                         for guest in guests:
                             for when in booked:
                                 spec = sms_reminder() if channel == vocabulary.SMS else reminder()
-                                spec = {**spec, "condition": condition, "offset": {"value": 2, "unit": unit}, "conditions": gate}
+                                spec = {
+                                    **spec,
+                                    "condition": condition,
+                                    "offset": {"value": 2, "unit": unit},
+                                    "conditions": gate,
+                                }
                                 # The primary guest is replaced wholesale rather
                                 # than merged, or the addressable shape's email
                                 # would survive into the unaddressable case and
@@ -952,7 +1025,11 @@ def test_decide_has_no_fall_through_over_every_researched_combination():
         # Three moments, chosen to reach every rung: before planning, while the
         # reminder is pending, and long after it was due. A sweep that only ever
         # runs "now" would see one status and prove nothing about totality.
-        for moment in (NOW, datetime(2026, 10, 19, 13, 0, tzinfo=timezone.utc), datetime(2026, 10, 21, tzinfo=timezone.utc)):
+        for moment in (
+            NOW,
+            datetime(2026, 10, 19, 13, 0, tzinfo=timezone.utc),
+            datetime(2026, 10, 21, tzinfo=timezone.utc),
+        ):
             decision = conditions.evaluate(spec, book, now=moment, org=SWEEP_ORG)
             assert decision.status in vocabulary.STATUSES, decision
             seen_statuses.add(decision.status)
@@ -999,7 +1076,9 @@ def test_a_missing_sending_address_is_refused_rather_than_recorded_as_sent():
     with pytest.raises(ConfigurationRefused, match="sending domain"):
         conditions.evaluate(reminder(emailFrom="noreply"), booking(), now=past, org={})
     with pytest.raises(ConfigurationRefused, match="no email address for the host"):
-        conditions.evaluate(reminder(emailFrom="host"), booking(host={"email": ""}), now=past, org=SWEEP_ORG)
+        conditions.evaluate(
+            reminder(emailFrom="host"), booking(host={"email": ""}), now=past, org=SWEEP_ORG
+        )
 
 
 def test_an_sms_reminder_needs_a_number_behind_the_connection(configured, engine, tmp_path):
@@ -1019,7 +1098,9 @@ def test_an_sms_reminder_needs_a_number_behind_the_connection(configured, engine
     # ... and the local-area mode reads a different field, so one of the two is
     # still refused rather than silently sending from the wrong number.
     with pytest.raises(ConfigurationRefused, match="needs a matching number"):
-        fresh.create_reminder(sms_reminder(smsFrom="local_area_number"), actor="dana", source=SOURCE)
+        fresh.create_reminder(
+            sms_reminder(smsFrom="local_area_number"), actor="dana", source=SOURCE
+        )
 
 
 def store_on(tmp_path) -> RecordStore:
@@ -1036,7 +1117,10 @@ def test_the_planning_and_running_questions_are_separate():
     fire_time = datetime(2026, 10, 12, 14, 0, tzinfo=timezone.utc)
 
     assert conditions.plan(spec, book, now=NOW).status == vocabulary.SCHEDULED
-    assert conditions.decide(spec, book, now=fire_time + timedelta(minutes=1)).status == vocabulary.SENT
+    assert (
+        conditions.decide(spec, book, now=fire_time + timedelta(minutes=1)).status
+        == vocabulary.SENT
+    )
     # Planned after its own fire time: the documented past reason.
     late = conditions.plan(spec, book, now=fire_time + timedelta(days=1))
     assert late.status == vocabulary.SKIPPED
@@ -1086,7 +1170,9 @@ def test_a_booking_with_no_start_is_reported_not_raised():
 
 def test_the_three_named_tags_resolve_for_a_real_booking():
     rendered = tags.render_message(
-        "Hi {CP.Guest.FirstName}: {CP.Meeting.RescheduleUrl} or {CP.Meeting.CancelUrl}", "", booking()
+        "Hi {CP.Guest.FirstName}: {CP.Meeting.RescheduleUrl} or {CP.Meeting.CancelUrl}",
+        "",
+        booking(),
     )
     assert rendered["subject"].startswith("Hi Priya:")
     assert "https://meet.example/northwind/reschedule" in rendered["subject"]
@@ -1109,13 +1195,16 @@ def test_all_eight_cal_tokens_resolve():
 def test_the_cal_time_token_renders_on_every_platform():
     """``%-I:%M %p`` is a glibc extension ``strftime`` rejects on Windows, and
     Cal's token is published - so it has to render identically everywhere."""
-    rendered = tags.render("{START_TIME_h:mma}", booking(start="2026-10-19T14:00:00+00:00", timezoneOffsetMinutes=0))
+    rendered = tags.render(
+        "{START_TIME_h:mma}", booking(start="2026-10-19T14:00:00+00:00", timezoneOffsetMinutes=0)
+    )
     assert rendered["text"] == "2:00 pm"
 
 
 def test_the_cal_date_token_renders_on_every_platform():
     rendered = tags.render(
-        "{EVENT_DATE_ddd, MMM D, YYYY h:mma}", booking(start="2026-10-19T14:00:00+00:00", timezoneOffsetMinutes=0)
+        "{EVENT_DATE_ddd, MMM D, YYYY h:mma}",
+        booking(start="2026-10-19T14:00:00+00:00", timezoneOffsetMinutes=0),
     )
     assert rendered["text"] == "Mon, Oct 19, 2026 2:00 pm"
 
@@ -1145,7 +1234,10 @@ def test_a_substituted_value_is_never_re_read_as_a_token():
 
 
 def test_a_braced_and_a_bare_spelling_are_the_same_tag():
-    assert tags.render("{CP.Guest.FirstName}", booking())["text"] == tags.render("CP.Guest.FirstName", booking())["text"]
+    assert (
+        tags.render("{CP.Guest.FirstName}", booking())["text"]
+        == tags.render("CP.Guest.FirstName", booking())["text"]
+    )
 
 
 def test_an_unknown_tag_is_left_in_place_and_reported():
@@ -1225,7 +1317,9 @@ def test_a_weeks_offset_projects_onto_whole_days():
     """Cal's unit enum is ``hour|minute|day`` and has no week; one week is
     exactly seven days, so the conversion is exact rather than a gap."""
     for value, expected in ((1, 7), (2, 14), (6, 42)):
-        projected = cal.workflow(reminder(offset={"value": value, "unit": "weeks"}), meeting_type_ids=[])
+        projected = cal.workflow(
+            reminder(offset={"value": value, "unit": "weeks"}), meeting_type_ids=[]
+        )
         assert projected["body"]["trigger"]["offset"] == {"value": expected, "unit": "day"}
 
 
@@ -1289,7 +1383,9 @@ def test_the_projection_carries_the_four_message_options_cal_names():
 def test_a_composed_message_projects_as_the_custom_template():
     assert cal.cal_template(reminder(subject="Hi", body="There")) == "custom"
     assert cal.cal_template(reminder(subject="", body="")) == "reminder"
-    assert cal.cal_template(reminder(condition=vocabulary.AFTER, subject="", body="")) == "completed"
+    assert (
+        cal.cal_template(reminder(condition=vocabulary.AFTER, subject="", body="")) == "completed"
+    )
 
 
 def test_an_unknown_cal_template_is_refused_naming_the_published_set():
@@ -1311,7 +1407,9 @@ def test_an_after_meeting_projection_folds_the_duration_in_when_a_booking_is_giv
     """This product anchors a follow-up on the meeting's end; Cal's afterEvent
     fires relative to the event, so the two only agree once duration is added."""
     book = booking(durationMinutes=45)
-    assert cal.cal_trigger(reminder(condition=vocabulary.AFTER, offset={"value": 1, "unit": "hours"}))["offset"] == {
+    assert cal.cal_trigger(
+        reminder(condition=vocabulary.AFTER, offset={"value": 1, "unit": "hours"})
+    )["offset"] == {
         "value": 1,
         "unit": "hour",
     }
@@ -1322,7 +1420,11 @@ def test_an_after_meeting_projection_folds_the_duration_in_when_a_booking_is_giv
 
 
 def test_a_cal_offset_converts_back_to_this_products_own():
-    assert cal.offset_from_cal({"value": 2, "unit": "hour"}) == {"value": 2, "unit": "hours", "minutes": 120}
+    assert cal.offset_from_cal({"value": 2, "unit": "hour"}) == {
+        "value": 2,
+        "unit": "hours",
+        "minutes": 120,
+    }
     assert cal.offset_from_cal({"value": 30, "unit": "minute"})["unit"] == "minutes"
     assert cal.offset_from_cal({"value": 7, "unit": "day"})["unit"] == "days"
 
@@ -1364,14 +1466,26 @@ def test_a_valid_cal_trigger_this_product_does_not_act_on_is_reported_not_refuse
     """Cal's enum is wider than this workflow, and a workflow for Cal.com is not
     an error - it is a workflow for Cal.com."""
     result = cal.validate_workflow(
-        {"body": {"trigger": {"type": "bookingRejected", "offset": {"value": 1, "unit": "hour"}}, "steps": []}}
+        {
+            "body": {
+                "trigger": {"type": "bookingRejected", "offset": {"value": 1, "unit": "hour"}},
+                "steps": [],
+            }
+        }
     )
-    assert "not" in result["problems"][0]["message"] or "does not" in result["problems"][0]["message"]
+    assert (
+        "not" in result["problems"][0]["message"] or "does not" in result["problems"][0]["message"]
+    )
 
 
 def test_a_workflow_with_no_action_step_sends_nothing_and_says_so():
     result = cal.validate_workflow(
-        {"body": {"trigger": {"type": "beforeEvent", "offset": {"value": 1, "unit": "hour"}}, "steps": [{"type": "filter", "filter": {}}]}}
+        {
+            "body": {
+                "trigger": {"type": "beforeEvent", "offset": {"value": 1, "unit": "hour"}},
+                "steps": [{"type": "filter", "filter": {}}],
+            }
+        }
     )
     assert any(problem["field"] == "steps" for problem in result["problems"])
 
@@ -1381,7 +1495,10 @@ def test_a_delay_step_is_reported_as_modelled_by_cal_and_not_produced_here():
         {
             "body": {
                 "trigger": {"type": "beforeEvent", "offset": {"value": 1, "unit": "hour"}},
-                "steps": [{"type": "action", "action": "email_attendee", "template": "reminder"}, {"type": "delay"}],
+                "steps": [
+                    {"type": "action", "action": "email_attendee", "template": "reminder"},
+                    {"type": "delay"},
+                ],
             }
         }
     )
@@ -1470,7 +1587,9 @@ def test_a_patch_is_revalidated_against_the_merged_result(configured, engine):
 
 def test_a_patch_that_keeps_the_configuration_legal_still_works(configured, engine):
     record = configured.create_reminder(reminder(), actor="dana", source=SOURCE)
-    updated = engine.update_reminder(record["id"], {"subject": "New subject"}, actor="dana", source=SOURCE)
+    updated = engine.update_reminder(
+        record["id"], {"subject": "New subject"}, actor="dana", source=SOURCE
+    )
     assert updated["data"]["subject"] == "New subject"
     assert updated["data"]["condition"] == vocabulary.BEFORE
 
@@ -1489,7 +1608,9 @@ def test_a_reminder_is_a_reusable_asset_not_scoped_to_one_room(configured, room)
 
 def test_one_reminder_attaches_to_many_meeting_types(configured):
     first = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
-    second = configured.create_meeting_type({"name": "Security review"}, actor="dana", source=SOURCE)
+    second = configured.create_meeting_type(
+        {"name": "Security review"}, actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(reminder(), actor="dana", source=SOURCE)
     configured.attach(first["id"], asset["id"], actor="dana", source=SOURCE)
     configured.attach(second["id"], asset["id"], actor="dana", source=SOURCE)
@@ -1497,7 +1618,9 @@ def test_one_reminder_attaches_to_many_meeting_types(configured):
 
 
 def test_attaching_twice_does_not_send_twice(configured):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(reminder(), actor="dana", source=SOURCE)
     first = configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     second = configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
@@ -1508,7 +1631,9 @@ def test_attaching_twice_does_not_send_twice(configured):
 def test_remove_from_meeting_type_spares_the_asset_and_its_other_attachments(configured):
     """The researched counterpart to Delete, and the reason both exist."""
     first = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
-    second = configured.create_meeting_type({"name": "Security review"}, actor="dana", source=SOURCE)
+    second = configured.create_meeting_type(
+        {"name": "Security review"}, actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(reminder(), actor="dana", source=SOURCE)
     configured.attach(first["id"], asset["id"], actor="dana", source=SOURCE)
     configured.attach(second["id"], asset["id"], actor="dana", source=SOURCE)
@@ -1519,7 +1644,9 @@ def test_remove_from_meeting_type_spares_the_asset_and_its_other_attachments(con
 
 
 def test_detaching_something_that_is_not_attached_is_refused(configured):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(reminder(), actor="dana", source=SOURCE)
     with pytest.raises(ReminderError, match="not attached"):
         configured.detach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
@@ -1527,7 +1654,9 @@ def test_detaching_something_that_is_not_attached_is_refused(configured):
 
 def test_deleting_a_reminder_keeps_its_delivery_history_auditable(configured, room, store):
     """A reminder's history outliving the reminder is the point of an audit log."""
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(reminder(), actor="dana", source=SOURCE)
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     booking_record = configured.create_booking(
@@ -1551,7 +1680,9 @@ def test_deleting_a_reminder_keeps_its_delivery_history_auditable(configured, ro
 def test_attaching_an_sms_reminder_makes_the_meeting_types_form_need_a_phone(configured):
     """Cal: ``attendee.phoneNumber`` "becomes required when SMS reminders are
     enabled for the event type"."""
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, actor="dana", source=SOURCE
+    )
     assert configured.phone_required(meeting_type["id"]) is False
     asset = configured.create_reminder(sms_reminder(), actor="dana", source=SOURCE)
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
@@ -1559,14 +1690,18 @@ def test_attaching_an_sms_reminder_makes_the_meeting_types_form_need_a_phone(con
 
 
 def test_a_disabled_sms_reminder_does_not_require_a_phone(configured):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(sms_reminder(enabled=False), actor="dana", source=SOURCE)
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     assert configured.phone_required(meeting_type["id"]) is False
 
 
 def test_a_booking_without_a_phone_is_refused_against_such_a_meeting_type(configured, room):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(sms_reminder(), actor="dana", source=SOURCE)
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     spec = {**booking(), "meetingTypeId": meeting_type["id"]}
@@ -1579,10 +1714,14 @@ def test_a_booking_without_a_phone_is_refused_against_such_a_meeting_type(config
 def test_a_booking_made_before_the_sms_reminder_takes_the_skip_reason_instead(configured, room):
     """The researched consequence has two halves, because a booking cannot be
     refused retroactively."""
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, actor="dana", source=SOURCE
+    )
     spec = {**booking(), "meetingTypeId": meeting_type["id"]}
     spec["primaryGuest"] = {**spec["primaryGuest"], "phone": ""}
-    record = configured.create_booking(room["id"], spec, actor="dana", source=SOURCE, enforce_phone=False)
+    record = configured.create_booking(
+        room["id"], spec, actor="dana", source=SOURCE, enforce_phone=False
+    )
     assert record["data"]["phoneRequiredAtBooking"] is False
 
     asset = configured.create_reminder(sms_reminder(), actor="dana", source=SOURCE)
@@ -1601,9 +1740,16 @@ def test_a_booking_must_name_a_meeting_type(configured, room):
 def test_a_booking_against_a_room_that_does_not_exist_is_a_not_found(configured):
     from dsr.db.audited import RecordNotFound
 
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, actor="dana", source=SOURCE
+    )
     with pytest.raises(RecordNotFound):
-        configured.create_booking("no-such-room", {**booking(), "meetingTypeId": meeting_type["id"]}, actor="dana", source=SOURCE)
+        configured.create_booking(
+            "no-such-room",
+            {**booking(), "meetingTypeId": meeting_type["id"]},
+            actor="dana",
+            source=SOURCE,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -1615,11 +1761,18 @@ def test_a_booking_against_a_room_that_does_not_exist_is_a_not_found(configured)
 def wired(configured, room):
     """A configured engine with one meeting type, two reminders and a booking."""
     meeting_type = configured.create_meeting_type(
-        {"name": "Enterprise Evaluation", "durationMinutes": 45}, room_id=room["id"], actor="dana", source=SOURCE
+        {"name": "Enterprise Evaluation", "durationMinutes": 45},
+        room_id=room["id"],
+        actor="dana",
+        source=SOURCE,
     )
     email = configured.create_reminder(reminder(), actor="dana", source=SOURCE)
     conditional = configured.create_reminder(
-        reminder(name="Nudge", condition=vocabulary.BEFORE_IF_NO_RESPONSE, offset={"value": 2, "unit": "hours"}),
+        reminder(
+            name="Nudge",
+            condition=vocabulary.BEFORE_IF_NO_RESPONSE,
+            offset={"value": 2, "unit": "hours"},
+        ),
         actor="dana",
         source=SOURCE,
     )
@@ -1646,7 +1799,9 @@ def test_planning_records_a_scheduled_row_per_attached_reminder(wired):
 
 
 def test_planning_skips_a_disabled_reminder_entirely(configured, room):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
     asset = configured.create_reminder(reminder(enabled=False), actor="dana", source=SOURCE)
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     booking_record = configured.create_booking(
@@ -1694,7 +1849,9 @@ def test_firing_twice_does_not_rewrite_an_audit_row(wired):
 
 def test_firing_before_the_fire_time_schedules_rather_than_sends(wired):
     wired["engine"].fire(now=NOW, source=SOURCE)
-    assert {row["data"]["status"] for row in wired["engine"].deliveries(limit=10)} == {vocabulary.SCHEDULED}
+    assert {row["data"]["status"] for row in wired["engine"].deliveries(limit=10)} == {
+        vocabulary.SCHEDULED
+    }
 
 
 def test_firing_picks_up_a_booking_planned_by_nobody_yet(wired):
@@ -1702,12 +1859,20 @@ def test_firing_picks_up_a_booking_planned_by_nobody_yet(wired):
     is not left waiting for a separate pass."""
     fired = wired["engine"].fire(now=at(400), source=SOURCE)
     assert fired["fired"] == 2
-    assert all(row["data"]["status"] in (vocabulary.SENT, vocabulary.SKIPPED) for row in fired["deliveries"])
+    assert all(
+        row["data"]["status"] in (vocabulary.SENT, vocabulary.SKIPPED)
+        for row in fired["deliveries"]
+    )
 
 
 def test_delivering_one_reminder_leaves_the_others_alone(wired):
     result = wired["engine"].deliver(
-        wired["room"]["id"], wired["booking"]["id"], reminder_id=wired["conditional"]["id"], actor="dana", source=SOURCE, now=at(400)
+        wired["room"]["id"],
+        wired["booking"]["id"],
+        reminder_id=wired["conditional"]["id"],
+        actor="dana",
+        source=SOURCE,
+        now=at(400),
     )
     assert result["count"] == 1
     assert result["deliveries"][0]["data"]["reminderId"] == wired["conditional"]["id"]
@@ -1734,37 +1899,56 @@ def test_preview_writes_nothing_at_all(wired, store):
 def test_a_preview_agrees_with_the_delivery(wired):
     """Same evaluation, so a preview cannot promise something the send will not
     do - which is the only thing that makes a preview worth reading."""
-    preview = wired["engine"].preview(wired["conditional"]["data"], wired["booking"]["data"], now=at(400))
+    preview = wired["engine"].preview(
+        wired["conditional"]["data"], wired["booking"]["data"], now=at(400)
+    )
     result = wired["engine"].deliver(
-        wired["room"]["id"], wired["booking"]["id"], reminder_id=wired["conditional"]["id"], actor="dana", source=SOURCE, now=at(400)
+        wired["room"]["id"],
+        wired["booking"]["id"],
+        reminder_id=wired["conditional"]["id"],
+        actor="dana",
+        source=SOURCE,
+        now=at(400),
     )
     assert preview["decision"]["status"] == result["deliveries"][0]["data"]["status"]
     assert preview["decision"]["reason"] == result["deliveries"][0]["data"]["reason"]
 
 
 def test_a_composed_message_carries_the_calendar_event_when_asked(configured, room):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
-    asset = configured.create_reminder(reminder(includeCalendarEvent=True), actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
+    asset = configured.create_reminder(
+        reminder(includeCalendarEvent=True), actor="dana", source=SOURCE
+    )
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     booking_record = configured.create_booking(
         room["id"], {**booking(), "meetingTypeId": meeting_type["id"]}, actor="dana", source=SOURCE
     )
-    result = configured.deliver(room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(400))
+    result = configured.deliver(
+        room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(400)
+    )
     attachments = result["deliveries"][0]["data"]["message"]["attachments"]
     assert [entry["filename"] for entry in attachments] == ["invite.ics"]
     assert attachments[0]["content_type"] == "text/calendar"
 
 
 def test_no_show_attendees_are_left_out_of_the_recipient_list(configured, room):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
-    asset = configured.create_reminder(reminder(emailTo="all_guests", skipNoShowAttendees=True), actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
+    asset = configured.create_reminder(
+        reminder(emailTo="all_guests", skipNoShowAttendees=True), actor="dana", source=SOURCE
+    )
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     guests = [dict(guest, noShow=True) for guest in BOOKING_DEFAULTS["guests"]]
     spec = booking(guests=guests, primaryGuest={"noShow": True})
     booking_record = configured.create_booking(
         room["id"], {**spec, "meetingTypeId": meeting_type["id"]}, actor="dana", source=SOURCE
     )
-    result = configured.deliver(room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(400))
+    result = configured.deliver(
+        room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(400)
+    )
     # The filter is applied when the audience is resolved, not only when the
     # message is composed: a delivery that claims to have reached a guest it
     # skipped is a row nobody can audit.
@@ -1773,13 +1957,19 @@ def test_no_show_attendees_are_left_out_of_the_recipient_list(configured, room):
 
 
 def test_a_delivery_records_the_locale_it_went_out_in(configured, room):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
-    asset = configured.create_reminder(reminder(autoTranslateEnabled=True, sourceLocale="fr"), actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
+    asset = configured.create_reminder(
+        reminder(autoTranslateEnabled=True, sourceLocale="fr"), actor="dana", source=SOURCE
+    )
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     booking_record = configured.create_booking(
         room["id"], {**booking(), "meetingTypeId": meeting_type["id"]}, actor="dana", source=SOURCE
     )
-    result = configured.deliver(room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(400))
+    result = configured.deliver(
+        room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(400)
+    )
     message = result["deliveries"][0]["data"]["message"]
     assert message["locale"] == "fr"
     assert message["auto_translate_enabled"] is True
@@ -1793,15 +1983,21 @@ def test_a_delivery_records_the_locale_it_went_out_in(configured, room):
 
 @pytest.fixture()
 def sms_wired(configured, room):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
-    asset = configured.create_reminder(sms_reminder(repliesTo=vocabulary.REPLY_TO_ASSIGNEES), actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
+    asset = configured.create_reminder(
+        sms_reminder(repliesTo=vocabulary.REPLY_TO_ASSIGNEES), actor="dana", source=SOURCE
+    )
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
     booking_record = configured.create_booking(
         room["id"], {**booking(), "meetingTypeId": meeting_type["id"]}, actor="dana", source=SOURCE
     )
     # Well past the reminder's fire time, or the delivery would be `scheduled`
     # and would have resolved no reply-forwarding address yet.
-    result = configured.deliver(room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(1200))
+    result = configured.deliver(
+        room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(1200)
+    )
     return {"engine": configured, "room": room, "delivery": result["deliveries"][0]}
 
 
@@ -1818,8 +2014,12 @@ def test_an_inbound_reply_is_forwarded_to_the_send_replies_to_addresses(sms_wire
 
 def test_a_reply_is_riding_along_on_the_delivery(sms_wired):
     engine = sms_wired["engine"]
-    engine.record_reply(sms_wired["delivery"]["id"], {"from": "+1", "body": "one"}, actor="dana", source=SOURCE)
-    engine.record_reply(sms_wired["delivery"]["id"], {"from": "+1", "body": "two"}, actor="dana", source=SOURCE)
+    engine.record_reply(
+        sms_wired["delivery"]["id"], {"from": "+1", "body": "one"}, actor="dana", source=SOURCE
+    )
+    engine.record_reply(
+        sms_wired["delivery"]["id"], {"from": "+1", "body": "two"}, actor="dana", source=SOURCE
+    )
     delivery = engine.get_delivery(sms_wired["delivery"]["id"])
     assert len(delivery["data"]["replies"]) == 2
     assert len(engine.replies(delivery_id=delivery["id"], limit=10)) == 2
@@ -1830,33 +2030,54 @@ def test_a_reply_without_an_organisation_owned_account_is_refused(configured, sm
     company's own Twilio account."""
     configured.save_org({**org_view(configured), "own_account": False}, actor="dana", source=SOURCE)
     with pytest.raises(ConfigurationRefused, match="own Twilio account"):
-        configured.record_reply(sms_wired["delivery"]["id"], {"from": "+1", "body": "hi"}, actor="dana", source=SOURCE)
+        configured.record_reply(
+            sms_wired["delivery"]["id"], {"from": "+1", "body": "hi"}, actor="dana", source=SOURCE
+        )
 
 
 def test_a_reply_to_an_email_reminder_is_refused(configured, wired):
     result = wired["engine"].deliver(
-        wired["room"]["id"], wired["booking"]["id"], reminder_id=wired["email"]["id"], actor="dana", source=SOURCE, now=at(400)
+        wired["room"]["id"],
+        wired["booking"]["id"],
+        reminder_id=wired["email"]["id"],
+        actor="dana",
+        source=SOURCE,
+        now=at(400),
     )
     with pytest.raises(ReminderError, match="only an SMS reminder"):
-        wired["engine"].record_reply(result["deliveries"][0]["id"], {"from": "+1", "body": "hi"}, actor="dana", source=SOURCE)
+        wired["engine"].record_reply(
+            result["deliveries"][0]["id"], {"from": "+1", "body": "hi"}, actor="dana", source=SOURCE
+        )
 
 
 def test_a_reply_with_no_body_is_refused(sms_wired):
     with pytest.raises(ReminderError, match="needs a body"):
-        sms_wired["engine"].record_reply(sms_wired["delivery"]["id"], {"from": "+1"}, actor="dana", source=SOURCE)
+        sms_wired["engine"].record_reply(
+            sms_wired["delivery"]["id"], {"from": "+1"}, actor="dana", source=SOURCE
+        )
 
 
 def test_a_reply_to_a_booking_with_no_forwarding_address_is_refused(configured, room):
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
-    asset = configured.create_reminder(sms_reminder(repliesTo=vocabulary.REPLY_TO_HOST), actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
+    asset = configured.create_reminder(
+        sms_reminder(repliesTo=vocabulary.REPLY_TO_HOST), actor="dana", source=SOURCE
+    )
     configured.attach(meeting_type["id"], asset["id"], actor="dana", source=SOURCE)
-    spec = booking(host={"email": "", "name": "Dana Okoro", "firstName": "Dana"}, booker={"email": ""})
+    spec = booking(
+        host={"email": "", "name": "Dana Okoro", "firstName": "Dana"}, booker={"email": ""}
+    )
     booking_record = configured.create_booking(
         room["id"], {**spec, "meetingTypeId": meeting_type["id"]}, actor="dana", source=SOURCE
     )
-    result = configured.deliver(room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(1200))
+    result = configured.deliver(
+        room["id"], booking_record["id"], actor="dana", source=SOURCE, now=at(1200)
+    )
     with pytest.raises(ReminderError, match="no reply-forwarding address"):
-        configured.record_reply(result["deliveries"][0]["id"], {"from": "+1", "body": "hi"}, actor="dana", source=SOURCE)
+        configured.record_reply(
+            result["deliveries"][0]["id"], {"from": "+1", "body": "hi"}, actor="dana", source=SOURCE
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -1865,7 +2086,9 @@ def test_a_reply_to_a_booking_with_no_forwarding_address_is_refused(configured, 
 
 
 def test_the_summary_counts_by_status_reason_and_channel(wired):
-    wired["engine"].deliver(wired["room"]["id"], wired["booking"]["id"], actor="dana", source=SOURCE, now=at(400))
+    wired["engine"].deliver(
+        wired["room"]["id"], wired["booking"]["id"], actor="dana", source=SOURCE, now=at(400)
+    )
     summary = wired["engine"].summary()
     assert summary["by_status"] == {vocabulary.SENT: 1, vocabulary.SKIPPED: 1}
     assert summary["by_reason"] == {vocabulary.CONDITION_NOT_SATISFIED: 1}
@@ -1876,10 +2099,17 @@ def test_the_summary_counts_by_status_reason_and_channel(wired):
 def test_a_needs_human_skip_is_counted_apart_from_a_working_rule(configured, room):
     """'Recipient not found' is a data problem someone must fix on the booking;
     a weekday restriction is the rule working. Same status, different meaning."""
-    meeting_type = configured.create_meeting_type({"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE)
-    unreachable = configured.create_reminder(reminder(name="No address"), actor="dana", source=SOURCE)
+    meeting_type = configured.create_meeting_type(
+        {"name": "Evaluation"}, room_id=room["id"], actor="dana", source=SOURCE
+    )
+    unreachable = configured.create_reminder(
+        reminder(name="No address"), actor="dana", source=SOURCE
+    )
     gated = configured.create_reminder(
-        reminder(name="Saturdays only", conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["saturday"]}]}),
+        reminder(
+            name="Saturdays only",
+            conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["saturday"]}]},
+        ),
         actor="dana",
         source=SOURCE,
     )
@@ -1897,7 +2127,9 @@ def test_a_needs_human_skip_is_counted_apart_from_a_working_rule(configured, roo
 
 def test_a_room_scoped_summary_sees_only_that_rooms_rows(wired, store):
     other = store.create("room", {"name": "Other"}, actor="dana")
-    wired["engine"].deliver(wired["room"]["id"], wired["booking"]["id"], actor="dana", source=SOURCE, now=at(400))
+    wired["engine"].deliver(
+        wired["room"]["id"], wired["booking"]["id"], actor="dana", source=SOURCE, now=at(400)
+    )
     assert wired["engine"].summary(room_id=wired["room"]["id"])["deliveries"] == 2
     assert wired["engine"].summary(room_id=other["id"])["deliveries"] == 0
 
@@ -1932,7 +2164,9 @@ def test_every_write_method_requires_a_source(engine, room, configured):
 
 
 def test_a_delivery_is_audited_under_the_source_it_was_given(wired, store):
-    wired["engine"].deliver(wired["room"]["id"], wired["booking"]["id"], actor="dana", source=SOURCE, now=at(400))
+    wired["engine"].deliver(
+        wired["room"]["id"], wired["booking"]["id"], actor="dana", source=SOURCE, now=at(400)
+    )
     entries = store.audit(collection=DELIVERY_COLLECTION)
     assert len(entries) == 2
     assert {entry["source"] for entry in entries} == {SOURCE}
@@ -1942,7 +2176,9 @@ def test_a_delivery_is_audited_under_the_source_it_was_given(wired, store):
 def test_the_fired_row_is_audited_under_the_fire_routes_source(wired, store):
     wired["engine"].plan(wired["booking"], actor="dana", source=SOURCE)
     wired["engine"].fire(now=at(400), source="POST /api/wf-061/fire")
-    actions = [(row["action"], row["source"]) for row in store.audit(collection=DELIVERY_COLLECTION)]
+    actions = [
+        (row["action"], row["source"]) for row in store.audit(collection=DELIVERY_COLLECTION)
+    ]
     assert ("update", "POST /api/wf-061/fire") in actions
     assert ("insert", SOURCE) in actions
 
@@ -1959,12 +2195,17 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
     shared: the test creates its room through the core records API, and that
     write's source is a core route.
     """
-    http.patch(f"{PREFIX}/messaging", json={"noreply_domain": "no-reply.contoso.example", "connected": True, "own_account": True})
+    http.patch(
+        f"{PREFIX}/messaging",
+        json={"noreply_domain": "no-reply.contoso.example", "connected": True, "own_account": True},
+    )
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(
         f"{PREFIX}/reminders", json={"name": "24h", "offset": {"value": 24, "unit": "hours"}}
     ).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     http.patch(f"{PREFIX}/reminders/{reminder_id}", json={"subject": "Changed"})
 
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
@@ -1975,13 +2216,20 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
             "start": "2026-10-19T14:00:00+00:00",
             "durationMinutes": 45,
             "bookedAt": "2026-09-20T09:00:00+00:00",
-            "primaryGuest": {"name": "Priya Raman", "email": "p@n.example", "responseStatus": "accepted"},
+            "primaryGuest": {
+                "name": "Priya Raman",
+                "email": "p@n.example",
+                "responseStatus": "accepted",
+            },
             "host": {"name": "Dana", "email": "d@x.example"},
         },
     ).json()["id"]
     http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/plan")
     http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/deliver", json={})
-    http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/preview", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/preview",
+        json={"reminder_id": reminder_id},
+    )
     http.post(f"{PREFIX}/fire")
     http.delete(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders/{reminder_id}")
     http.delete(f"{PREFIX}/reminders/{reminder_id}")
@@ -1992,7 +2240,9 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
 
     assert sources, "no source was recorded, so the check proved nothing"
     for source in sorted(sources):
-        assert source_names_a_mounted_route(source, routes), f"{source!r} names no route this app serves"
+        assert source_names_a_mounted_route(source, routes), (
+            f"{source!r} names no route this app serves"
+        )
 
 
 def test_the_openapi_schema_does_list_this_features_routes(http):
@@ -2023,10 +2273,15 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
     The weaker check above would pass even if a domain function hardcoded a
     perfectly valid *core* path. This one cannot.
     """
-    http.patch(f"{PREFIX}/messaging", json={"noreply_domain": "no-reply.contoso.example", "connected": True})
+    http.patch(
+        f"{PREFIX}/messaging",
+        json={"noreply_domain": "no-reply.contoso.example", "connected": True},
+    )
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2048,16 +2303,25 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
         row["source"]
         for row in store.audit(limit=1000)
         if row["collection"]
-        in (DELIVERY_COLLECTION, BOOKING_COLLECTION, REMINDER_COLLECTION, ATTACHMENT_COLLECTION, MEETING_TYPE_COLLECTION)
+        in (
+            DELIVERY_COLLECTION,
+            BOOKING_COLLECTION,
+            REMINDER_COLLECTION,
+            ATTACHMENT_COLLECTION,
+            MEETING_TYPE_COLLECTION,
+        )
         and row["source"]
     }
     routes = mounted_routes(http)
 
     assert len(mine) >= 6, f"the feature recorded fewer sources than it has write routes: {mine}"
     for source in sorted(mine):
-        assert source.startswith(f"POST {PREFIX}") or source.startswith(f"PATCH {PREFIX}") or (
-            source.startswith(f"DELETE {PREFIX}")
-        ) or source.startswith(f"PATCH {PREFIX}"), f"{source!r} does not name a route under this feature's own prefix"
+        assert (
+            source.startswith(f"POST {PREFIX}")
+            or source.startswith(f"PATCH {PREFIX}")
+            or (source.startswith(f"DELETE {PREFIX}"))
+            or source.startswith(f"PATCH {PREFIX}")
+        ), f"{source!r} does not name a route under this feature's own prefix"
         assert source_names_a_mounted_route(source, routes), f"{source!r} names no mounted route"
 
 
@@ -2065,7 +2329,9 @@ def test_a_delivery_written_over_http_records_its_own_route(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
         json={
@@ -2086,10 +2352,12 @@ def test_every_source_string_the_feature_builds_is_under_its_own_prefix():
     ``router.prefix``, so a renamed route cannot leave a stale string behind."""
     module = load_feature(MODULE)
     found: list[str] = []
-    for route in module.router.routes:
+    for _route in module.router.routes:
         for verb in ("POST", "PATCH", "PUT", "DELETE"):
             found.append(f"{verb} {module.router.prefix}")
-    assert found and all(entry.startswith(f"POST {PREFIX}") or entry.endswith(PREFIX) for entry in found)
+    assert found and all(
+        entry.startswith(f"POST {PREFIX}") or entry.endswith(PREFIX) for entry in found
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -2140,7 +2408,9 @@ def test_a_missing_configuration_is_a_428_not_a_400(http):
     assert reminder_id.json()["error"] == "configuration_required"
     assert "Command Center" in reminder_id.json()["detail"]
     # And a second attempt refuses the same way rather than behaving differently.
-    assert http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).status_code == 428
+    assert (
+        http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).status_code == 428
+    )
 
 
 def test_an_invalid_reminder_is_a_400_naming_the_published_set(http):
@@ -2153,7 +2423,8 @@ def test_an_invalid_reminder_is_a_400_naming_the_published_set(http):
 def test_the_messaging_setup_round_trips_over_http(http):
     assert http.get(f"{PREFIX}/messaging").json()["sms_ready"] is False
     saved = http.patch(
-        f"{PREFIX}/messaging", json={"noreply_domain": "no-reply.contoso.example", "connected": True}
+        f"{PREFIX}/messaging",
+        json={"noreply_domain": "no-reply.contoso.example", "connected": True},
     ).json()
     assert saved["sms_ready"] is True
     assert saved["reply_forwarding_ready"] is False
@@ -2195,22 +2466,40 @@ def test_a_reminder_round_trips_over_http(http):
 def test_the_reminder_list_filters_by_channel_and_condition_over_http(http):
     http.post(f"{PREFIX}/reminders", json={"name": "email one", "condition": "after_meeting"})
     http.patch(f"{PREFIX}/messaging", json={"connected": True, "number": "+15550100"})
-    http.post(f"{PREFIX}/reminders", json={"name": "sms one", "channel": "sms", "condition": "after_meeting"})
-    http.post(f"{PREFIX}/reminders", json={"name": "nudge", "condition": "before_meeting_if_no_response"})
+    http.post(
+        f"{PREFIX}/reminders",
+        json={"name": "sms one", "channel": "sms", "condition": "after_meeting"},
+    )
+    http.post(
+        f"{PREFIX}/reminders", json={"name": "nudge", "condition": "before_meeting_if_no_response"}
+    )
     assert http.get(f"{PREFIX}/reminders", params={"channel": "sms"}).json()["count"] == 1
-    assert http.get(f"{PREFIX}/reminders", params={"condition": "after_meeting"}).json()["count"] == 2
+    assert (
+        http.get(f"{PREFIX}/reminders", params={"condition": "after_meeting"}).json()["count"] == 2
+    )
     assert http.get(f"{PREFIX}/reminders").json()["count"] == 3
 
 
 def test_attaching_and_detaching_over_http(http):
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h"}).json()["id"]
-    assert http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}).status_code == 201
+    assert (
+        http.post(
+            f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders",
+            json={"reminder_id": reminder_id},
+        ).status_code
+        == 201
+    )
     view = http.get(f"{PREFIX}/meeting-types/{meeting_type['id']}").json()
     assert view["reminder_count"] == 1
     assert view["phone_required"] is False
 
-    assert http.delete(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders/{reminder_id}").status_code == 204
+    assert (
+        http.delete(
+            f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders/{reminder_id}"
+        ).status_code
+        == 204
+    )
     assert http.get(f"{PREFIX}/meeting-types/{meeting_type['id']}").json()["reminder_count"] == 0
     # The asset survives, which is the whole difference from Delete.
     assert http.get(f"{PREFIX}/reminders/{reminder_id}").status_code == 200
@@ -2231,14 +2520,21 @@ def test_deleting_a_reminder_over_http_is_204_and_soft(http):
 
 def test_attaching_without_a_reminder_id_is_a_400_over_http(http):
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
-    assert http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={}).status_code == 400
+    assert (
+        http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={}).status_code
+        == 400
+    )
 
 
 def test_the_meeting_type_view_reports_the_phone_requirement_over_http(http):
     http.patch(f"{PREFIX}/messaging", json={"connected": True, "number": "+15550100"})
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
-    reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).json()[
+        "id"
+    ]
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     view = http.get(f"{PREFIX}/meeting-types/{meeting_type['id']}").json()
     assert view["phone_required"] is True
     assert "becomes required" in view["phone_required_quote"]
@@ -2247,7 +2543,8 @@ def test_the_meeting_type_view_reports_the_phone_requirement_over_http(http):
 def test_a_booking_on_a_missing_room_is_a_404_over_http(http):
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     response = http.post(
-        f"{PREFIX}/rooms/no-such-room/bookings", json={"meetingTypeId": meeting_type["id"], "start": "2026-10-19T14:00:00Z"}
+        f"{PREFIX}/rooms/no-such-room/bookings",
+        json={"meetingTypeId": meeting_type["id"], "start": "2026-10-19T14:00:00Z"},
     )
     assert response.status_code == 404
 
@@ -2255,8 +2552,12 @@ def test_a_booking_on_a_missing_room_is_a_404_over_http(http):
 def test_a_booking_without_a_phone_on_an_sms_meeting_type_is_a_428_over_http(http):
     http.patch(f"{PREFIX}/messaging", json={"connected": True, "number": "+15550100"})
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
-    reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).json()[
+        "id"
+    ]
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     response = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2271,13 +2572,22 @@ def test_a_booking_without_a_phone_on_an_sms_meeting_type_is_a_428_over_http(htt
 
 
 def test_plan_deliver_and_read_a_meetinging_activity_over_http(http):
-    http.patch(f"{PREFIX}/messaging", json={"noreply_domain": "no-reply.contoso.example", "connected": True})
+    http.patch(
+        f"{PREFIX}/messaging",
+        json={"noreply_domain": "no-reply.contoso.example", "connected": True},
+    )
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(
         f"{PREFIX}/reminders",
-        json={"name": "24h", "condition": "before_meeting_if_no_response", "offset": {"value": 24, "unit": "hours"}},
+        json={
+            "name": "24h",
+            "condition": "before_meeting_if_no_response",
+            "offset": {"value": 24, "unit": "hours"},
+        },
     ).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2285,7 +2595,11 @@ def test_plan_deliver_and_read_a_meetinging_activity_over_http(http):
             "meetingTypeId": meeting_type["id"],
             "start": "2026-10-19T14:00:00+00:00",
             "bookedAt": "2026-09-20T09:00:00+00:00",
-            "primaryGuest": {"name": "Priya Raman", "email": "p@n.example", "responseStatus": "needsAction"},
+            "primaryGuest": {
+                "name": "Priya Raman",
+                "email": "p@n.example",
+                "responseStatus": "needsAction",
+            },
             "host": {"name": "Dana", "email": "d@x.example"},
         },
     ).json()["id"]
@@ -2294,7 +2608,9 @@ def test_plan_deliver_and_read_a_meetinging_activity_over_http(http):
     assert planned["planned"] == 1
     assert planned["deliveries"][0]["data"]["status"] == "scheduled"
 
-    delivered = http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/deliver", json={}).json()
+    delivered = http.post(
+        f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/deliver", json={}
+    ).json()
     assert delivered["deliveries"][0]["data"]["status"] == "scheduled"  # 24h out from a real clock
 
     activity = http.get(f"{PREFIX}/rooms/{room['id']}/deliveries").json()
@@ -2308,7 +2624,9 @@ def test_the_preview_route_writes_nothing_over_http(http):
     reminder_id = http.post(
         f"{PREFIX}/reminders", json={"name": "24h", "subject": "Hi {CP.Guest.FirstName}"}
     ).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2320,7 +2638,8 @@ def test_the_preview_route_writes_nothing_over_http(http):
         },
     ).json()["id"]
     response = http.post(
-        f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/preview", json={"reminder_id": reminder_id}
+        f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/preview",
+        json={"reminder_id": reminder_id},
     )
     assert response.status_code == 200
     assert response.json()["message"]["subject"] == "Hi Priya"
@@ -2330,7 +2649,9 @@ def test_the_preview_route_writes_nothing_over_http(http):
 def test_the_preview_falls_back_to_the_first_attached_reminder_over_http(http):
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2341,7 +2662,10 @@ def test_the_preview_falls_back_to_the_first_attached_reminder_over_http(http):
             "host": {"name": "Dana", "email": "d@x.example"},
         },
     ).json()["id"]
-    assert http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/preview", json={}).status_code == 200
+    assert (
+        http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/preview", json={}).status_code
+        == 200
+    )
 
 
 def test_a_preview_of_a_booking_with_no_reminders_is_a_404_over_http(http):
@@ -2349,7 +2673,11 @@ def test_a_preview_of_a_booking_with_no_reminders_is_a_404_over_http(http):
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
-        json={"meetingTypeId": meeting_type["id"], "start": "2099-10-19T14:00:00+00:00", "primaryGuest": {"name": "W"}},
+        json={
+            "meetingTypeId": meeting_type["id"],
+            "start": "2099-10-19T14:00:00+00:00",
+            "primaryGuest": {"name": "W"},
+        },
     ).json()["id"]
     response = http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/preview", json={})
     assert response.status_code == 404
@@ -2357,7 +2685,9 @@ def test_a_preview_of_a_booking_with_no_reminders_is_a_404_over_http(http):
 
 
 def test_the_cal_workflow_route_returns_the_projection_over_http(http):
-    reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h", "offset": {"value": 1, "unit": "weeks"}}).json()["id"]
+    reminder_id = http.post(
+        f"{PREFIX}/reminders", json={"name": "24h", "offset": {"value": 1, "unit": "weeks"}}
+    ).json()["id"]
     body = http.get(f"{PREFIX}/reminders/{reminder_id}/cal-workflow").json()
     assert body["workflow"]["headers"] == {"cal-api-version": "2024-08-13"}
     assert body["workflow"]["body"]["trigger"]["offset"] == {"value": 7, "unit": "day"}
@@ -2367,12 +2697,22 @@ def test_the_cal_workflow_route_returns_the_projection_over_http(http):
 def test_the_cal_workflow_route_folds_a_bookings_duration_when_given(http):
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(
-        f"{PREFIX}/reminders", json={"name": "follow-up", "condition": "after_meeting", "offset": {"value": 1, "unit": "hours"}}
+        f"{PREFIX}/reminders",
+        json={
+            "name": "follow-up",
+            "condition": "after_meeting",
+            "offset": {"value": 1, "unit": "hours"},
+        },
     ).json()["id"]
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
-        json={"meetingTypeId": meeting_type["id"], "start": "2026-10-19T14:00:00+00:00", "durationMinutes": 45, "primaryGuest": {"name": "W"}},
+        json={
+            "meetingTypeId": meeting_type["id"],
+            "start": "2026-10-19T14:00:00+00:00",
+            "durationMinutes": 45,
+            "primaryGuest": {"name": "W"},
+        },
     ).json()["id"]
     without = http.get(f"{PREFIX}/reminders/{reminder_id}/cal-workflow").json()
     with_booking = http.get(
@@ -2384,31 +2724,63 @@ def test_the_cal_workflow_route_folds_a_bookings_duration_when_given(http):
 
 def test_the_cal_workflow_route_404s_on_an_unknown_booking(http):
     reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h"}).json()["id"]
-    assert http.get(f"{PREFIX}/reminders/{reminder_id}/cal-workflow", params={"booking_id": "nope"}).status_code == 404
+    assert (
+        http.get(
+            f"{PREFIX}/reminders/{reminder_id}/cal-workflow", params={"booking_id": "nope"}
+        ).status_code
+        == 404
+    )
 
 
 def test_the_cal_validator_route_over_http(http):
-    assert http.post(f"{PREFIX}/cal-workflows/validate", json={"body": {"trigger": {"type": "beforeEvent", "offset": {"value": 1, "unit": "hour"}}, "steps": [{"type": "action", "action": "email_attendee", "template": "reminder"}]}}).json()["ok"] is True
-    assert http.post(f"{PREFIX}/cal-workflows/validate", json={"body": {"trigger": {"type": "nope"}, "steps": []}}).json()["ok"] is False
+    assert (
+        http.post(
+            f"{PREFIX}/cal-workflows/validate",
+            json={
+                "body": {
+                    "trigger": {"type": "beforeEvent", "offset": {"value": 1, "unit": "hour"}},
+                    "steps": [
+                        {"type": "action", "action": "email_attendee", "template": "reminder"}
+                    ],
+                }
+            },
+        ).json()["ok"]
+        is True
+    )
+    assert (
+        http.post(
+            f"{PREFIX}/cal-workflows/validate",
+            json={"body": {"trigger": {"type": "nope"}, "steps": []}},
+        ).json()["ok"]
+        is False
+    )
 
 
 def test_a_delivery_can_be_read_and_filtered_over_http(http):
     http.patch(f"{PREFIX}/messaging", json={"connected": True, "number": "+15550100"})
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
         json={
             "meetingTypeId": meeting_type["id"],
             "start": "2026-10-19T14:00:00+00:00",
-            "primaryGuest": {"name": "Priya Raman", "email": "p@n.example", "responseStatus": "accepted"},
+            "primaryGuest": {
+                "name": "Priya Raman",
+                "email": "p@n.example",
+                "responseStatus": "accepted",
+            },
             "host": {"name": "Dana", "email": "d@x.example"},
         },
     ).json()["id"]
     http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/deliver", json={})
-    delivery_id = http.get(f"{PREFIX}/deliveries", params={"limit": 5}).json()["deliveries"][0]["id"]
+    delivery_id = http.get(f"{PREFIX}/deliveries", params={"limit": 5}).json()["deliveries"][0][
+        "id"
+    ]
 
     read = http.get(f"{PREFIX}/deliveries/{delivery_id}").json()
     assert read["data"]["status"] == "scheduled"
@@ -2416,7 +2788,9 @@ def test_a_delivery_can_be_read_and_filtered_over_http(http):
     assert http.get(f"{PREFIX}/deliveries", params={"channel": "sms"}).json()["count"] == 0
     assert http.get(f"{PREFIX}/deliveries", params={"status": "scheduled"}).json()["count"] == 1
     assert http.get(f"{PREFIX}/deliveries", params={"status": "sent"}).json()["count"] == 0
-    assert http.get(f"{PREFIX}/deliveries", params={"reason": "phone_not_found"}).json()["count"] == 0
+    assert (
+        http.get(f"{PREFIX}/deliveries", params={"reason": "phone_not_found"}).json()["count"] == 0
+    )
 
 
 def test_an_unknown_delivery_is_a_404_over_http(http):
@@ -2432,8 +2806,12 @@ def test_an_unknown_filter_value_is_a_400_naming_the_published_set(http):
 def test_the_sms_reply_route_refuses_without_an_own_account(http):
     http.patch(f"{PREFIX}/messaging", json={"connected": True, "number": "+15550100"})
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
-    reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "text", "channel": "sms"}).json()[
+        "id"
+    ]
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     booking_id = http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2445,8 +2823,12 @@ def test_the_sms_reply_route_refuses_without_an_own_account(http):
         },
     ).json()["id"]
     http.post(f"{PREFIX}/rooms/{room['id']}/bookings/{booking_id}/deliver", json={})
-    delivery_id = http.get(f"{PREFIX}/deliveries", params={"channel": "sms"}).json()["deliveries"][0]["id"]
-    response = http.post(f"{PREFIX}/deliveries/{delivery_id}/sms-replies", json={"from": "+1", "body": "hi"})
+    delivery_id = http.get(f"{PREFIX}/deliveries", params={"channel": "sms"}).json()["deliveries"][
+        0
+    ]["id"]
+    response = http.post(
+        f"{PREFIX}/deliveries/{delivery_id}/sms-replies", json={"from": "+1", "body": "hi"}
+    )
     assert response.status_code == 428
     assert "own Twilio account" in response.json()["detail"]
 
@@ -2459,13 +2841,20 @@ def test_the_summary_route_over_http(http):
 
 
 def test_the_fire_route_is_a_no_op_with_nothing_attached(http):
-    assert http.post(f"{PREFIX}/fire").json() == {"fired": 0, "sent": 0, "skipped": 0, "deliveries": []}
+    assert http.post(f"{PREFIX}/fire").json() == {
+        "fired": 0,
+        "sent": 0,
+        "skipped": 0,
+        "deliveries": [],
+    }
 
 
 def test_the_fire_route_reports_what_it_did_over_http(http):
     meeting_type = http.post(f"{PREFIX}/meeting-types", json={"name": "Evaluation"}).json()
     reminder_id = http.post(f"{PREFIX}/reminders", json={"name": "24h"}).json()["id"]
-    http.post(f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id})
+    http.post(
+        f"{PREFIX}/meeting-types/{meeting_type['id']}/reminders", json={"reminder_id": reminder_id}
+    )
     room = http.post("/api/records/room", json={"name": "Northwind"}).json()
     http.post(
         f"{PREFIX}/rooms/{room['id']}/bookings",
@@ -2473,7 +2862,11 @@ def test_the_fire_route_reports_what_it_did_over_http(http):
             "meetingTypeId": meeting_type["id"],
             "start": "2020-10-19T14:00:00+00:00",
             "bookedAt": "2020-09-20T09:00:00+00:00",
-            "primaryGuest": {"name": "Priya Raman", "email": "p@n.example", "responseStatus": "accepted"},
+            "primaryGuest": {
+                "name": "Priya Raman",
+                "email": "p@n.example",
+                "responseStatus": "accepted",
+            },
             "host": {"name": "Dana", "email": "d@x.example"},
         },
     )
@@ -2515,16 +2908,22 @@ def test_the_skip_reason_precedence_inference_matches_the_evaluation_order():
         conditions={"match": "all", "rules": [{"kind": "weekday", "weekdays": ["saturday"]}]},
     )
     book = booking(primaryGuest={"responseStatus": vocabulary.RESPONSE_DECLINED})
-    decision = conditions.evaluate(spec, book, now=datetime(2026, 10, 19, 12, 30, tzinfo=timezone.utc))
+    decision = conditions.evaluate(
+        spec, book, now=datetime(2026, 10, 19, 12, 30, tzinfo=timezone.utc)
+    )
     assert decision.reason == vocabulary.CONDITION_NOT_SATISFIED
     # ... and the restriction's verdict is still recorded.
-    assert any(check["check"] == "condition_group" and not check["passed"] for check in decision.checks)
+    assert any(
+        check["check"] == "condition_group" and not check["passed"] for check in decision.checks
+    )
 
 
 def test_the_declined_is_responding_inference_is_the_behaviour():
     entry = reminder_inferences.by_id("declined-counts-as-responding")
     assert entry["value"]["declined"] == "responded"
-    assert conditions.has_not_responded(booking(primaryGuest={"responseStatus": "declined"})) is False
+    assert (
+        conditions.has_not_responded(booking(primaryGuest={"responseStatus": "declined"})) is False
+    )
 
 
 def test_the_after_meeting_anchor_inference_matches_the_code():
@@ -2542,9 +2941,13 @@ def test_the_timezone_inference_matches_the_fixed_offset_the_code_reads():
     book = booking(start="2026-10-19T12:00:00+00:00", timezoneOffsetMinutes=-300)
     assert conditions.local_timezone(book).utcoffset(None) == timedelta(minutes=-300)
     # No offset at all is UTC, not a crash and not a guess.
-    assert conditions.local_timezone(booking(timezoneOffsetMinutes=None)).utcoffset(None) == timedelta(0)
+    assert conditions.local_timezone(booking(timezoneOffsetMinutes=None)).utcoffset(
+        None
+    ) == timedelta(0)
     # An unparseable offset is UTC too, because a bad field must not stop a run.
-    assert conditions.local_timezone(booking(timezoneOffsetMinutes="banana")).utcoffset(None) == timedelta(0)
+    assert conditions.local_timezone(booking(timezoneOffsetMinutes="banana")).utcoffset(
+        None
+    ) == timedelta(0)
 
 
 def test_the_no_outbound_send_inference_matches_the_code():
@@ -2578,14 +2981,18 @@ def test_the_unresolved_tags_inference_matches_the_renderer():
     entry = reminder_inferences.by_id("unresolved-tags-are-reported-not-blanked")
     assert entry["value"]["never"] == "replaced with an empty string"
     book = booking()
-    book["primaryGuest"] = {key: value for key, value in book["primaryGuest"].items() if key != "phone"}
+    book["primaryGuest"] = {
+        key: value for key, value in book["primaryGuest"].items() if key != "phone"
+    }
     assert tags.render("Call {CP.Guest.Phone}", book)["text"] == "Call {CP.Guest.Phone}"
 
 
 def test_the_sms_primary_guest_inference_matches_the_resolver():
     entry = reminder_inferences.by_id("sms-goes-to-the-primary-guest")
     assert entry["value"]["sms_recipients"] == "the primary guest only"
-    book = booking(guests=[{"email": "a@x.example", "phone": "+1"}, {"email": "b@x.example", "phone": "+2"}])
+    book = booking(
+        guests=[{"email": "a@x.example", "phone": "+1"}, {"email": "b@x.example", "phone": "+2"}]
+    )
     decision = conditions.resolve_recipients(sms_reminder(), book)
     assert len(decision["recipients"]) == 1
 
@@ -2599,16 +3006,27 @@ def test_the_weekday_evaluates_the_meeting_inference_matches_the_code():
 
 
 def test_the_lead_time_fails_closed_inference_matches_the_code():
-    entry = reminder_inferences.by_id("lead-time-gate-fails-closed")
-    assert conditions.booked_far_enough(booking(bookedAt=None), vocabulary.require_offset(1, "weeks")) is False
+    reminder_inferences.by_id("lead-time-gate-fails-closed")
+    assert (
+        conditions.booked_far_enough(booking(bookedAt=None), vocabulary.require_offset(1, "weeks"))
+        is False
+    )
 
 
 def test_the_schedule_in_the_past_inference_matches_the_two_step_api():
     entry = reminder_inferences.by_id("schedule-in-the-past-is-a-planning-question")
     assert "planning" in entry["value"]["checked_at"]
     # Planning reports it; running does not, because at run time it is always past.
-    assert conditions.plan(reminder(), booking(), now=datetime(2027, 1, 1, tzinfo=timezone.utc)).reason == vocabulary.SCHEDULE_IN_PAST
-    assert conditions.decide(reminder(), booking(), now=datetime(2027, 1, 1, tzinfo=timezone.utc)).status == vocabulary.SENT
+    assert (
+        conditions.plan(reminder(), booking(), now=datetime(2027, 1, 1, tzinfo=timezone.utc)).reason
+        == vocabulary.SCHEDULE_IN_PAST
+    )
+    assert (
+        conditions.decide(
+            reminder(), booking(), now=datetime(2027, 1, 1, tzinfo=timezone.utc)
+        ).status
+        == vocabulary.SENT
+    )
 
 
 def test_the_phone_required_inference_names_both_halves():
@@ -2628,7 +3046,10 @@ def test_the_weeks_offset_conversion_is_named_as_an_inference():
     disagree with, so it has to be in the registry rather than only in a comment."""
     entry = reminder_inferences.by_id("weeks-offset-converts-to-days")
     assert entry["value"]["cal_unit"] == "day"
-    assert cal.cal_offset(reminder(offset={"value": 1, "unit": "weeks"})) == {"value": 7, "unit": "day"}
+    assert cal.cal_offset(reminder(offset={"value": 1, "unit": "weeks"})) == {
+        "value": 7,
+        "unit": "day",
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -2697,7 +3118,10 @@ def test_the_seed_reaches_every_status_and_reason_and_says_so(tmp_path):
     database = AuditedDatabase(tmp_path / "summary.db", mirror_dir=tmp_path / "mirror")
     try:
         store = RecordStore(database)
-        rooms = [(store.create("room", {"name": name}, actor="seed")["id"], name) for name in ("a", "b", "c", "d")]
+        rooms = [
+            (store.create("room", {"name": name}, actor="seed")["id"], name)
+            for name in ("a", "b", "c", "d")
+        ]
         summary = module.seed(database, {"room_ids": rooms, "now": NOW, "rng": None})
     finally:
         database.close()
@@ -2714,7 +3138,10 @@ def test_the_seed_never_raises_and_leaves_the_demo_non_empty(tmp_path):
     database = AuditedDatabase(tmp_path / "raise.db", mirror_dir=tmp_path / "mirror")
     try:
         store = RecordStore(database)
-        rooms = [(store.create("room", {"name": name}, actor="seed")["id"], name) for name in ("a", "b", "c", "d")]
+        rooms = [
+            (store.create("room", {"name": name}, actor="seed")["id"], name)
+            for name in ("a", "b", "c", "d")
+        ]
         module.seed(database, {"room_ids": rooms, "now": NOW, "rng": None})
         assert len(store.list(DELIVERY_COLLECTION, limit=1000)) > 20
         assert len(store.list(REPLY_COLLECTION, limit=100)) == 1
@@ -2746,7 +3173,10 @@ def test_the_seed_is_repeatable_on_a_fresh_database_at_any_clock(tmp_path):
         database = AuditedDatabase(tmp_path / f"clock-{index}.db", mirror_dir=tmp_path / "mirror")
         try:
             store = RecordStore(database)
-            rooms = [(store.create("room", {"name": name}, actor="seed")["id"], name) for name in ("a", "b", "c", "d")]
+            rooms = [
+                (store.create("room", {"name": name}, actor="seed")["id"], name)
+                for name in ("a", "b", "c", "d")
+            ]
             summary = module.seed(database, {"room_ids": rooms, "now": clock, "rng": None})
             assert "NOT reached" not in summary, f"clock {clock} lost a state: {summary}"
         finally:
@@ -2786,7 +3216,15 @@ def test_the_only_fixed_vocabulary_is_the_envelope(tmp_path):
         engine = ReminderEngine(RecordStore(database), clock=lambda: NOW)
         engine.save_org({"connected": True}, actor="dana", source=SOURCE)
         record = engine.create_reminder(reminder(), actor="dana", source=SOURCE)
-        for field in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at"):
+        for field in (
+            "id",
+            "collection",
+            "room_id",
+            "revision",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        ):
             assert field in record, field
     finally:
         database.close()

@@ -74,7 +74,9 @@ def normalise_table(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ChangeTrackingDisabled("a table must be described as a JSON object")
     logical_name = str(raw.get("logical_name") or raw.get("logicalName") or "").strip()
     if not logical_name:
-        raise ChangeTrackingDisabled("a table needs a logical_name; that is what the delta link is scoped to")
+        raise ChangeTrackingDisabled(
+            "a table needs a logical_name; that is what the delta link is scoped to"
+        )
     return {
         "logical_name": logical_name,
         "entity_set": str(raw.get("entity_set") or f"{logical_name}s"),
@@ -202,9 +204,23 @@ def poll(
         "changes_observed": max(0, int(observed_changes)),
         "count_url": f"{base}/$count?$deltatoken={token}",
         "query_options_accepted": sorted(
-            str(key) for key in options
-            if key not in (None, "", "deltatoken", "$deltatoken", "filter", "$filter",
-                           "orderby", "$orderby", "expand", "$expand", "top", "$top")
+            str(key)
+            for key in options
+            if key
+            not in (
+                None,
+                "",
+                "deltatoken",
+                "$deltatoken",
+                "filter",
+                "$filter",
+                "orderby",
+                "$orderby",
+                "expand",
+                "$expand",
+                "top",
+                "$top",
+            )
         ),
         "query_options_refused": list(vocabulary.UNSUPPORTED_DELTA_QUERY_OPTIONS.values()),
     }

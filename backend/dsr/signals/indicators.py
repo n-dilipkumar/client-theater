@@ -101,7 +101,9 @@ QUALIFICATION_REASONS: dict[str, str] = {
 def _split_bound(token: str) -> tuple[float | None, str]:
     """Split ``30s`` into ``(30.0, "s")`` and ``75`` into ``(75.0, "")``."""
     digits = 0
-    while digits < len(token) and (token[digits].isdigit() or (digits == 0 and token[digits] in "+-")):
+    while digits < len(token) and (
+        token[digits].isdigit() or (digits == 0 and token[digits] in "+-")
+    ):
         digits += 1
     if digits == 0:
         return None, ""
@@ -177,11 +179,23 @@ def numeric_fields(metadata_shape: Mapping[str, Any] | None) -> list[str]:
         if not isinstance(sub, Mapping):
             continue
         declared = sub.get("type")
-        names = [declared] if isinstance(declared, str) else list(declared) if isinstance(declared, list) else []
+        names = (
+            [declared]
+            if isinstance(declared, str)
+            else list(declared)
+            if isinstance(declared, list)
+            else []
+        )
         numeric = {"number", "integer"} & set(names)
         bounded = any(
             keyword in sub
-            for keyword in ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf")
+            for keyword in (
+                "minimum",
+                "maximum",
+                "exclusiveMinimum",
+                "exclusiveMaximum",
+                "multipleOf",
+            )
         )
         if numeric or bounded:
             found.append(str(name))
@@ -224,9 +238,7 @@ def _compare(value: float, threshold: float, comparison: str) -> bool:
     return False
 
 
-def evaluate(
-    indicator: Mapping[str, Any], metadata: Mapping[str, Any] | None
-) -> dict[str, Any]:
+def evaluate(indicator: Mapping[str, Any], metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     """Decide whether ``metadata`` supports the claim ``indicator`` makes.
 
     Always returns a decision with a named ``reason``, including when the
@@ -389,7 +401,10 @@ def describe_vocabulary() -> dict[str, Any]:
         "claim_form": "<subject> <comparative> <number><unit?> <rest...>",
         "claim_examples": [
             {"key": SPECIFIC_EXAMPLE["key"], "claim": parse_claim(SPECIFIC_EXAMPLE["key"])},
-            {"key": "watched_more_than_75_percent", "claim": parse_claim("watched_more_than_75_percent")},
+            {
+                "key": "watched_more_than_75_percent",
+                "claim": parse_claim("watched_more_than_75_percent"),
+            },
             {"key": VAGUE_EXAMPLE["key"], "claim": parse_claim(VAGUE_EXAMPLE["key"])},
         ],
         "quality_examples": {"specific": SPECIFIC_EXAMPLE, "vague": VAGUE_EXAMPLE},

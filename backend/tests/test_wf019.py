@@ -16,14 +16,13 @@ Saturday, which the week-grain assertions rely on.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr import influence
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
@@ -53,6 +52,7 @@ from dsr.influence import (
     vocabulary,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: This feature's own prefix. The HTTP tests go through the mounted app rather
 #: than a throwaway router, so a collision with another feature fails loudly here.
@@ -119,7 +119,9 @@ def seed_library(store: RecordStore) -> dict[str, str]:
 
 def seed_rooms(store: RecordStore, count: int = 2) -> list[str]:
     return [
-        store.create("room", {"name": f"Room {index}", "account": "Acme"}, actor="dana", source=SOURCE)["id"]
+        store.create(
+            "room", {"name": f"Room {index}", "account": "Acme"}, actor="dana", source=SOURCE
+        )["id"]
         for index in range(count)
     ]
 
@@ -127,7 +129,12 @@ def seed_rooms(store: RecordStore, count: int = 2) -> list[str]:
 def share(store: RecordStore, asset: str, room: str | None = None, **kwargs):
     return record_event(
         store,
-        {"action": "asset.shared", "asset_id": asset, "occurred_at": kwargs.pop("when", at(days=1)), **kwargs},
+        {
+            "action": "asset.shared",
+            "asset_id": asset,
+            "occurred_at": kwargs.pop("when", at(days=1)),
+            **kwargs,
+        },
         room_id=room,
         actor="dana",
         source=SOURCE,
@@ -137,7 +144,12 @@ def share(store: RecordStore, asset: str, room: str | None = None, **kwargs):
 def view(store: RecordStore, asset: str, room: str | None = None, **kwargs):
     return record_event(
         store,
-        {"action": "asset.viewed", "asset_id": asset, "occurred_at": kwargs.pop("when", at(days=1)), **kwargs},
+        {
+            "action": "asset.viewed",
+            "asset_id": asset,
+            "occurred_at": kwargs.pop("when", at(days=1)),
+            **kwargs,
+        },
         room_id=room,
         actor="dana",
         source=SOURCE,
@@ -312,7 +324,9 @@ def test_the_two_windows_are_independent():
 
 
 def test_a_window_is_inclusive_at_both_ends():
-    filters = Filters.build(activity_from="2026-09-20T00:00:00Z", activity_to="2026-09-20T23:59:59Z")
+    filters = Filters.build(
+        activity_from="2026-09-20T00:00:00Z", activity_to="2026-09-20T23:59:59Z"
+    )
     assert filters.in_window("viewed", influence.parse_time("2026-09-20T00:00:00Z")) is True
     assert filters.in_window("viewed", influence.parse_time("2026-09-20T23:59:59Z")) is True
     assert filters.in_window("viewed", influence.parse_time("2026-09-19T23:59:59Z")) is False
@@ -355,7 +369,7 @@ def test_a_filter_set_round_trips_to_json():
 
 def test_filters_are_frozen_so_a_scope_cannot_be_widened_afterwards():
     filters = Filters.build(collection="Security")
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         filters.collection = "Enterprise"  # type: ignore[misc]
 
 
@@ -449,7 +463,11 @@ def test_an_unknown_audience_is_refused(store):
 def test_an_asset_can_be_named_by_its_title(store):
     assets = seed_library(store)
     stored = record_event(
-        store, {"action": "asset.viewed", "asset": "API Guide"}, room_id=None, actor=None, source=SOURCE
+        store,
+        {"action": "asset.viewed", "asset": "API Guide"},
+        room_id=None,
+        actor=None,
+        source=SOURCE,
     )
     assert stored["data"]["asset_id"] == assets["guide"]
 
@@ -461,7 +479,11 @@ def test_two_assets_with_one_title_are_refused_rather_than_guessed(store):
 
     with pytest.raises(InfluenceError) as excinfo:
         record_event(
-            store, {"action": "asset.viewed", "asset": "Overview Deck"}, room_id=None, actor=None, source=SOURCE
+            store,
+            {"action": "asset.viewed", "asset": "Overview Deck"},
+            room_id=None,
+            actor=None,
+            source=SOURCE,
         )
     assert "asset_id" in str(excinfo.value)
 
@@ -475,7 +497,11 @@ def test_an_event_needs_to_name_an_asset(store):
 def test_an_unknown_asset_id_is_404_worth(store):
     with pytest.raises(UnknownAsset):
         record_event(
-            store, {"action": "asset.viewed", "asset_id": "nope"}, room_id=None, actor=None, source=SOURCE
+            store,
+            {"action": "asset.viewed", "asset_id": "nope"},
+            room_id=None,
+            actor=None,
+            source=SOURCE,
         )
 
 
@@ -507,7 +533,11 @@ def test_an_unparseable_occurrence_time_is_refused(store):
 def test_an_occurrence_defaults_to_now(store):
     assets = seed_library(store)
     stored = record_event(
-        store, {"action": "asset.viewed", "asset_id": assets["deck"]}, room_id=None, actor=None, source=SOURCE
+        store,
+        {"action": "asset.viewed", "asset_id": assets["deck"]},
+        room_id=None,
+        actor=None,
+        source=SOURCE,
     )
     assert stored["data"]["at"]
 
@@ -563,7 +593,11 @@ def test_a_workspace_scoped_occurrence_inherits_the_asset_own_workspace(store):
         "document", {"title": "Attached Deck"}, room_id=room, actor="dana", source=SOURCE
     )["id"]
     stored = record_event(
-        store, {"action": "asset.viewed", "asset_id": asset}, room_id=None, actor=None, source=SOURCE
+        store,
+        {"action": "asset.viewed", "asset_id": asset},
+        room_id=None,
+        actor=None,
+        source=SOURCE,
     )
     assert stored["room_id"] == room
 
@@ -615,7 +649,7 @@ def test_two_event_ids_are_two_occurrences(store):
 
 
 def test_the_backfill_projects_only_the_three_asset_occurrences(store):
-    assets = seed_library(store)
+    seed_library(store)
     room = seed_rooms(store, 1)[0]
     for action in ("viewed", "shared", "downloaded"):
         store.create(
@@ -686,7 +720,7 @@ def test_the_backfill_prefers_an_asset_id_over_a_title(store):
 
 
 def test_running_the_backfill_twice_changes_nothing(store):
-    assets = seed_library(store)
+    seed_library(store)
     room = seed_rooms(store, 1)[0]
     store.create(
         "activity",
@@ -726,7 +760,11 @@ def test_an_activity_row_with_no_target_is_counted_under_its_own_name(store):
     seed_library(store)
     room = seed_rooms(store, 1)[0]
     store.create(
-        "activity", {"action": "viewed", "occurred_at": at(days=1)}, room_id=room, actor="system", source=SOURCE
+        "activity",
+        {"action": "viewed", "occurred_at": at(days=1)},
+        room_id=room,
+        actor="system",
+        source=SOURCE,
     )
 
     result = ingest_activity(store, actor="system", source=SOURCE)
@@ -756,7 +794,10 @@ def test_a_recorded_occurrence_with_no_workspace_or_asset_is_skipped_not_default
     seed_library(store)
     store.create(EVENT_COLLECTION, {"action": "viewed"}, actor="dana", source=SOURCE)
     store.create(
-        EVENT_COLLECTION, {"asset_id": "document_x", "action": "viewed"}, actor="dana", source=SOURCE
+        EVENT_COLLECTION,
+        {"asset_id": "document_x", "action": "viewed"},
+        actor="dana",
+        source=SOURCE,
     )
     store.create(
         EVENT_COLLECTION, {"asset_id": "document_x", "at": at(days=1)}, actor="dana", source=SOURCE
@@ -891,7 +932,12 @@ def test_a_rate_is_rounded_to_two_places(store):
     assets = seed_library(store)
     share(store, assets["deck"])
     for _ in range(2):
-        store.create("document", {"title": f"Filler {len(store.list('document'))}"}, actor="dana", source=SOURCE)
+        store.create(
+            "document",
+            {"title": f"Filler {len(store.list('document'))}"},
+            actor="dana",
+            source=SOURCE,
+        )
 
     # 1 of 6 is 16.666...
     assert portfolio(store)["metrics"]["utilization_rate"] == 16.67
@@ -950,7 +996,9 @@ def test_filtering_by_a_tag_reaches_the_asset_it_was_filed_under(store):
     store.update(assets["pack"], {"tags": ["compliance"]}, actor="dana", source=SOURCE)
     share(store, assets["pack"])
 
-    assert portfolio(store, Filters.build(collection="compliance"))["metrics"]["content_shares"] == 1
+    assert (
+        portfolio(store, Filters.build(collection="compliance"))["metrics"]["content_shares"] == 1
+    )
 
 
 def test_the_shares_window_bounds_shares_only(store):
@@ -994,7 +1042,9 @@ def test_a_narrow_window_shrinks_the_assets_in_scope_that_have_activity(store):
     share(store, assets["deck"], when=at(days=1))
     share(store, assets["pack"], when=at(days=60))
 
-    metrics = portfolio(store, Filters.build(shared_from=at(days=1), shared_to=at(days=1)))["metrics"]
+    metrics = portfolio(store, Filters.build(shared_from=at(days=1), shared_to=at(days=1)))[
+        "metrics"
+    ]
 
     assert metrics["content_shares"] == 1
     assert metrics["utilization_rate"] == 25.0
@@ -1055,8 +1105,14 @@ def test_a_quiet_bucket_is_a_zero_point_not_a_gap(store):
 
     assert len(points) == 10
     assert [point["bucket"] for point in points][:2] == ["2026-09-01", "2026-09-02"]
-    assert points[1] == {"bucket": "2026-09-02", "views": 0, "internal_views": 0,
-                         "shares": 0, "downloads": 0, "assets": 0}
+    assert points[1] == {
+        "bucket": "2026-09-02",
+        "views": 0,
+        "internal_views": 0,
+        "shares": 0,
+        "downloads": 0,
+        "assets": 0,
+    }
 
 
 def test_the_trend_is_ascending(store):
@@ -1099,7 +1155,9 @@ def test_a_bounded_window_draws_its_whole_span(store):
     body = engagement(
         store,
         grain="day",
-        filters=Filters.build(shared_from="2026-09-01T00:00:00+00:00", shared_to="2026-09-30T00:00:00+00:00"),
+        filters=Filters.build(
+            shared_from="2026-09-01T00:00:00+00:00", shared_to="2026-09-30T00:00:00+00:00"
+        ),
     )
 
     assert body["count"] == 30
@@ -1111,7 +1169,9 @@ def test_a_window_with_no_activity_draws_the_window_and_no_points_of_activity(st
     body = engagement(
         store,
         grain="day",
-        filters=Filters.build(shared_from="2026-08-01T00:00:00+00:00", shared_to="2026-08-05T00:00:00+00:00"),
+        filters=Filters.build(
+            shared_from="2026-08-01T00:00:00+00:00", shared_to="2026-08-05T00:00:00+00:00"
+        ),
     )
     assert body["count"] == 5
     assert body["totals"]["shares"] == 0
@@ -1142,8 +1202,14 @@ def test_top_content_reports_every_researched_column(store):
 
     row = top_content(store)["rows"][0]
 
-    for column in ("shares", "views", "downloads", "total_time_seconds",
-                   "last_share_at", "last_view_at"):
+    for column in (
+        "shares",
+        "views",
+        "downloads",
+        "total_time_seconds",
+        "last_share_at",
+        "last_view_at",
+    ):
         assert column in row
     assert row["total_time_seconds"] == 120
     assert row["last_share_at"].startswith("2026-09-16")
@@ -1186,9 +1252,7 @@ def test_sorting_by_shares_puts_the_most_shared_first(store):
 
     assert rows[0]["title"] == "Overview Deck"
     assert rows[0]["shares"] == 3
-    assert [row["shares"] for row in rows] == sorted(
-        (row["shares"] for row in rows), reverse=True
-    )
+    assert [row["shares"] for row in rows] == sorted((row["shares"] for row in rows), reverse=True)
 
 
 def test_sorting_by_title_is_alphabetical(store):
@@ -1241,20 +1305,30 @@ def test_ties_break_on_asset_id_the_same_way_in_both_directions(store):
     for asset in (first, second, third):
         view(store, asset)
 
-    descending = [row["asset_id"] for row in top_content(store, direction="desc", sort="views")["rows"]]
-    ascending = [row["asset_id"] for row in top_content(store, direction="asc", sort="views")["rows"]]
+    descending = [
+        row["asset_id"] for row in top_content(store, direction="desc", sort="views")["rows"]
+    ]
+    ascending = [
+        row["asset_id"] for row in top_content(store, direction="asc", sort="views")["rows"]
+    ]
 
     assert descending == ascending == sorted((first, second, third))
 
 
 def test_paging_a_tied_table_covers_every_row_exactly_once(store):
-    ids = [store.create("document", {"title": "Same"}, actor="dana", source=SOURCE)["id"] for _ in range(5)]
+    ids = [
+        store.create("document", {"title": "Same"}, actor="dana", source=SOURCE)["id"]
+        for _ in range(5)
+    ]
     for asset in ids:
         view(store, asset)
 
     seen: list[str] = []
     for offset in range(0, 5, 2):
-        seen.extend(row["asset_id"] for row in top_content(store, sort="views", limit=2, offset=offset)["rows"])
+        seen.extend(
+            row["asset_id"]
+            for row in top_content(store, sort="views", limit=2, offset=offset)["rows"]
+        )
 
     assert sorted(seen) == sorted(ids)
     assert len(seen) == len(set(seen))
@@ -1451,7 +1525,14 @@ def linked(store: RecordStore, *, assets, room, amount=10000, name="Deal", **kwa
     link_account(store, {"name": "Acme"}, actor="dana", source=SOURCE)
     return link_deal(
         store,
-        {"name": name, "account": "Acme", "room_id": room, "amount": amount, "assets": list(assets), **kwargs},
+        {
+            "name": name,
+            "account": "Acme",
+            "room_id": room,
+            "amount": amount,
+            "assets": list(assets),
+            **kwargs,
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -1488,7 +1569,13 @@ def test_a_deal_whose_account_is_not_registered_is_a_named_blocker(store):
     rooms = seed_rooms(store, 1)
     link_deal(
         store,
-        {"name": "Deal", "account": "Nobody", "room_id": rooms[0], "amount": 100, "assets": [assets["deck"]]},
+        {
+            "name": "Deal",
+            "account": "Nobody",
+            "room_id": rooms[0],
+            "amount": 100,
+            "assets": [assets["deck"]],
+        },
         actor="dana",
         source=SOURCE,
     )
@@ -1515,7 +1602,7 @@ def test_a_deal_connected_to_a_missing_workspace_is_a_named_blocker(store):
 
 
 def test_a_deal_naming_no_asset_is_a_named_blocker(store):
-    assets = seed_library(store)
+    seed_library(store)
     rooms = seed_rooms(store, 1)
     link_account(store, {"name": "Acme"}, actor="dana", source=SOURCE)
     link_deal(
@@ -1644,8 +1731,12 @@ def test_won_and_open_revenue_are_reported_separately(store):
     rooms = seed_rooms(store, 1)
     view(store, assets["deck"], rooms[0])
     view(store, assets["pack"], rooms[0])
-    linked(store, assets=[assets["deck"]], room=rooms[0], amount=10000, name="Won", stage="Closed Won")
-    linked(store, assets=[assets["pack"]], room=rooms[0], amount=5000, name="Open", stage="Negotiation")
+    linked(
+        store, assets=[assets["deck"]], room=rooms[0], amount=10000, name="Won", stage="Closed Won"
+    )
+    linked(
+        store, assets=[assets["pack"]], room=rooms[0], amount=5000, name="Open", stage="Negotiation"
+    )
 
     totals = sales_influence(store)["totals"]
 
@@ -1660,7 +1751,9 @@ def test_a_deal_is_won_from_the_flag_or_the_stage(store):
     view(store, assets["deck"], rooms[0])
     view(store, assets["pack"], rooms[0])
     linked(store, assets=[assets["deck"]], room=rooms[0], amount=1, name="Flag", won=True)
-    linked(store, assets=[assets["pack"]], room=rooms[0], amount=2, name="Stage", stage="closed won")
+    linked(
+        store, assets=[assets["pack"]], room=rooms[0], amount=2, name="Stage", stage="closed won"
+    )
 
     assert sales_influence(store)["totals"]["won_revenue"] == 3
 
@@ -1670,7 +1763,9 @@ def test_revenue_in_two_currencies_is_never_summed(store):
     rooms = seed_rooms(store, 1)
     view(store, assets["deck"], rooms[0])
     view(store, assets["pack"], rooms[0])
-    linked(store, assets=[assets["deck"]], room=rooms[0], amount=100, name="Dollars", currency="USD")
+    linked(
+        store, assets=[assets["deck"]], room=rooms[0], amount=100, name="Dollars", currency="USD"
+    )
     linked(store, assets=[assets["pack"]], room=rooms[0], amount=90, name="Euros", currency="EUR")
 
     body = sales_influence(store)
@@ -1852,13 +1947,25 @@ def test_a_repeat_crm_id_updates_the_one_deal_rather_than_adding_a_second(store)
     rooms = seed_rooms(store, 1)
     first = link_deal(
         store,
-        {"name": "Deal", "crm_id": "crm-1", "room_id": rooms[0], "amount": 100, "assets": [assets["deck"]]},
+        {
+            "name": "Deal",
+            "crm_id": "crm-1",
+            "room_id": rooms[0],
+            "amount": 100,
+            "assets": [assets["deck"]],
+        },
         actor=None,
         source=SOURCE,
     )
     second = link_deal(
         store,
-        {"name": "Deal renamed", "crm_id": "crm-1", "room_id": rooms[0], "amount": 250, "assets": [assets["deck"]]},
+        {
+            "name": "Deal renamed",
+            "crm_id": "crm-1",
+            "room_id": rooms[0],
+            "amount": 250,
+            "assets": [assets["deck"]],
+        },
         actor=None,
         source=SOURCE,
     )
@@ -1881,7 +1988,10 @@ def test_two_deals_with_no_crm_id_are_two_deals(store):
 def test_a_repeat_crm_id_updates_the_one_account(store):
     first = link_account(store, {"name": "Acme", "crm_id": "a-1"}, actor=None, source=SOURCE)
     second = link_account(
-        store, {"name": "Acme Ltd", "crm_id": "a-1", "domain": "acme.example"}, actor=None, source=SOURCE
+        store,
+        {"name": "Acme Ltd", "crm_id": "a-1", "domain": "acme.example"},
+        actor=None,
+        source=SOURCE,
     )
     assert first["created"] is True
     assert second["created"] is False
@@ -1897,7 +2007,10 @@ def test_an_account_needs_a_name(store):
 def test_the_currency_is_upper_cased(store):
     rooms = seed_rooms(store, 1)
     result = link_deal(
-        store, {"name": "D", "room_id": rooms[0], "amount": 1, "currency": "gbp"}, actor=None, source=SOURCE
+        store,
+        {"name": "D", "room_id": rooms[0], "amount": 1, "currency": "gbp"},
+        actor=None,
+        source=SOURCE,
     )
     assert result["deal"]["data"]["currency"] == "GBP"
 
@@ -1905,7 +2018,9 @@ def test_the_currency_is_upper_cased(store):
 def test_the_default_currency_can_be_set_for_the_deployment(store, monkeypatch):
     monkeypatch.setenv("DSR_CRM_CURRENCY", "nzd")
     rooms = seed_rooms(store, 1)
-    result = link_deal(store, {"name": "D", "room_id": rooms[0], "amount": 1}, actor=None, source=SOURCE)
+    result = link_deal(
+        store, {"name": "D", "room_id": rooms[0], "amount": 1}, actor=None, source=SOURCE
+    )
     assert result["deal"]["data"]["currency"] == "NZD"
 
 
@@ -2202,7 +2317,11 @@ def test_the_backfill_endpoint_projects_and_reports(client):
     client.post("/api/records/document", json={"title": "Overview Deck"})
     client.post(
         "/api/records/activity",
-        json={"action": "viewed", "target": "Overview Deck", "occurred_at": "2026-09-20T10:00:00+00:00"},
+        json={
+            "action": "viewed",
+            "target": "Overview Deck",
+            "occurred_at": "2026-09-20T10:00:00+00:00",
+        },
         params={"room_id": room},
     )
 
@@ -2271,9 +2390,7 @@ def test_a_workspace_report_keeps_the_other_filters(client):
         json={"action": "asset.shared", "asset_id": assets["Overview Deck"]},
         params={"room_id": room},
     )
-    body = client.get(
-        f"{PREFIX}/rooms/{room}/influence", params={"collection": "Security"}
-    ).json()
+    body = client.get(f"{PREFIX}/rooms/{room}/influence", params={"collection": "Security"}).json()
     assert body["filters"]["collection"] == "Security"
     assert body["metrics"]["number_of_assets"] == 0
 
@@ -2397,21 +2514,25 @@ def test_every_source_this_feature_records_names_a_route_the_host_mounted(client
         params={"room_id": room},
     )
     client.post(f"{PREFIX}/events/ingest-activity")
-    client.post(f"{PREFIX}/links/accounts", json={"name": "Acme", "crm_id": "a-1"}, params={"actor": "dana"})
+    client.post(
+        f"{PREFIX}/links/accounts", json={"name": "Acme", "crm_id": "a-1"}, params={"actor": "dana"}
+    )
     client.post(
         f"{PREFIX}/links/deals",
-        json={"name": "D", "crm_id": "d-1", "account": "Acme", "room_id": room,
-              "amount": 100, "assets": [deck]},
+        json={
+            "name": "D",
+            "crm_id": "d-1",
+            "account": "Acme",
+            "room_id": room,
+            "amount": 100,
+            "assets": [deck],
+        },
         params={"actor": "dana"},
     )
 
     record = REGISTRY.by_id(FEATURE_ID)
     assert record is not None
-    mounted = {
-        (method, route["path"])
-        for route in record.routes
-        for method in route["methods"]
-    }
+    mounted = {(method, route["path"]) for route in record.routes for method in route["methods"]}
 
     entries = client.get("/api/audit", params={"limit": 500}).json()["entries"]
     # The source is "<METHOD> <path>", so the prefix is *inside* the string, not
@@ -2441,7 +2562,7 @@ def _path_matches(mounted: str, actual: str) -> bool:
     actual_parts = actual.split("/")
     if len(mounted_parts) != len(actual_parts):
         return False
-    for expected, given in zip(mounted_parts, actual_parts):
+    for expected, given in zip(mounted_parts, actual_parts, strict=False):
         if expected.startswith("{") and expected.endswith("}"):
             continue
         if expected != given:
@@ -2479,13 +2600,19 @@ def test_the_backfill_audit_row_names_its_own_route(client):
     room = http_room(client)
     client.post(
         "/api/records/activity",
-        json={"action": "viewed", "target": "Overview Deck", "occurred_at": "2026-09-20T10:00:00+00:00"},
+        json={
+            "action": "viewed",
+            "target": "Overview Deck",
+            "occurred_at": "2026-09-20T10:00:00+00:00",
+        },
         params={"room_id": room},
     )
     client.post(f"{PREFIX}/events/ingest-activity")
     sources = [
         entry["source"]
-        for entry in client.get("/api/audit", params={"collection": EVENT_COLLECTION}).json()["entries"]
+        for entry in client.get("/api/audit", params={"collection": EVENT_COLLECTION}).json()[
+            "entries"
+        ]
     ]
     assert sources == [f"POST {PREFIX}/events/ingest-activity"]
 
@@ -2534,7 +2661,6 @@ def test_reading_the_report_never_writes_to_the_audit_log(client):
 
 @pytest.fixture()
 def seeded_db():
-    from datetime import datetime as _dt
 
     db = AuditedDatabase(":memory:")
     try:
@@ -2649,9 +2775,7 @@ def test_the_seed_names_its_own_source_and_not_a_route(seeded_db):
     from dsr.features.wf019_rank_content_influence_and_associate_r import seed
 
     seed(seeded_db, seed_context(seeded_db))
-    sources = {
-        entry["source"] for entry in seeded_db.audit(limit=500) if entry["source"]
-    }
+    sources = {entry["source"] for entry in seeded_db.audit(limit=500) if entry["source"]}
     assert sources == {"seed"}
     assert not any(source.startswith(PREFIX) for source in sources)
 
@@ -2686,7 +2810,10 @@ def test_the_seeder_runs_wf019_without_failing(tmp_path, monkeypatch):
 
     result = subprocess.run(
         [str(interpreter), str(root / "backend" / "seed.py")],
-        capture_output=True, text=True, env=env, timeout=300,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=300,
     )
 
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]

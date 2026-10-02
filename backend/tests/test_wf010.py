@@ -28,9 +28,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
+from fastapi.testclient import TestClient
 
 #: This feature's own prefix. The tests go through the mounted app rather than a
 #: throwaway router, so a collision with another feature fails here loudly.
@@ -134,9 +133,7 @@ def test_this_feature_claims_exactly_its_own_paths(client):
     body = client.get("/api/features").json()
     record = next(f for f in body["features"] if f["id"] == "wf-010-library-search")
 
-    claimed = {
-        (method, route["path"]) for route in record["routes"] for method in route["methods"]
-    }
+    claimed = {(method, route["path"]) for route in record["routes"] for method in route["methods"]}
     expected = {
         ("GET", f"{PREFIX}/contract"),
         ("GET", f"{PREFIX}/fields"),
@@ -307,9 +304,9 @@ def test_a_field_added_today_is_searchable_today_without_a_migration(client):
 
     assert client.post(f"{PREFIX}/search", json={"term": "regional"}).json()["totalCount"] == 1
     assert (
-        client.post(
-            f"{PREFIX}/search", json={"filter": {"field": "seats", "value": 12}}
-        ).json()["totalCount"]
+        client.post(f"{PREFIX}/search", json={"filter": {"field": "seats", "value": 12}}).json()[
+            "totalCount"
+        ]
         == 1
     )
 
@@ -332,7 +329,9 @@ def test_an_out_of_range_page_size_is_400_with_the_documented_message(client):
     response = client.post(f"{PREFIX}/search", json={"options": {"pageSize": 150}})
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "PageSize 150 is incorrect. Please set a value between 0-100"
+    assert (
+        response.json()["detail"] == "PageSize 150 is incorrect. Please set a value between 0-100"
+    )
 
 
 def test_a_too_deep_filter_is_400_with_the_documented_message(client):
@@ -354,7 +353,9 @@ def test_a_too_deep_filter_is_400_with_the_documented_message(client):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Filter is too complex. Currently the max filter depth is 2."
+    assert (
+        response.json()["detail"] == "Filter is too complex. Currently the max filter depth is 2."
+    )
 
 
 def test_a_filter_at_the_documented_depth_is_accepted(client):
@@ -382,7 +383,9 @@ def test_paging_through_the_api_visits_every_result_once(client):
 
     while True:
         params = {"continuationToken": token} if token else {}
-        body = client.post(f"{PREFIX}/search", json={"options": {"pageSize": 3}}, params=params).json()
+        body = client.post(
+            f"{PREFIX}/search", json={"options": {"pageSize": 3}}, params=params
+        ).json()
         seen.extend(document["id"] for document in body["documents"])
         token = body["continuationToken"]
         if not token:
@@ -419,18 +422,16 @@ def test_an_expired_token_is_400_and_says_to_start_again(client, monkeypatch):
 
 
 def test_a_garbage_token_is_400(client):
-    response = client.post(
-        f"{PREFIX}/search", json={}, params={"continuationToken": "not-a-token"}
-    )
+    response = client.post(f"{PREFIX}/search", json={}, params={"continuationToken": "not-a-token"})
 
     assert response.status_code == 400
     assert "invalid or expired" in response.json()["detail"]
 
 
 def test_a_token_cannot_be_reused_with_a_different_term(client):
-    token = client.post(
-        f"{PREFIX}/search", json={"options": {"pageSize": 2}}
-    ).json()["continuationToken"]
+    token = client.post(f"{PREFIX}/search", json={"options": {"pageSize": 2}}).json()[
+        "continuationToken"
+    ]
 
     response = client.post(
         f"{PREFIX}/search",
@@ -548,9 +549,9 @@ def test_assembly_appears_in_the_audit_trail_with_its_actor(client, room):
     assert entry["after_state"]["count"] == 1
     assert entry["after_state"]["ids"] == [
         record["id"]
-        for record in client.get(
-            "/api/records/room_content", params={"room_id": room}
-        ).json()["records"]
+        for record in client.get("/api/records/room_content", params={"room_id": room}).json()[
+            "records"
+        ]
     ]
 
 
@@ -590,9 +591,9 @@ def test_assembly_provenance_is_on_the_content_records(client, room):
         headers={"X-Client-Details": encode_client_details({"application": "sales-room-ui"})},
     )
 
-    data = client.get(
-        "/api/records/room_content", params={"room_id": room}
-    ).json()["records"][0]["data"]
+    data = client.get("/api/records/room_content", params={"room_id": room}).json()["records"][0][
+        "data"
+    ]
     assert data["content_id"] == found[0]["id"]
     assert data["search_id"] == "library_search_1"
     assert data["client_application"] == "sales-room-ui"
@@ -631,7 +632,9 @@ def test_assembly_records_the_calling_application(client, room):
         headers={"X-Client-Details": encode_client_details({"application": "sales-room-ui"})},
     )
 
-    data = client.get("/api/records/room_content", params={"room_id": room}).json()["records"][0]["data"]
+    data = client.get("/api/records/room_content", params={"room_id": room}).json()["records"][0][
+        "data"
+    ]
     assert data["client_application"] == "sales-room-ui"
 
 
@@ -677,9 +680,12 @@ def test_saved_search_writes_audit_the_route_that_served_them(client):
 
     client.delete(f"{PREFIX}/searches/{record_id}")
 
-    sources = [entry["source"] for entry in client.get(
-        "/api/audit", params={"collection": "library_search"}
-    ).json()["entries"]]
+    sources = [
+        entry["source"]
+        for entry in client.get("/api/audit", params={"collection": "library_search"}).json()[
+            "entries"
+        ]
+    ]
     assert sources == [
         f"DELETE {PREFIX}/searches/{record_id}",
         f"POST {PREFIX}/searches",

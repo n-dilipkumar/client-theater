@@ -66,6 +66,7 @@ OPERATORS: Mapping[str, str] = {
     "exists": "the answer is present and not blank, whatever it says",
 }
 
+
 #: The order rules are evaluated in, and the only comparison a rule can make that
 #: needs no value: a first match wins, so a form author can see the shape of their
 #: own form by reading it top to bottom.
@@ -112,7 +113,9 @@ def normalise_form(spec: Mapping[str, Any], *, field: str = "form") -> dict[str,
             raise RoutingError(f"{field}.rules[{index}] must be an object")
         field_name = str(raw.get("field") or "").strip()
         if not field_name:
-            raise RoutingError(f"{field}.rules[{index}].field is required; a rule needs a question to answer")
+            raise RoutingError(
+                f"{field}.rules[{index}].field is required; a rule needs a question to answer"
+            )
         operator = require_operator(str(raw.get("operator") or "").strip())
         event_type_id = str(raw.get("eventTypeId") or raw.get("event_type_id") or "").strip()
         declines = raw.get("fallback") is True
@@ -225,9 +228,7 @@ def rule_matches(rule: Mapping[str, Any], responses: Mapping[str, Any]) -> bool:
     raise RoutingError(f"operator {operator!r} is published but not implemented")
 
 
-def route(
-    form: Mapping[str, Any], responses: Mapping[str, Any]
-) -> dict[str, Any]:
+def route(form: Mapping[str, Any], responses: Mapping[str, Any]) -> dict[str, Any]:
     """Route a set of answers to an event type. Total, always.
 
     Three outcomes, and there is no fourth:

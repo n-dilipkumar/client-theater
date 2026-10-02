@@ -218,9 +218,7 @@ def _norm(value: str) -> str:
     return " ".join(value.split()).strip().lower()
 
 
-def _check_refinement(
-    name: str, value: Any, event: Mapping[str, Any]
-) -> tuple[str | None, str]:
+def _check_refinement(name: str, value: Any, event: Mapping[str, Any]) -> tuple[str | None, str]:
     """One refinement against one event.
 
     Returns ``(reason, detail)`` where ``reason`` is ``None`` when the refinement
@@ -402,9 +400,9 @@ def evaluate(
         "matched": bool(criteria_list) and not failing,
         "criteria_count": len(criteria_list),
         "failed_count": len(failing),
-        "reason": "matched" if criteria_list and not failing else (
-            str(failing[0]["reason"]) if failing else "no_criteria"
-        ),
+        "reason": "matched"
+        if criteria_list and not failing
+        else (str(failing[0]["reason"]) if failing else "no_criteria"),
         "detail": (
             "Every filter of this workflow is satisfied by the event."
             if criteria_list and not failing
@@ -473,10 +471,11 @@ def evaluate_contact(
                 "refinements": dict(criteria.get("refinements") or {}),
                 "matched": bool(hits),
                 "match_count": len(hits),
-                "reason": "matched" if hits else (str(misses[0]["verdict"]["reason"]) if misses else "no_events"),
+                "reason": "matched"
+                if hits
+                else (str(misses[0]["verdict"]["reason"]) if misses else "no_events"),
                 "detail": (
-                    f"{len(hits)} of the contact's {len(events)} event(s) satisfied this "
-                    f"filter."
+                    f"{len(hits)} of the contact's {len(events)} event(s) satisfied this filter."
                     if hits
                     else (
                         f"none of the contact's {len(events)} event(s) satisfied this "
@@ -501,9 +500,7 @@ def evaluate_contact(
             f"every one of the workflow's {len(rows)} filter(s) is satisfied by this "
             f"contact's activity"
             if not failing
-            else "; ".join(
-                f"{row['family']}: {row['detail']}" for row in failing
-            )
+            else "; ".join(f"{row['family']}: {row['detail']}" for row in failing)
         ),
         "criteria": rows,
         "hit_activity_ids": hit_ids,
@@ -542,9 +539,9 @@ def _reason_tally(misses: Sequence[Mapping[str, Any]]) -> str:
         counts[reason] = counts.get(reason, 0) + 1
     ordered = sorted(
         counts.items(),
-        key=lambda item: MISS_PRIORITY.index(item[0])
-        if item[0] in MISS_PRIORITY
-        else len(MISS_PRIORITY),
+        key=lambda item: (
+            MISS_PRIORITY.index(item[0]) if item[0] in MISS_PRIORITY else len(MISS_PRIORITY)
+        ),
     )
     return ", ".join(f"{reason} x{count}" for reason, count in ordered) or "no events at all"
 

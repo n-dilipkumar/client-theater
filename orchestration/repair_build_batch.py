@@ -23,6 +23,7 @@ So the repair does what the dispatch should have done:
 Idempotent on purpose. An agent that already has the brief is left alone, so this
 can be run twice without telling an agent to do its whole task again.
 """
+
 import json
 import re
 import subprocess
@@ -58,8 +59,15 @@ HAVE_BRIEF = re.compile(r"ports/WF-\d{3}|Build brief|Read the file orchestration
 
 
 def orca(args, timeout=180):
-    p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
+    p = subprocess.run(
+        args,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
     try:
         return json.loads(p.stdout)
     except json.JSONDecodeError:
@@ -118,9 +126,22 @@ def main():
         if bad:
             print(f"  {ticket}  REFUSING, prompt contains {bad}")
             continue
-        send = orca(["orca", "terminal", "send", "--terminal", handle,
-                     "--text", text, "--enter", "--wait-submit", "30", "--json"],
-                    timeout=120)
+        send = orca(
+            [
+                "orca",
+                "terminal",
+                "send",
+                "--terminal",
+                handle,
+                "--text",
+                text,
+                "--enter",
+                "--wait-submit",
+                "30",
+                "--json",
+            ],
+            timeout=120,
+        )
         print(f"  {ticket}  re-sent  send_ok={send.get('ok')}")
         resent.append(ticket)
 

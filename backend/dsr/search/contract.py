@@ -119,7 +119,9 @@ TOKEN_INVALID = "continuationToken is invalid or expired. Please regenerate it."
 
 def page_size_error(value: Any) -> str:
     """The documented 400 body for an out-of-range page size."""
-    return f"PageSize {value} is incorrect. Please set a value between {MIN_PAGE_SIZE}-{MAX_PAGE_SIZE}"
+    return (
+        f"PageSize {value} is incorrect. Please set a value between {MIN_PAGE_SIZE}-{MAX_PAGE_SIZE}"
+    )
 
 
 def asset_url_expiry() -> dict[str, Any]:
@@ -129,7 +131,10 @@ def asset_url_expiry() -> dict[str, Any]:
     a thumbnail URL and serve a broken image tomorrow.
     """
     expires = datetime.now(timezone.utc) + timedelta(days=ASSET_URL_TTL_DAYS)
-    return {"assetUrlsExpireAt": expires.isoformat(timespec="seconds"), "assetUrlTtlDays": ASSET_URL_TTL_DAYS}
+    return {
+        "assetUrlsExpireAt": expires.isoformat(timespec="seconds"),
+        "assetUrlTtlDays": ASSET_URL_TTL_DAYS,
+    }
 
 
 # -- JSON path access ------------------------------------------------------- #
@@ -265,7 +270,11 @@ def parse_filter(node: Any, schema: LibrarySchema, depth: int = 1) -> FilterNode
             for child in children:
                 if isinstance(child, Mapping) and any(name in child for name in FILTER_OPERATORS):
                     raise SearchError(FILTER_TOO_COMPLEX)
-        return Group(operator=operator, children=tuple(parse_filter(c, schema, depth + 1) for c in children), depth=depth)
+        return Group(
+            operator=operator,
+            children=tuple(parse_filter(c, schema, depth + 1) for c in children),
+            depth=depth,
+        )
 
     if "field" not in node:
         raise SearchError("filter condition needs a 'field'; groups use 'and' or 'or'")
@@ -275,7 +284,9 @@ def parse_filter(node: Any, schema: LibrarySchema, depth: int = 1) -> FilterNode
         raise SearchError("filter condition 'field' must be a non-empty string")
     operator = node.get("operator", "equal")
     if operator not in SEARCH_OPERATORS:
-        raise SearchError(f"unknown filter operator {operator!r}; use one of {', '.join(SEARCH_OPERATORS)}")
+        raise SearchError(
+            f"unknown filter operator {operator!r}; use one of {', '.join(SEARCH_OPERATORS)}"
+        )
     if "value" not in node:
         raise SearchError(f"filter condition on {field_name!r} needs a 'value'")
     if operator == "in" and not isinstance(node["value"], (list, tuple, set)):
@@ -329,7 +340,11 @@ def parse_sort(raw: Any, schema: LibrarySchema) -> tuple[SortKey, ...]:
         if field_name == RELEVANCE:
             keys.append(SortKey(field=RELEVANCE, descending=True, path=RELEVANCE))
             continue
-        keys.append(SortKey(field=field_name, descending=direction == "desc", path=schema.resolve(field_name)))
+        keys.append(
+            SortKey(
+                field=field_name, descending=direction == "desc", path=schema.resolve(field_name)
+            )
+        )
     return tuple(keys)
 
 
@@ -393,7 +408,9 @@ class SearchQuery:
 
         repository = body.get("repository", REPOSITORIES[0])
         if repository not in REPOSITORIES:
-            raise SearchError(f"unknown repository {repository!r}; use one of {', '.join(REPOSITORIES)}")
+            raise SearchError(
+                f"unknown repository {repository!r}; use one of {', '.join(REPOSITORIES)}"
+            )
 
         return cls(
             term=term,
@@ -453,7 +470,10 @@ class SearchQuery:
         if self.filter is not None:
             body["filter"] = _filter_to_body(self.filter)
         if self.sort:
-            body["sort"] = [{"field": key.field, "direction": "desc" if key.descending else "asc"} for key in self.sort]
+            body["sort"] = [
+                {"field": key.field, "direction": "desc" if key.descending else "asc"}
+                for key in self.sort
+            ]
         if self.repository != REPOSITORIES[0]:
             body["repository"] = self.repository
         return body
@@ -578,7 +598,9 @@ def _sign(secret: bytes, body: str) -> str:
 # -- the discoverable contract ----------------------------------------------- #
 
 
-def contract(schema: LibrarySchema, *, token_ttl_seconds: int = DEFAULT_TOKEN_TTL_SECONDS) -> dict[str, Any]:
+def contract(
+    schema: LibrarySchema, *, token_ttl_seconds: int = DEFAULT_TOKEN_TTL_SECONDS
+) -> dict[str, Any]:
     """Everything a client needs to build a valid query, in one response.
 
     Served so the UI can render the limits, the field pickers and the operator
@@ -594,7 +616,10 @@ def contract(schema: LibrarySchema, *, token_ttl_seconds: int = DEFAULT_TOKEN_TT
             "continuationTokenTtlSeconds": token_ttl_seconds,
         },
         "searchFields": list(DEFAULT_SEARCH_FIELDS),
-        "returnFields": {"default": list(DEFAULT_RETURN_FIELDS), "optIn": list(OPT_IN_RETURN_FIELDS)},
+        "returnFields": {
+            "default": list(DEFAULT_RETURN_FIELDS),
+            "optIn": list(OPT_IN_RETURN_FIELDS),
+        },
         "operators": {"condition": list(SEARCH_OPERATORS), "group": list(FILTER_OPERATORS)},
         "repositories": list(REPOSITORIES),
         "customPropertyPrefix": "custom.",

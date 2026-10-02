@@ -54,8 +54,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping, Sequence
-from urllib import error as urlerror
-from urllib import request as urlrequest
+from urllib import error as urlerror, request as urlrequest
 
 from dsr.panel_time.errors import CalendarShapeError, LimitExceeded, PanelTimeNotConfigured
 from dsr.panel_time.timeutils import format_instant, parse_instant
@@ -143,9 +142,7 @@ class Expansion:
 
 def _check_provider(provider: object, *, field_name: str = "provider") -> str:
     if not isinstance(provider, str) or provider not in PROVIDERS:
-        raise CalendarShapeError(
-            f"{field_name} must be one of {list(PROVIDERS)}; got {provider!r}"
-        )
+        raise CalendarShapeError(f"{field_name} must be one of {list(PROVIDERS)}; got {provider!r}")
     return provider
 
 
@@ -207,7 +204,7 @@ def expand_invited(
     if calendar_expansion_max < 1 or calendar_expansion_max > CALENDAR_EXPANSION_MAX_LIMIT:
         raise LimitExceeded(
             f"calendar_expansion_max is {calendar_expansion_max}; the documented maximum is "
-            f"{CALENDAR_EXPANSION_MAX_LIMIT}: \"{CALENDAR_EXPANSION_MAX_QUOTE}\""
+            f'{CALENDAR_EXPANSION_MAX_LIMIT}: "{CALENDAR_EXPANSION_MAX_QUOTE}"'
         )
 
     by_address: dict[str, Mapping[str, Any]] = {}
@@ -314,8 +311,8 @@ def expand_invited(
         raise LimitExceeded(
             f"this panel resolves to {len(invited)} calendars after group expansion, and "
             f"calendarExpansionMax is capped at {calendar_expansion_max} "
-            "(\"Maximal number of calendars for which FreeBusy information is to be "
-            "provided. Optional. Maximum value is 50.\"). Remove an attendee, or split "
+            '("Maximal number of calendars for which FreeBusy information is to be '
+            'provided. Optional. Maximum value is 50."). Remove an attendee, or split '
             "the panel, rather than raising the knob past its documented maximum."
         )
 
@@ -491,8 +488,7 @@ def render_commit_request(
             "isOnlineMeeting": bool(create_conference),
             "location": {
                 "displayName": str(
-                    (location_constraint or {}).get("display_name")
-                    or "Microsoft Teams Meeting"
+                    (location_constraint or {}).get("display_name") or "Microsoft Teams Meeting"
                 )
             },
         }
@@ -583,9 +579,7 @@ class LocalDirectory:
                 unreadable[calendar_id] = str(exc)
                 continue
             relevant = [
-                (start, end)
-                for start, end in blocks
-                if start < time_max and time_min < end
+                (start, end) for start, end in blocks if start < time_max and time_min < end
             ]
             if relevant:
                 busy[calendar_id] = relevant
@@ -695,7 +689,9 @@ class UrllibProvider:
                 f"Google refused the free/busy read with HTTP {exc.code}: {exc.reason}"
             ) from exc
         except urlerror.URLError as exc:
-            raise PanelTimeNotConfigured(f"could not reach {GOOGLE_FREEBUSY_URL}: {exc.reason}") from exc
+            raise PanelTimeNotConfigured(
+                f"could not reach {GOOGLE_FREEBUSY_URL}: {exc.reason}"
+            ) from exc
         return parse_google_free_busy(payload, requested=[str(r["id"]) for r in calendars])
 
 
@@ -710,19 +706,21 @@ def parse_google_free_busy(payload: Mapping[str, Any], *, requested: Sequence[st
     calendars = payload.get("calendars")
     if not isinstance(calendars, Mapping):
         raise CalendarShapeError(
-            "a Google free/busy response must carry a 'calendars' object; got "
-            f"{sorted(payload)}"
+            f"a Google free/busy response must carry a 'calendars' object; got {sorted(payload)}"
         )
     busy: dict[str, list[tuple[datetime, datetime]]] = {}
     unreadable: dict[str, str] = {}
     for key, entry in calendars.items():
         errors = (entry or {}).get("errors") or []
         if errors:
-            unreadable[str(key)] = "; ".join(
-                f"{error.get('domain', 'global')}: {error.get('reason', 'unknown')}"
-                for error in errors
-                if isinstance(error, Mapping)
-            ) or "the provider reported an error for this calendar"
+            unreadable[str(key)] = (
+                "; ".join(
+                    f"{error.get('domain', 'global')}: {error.get('reason', 'unknown')}"
+                    for error in errors
+                    if isinstance(error, Mapping)
+                )
+                or "the provider reported an error for this calendar"
+            )
             continue
         busy[str(key)] = _busy_blocks((entry or {}).get("busy") or [])
     for key in requested:
@@ -739,7 +737,9 @@ def _busy_blocks(raw: Any) -> list[tuple[datetime, datetime]]:
     the operator's own table is the normal case, not the exotic one.
     """
     if not isinstance(raw, (list, tuple)):
-        raise CalendarShapeError(f"a busy list must be a list of intervals; got {type(raw).__name__}")
+        raise CalendarShapeError(
+            f"a busy list must be a list of intervals; got {type(raw).__name__}"
+        )
     blocks: list[tuple[datetime, datetime]] = []
     for entry in raw:
         if isinstance(entry, Mapping):
