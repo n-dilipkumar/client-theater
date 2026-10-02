@@ -13,8 +13,6 @@
  * no motion that ignores `prefers-reduced-motion` (there is none).
  */
 
-import { Icon } from '@/components/ui'
-
 /**
  * The nav glyph: a meeting moving from one person to another.
  *

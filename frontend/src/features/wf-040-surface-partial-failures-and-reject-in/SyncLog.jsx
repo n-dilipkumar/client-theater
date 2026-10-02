@@ -81,7 +81,6 @@ function SyncLogPage() {
   const dispositionLabels = published.disposition_labels || {}
   const summary = log.data?.summary || {}
   const rows = log.data?.rows || []
-  const queueCounts = queue.data?.counts || {}
   const connectorNames = Object.fromEntries(
     (connectors.data?.connectors || []).map((entry) => [entry.id, entry.label]),
   )

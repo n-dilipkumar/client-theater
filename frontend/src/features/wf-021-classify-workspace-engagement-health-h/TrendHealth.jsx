@@ -244,10 +244,8 @@ function TrendHealthPage() {
 
       {selected && (
         <RoomBadge
-          roomId={selected}
           state={detail}
           labels={labels}
-          published={published}
           onClose={() => setSelected(null)}
         />
       )}
@@ -298,7 +296,7 @@ function FilterButton({ active, onClick, tone, children }) {
  * "Cooling, becomes Cold in 9 days" can act this week rather than reading a
  * value after the fact.
  */
-function RoomBadge({ roomId, state, labels, published, onClose }) {
+function RoomBadge({ state, labels, onClose }) {
   const { data, loading, error, refetch } = state
 
   return (

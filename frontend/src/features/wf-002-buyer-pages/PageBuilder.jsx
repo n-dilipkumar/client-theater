@@ -326,7 +326,17 @@ function PageCanvas({
 
 export default function PageBuilder({ roomId, pageId, onSelectPage, onOpenBuyerView }) {
   const [actor, setActor] = useState(readActor)
-  const [selectedBlockId, setSelectedBlockId] = useState(null)
+  // The selected block is scoped to the room it was selected in: a change of room
+  // invalidates it, so it reads as nothing selected rather than pointing at an
+  // id that is no longer on the page. Deriving it means the first render of the
+  // new room is already correct.
+  const [blockChoice, setBlockChoice] = useState({ forRoom: undefined, blockId: null })
+  const selectedBlockId = blockChoice.forRoom === roomId ? blockChoice.blockId : null
+  const setSelectedBlockId = (next) =>
+    setBlockChoice({
+      forRoom: roomId,
+      blockId: typeof next === 'function' ? next(selectedBlockId) : next,
+    })
   const [busy, setBusy] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [status, setStatus] = useState('')
@@ -343,7 +353,7 @@ export default function PageBuilder({ roomId, pageId, onSelectPage, onOpenBuyerV
 
   const params = actor ? { actor } : {}
 
-  const pages = room.data?.pages || []
+  const pages = useMemo(() => room.data?.pages || [], [room.data])
   const current = useMemo(
     () => pages.find((page) => page.id === pageId) || pages[0] || null,
     [pages, pageId],
@@ -356,10 +366,6 @@ export default function PageBuilder({ roomId, pageId, onSelectPage, onOpenBuyerV
 
   const block = (current?.blocks || []).find((item) => item.id === selectedBlockId) || null
   const fragment = block ? fragmentsByKey[block.fragment] : null
-
-  // A change of room invalidates the selected block, so it is cleared rather
-  // than left pointing at an id that is no longer on the page.
-  useEffect(() => setSelectedBlockId(null), [roomId])
 
   const announce = useCallback((message) => {
     setStatus('')

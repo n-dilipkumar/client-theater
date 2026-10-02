@@ -1,7 +1,5 @@
 import { useId, useRef, useState } from 'react'
 
-import { inputClass } from '@/components/ui'
-
 import { Glyph } from './primitives'
 
 /**

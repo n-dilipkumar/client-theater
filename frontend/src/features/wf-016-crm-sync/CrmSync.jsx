@@ -691,8 +691,13 @@ export default function CrmSync() {
   }
 
   const summary = activity.data?.summary
-  const automationRows = automations.data?.automations || []
-  const subscriptionRows = subscriptions.data?.subscriptions || []
+  // Memoised so the `stats` below keeps a stable dependency. A fresh `[]` each
+// render made every dep change on every render, so the memo never held.
+  const automationRows = useMemo(() => automations.data?.automations || [], [automations.data])
+  const subscriptionRows = useMemo(
+    () => subscriptions.data?.subscriptions || [],
+    [subscriptions.data],
+  )
 
   const stats = useMemo(
     () => [

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { relativeTime, absoluteTime } from '@/lib/api'
 import {
   Badge,
@@ -464,7 +464,17 @@ function ConnectPanel({ onConnected }) {
 export default function Engagement() {
   const [roomId, setRoomId] = useState(ALL_ROOMS)
   const [grain, setGrain] = useState('day')
-  const [tab, setTab] = useState('engagement')
+  // The tab is scoped to the room it was chosen for: a new deal is a new
+  // drill-down, so the previous room's Timeline should not stay open under the
+  // new room's heading. Deriving it means the first render of the new room
+  // already shows the overview, rather than one render of the old room's tab.
+  const [tabChoice, setTabChoice] = useState({ forRoom: undefined, tab: 'engagement' })
+  const tab = tabChoice.forRoom === roomId ? tabChoice.tab : 'engagement'
+  const setTab = (next) =>
+    setTabChoice({
+      forRoom: roomId,
+      tab: typeof next === 'function' ? next(tab) : next,
+    })
   const [nonce, setNonce] = useState(0)
 
   const overview = useAsync(
@@ -477,10 +487,6 @@ export default function Engagement() {
   )
 
   const refetch = useCallback(() => setNonce((n) => n + 1), [])
-
-  // A new deal is a new drill-down, so the tab resets rather than leaving the
-  // previous room's Timeline open under the new room's heading.
-  useEffect(() => setTab('engagement'), [roomId])
 
   const notConnected = overview.error?.status === 428
 

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Spinner, StatCard, inputClass, useAsync } from '@/components/ui'
 
-import { ago, detailOf, mappingApi, shortMoment, toneFor } from './api'
+import { detailOf, mappingApi, shortMoment, toneFor } from './api'
 import { BadgeRow, Glyph, Notice } from './primitives'
 
 /**
@@ -191,9 +191,17 @@ function NewConnection({ providers, onCreate, onCancel, busy }) {
 const EMPTY_ROW = { source_field: '', source_type: 'text', target_property: '', direction: 'out', transform: 'identity' }
 
 function GridRow({ row, vocabulary, properties, onSave, onDelete, busy }) {
-  const [form, setForm] = useState(row)
+  // The editable form is derived from the row it was opened for. `edits` keeps
+  // the operator's own values keyed by the row they belong to, so a different
+  // `row` (a refetch, or another row rendered into this component) derives a
+  // fresh form during render rather than one render late via an effect.
+  const [edits, setEdits] = useState({ forRow: null, form: null })
   const [open, setOpen] = useState(false)
-  useEffect(() => setForm(row), [row])
+
+  const form = edits.forRow === row ? edits.form : row
+
+  const setForm = (next) =>
+    setEdits({ forRow: row, form: typeof next === 'function' ? next(form) : next })
 
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value })
   const findings = row.findings || []

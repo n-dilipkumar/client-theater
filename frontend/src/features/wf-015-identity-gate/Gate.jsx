@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { relativeTime } from '@/lib/api'
-import { Badge, Button, Card, Field, Icon, Spinner, inputClass } from '@/components/ui'
+import { Badge, Button, Card, Field, Icon, Spinner, inputClass, useAsync } from '@/components/ui'
 
 import { accessApi, getRecord, listRecords } from './api'
 import { ICONS } from './icons'
@@ -64,6 +64,12 @@ function readToken(roomId) {
   }
 }
 
+/** The token a shared link carries, if any. */
+function tokenFromUrl() {
+  const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
+  return params.get('token') || ''
+}
+
 function writeToken(roomId, token) {
   try {
     if (token) window.sessionStorage.setItem(tokenKey(roomId), token)
@@ -75,49 +81,76 @@ function writeToken(roomId, token) {
 }
 
 export default function Gate({ roomId }) {
-  const [state, setState] = useState({ loading: true, check: null, room: null })
-  const [requirements, setRequirements] = useState(null)
   const [form, setForm] = useState({ name: '', email: '' })
   const [method, setMethod] = useState('identified')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
 
-  const load = useCallback(
-    async (token) => {
-      setState((prev) => ({ ...prev, loading: true }))
-      try {
-        const [check, room] = await Promise.all([
-          accessApi.check(roomId, token || undefined),
-          getRecord('room', roomId),
-        ])
-        setState({ loading: false, check, room })
-        if (check.status === 'required' || check.status === 'pending') {
-          setRequirements(await accessApi.requirements(roomId))
-        }
-      } catch (failure) {
-        setState({ loading: false, check: null, room: null })
-        setError(failure)
-      }
+  // The token the link carries wins over the remembered one. Reading the URL
+  // during render is safe -- it is a synchronous read of the current location --
+  // so a shared link needs no effect to notice it.
+  const [urlToken] = useState(tokenFromUrl)
+
+  // Persisting a token from the URL is genuinely an external-system write, so
+  // it stays an effect. It writes to sessionStorage and to no React state, which
+  // is exactly the shape an effect is for.
+  useEffect(() => {
+    if (urlToken) writeToken(roomId, urlToken)
+  }, [roomId, urlToken])
+
+  // What the gate checks is a fetch, and `useAsync` is what this repo provides
+  // for a fetch: it owns the loading and error state, refetches when its deps
+  // change, and exposes `refetch` for a manual reload. The previous version
+  // hand-rolled all of that into `useState` plus an effect that called a
+  // `load` which set state synchronously on entry -- the cascading-render shape
+  // this replaces.
+  //
+  // Keying the token into the deps is what keeps `refetch()` honest after a
+  // submit that mints a new one.
+  const [tokenVersion, setTokenVersion] = useState(0)
+  const gate = useAsync(
+    async () => {
+      const token = urlToken || readToken(roomId)
+      const [answer, room] = await Promise.all([
+        accessApi.check(roomId, token || undefined),
+        getRecord('room', roomId),
+      ])
+      return { check: answer, room }
     },
-    [roomId],
+    [roomId, urlToken, tokenVersion],
   )
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
-    const fromUrl = params.get('token') || ''
-    if (fromUrl) writeToken(roomId, fromUrl)
-    load(readToken(roomId))
-  }, [roomId, load])
+  // The form's fields are only worth fetching once the check says they are.
+  // Deriving that from `check` rather than from a flag set inside the fetch
+  // means the requirements arrive with the check rather than a render later.
+  const answer = gate.data?.check
+  const needsForm =
+    answer?.status === 'required' || answer?.status === 'pending' || undefined
+  const requirements = useAsync(
+    () => (needsForm ? accessApi.requirements(roomId) : Promise.resolve(null)),
+    [needsForm, roomId],
+  )
+
+  const state = {
+    loading: gate.loading,
+    check: gate.data?.check || null,
+    room: gate.data?.room || null,
+  }
+  const error = gate.error
 
   async function submit(event) {
     event.preventDefault()
     setSubmitting(true)
-    setError(null)
     setNotice(null)
     try {
       const result = await accessApi.submit(roomId, { ...form, method })
-      if (result.token) writeToken(roomId, result.token)
+      if (result.token) {
+        writeToken(roomId, result.token)
+        // The check must be re-run against the token just issued, not the one
+        // remembered before the submit. Bumping the version re-runs `check`
+        // with the new token in storage.
+        setTokenVersion((n) => n + 1)
+      }
       if (result.status === 'pending_verification') {
         setNotice({
           tone: 'info',
@@ -127,9 +160,8 @@ export default function Gate({ roomId }) {
           expires: result.expires_at,
         })
       }
-      await load(readToken(roomId))
-    } catch (failure) {
-      setError(failure)
+      } catch (failure) {
+      setNotice({ tone: 'bad', title: 'That did not work', body: failure.message })
     } finally {
       setSubmitting(false)
     }
@@ -164,7 +196,8 @@ export default function Gate({ roomId }) {
 
   const check = state.check || {}
   const room = state.room?.data || {}
-  const fields = requirements?.fields || []
+  const requirementsData = requirements.data
+  const fields = requirementsData?.fields || []
   // The machine-readable reason on the 403, falling back to the stored one. Four
   // refusals read very differently to a person and none of them is "error".
   const refusal = REFUSAL_COPY[error?.code || check.refusal_reason]
@@ -227,15 +260,15 @@ export default function Gate({ roomId }) {
       {check.status === 'required' && (
         <Card>
           <h2 className="font-mono text-base font-semibold">
-            {requirements?.requires_verification
+            {requirementsData?.requires_verification
               ? 'Verify your email to continue'
               : 'Tell us who you are'}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {requirements?.requires_verification
+            {requirementsData?.requires_verification
               ? 'We will email you a link. Once you open it, the room unlocks.'
               : 'Your details are recorded against this room so the sender knows who has been through.'}
-            {requirements?.domain_security &&
+            {requirementsData?.domain_security &&
               ' This room also restricts access to approved email domains.'}
           </p>
 
@@ -280,11 +313,11 @@ export default function Gate({ roomId }) {
               <Button type="submit" variant="primary" disabled={submitting}>
                 {submitting
                   ? 'Checking…'
-                  : requirements?.requires_verification
+                  : requirementsData?.requires_verification
                     ? 'Send me the link'
                     : 'Continue'}
               </Button>
-              {requirements?.allows_account_login && (
+              {requirementsData?.allows_account_login && (
                 <PathButton glyph={ICONS.inbox} onClick={useAccount}>
                   Use my existing account
                 </PathButton>

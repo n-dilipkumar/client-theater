@@ -139,7 +139,7 @@ describe('the grid', () => {
   })
 
   it('shows a picklist row the internal option values it must target', async () => {
-    const { user } = await renderPage({
+    await renderPage({
       '/wf-035/connections/conn_1/mappings/map_1/validation': {
         validation: REPORT_WITH_FINDINGS,
         validated: true,

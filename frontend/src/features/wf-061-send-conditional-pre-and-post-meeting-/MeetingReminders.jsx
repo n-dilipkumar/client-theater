@@ -37,8 +37,8 @@
  * rather than a change here.
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { absoluteTime, api, relativeTime } from '@/lib/api'
+import { useMemo, useState } from 'react'
+import { absoluteTime, relativeTime } from '@/lib/api'
 import {
   Badge,
   Button,
@@ -299,25 +299,31 @@ export default function MeetingReminders() {
     () => reminderApi.listDeliveries({ status: statusFilter, reason: reasonFilter, limit: 80 }),
     [statusFilter, reasonFilter],
   )
-  // Rooms are a core collection, not this feature's, so they come from the core
-  // client's own reader. This feature's routes are reached through `reminderApi`.
-  const rooms = useAsync(() => api.listRecords('room', { limit: 100 }), [])
-
   // -- the setup form
-  const [noreplyDomain, setNoreplyDomain] = useState('')
-  const [number, setNumber] = useState('')
-  const [localNumber, setLocalNumber] = useState('')
-  const [connected, setConnected] = useState(false)
-  const [ownAccount, setOwnAccount] = useState(false)
-  useEffect(() => {
-    const settings = messaging.data?.settings
-    if (!settings) return
-    setNoreplyDomain(settings.noreply_domain || '')
-    setNumber(settings.number || '')
-    setLocalNumber(settings.localNumber || '')
-    setConnected(Boolean(settings.connected))
-    setOwnAccount(Boolean(settings.own_account))
-  }, [messaging.data])
+  // The setup form is seeded from the messaging settings. Each field records the
+  // settings payload it was seeded from, so a refetch of the settings derives a
+  // fresh seed during render instead of an effect writing five states.
+  const [setupEdits, setSetupEdits] = useState({ forSettings: undefined, edits: {} })
+  const settings = messaging.data?.settings
+
+  const seed = useMemo(() => {
+    if (!settings) return {}
+    return {
+      noreply_domain: settings.noreply_domain || '',
+      number: settings.number || '',
+      localNumber: settings.localNumber || '',
+      connected: Boolean(settings.connected),
+      own_account: Boolean(settings.own_account),
+    }
+  }, [settings])
+
+  const setup = setupEdits.forSettings === settings ? setupEdits.edits : seed
+
+  const setSetupField = (field, value) =>
+    setSetupEdits({
+      forSettings: settings,
+      edits: { ...setup, [field]: value },
+    })
 
   // -- the new-reminder form
   const [draft, setDraft] = useState({
@@ -353,11 +359,11 @@ export default function MeetingReminders() {
   function saveSetup() {
     guard('setup', () => 'Messaging setup saved.', async () => {
       await reminderApi.saveMessaging({
-        noreply_domain: noreplyDomain,
-        number,
-        localNumber: localNumber,
-        connected,
-        own_account: ownAccount,
+        noreply_domain: setup.noreply_domain || '',
+        number: setup.number || '',
+        localNumber: setup.localNumber || '',
+        connected: Boolean(setup.connected),
+        own_account: Boolean(setup.own_account),
       })
       messaging.refetch()
     })
@@ -365,7 +371,6 @@ export default function MeetingReminders() {
 
   function createReminder() {
     guard('create', (record) => `Created "${record.data.name}".`, async () => {
-      const isSms = draft.channel === 'sms'
       const record = await reminderApi.createReminder({
         name: draft.name,
         channel: draft.channel,
@@ -869,24 +874,24 @@ export default function MeetingReminders() {
                   <input
                     id="setup-domain"
                     className={inputClass}
-                    value={noreplyDomain}
-                    onChange={(event) => setNoreplyDomain(event.target.value)}
+                    value={setup.noreply_domain || ''}
+                    onChange={(event) => setSetupField('noreply_domain', event.target.value)}
                   />
                 </Field>
                 <Field label="Sending number" id="setup-number" hint="Used by “any number”.">
                   <input
                     id="setup-number"
                     className={inputClass}
-                    value={number}
-                    onChange={(event) => setNumber(event.target.value)}
+                    value={setup.number || ''}
+                    onChange={(event) => setSetupField('number', event.target.value)}
                   />
                 </Field>
                 <Field label="Local area number" id="setup-local" hint="Used by “local area number”.">
                   <input
                     id="setup-local"
                     className={inputClass}
-                    value={localNumber}
-                    onChange={(event) => setLocalNumber(event.target.value)}
+                    value={setup.localNumber || ''}
+                    onChange={(event) => setSetupField('localNumber', event.target.value)}
                   />
                 </Field>
                 <div className="flex flex-col justify-end gap-2">
@@ -894,8 +899,8 @@ export default function MeetingReminders() {
                     <input
                       type="checkbox"
                       className="h-4 w-4"
-                      checked={connected}
-                      onChange={(event) => setConnected(event.target.checked)}
+                      checked={Boolean(setup.connected)}
+                      onChange={(event) => setSetupField('connected', event.target.checked)}
                     />
                     <Icon path={Glyphs.phone} size={15} />
                     Twilio connected
@@ -904,8 +909,8 @@ export default function MeetingReminders() {
                     <input
                       type="checkbox"
                       className="h-4 w-4"
-                      checked={ownAccount}
-                      onChange={(event) => setOwnAccount(event.target.checked)}
+                      checked={Boolean(setup.own_account)}
+                      onChange={(event) => setSetupField('own_account', event.target.checked)}
                     />
                     <Icon path={Glyphs.reply} size={15} />
                     Our own Twilio account

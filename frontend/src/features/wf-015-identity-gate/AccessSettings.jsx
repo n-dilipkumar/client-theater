@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { absoluteTime, relativeTime } from '@/lib/api'
 import {
@@ -90,7 +90,12 @@ export default function AccessSettings() {
   const rooms = useAsync(() => listRecords('room', { limit: 100 }), [])
   const templates = useAsync(() => listRecords('room_template', { limit: 100 }), [])
 
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
+  // Which room is on screen is derived, not stored: an explicit choice wins,
+  // otherwise the first room. The old effect that set the state on arrival
+  // forced an extra render in which nothing was selected yet.
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
+
   const access = useAsync(
     () => (roomId ? accessApi.roomAccess(roomId) : Promise.resolve(null)),
     [roomId],
@@ -104,25 +109,37 @@ export default function AccessSettings() {
   )
   const outbox = useAsync(() => (roomId ? accessApi.outbox(roomId) : Promise.resolve(null)), [roomId])
 
-  const [draft, setDraft] = useState(null)
+  // The editable copy of the policy is derived from what the server sent, not
+// mirrored into state by an effect.
+//
+// `draftSeed` records which loaded payload the current draft was seeded from.
+// When `access.data` is a different object -- a different room, or the same one
+// refetched after a save -- the seed no longer matches, so the form shows a
+// freshly derived draft immediately. That is what the old
+// `useEffect(() => setDraft(draftFrom(access.data.policy, ...)), [access.data])`
+// did, minus the render pass in which the previous room's edits were still on
+// screen. Nothing calls setState during render to arrange it.
+const [draftState, setDraftState] = useState({ seed: null, draft: null })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [saved, setSaved] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
 
-  // Reset the form whenever the effective policy changes underneath it.
-  useEffect(() => {
-    if (access.data) {
-      setDraft(draftFrom(access.data.policy, access.data.level))
-      setFieldErrors({})
-      setSaveError(null)
-      setSaved(false)
-    }
-  }, [access.data])
+  const policySeed = access.data || null
+  const draft =
+    draftState.seed === policySeed
+      ? draftState.draft
+      : policySeed
+        ? draftFrom(policySeed.policy, policySeed.level)
+        : null
 
-  useEffect(() => {
-    if (!roomId && rooms.data?.records?.length) setRoomId(rooms.data.records[0].id)
-  }, [rooms.data, roomId])
+  // An edit keeps the seed it was made against, so the next render still shows
+  // the operator's own text.
+  const setDraft = (next) =>
+    setDraftState({
+      seed: policySeed,
+      draft: typeof next === 'function' ? next(draft) : next,
+    })
 
   const room = useMemo(
     () => rooms.data?.records?.find((item) => item.id === roomId),
@@ -177,6 +194,10 @@ export default function AccessSettings() {
         allowed_domains: domainLocked ? [] : parsedDomains,
         inherit: draft.inherit && canInherit,
       })
+      // The draft is dropped here rather than on the next `access.data`: until
+      // the refetch lands it is still the operator's text, and letting it go
+      // early would blank the form mid-save.
+      setDraftState({ seed: null, draft: null })
       setSaved(true)
       access.refetch()
       sessions.refetch()
@@ -245,7 +266,7 @@ export default function AccessSettings() {
                 id="access-room"
                 className={inputClass}
                 value={roomId}
-                onChange={(event) => setRoomId(event.target.value)}
+                onChange={(event) => setChosenRoomId(event.target.value)}
               >
                 {rooms.data.records.map((item) => (
                   <option key={item.id} value={item.id}>
