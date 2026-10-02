@@ -7,7 +7,7 @@
 **What is built, what is not, and what each one is worth.**
 
 Regenerate with `.venv/Scripts/python orchestration/make_workflow_board.py`.
-Verified against `origin/main` at `baaa07f` (2026-10-01T19:20:35+05:30); generated 2026-10-01T22:24:43+05:30.
+Verified against `origin/main` at `bc999cc` (2026-10-02T18:00:20+05:30); generated 2026-10-02T18:15:36+05:30.
 
 This is the board to open a branch from. For live route counts, test counts
 and in-flight agent worktrees, see `orchestration/STATUS.md` — that file
@@ -17,18 +17,18 @@ measures the running product, this one measures the workflow corpus.
 
 | | Count |
 |---|---:|
-| **Built and landed** | **48** |
-| Pending — critical | 5 |
+| **Built and landed** | **53** |
+| Pending — critical | 0 |
 | Pending — supplementary | 85 |
-| **Pending total** | **90** |
+| **Pending total** | **85** |
 | Corpus researched | 138 tickets, 133 after dedupe |
 | Target | 138 |
 
-**48 of 138 built (34%), 90 to go.**
+**53 of 138 built (38%), 85 to go.**
 
 The target is the whole corpus: 138 researched workflows, all of
 them to be built. There is no cap and no shortlist to be chosen from -
-90 remain, and criticality is what decides the order they are
+85 remain, and criticality is what decides the order they are
 worked in, not which of them are worth doing.
 
 ## How status is decided
@@ -52,7 +52,7 @@ Criticality is the judgment in
 
 ## Built
 
-All 48 workflows with a feature module on `origin/main`.
+All 53 workflows with a feature module on `origin/main`.
 
 | Workflow | Name | Criticality | Basis | Tests |
 |---|---|---|---|---|
@@ -63,7 +63,12 @@ All 48 workflows with a feature module on `origin/main`.
 | ✅ **WF-006** | Review buyer engagement and prioritise follow-up | critical | C1 | — |
 | ✅ **WF-007** | Ingest a document or deck into the content library | critical | C1 | `test_wf007.py` |
 | ✅ **WF-011** | Take a room from draft to live and hand over the link | critical | C1 | `test_wf011.py` |
+| ✅ **WF-014** | Expire or cap access to a room | critical | C2 | `test_wf014_http.py` |
 | ✅ **WF-015** | Verify buyer identity and restrict by email domain | critical | C2 | `test_wf015.py` |
+| ✅ **WF-069** | Gate each buyer link with a password, an expiry and email verification | critical | C2 | `test_wf069.py` |
+| ✅ **WF-076** | Revoke access early and keep the audit row | critical | C2 | `test_wf076.py` |
+| ✅ **WF-077** | Manage internal workspace roles and least-privilege integration scopes | critical | C2 | `test_wf077.py` |
+| ✅ **WF-079** | Export a tamper-evident audit trail with IP and verification outcomes | critical | C2 | `test_wf079.py` |
 | ✅ **WF-005** | Archive and restore a room | supplementary | None | `test_wf005.py` |
 | ✅ **WF-008** | Auto-sync an external cloud file into the content library | supplementary | None | `test_wf008_http.py` |
 | ✅ **WF-009** | Approve and publish library content, immediately or on schedule | supplementary | None | `test_wf009.py` |
@@ -107,21 +112,9 @@ All 48 workflows with a feature module on `origin/main`.
 
 ## Pending
 
-90 researched workflows with no code on `main`. Ordered
+85 researched workflows with no code on `main`. Ordered
 critical-first, then by ticket number, so the queue is reviewable. Each is
 a candidate for a feature branch or an issue.
-
-### Critical (5)
-
-Removing any of these leaves no usable sales room.
-
-| Workflow | Name | Basis | Spec |
-|---|---|---|---|
-| ⬜ **WF-014** | Expire or cap access to a room | C2 | complete |
-| ⬜ **WF-069** | Gate each buyer link with a password, an expiry and email verification | C2 | complete |
-| ⬜ **WF-076** | Revoke access early and keep the audit row | C2 | complete |
-| ⬜ **WF-077** | Manage internal workspace roles and least-privilege integration scopes | C2 | complete |
-| ⬜ **WF-079** | Export a tamper-evident audit trail with IP and verification outcomes | C2 | complete |
 
 ### Supplementary (85)
 
