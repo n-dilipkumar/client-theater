@@ -58,6 +58,42 @@ The cost is heavy-tailed. A few hundred expensive setups carry most of the cost.
 `pytest --cov=dsr` on `main`: **94.91%** — 47,499 of 50,045 statements covered,
 2,546 missed. **This is the number every change must defend.**
 
+> **CORRECTED 2026-10-02 by the orchestrator. Read this before trusting 2,546.**
+>
+> **The floor is 2,553 missed / 94.89859%, not 2,546 / 94.91%.**
+>
+> The 2,546 figure above is wrong. It was measured once, on a machine with other
+> work running, printed to two decimals, and never re-measured. Four agents were
+> then told to defend it. Two of them measured the *same commit* independently
+> and both got 2,553. I diffed the two coverage JSON files, per file and line.
+>
+> The entire difference is **7 statements in one file**:
+>
+>     dsr/api.py lines 299, 300, 301, 303, 304, 306, 307
+>
+> Those lines are **import-time** code, guarded by `if FRONTEND_DIST.is_dir():`.
+> Whether they count as covered depends on whether a built frontend exists on
+> disk when `dsr.api` is first imported.
+>
+>     main repo      frontend/dist/index.html   EXISTS  -> covered
+>     agent clone    frontend/dist/index.html   ABSENT  -> not covered
+>     harness tree   frontend/dist/index.html   ABSENT  -> not covered
+>
+> `frontend/dist` is a build artefact and is gitignored. A clone never has it.
+> So the same commit measures 2,546 or 2,553 depending on whether someone ran
+> `npm run build` in that working copy first.
+>
+> **Defend 2,553.** It is the number that reproduces on a fresh clone, which is
+> what CI has. A branch measured in a tree where `frontend/dist` happens to exist
+> will read 7 statements high for a reason that has nothing to do with the change.
+>
+> **The real finding, and it is bigger than the number:** **CI does not run
+> coverage at all.** All six checks were green on a branch that was below this
+> floor, because nothing measures it. A floor with no enforcement behind it is a
+> sentence in a document, not a gate. `core` found this and I am recording it
+> rather than burying it. Adding coverage to CI is a real decision for a human:
+> it costs a provider, a threshold, and a slower backend job.
+
 To reproduce:
 
 ```
@@ -159,75 +195,205 @@ their worktree, and must not fail if it does not.
 
 ---
 
-## 6. Progress log
+## 6. Environment facts every agent needs
 
-Append here. Newest last.
+These three facts cost real time to establish. Do not rediscover them.
+
+**1. Use the space-free Python path.**
+
+    C:\Users\Dilip\dsrvenv\Scripts\python.exe
+
+That is a junction to the real virtualenv. The real folder is called
+`dummy repo`, which contains a space. **cmd.exe splits a path on a space**, so
+the real path does not survive a cmd prompt. One agent reported the interpreter
+as missing and refused to start; the interpreter was there the whole time.
+
+**2. Heartbeats must be one line, and must not use backticks.**
+
+    orca orchestration send --subject "HEARTBEAT" --to run:run_6e0bc978dd0e --type heartbeat --body "AGENT: core | ELAPSED: 31 | DONE: x | WORKING: y | BLOCKED: NONE | NEXT: z"
+
+Use the pipe character to separate fields. Newlines and backticks are rewritten
+or executed before the agent sees them.
+
+**3. Your terminal handle is the one in your live preamble.** Do not search for
+it. `orca orchestration status` is not a command.
+
+---
+
+## 7. Progress log
+
+Append here. Newest last. Write for an agent who has never seen this work.
 
 - 2026-10-02 — Orchestrator. Baseline measured and recorded. Four agents
   dispatched.
 
-- 2026-10-03 — Agent `harness` (branch `perf-test-harness`, commit "Add shared
-  test fixtures and run the suite in parallel"). Two files changed:
-  `backend/tests/conftest.py` (new) and the `[tool.pytest.ini_options]` and
-  `dev` sections of `backend/pyproject.toml`. No `test_*.py` file was touched.
-  No application source was touched.
+- 2026-10-02 — Orchestrator. Environment defects found and fixed. The venv path
+  carried a space. The heartbeat command used flags that do not exist. The
+  heartbeat monitor matched subjects exactly, so it reported a live agent as
+  silent. Two crashed agents from the first launch were still alive in abandoned
+  tabs and sending heartbeats under the same identity as a live one. All four
+  fixed. See section 6.
 
-  ### What the fixtures are for
+- 2026-10-02 — Orchestrator. **A pre-existing flaky test, measured not guessed.**
 
-  58 of the 75 test modules built a `TestClient` inside each test. Entering one
-  runs the application lifespan, and the lifespan is the expensive half. A test
-  needs a fresh **database**, not a fresh **application**, because `get_store`
-  reads `request.app.state.store` on every request. So `module_client` enters
-  one client per module and `client` swaps `app.state` per test.
+  `tests/test_wf069.py::TestOneTimeCodeHashing::test_codes_do_not_repeat_in_a_small_sample`
+  failed once on the `perf-tests-features-b` branch. It mints 200 six-digit codes
+  and asserts all 200 differ. The code space is 1,000,000, so the birthday
+  probability of at least one repeat is **1.97 percent**.
 
-  Fixture names match what the suite already calls things, so adopting one is a
-  deletion, not a rename: `client`, `http`, `db`, `db_path`, `store`,
-  `memory_db`, `module_client`. A module that keeps its own fixture of the same
-  name keeps it, so **no existing test changed behaviour**. As of this commit
-  no module has adopted them yet. That is the next agent's work, and it is
-  where the remaining speed is.
+  Measured over 2,000 trials of 200 real `mint_code()` calls:
 
-  Two autouse guards back this up:
+      collisions   35 (1.75%)
+      theory       1.97%
+      worst trial  1 repeat
 
-  1. `DSR_DB_PATH` and `DSR_AUDIT_DIR` are pointed at the test's own `tmp_path`
-     when a test has not set them. Every current module sets both, so this
-     changes no existing test. It stops the next module from silently reading
-     and writing the real `data/dsr.db`.
-  2. `app.dependency_overrides` is emptied before each test. It is the
-     documented seam for replacing a service and it is process-wide. Several
-     modules clear it in teardown and several do not (`test_wf034.py` installs
-     overrides at lines 2065 and 2084 with no teardown). Clearing before each
-     test can only remove state, never add it, so it cannot manufacture a pass.
+  The test is inherently flaky at about 2 percent. It is a defect in the TEST, not
+  in the product and not in any fixture change. Re-running the file gives
+  298 passed.
+
+  **Two measurement mistakes of my own, both worth recording.**
+
+  1. My first check ran 30 trials on the agent's branch (1 failure) and 30 on a
+     pristine copy of the base commit (0 failures), and printed DIFFERENT. With a
+     2 percent event, 0 or 1 in 30 is the *expected* result: a clean 30 is more
+     likely than not. Reporting a 1-in-30 observation as a difference is how you
+     chase a ghost.
+  2. The follow-up script printed `birthday probability expected: -97.03%`.
+     Operator precedence: `1 - pow(x, n) * 100` multiplies the wrong term. The
+     real value is `(1 - pow(x, n)) * 100` = 1.97 percent. A negative
+     probability is obviously wrong on sight, and I read the verdict line anyway.
+
+  **No agent should "fix" this test by deleting it or by widening the sample.** It
+  proves codes do not repeat, which is a real property. It proves it in a way that
+  fails 2 percent of the time. The honest fix is to seed the random source, not to
+  remove the assertion.
+
+- 2026-10-02 — Orchestrator. **Recovery after a lost stash.** The `core` agent ran
+  `git stash push`, git reported success, and the stash did not persist. Seven
+  changed files were gone. They were recovered from the unreachable stash commit
+  `1708bd5556294665df054d8bd52a8885abeab4fa` with `git checkout`, and verified
+  green before the agent was told. Recorded in `WORKTREE-SAFETY.md`.
+
+- 2026-10-02 — **PR #95 MERGED. Commit `d7f385f`. First landing.**
+
+  Eight files, all under `backend/tests`, no shared file:
+
+      test_access_api.py  test_analytics.py  test_api.py
+      test_audited.py     test_features.py   test_roles.py
+      test_roles_api.py   test_seed.py
+
+  All six CI checks green on an isolated runner. Mergeable CLEAN.
+
+  What landed, and what it is worth:
+
+  * `test_seed.py` ran the seeder three times for two assertions, because one
+    test wanted a fresh nested path and one wanted to seed the same path twice.
+    A module fixture now seeds once. The file was 28.4 s, the most expensive in
+    the suite for two tests.
+  * Five files entered a `TestClient` per test, which runs the FastAPI lifespan
+    and opens a database each time. One module-scoped client per module, with a
+    fresh database swapped into `app.state` per test.
+  * `test_audited.py` split into two fixtures: `db` in memory, and `mirror_db`
+    file-backed for exactly the three tests that glob for `audit-*.jsonl`. Its
+    slowest setup fell from 1.22 s to 0.20 s.
+
+  **The agent corrected its own headline numbers twice, unprompted.** It first
+  claimed a halving, then reported that it had measured its own *converted* tree
+  and called it the baseline. Its final claim is 27 to 35 percent on the six
+  converted files, measured against a clean clone at `bc999cc` in a temp folder.
+  That is the number to trust, and it is smaller than the one it started with.
+
+  **A real defect found and fixed:** `app` is a module-level singleton shared by
+  every test file in the process. The first version of the fixture closed its
+  database on the way out without restoring `app.state`, so a file that read
+  `app.state.store` without entering its own client would have hit a closed
+  database. That is the exact "passes alone, fails together" mode. Both fixtures
+  now save and restore `app.state.db` and `app.state.store`.
+
+- 2026-10-02 — **The measurement lesson of this programme, stated once.**
+
+  On this machine, with four agent suites competing for eight cores, **a single
+  timing sample is not evidence.** The spread between a fast and a slow run of
+  identical code was 47 s (151.93 s against 198.85 s), and one `AuditedDatabase`
+  round hit 987 ms where the median was 5 ms.
+
+  I published a number from one contaminated sample. I measured a file database
+  with a mirror at 657 ms and one without at 13 ms, and wrote that the mirror was
+  the cost. Re-measured as the minimum of six interleaved rounds:
+
+      file + mirror    min 3.41ms
+      file, no mirror  min 4.03ms
+      in-memory        min 0.48ms
+
+  The mirror costs nothing. My first number was an artifact of running first on a
+  cold, contended disk. The rule every agent now follows: **interleave the
+  variants, take the minimum of several rounds, and say the machine was busy.**
+
+  One more consequence, which is the useful part: **CI is a better measurement
+  than any local run here.** It runs on an isolated runner with no competing load.
+  When CI disagrees with a local number, CI is right.
+
+- 2026-10-03 — **Agent `harness`. PR #96. The keystone fixtures have landed on a
+  branch. Read this before converting any fixture.**
+
+  Two files. No `test_*.py`, no application source, no shared file.
+
+      backend/tests/conftest.py      new
+      backend/pyproject.toml         pytest-xdist and pytest-cov in dev, -n auto in addopts
+
+  ### The fixtures, and why they are shaped this way
+
+  Entering a `TestClient` runs the application lifespan. The lifespan in
+  `dsr/api.py` does two things: it opens the database, and it assigns
+  `app.state.db` and `app.state.store`. A test needs the first. It does not need
+  the second re-run, because `get_store` reads `request.app.state.store` fresh
+  on every request. **A test needs a fresh database, not a fresh application.**
+
+  `module_client` enters one client per module. `client` reuses it and swaps
+  `app.state` per test, then restores the state it found. Names match what the
+  suite already calls things, so adopting one is a deletion and not a rename:
+
+      client   http   db   db_path   store   memory_db   module_client
+
+  **A fixture defined in a module always beats one in `conftest.py`,** so any
+  module that has not been converted keeps its own fixtures and behaves exactly
+  as before. Converting a module is therefore safe at any time and in any order.
+  No module depends on another having converted first.
+
+  Two autouse guards sit under all of it:
+
+  1. `DSR_DB_PATH` and `DSR_AUDIT_DIR` point at the test's own `tmp_path` when a
+     test has not set them. Every current module sets both, so this changes no
+     existing test. It stops the next module from quietly reading and writing the
+     real `data/dsr.db`, which would let the suite pass while proving nothing.
+  2. `app.dependency_overrides` is emptied before each test. It is the documented
+     seam for replacing a service and it is process-wide. Clearing before each
+     test can only remove state and never add it, so it cannot manufacture a
+     pass.
 
   ### Measured fixture cost
 
   200 iterations per strategy, minimum of four interleaved rounds, with a
-  no-op-fixture run subtracted as the floor. Whole-suite runs, not samples:
+  no-op-fixture run subtracted as the floor:
 
   | Strategy | per test |
   |---|---|
-  | A  file db + full lifespan per test (today) | 27.50 ms |
-  | B  in-memory db + full lifespan per test | 8.15 ms |
-  | C  module client + `app.state` swap, file db | 19.55 ms |
-  | D  session client + `app.state` swap, file db | 23.75 ms |
-  | E  module client + `app.state` swap, in-memory db | 1.35 ms |
+  | file db + full lifespan per test (what the suite did) | 27.50 ms |
+  | in-memory db + full lifespan per test | 8.15 ms |
+  | module client + `app.state` swap, file db | 19.55 ms |
+  | session client + `app.state` swap, file db | 23.75 ms |
+  | module client + `app.state` swap, in-memory db | 1.35 ms |
 
-  **Module scope beats session scope for a structural reason, not only a
-  timing one.** A session-scoped client outlives every test in it, so one test
-  can leave `app.state` pointing at a closed database for every test after it.
+  **Module scope beats session scope structurally, not only on timing.** A
+  session-scoped client outlives every test in it, so one test can leave
+  `app.state` pointing at a closed database for every test after it. That is the
+  same defect PR #95 found and fixed inside a single file.
 
-  Correction to an earlier claim in this document: the audit mirror is not a
-  meaningful cost. Re-measured interleaved, a file db **with** a mirror is
-  3.41 ms and the same db **without** one is 4.03 ms. The spread between the
-  fastest and slowest round on identical code reached 245x, because four suites
-  were sharing eight cores. Read the minimum, never the mean.
+  ### The whole suite
 
-  ### pytest-xdist
-
-  Added `pytest-xdist` to the dev extras and `-n auto` to `addopts`. The
-  machine was busy the whole time with three other suites, so read these as
-  ratios, not as absolute CI predictions. CI runs on an isolated runner and
-  will do better.
+  `pytest-xdist` is now a dev dependency and `addopts` carries `-n auto`. The
+  machine was running three other suites throughout, so read these as ratios and
+  remember the rule above: CI is the better measurement.
 
   | Configuration | Runtime | Result |
   |---|---|---|
@@ -236,19 +402,16 @@ Append here. Newest last.
   | `-n 8 --dist loadscope` | 269.4 s | 11127 passed, 2 xfailed |
   | `-n 8 --dist loadfile` | 393.8 s | 11127 passed, 2 xfailed |
 
-  After rebasing onto the merged core-test PR, three runs of plain
-  `python -m pytest`, which is what CI runs: **226.40 s, 247.61 s, 268.86 s**.
-  Minimum 226.40 s against a 708.3 s baseline on the same machine.
+  After rebasing onto `d7f385f`, three runs of plain `python -m pytest`, which is
+  what CI runs: **226.40 s, 247.61 s, 268.86 s**, all 11127 passed and 2 xfailed,
+  all exit 0. `load` is the default and it was fastest with no failures, so it is
+  left alone. The 9 warnings are the one pre-existing `StarletteDeprecationWarning`
+  once per worker process, not nine new problems.
 
-  `load` is the default and it was fastest with no failures, so it is left
-  alone. Every configuration exited 0 with the same test count. The 9 warnings
-  are the one pre-existing `StarletteDeprecationWarning`, once per worker
-  process, not 9 new problems.
+  ### Coverage, agreeing with the corrected floor
 
-  ### Coverage: the recorded 94.91% does not reproduce
-
-  Section 2 records 94.91%, 2546 missed of 50045. **On this machine at this
-  commit the same figure measures 94.8986%, 2553 missed.** Five independent runs
+  This branch measures **2553 missed, 94.89859%**, which is the corrected floor
+  and exactly what a clone without a built `frontend/dist` reports. Five runs
   agree, and three of them cannot be blamed on this change:
 
   | Run | Missed |
@@ -259,53 +422,43 @@ Append here. Newest last.
   | this branch, `--dist loadfile` | 2553 |
   | this branch, autouse guards removed entirely | 2553 |
 
-  Same 279 files with gaps, same per-file counts. So the change costs **zero**
-  coverage, and the 7-statement gap against section 2 is pre-existing here
-  rather than something this branch introduced. Coverage is invariant to the
-  distribution mode, which also answers the "does xdist hide order-dependent
-  tests" question by measurement: it does not change what is covered.
+  Same 279 files with gaps, same per-file counts. This change costs zero
+  coverage. **Coverage is invariant to the distribution mode**, which answers
+  "does xdist hide order-dependent tests" by measurement rather than assumption.
 
-  `pytest-cov` was missing from the dev extras, so the coverage command in
-  section 2 could not run on a clean install. It is now there.
+  Note for whoever maintains section 4: the gate there still reads 94.91%, which
+  was the `frontend/dist` artefact. The number to defend is 2553 missed.
 
-  ### Which tests genuinely need a file on disk
+  ### Which tests must stay file-backed
 
-  Kept file-backed, with the reason:
-
-  * `test_persistence_contract.py` and `test_wf001.py` reopen the **same path**
-    in a second `AuditedDatabase` and read the first one's rows back. The data
-    has to outlive the connection, which `":memory:"` cannot do at all.
+  * `test_persistence_contract.py` and `test_wf001.py` reopen the **same path** in
+    a second `AuditedDatabase` and read the first one's rows back. The data has to
+    outlive the connection, and `":memory:"` cannot do that at all.
   * `test_seed.py` points `DSR_DB_PATH` at a nested path whose parent directory
-    does not exist, then runs `backend/seed.py` in a subprocess. It needs a real
-    filesystem and a real `sqlite3.connect`.
+    does not exist, then runs `backend/seed.py` in a subprocess.
   * `test_audited.py`, `test_wf002.py`, `test_wf009.py`, `test_wf033.py` open
     file-backed databases directly in their own fixtures.
 
-  **The mirror is not one of them.** The JSONL audit mirror is written to
-  `mirror_dir`, which is a directory, independently of where the database lives.
-  So a test that only reads `audit-*.jsonl` needs a real `mirror_dir` and does
-  **not** need a file-backed database: `AuditedDatabase(":memory:",
-  mirror_dir=tmp_path / "audit")` covers it. That is a larger set than it looks,
-  and it is why `db` sets both and `store` deliberately sets neither.
+  **The mirror is not one of them, and this is the correction worth carrying
+  forward.** The JSONL audit mirror is written to `mirror_dir`, a directory,
+  independently of where the database lives. A test that only reads
+  `audit-*.jsonl` needs a real `mirror_dir` and does **not** need a file-backed
+  database. `AuditedDatabase(":memory:", mirror_dir=tmp_path / "audit")` covers
+  it. That is a larger set than it looks, and it is exactly what PR #95 did in
+  `test_audited.py` when it split `db` in memory from `mirror_db` file-backed.
 
-  Three things `:memory:` genuinely cannot do, for whoever converts next:
+  Three things `":memory:"` genuinely cannot do:
 
   1. Reopen the path in a second connection.
-  2. Use WAL. `_connect` skips the `journal_mode` pragma for `:memory:`.
-  3. Outlive the process. No test currently asserts on `journal_mode`, so this
-     is a mechanism to be aware of rather than a test to preserve.
+  2. Use WAL. `_connect` skips the `journal_mode` pragma for `":memory:"`.
+  3. Outlive the process. No test currently asserts on `journal_mode`, so this is
+     a mechanism to know about, not a test to preserve.
 
-  ### What I could not do
+  ### What is left
 
-  * **No module was converted.** Strategy C is measured and available, and it is
-    roughly a 14x cut on the fixture cost of the 58 modules that build a
-    `TestClient` per test, but converting them means editing files three other
-    agents own. That is the next agent's work and the biggest remaining win.
-  * **The 2,546 figure is unexplained.** It is not this branch, not the
-    distribution mode, and not the conftest. It is most likely a different
-    environment on the machine that recorded it. Anyone who needs a coverage
-    gate should re-record the baseline on the runner rather than trust 94.91%.
-  * **Order dependence was not hunted down.** No test failed under any
-    distribution mode, and coverage did not move, so nothing broke. That is
+  * **No module has adopted the fixtures yet.** That is the biggest remaining win:
+    58 modules still build a `TestClient` per test at about 27.50 ms each.
+  * **Order dependence was not hunted down.** Nothing failed under any
+    distribution mode and coverage did not move, so nothing broke. That is
     evidence, not proof: a test that passes both ways while covering different
-    lines would not show up in either number.
+    lines would show up in neither number.
