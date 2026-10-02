@@ -30,7 +30,7 @@
  * so a team that widens a vocabulary ships a record rather than a change here.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { absoluteTime, api, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -294,7 +294,7 @@ function InferenceRow({ entry }) {
 export default function MeetingChanges() {
   const [section, setSection] = useState('history')
   const [type, setType] = useState('')
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [selected, setSelected] = useState('')
   const [notice, setNotice] = useState(null)
   const [noticeError, setNoticeError] = useState(null)
@@ -322,13 +322,14 @@ export default function MeetingChanges() {
   const rooms = useAsync(() => api.listRecords('room', { limit: 100 }), [])
   const inferences = useAsync(() => meetingsApi.inferences(), [])
 
-  const roomOptions = rooms.data || []
+  const roomOptions = useMemo(() => rooms.data || [], [rooms.data])
 
-  // Default to the first room once the list arrives. An effect rather than a
-  // setState during render, so React is not asked to re-render mid-render.
-  useEffect(() => {
-    if (!roomId && roomOptions.length > 0) setRoomId(roomOptions[0].id)
-  }, [roomId, roomOptions])
+  // Default to the first room once the list arrives.
+  //
+  // Derived during render, which is both correct and cheaper than the effect it
+  // replaces: no setState during render, and no extra render in which no room
+  // was selected while the list was already on screen.
+  const roomId = chosenRoomId || roomOptions[0]?.id || ''
 
   // The recomputed availability, with the researched release applied. Only read
   // once a booking is picked, because it is the booking being rescheduled whose
@@ -655,7 +656,7 @@ export default function MeetingChanges() {
                     className={inputClass}
                     required
                     value={roomId}
-                    onChange={(event) => setRoomId(event.target.value)}
+                    onChange={(event) => setChosenRoomId(event.target.value)}
                   >
                     <option value="">Choose a room</option>
                     {roomOptions.map((room) => (

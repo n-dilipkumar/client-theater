@@ -30,7 +30,7 @@
  * somebody quoted, and a reviewer should be able to disagree with one by name.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api, absoluteTime, relativeTime } from '@/lib/api'
 import {
   Badge,
@@ -263,11 +263,22 @@ function Switch({ label, hint, checked, onChange, disabled }) {
 
 function BookableCalendar() {
   const [section, setSection] = useState('embed')
-  const [roomId, setRoomId] = useState('')
+  const [chosenRoomId, setChosenRoomId] = useState('')
   const [notice, setNotice] = useState(null)
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [selected, setSelected] = useState(null)
+
+  // The selected booking and the form belong to the room that was on screen
+  // when they were raised. Switching rooms reads as neither being set, which is
+  // what the old `useEffect(..., [roomId])` arranged -- except that it happened a
+  // render later, so a room switch briefly showed the previous room's booking.
+  const [selection, setSelection] = useState({ forRoom: undefined, booking: null })
+  const selected = selection.forRoom === roomId ? selection.booking : null
+  const setSelected = (next) =>
+    setSelection({
+      forRoom: roomId,
+      booking: typeof next === 'function' ? next(selected) : next,
+    })
 
   const vocabulary = useAsync(() => calendarApi.vocabulary(), [])
   const inferences = useAsync(() => calendarApi.inferences(), [])
@@ -308,32 +319,45 @@ function BookableCalendar() {
   // POST /v2/bookings, and the ones with a documented limit are the ones a page
   // can get wrong: recurrenceCount above 32 is refused, and instant is team events
   // only.
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    eventTypeId: '',
-    routingFormId: '',
-    start: '',
-    reservationUid: '',
-    rescheduleUid: '',
-    recurrenceCount: '',
-    instant: false,
-    teamSize: '',
-    note: '',
-    dealStage: '',
-  })
+  const [formEdits, setFormEdits] = useState({ forRoom: undefined, form: null })
+
+  // A room's booking form does not carry over to another room, so the form is
+  // scoped to the room it was filled in for. The old effect cleared three fields
+  // on a room change and left the rest, which meant a name and an email typed for
+  // one room were submitted against the next.
+  const form = useMemo(
+    () =>
+      formEdits.forRoom === roomId && formEdits.form
+        ? formEdits.form
+        : {
+            name: '',
+            email: '',
+            eventTypeId: '',
+            routingFormId: '',
+            start: '',
+            reservationUid: '',
+            rescheduleUid: '',
+            recurrenceCount: '',
+            instant: false,
+            teamSize: '',
+            note: '',
+            dealStage: '',
+          },
+    [formEdits, roomId],
+  )
+
+  const setForm = (next) =>
+    setFormEdits({
+      forRoom: roomId,
+      form: typeof next === 'function' ? next(form) : next,
+    })
 
   const [routingAnswer, setRoutingAnswer] = useState('security')
   const [routingResult, setRoutingResult] = useState(null)
 
-  useEffect(() => {
-    if (!roomId && rooms.data?.rooms?.length) setRoomId(rooms.data.rooms[0].id)
-  }, [rooms.data, roomId])
-
-  useEffect(() => {
-    setSelected(null)
-    setForm((previous) => ({ ...previous, start: '', reservationUid: '', rescheduleUid: '' }))
-  }, [roomId])
+  // The first room is the sensible default, derived rather than copied into state
+  // by an effect that cost an extra render with nothing chosen.
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
 
   const set = (key) => (value) => setForm((previous) => ({ ...previous, [key]: value }))
 
@@ -460,7 +484,7 @@ function BookableCalendar() {
 
   const embedSummary = embed.data?.summary
   const canBook = Boolean(embedSummary?.can_book)
-  const slotRows = grid.data?.slots || []
+  const slotRows = useMemo(() => grid.data?.slots || [], [grid.data])
   const available = slotRows.filter((slot) => slot.available)
   const byDay = useMemo(() => {
     const groups = new Map()
@@ -515,7 +539,7 @@ function BookableCalendar() {
             id="wf058-room"
             className={inputClass}
             value={roomId}
-            onChange={(event) => setRoomId(event.target.value)}
+            onChange={(event) => setChosenRoomId(event.target.value)}
           >
             <option value="">Choose a room</option>
             {(rooms.data?.rooms || []).map((room) => (

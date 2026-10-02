@@ -27,7 +27,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { absoluteTime, apiRequest, relativeTime } from '@/lib/api'
+import { absoluteTime, relativeTime } from '@/lib/api'
 import {
   Badge,
   Button,
@@ -454,9 +454,11 @@ export default function CrmProvisioning() {
     [roomId],
   )
 
-  const connectionRows = connections.data?.connections || []
+  // Memoised so the `stats` at the bottom keeps stable dependencies. A fresh `[]`
+  // each render made every dep change on every render, so the memo never held.
+  const connectionRows = useMemo(() => connections.data?.connections || [], [connections.data])
   const manifestRows = manifests.data?.manifests || []
-  const objectRows = objects.data?.objects || []
+  const objectRows = useMemo(() => objects.data?.objects || [], [objects.data])
   const keyRows = keys.data?.keys || []
   const runRows = runs.data?.installations || []
   const chosen = connectionRows.find((row) => row.id === connectionId)
@@ -525,7 +527,10 @@ export default function CrmProvisioning() {
       { label: 'Keys active', value: keys.data?.summary?.Active ?? 0, path: 'key', hint: `${keys.data?.summary?.Failed ?? 0} failed, ${keys.data?.summary?.Pending ?? 0} building` },
       { label: 'Fields created', value: runs.data?.totals?.created ?? 0, path: 'check', hint: `${runs.data?.totals?.left_in_place ?? 0} left in place` },
     ],
-    [connectionRows, objectRows, keys.data, runs.data],
+    // `objects.data?.incomplete` is read in the body above and was missing here,
+    // so the "CRM objects" hint could keep a stale incomplete count after a
+    // refetch changed it.
+    [connectionRows, objectRows, objects.data, keys.data, runs.data],
   )
 
   return (

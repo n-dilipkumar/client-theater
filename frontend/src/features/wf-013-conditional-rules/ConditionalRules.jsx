@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
   Badge,
@@ -375,57 +375,76 @@ export default function ConditionalRules() {
   const rooms = useAsync(() => rulesApi.rooms(), [])
   const variableCatalogue = useAsync(() => rulesApi.variables(), [])
 
-  const [roomId, setRoomId] = useState('')
-  const [blocks, setBlocks] = useState({ loading: false, data: null, error: null })
-  const [editing, setEditing] = useState(null)
+  const [chosenRoomId, setChosenRoomId] = useState('')
+  const [editingChoice, setEditingChoice] = useState({ forRoom: undefined, block: null })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
 
-  const [variables, setVariables] = useState({})
-  const [preview, setPreview] = useState(null)
+  const [variableEdits, setVariableEdits] = useState({ forCatalogue: undefined, values: {} })
   const [previewing, setPreviewing] = useState(false)
   const [previewError, setPreviewError] = useState(null)
-  const [notice, setNotice] = useState(null)
 
   // Default to the first room so the page is useful on arrival rather than
-  // presenting an empty picker.
-  useEffect(() => {
-    const records = rooms.data?.records || []
-    if (!roomId && records.length > 0) setRoomId(records[0].id)
-  }, [rooms.data, roomId])
+  // presenting an empty picker. Derived, so the first render with the list in
+  // hand already has the room the old effect would have set one render later.
+  const roomId = chosenRoomId || rooms.data?.records?.[0]?.id || ''
 
-  const loadBlocks = useCallback(async () => {
-    if (!roomId) {
-      setBlocks({ loading: false, data: null, error: null })
-      return
-    }
-    setBlocks((current) => ({ ...current, loading: true, error: null }))
-    try {
-      const data = await rulesApi.listBlocks(roomId)
-      setBlocks({ loading: false, data, error: null })
-    } catch (error) {
-      setBlocks({ loading: false, data: null, error })
-    }
-  }, [roomId])
+  // The open editor and the notice belong to the room that was on screen when
+  // they were raised. Switching rooms reads as neither being open, which is
+  // what the old effect's `setEditing(null)` / `setNotice(null)` arranged --
+  // except that it happened a render later, so a room switch briefly showed the
+  // previous room's open editor.
+  const editing = editingChoice.forRoom === roomId ? editingChoice.block : null
+  const setEditing = (next) =>
+    setEditingChoice({ forRoom: roomId, block: typeof next === 'function' ? next(editing) : next })
 
-  useEffect(() => {
-    setEditing(null)
-    setPreview(null)
-    setNotice(null)
-    loadBlocks()
-  }, [loadBlocks])
+  // The blocks follow the room through `useAsync`, which refetches when `roomId`
+  // changes and owns the loading and error states. This replaces a `loadBlocks`
+  // callback plus the effect that called it and reset three pieces of state on
+  // every room change.
+  const blocks = useAsync(
+    () => (roomId ? rulesApi.listBlocks(roomId) : Promise.resolve(null)),
+    [roomId],
+  )
+
+  // The preview and the notice belong to the room that was on screen when they
+  // were raised. Switching rooms reads as neither, which is what the old
+  // effect's `setPreview(null)` / `setNotice(null)` arranged.
+  const [previewState, setPreviewState] = useState({ forRoom: undefined, preview: null })
+  const [noticeState, setNoticeState] = useState({ forRoom: undefined, notice: null })
+
+  const preview = previewState.forRoom === roomId ? previewState.preview : null
+  const setPreview = (next) =>
+    setPreviewState({ forRoom: roomId, preview: typeof next === 'function' ? next(preview) : next })
+
+  const notice = noticeState.forRoom === roomId ? noticeState.notice : null
+  const setNotice = (next) =>
+    setNoticeState({ forRoom: roomId, notice: typeof next === 'function' ? next(notice) : next })
 
   // The value inputs are seeded from the declared variables so a seller only
-  // types the values they actually condition on.
-  const declared = variableCatalogue.data?.variables || []
-  useEffect(() => {
-    setVariables(Object.fromEntries(declared.map((variable) => [variable.name, ''])))
-  }, [variableCatalogue.data])
+  // types the values they actually condition on. Seeded per catalogue, so a
+  // catalogue refetch derives a fresh blank set during render.
+  const declared = useMemo(
+    () => variableCatalogue.data?.variables || [],
+    [variableCatalogue.data],
+  )
+  const seededVariables = useMemo(
+    () => Object.fromEntries(declared.map((variable) => [variable.name, ''])),
+    [declared],
+  )
+  const variables =
+    variableEdits.forCatalogue === variableCatalogue.data ? variableEdits.values : seededVariables
+  const setVariables = (next) =>
+    setVariableEdits({
+      forCatalogue: variableCatalogue.data,
+      values: typeof next === 'function' ? next(variables) : next,
+    })
 
-  const decisionFor = useMemo(() => {
-    if (!preview) return () => null
-    return (blockId) => preview.blocks.find((entry) => entry.block_id === blockId) || null
-  }, [preview])
+  // Not memoised: it closes over `preview` and returns a function, which is the
+  // shape the compiler cannot memoise. Rebuilding a one-line closure per render
+  // costs nothing, and memising it was reported as unrecoverable anyway.
+  const decisionFor = (blockId) =>
+    preview ? preview.blocks.find((entry) => entry.block_id === blockId) || null : null
 
   /** Only the values actually filled in are sent, so "not supplied" stays
    *  distinguishable from "supplied empty" in the trace (D3 and S9). */
@@ -439,7 +458,7 @@ export default function ConditionalRules() {
     try {
       await rulesApi.putRule(roomId, editing.id, rule)
       setEditing(null)
-      await loadBlocks()
+      blocks.refetch()
       setNotice({
         tone: 'info',
         title: 'Rule saved',
@@ -458,7 +477,7 @@ export default function ConditionalRules() {
     try {
       await rulesApi.deleteRule(roomId, block.id)
       setEditing(null)
-      await loadBlocks()
+      blocks.refetch()
       setNotice({
         tone: 'info',
         title: 'Rule removed',
@@ -485,7 +504,7 @@ export default function ConditionalRules() {
             }
           : { tone: 'info', title: 'Saved to the library', body: 'This block had no rule to lose.' },
       )
-      await loadBlocks()
+      blocks.refetch()
     } catch (error) {
       setSaveError(error)
     }
@@ -563,7 +582,7 @@ export default function ConditionalRules() {
                   id="rule-room"
                   className={inputClass}
                   value={roomId}
-                  onChange={(event) => setRoomId(event.target.value)}
+                  onChange={(event) => setChosenRoomId(event.target.value)}
                 >
                   {roomRecords.map((room) => (
                     <option key={room.id} value={room.id}>
@@ -664,7 +683,7 @@ export default function ConditionalRules() {
             <h2 className="mb-3 font-mono text-base font-semibold">Blocks</h2>
 
             {blocks.loading && <Spinner label="Loading blocks" />}
-            {blocks.error && <ErrorNote error={blocks.error} onRetry={loadBlocks} />}
+            {blocks.error && <ErrorNote error={blocks.error} onRetry={blocks.refetch} />}
 
             {!blocks.loading && !blocks.error && (
               <>

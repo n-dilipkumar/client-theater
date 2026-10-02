@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Badge,
   Button,
@@ -134,6 +134,12 @@ export default function WhiteLabel() {
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
   const [branding, setBranding] = useState(EMPTY_BRANDING)
+  // Monotonic token identifying the newest load. A response whose token is no
+  // longer the latest is stale and discards itself. This is the `cancelled`
+  // flag the docstring describes, implemented so that something actually
+  // cancels: the old code declared `let cancelled = false` and never assigned
+  // it, so the guard it was written for never fired.
+  const latestLoad = useRef(0)
 
   const selected = (rooms.data?.records || []).find((room) => room.id === roomId) || null
 
@@ -159,20 +165,22 @@ export default function WhiteLabel() {
     setBranding(EMPTY_BRANDING)
     if (!id) return
 
-    let cancelled = false
+    const token = ++latestLoad.current
     setBusy(true)
     try {
       const next = await whiteLabelApi.forRoom(id)
-      if (cancelled) return
-      setState(next)
+      const stale = token !== latestLoad.current
       // The form is seeded from what is stored, so the operator can see the
       // current values instead of typing over a blank form, and a blank field
       // unambiguously means "leave this alone" rather than "clear it".
-      setBranding({ ...EMPTY_BRANDING, ...tokenStrings(next?.branding) })
+      if (!stale) {
+        setState(next)
+        setBranding({ ...EMPTY_BRANDING, ...tokenStrings(next?.branding) })
+      }
     } catch (err) {
-      if (!cancelled) setError(err)
+      if (token === latestLoad.current) setError(err)
     } finally {
-      if (!cancelled) setBusy(false)
+      if (token === latestLoad.current) setBusy(false)
     }
   }
 

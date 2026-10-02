@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Field, inputClass } from '@/components/ui'
 import Glyph from './icons'
 import { Note, Toggle } from './primitives'
@@ -117,15 +117,21 @@ function OwnFieldEditor({ block, onSave, saving }) {
   const extra = Object.fromEntries(
     Object.entries(block.config || {}).filter(([key]) => !declared.has(key)),
   )
-  const [text, setText] = useState(() => JSON.stringify(extra, null, 2))
-  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    setText(JSON.stringify(extra, null, 2))
-    setError(null)
-    // Re-seed only when the stored set of own fields changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(Object.keys(extra).sort())])
+  // Re-seed only when the stored set of own fields changes -- which is what the
+  // old effect's `JSON.stringify(Object.keys(extra).sort())` dependency meant.
+  // Holding that key rather than the object is the point: it re-seeds when the
+  // set of keys changes and not when only a value does, so an operator's
+  // half-typed JSON is not thrown away by an unrelated re-render.
+  const extraKey = JSON.stringify(Object.keys(extra).sort())
+
+  const [edits, setEdits] = useState({ forKey: undefined, text: null, error: null })
+  const text = edits.forKey === extraKey && edits.text !== null ? edits.text : JSON.stringify(extra, null, 2)
+  const error = edits.forKey === extraKey ? edits.error : null
+
+  const setText = (next) =>
+    setEdits({ forKey: extraKey, text: typeof next === 'function' ? next(text) : next, error })
+  const setError = (next) => setEdits({ forKey: extraKey, text, error: next })
 
   function apply() {
     if (!text.trim()) {
