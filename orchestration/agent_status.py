@@ -15,6 +15,7 @@ with a commit on a branch containing a shared file has failed the contract even
 if it reports success, so that is called out separately and loudly.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -29,17 +30,15 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-ROOT = Path(r"C:\Users\Dilip\orca\projects\client-theater\client-theater")
-WORKSPACES = Path(r"C:\Users\Dilip\orca\workspaces\client-theater")
+ROOT = Path(__file__).resolve().parent.parent
+WORKSPACES = Path(os.environ.get("DSR_WORKSPACES") or ROOT.parent)
 REPO_ID = "id:8964203a-831a-425f-8fd7-ebc3a0fc2e46"
 
-SHARED = {
-    "backend/dsr/api.py", "backend/dsr/deps.py", "backend/dsr/store.py",
-    "backend/dsr/db/audited.py", "backend/seed.py", "frontend/src/App.jsx",
-    "frontend/src/main.jsx", "frontend/src/lib/api.js",
-    "frontend/src/lib/features.js", "frontend/src/components/ui.jsx",
-    "frontend/vite.config.js",
-}
+# One definition of the shared-file list, in tools/contract.py.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.contract import SHARED  # noqa: E402
 
 MAP = ROOT / "data" / "dispatched.json"
 if not MAP.exists():

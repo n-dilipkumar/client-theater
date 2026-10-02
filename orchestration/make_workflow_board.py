@@ -64,7 +64,11 @@ CRITICALITY = CORPUS / "criticality-decisions.json"
 CATALOGUE = CORPUS / "catalogue.json"
 OUT = ROOT / "orchestration" / "WORKFLOW-BOARD.md"
 
-TARGET = 100
+#: The target is the researched corpus, not a round number. It was 100, which
+#: meant the 38 workflows researched beyond it were excluded from "to go" - the
+#: queue could be worked to empty and the board would still read incomplete.
+#: Derived, so a corpus that grows moves the target with it.
+TARGET = len(json.loads((CORPUS / "workflows.json").read_text(encoding="utf-8")))
 
 #: How to invoke this generator, used in the messages it prints.
 PY_REL = ".venv/Scripts/python"
@@ -239,10 +243,10 @@ def render() -> tuple[str, dict]:
     A("")
     A(f"**{len(done)} of {TARGET} built ({100 * len(done) // TARGET}%), {TARGET - len(done)} to go.**")
     A("")
-    A(f"The corpus holds more tickets than the {TARGET} target, so this is an")
-    A(f"implementation pipeline rather than a research programme: there are")
-    A(f"{len(pending)} pending tickets competing for the {TARGET - len(done)} slots")
-    A(f"still needed. Criticality is what decides between them.")
+    A(f"The target is the whole corpus: {TARGET} researched workflows, all of")
+    A(f"them to be built. There is no cap and no shortlist to be chosen from -")
+    A(f"{len(pending)} remain, and criticality is what decides the order they are")
+    A(f"worked in, not which of them are worth doing.")
     A("")
 
     # ---- how to read it --------------------------------------------------- #

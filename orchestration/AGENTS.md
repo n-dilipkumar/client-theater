@@ -5,54 +5,22 @@
 
 ## Right now
 
-    agents dispatched   31
-    agent tabs open     0
-    merged into main    6
-    ready to merge      24
-    writing             1
-    no work yet         0
-    stopped or gone     0
+**No dispatch log in this clone.** `data/dispatched_batch.json` is
+gitignored, and without it this generator cannot know which agents
+were ever dispatched. It reports no counts rather than reporting zero:
+zero is a measurement, and no measurement was taken. The programme
+state it can measure is below.
 
-`main` at `dedaa64 Give each backfill log line a number, and order the transcript by it`
-measured 2026-09-28T09:42:23+05:30 in 4s
+`main` at `baaa07f Rebuild STATUS.md as a per-workflow table, measured from git (#77)`
+measured 2026-10-01T19:20:35+05:30 in 1s
 
-**37** features on `main` of 100. Board:  (0 cards).
+**48** features on `main` of 138. Board:  (0 cards).
 
 ## Every agent dispatched
 
-| Workflow | What it is doing | State | Commits | Uncommitted | Tab |
-|---|---|---|---|---|---|
-| WF-001 | DSR WF-001 Create room from template | **MERGED** | 56 | 0 | closed |
-| WF-038 | DSR WF-038 Batch-upsert engagement rows keye | **MERGED** | 54 | 1 | closed |
-| WF-039 | DSR WF-039 Write account + contact + opportu | **MERGED** | 54 | 0 | closed |
-| WF-040 | DSR WF-040 Surface partial failures and reje | **MERGED** | 54 | 0 | closed |
-| WF-041 | DSR WF-041 Detect and block duplicate record | **MERGED** | 54 | 0 | closed |
-| WF-045 | DSR WF-045 Backfill historical records on a  | **MERGED** | 54 | 0 | closed |
-| WF-005 | DSR WF-005 Archive and restore a room | **READY TO MERGE** | 55 | 0 | closed |
-| WF-014 | DSR WF-014 Expire or cap access to a room | **READY TO MERGE** | 55 | 0 | closed |
-| WF-042 | DSR WF-042 Pull CRM deal, account and contac | **READY TO MERGE** | 53 | 0 | closed |
-| WF-043 | DSR WF-043 Stream CRM record changes into th | **READY TO MERGE** | 54 | 0 | closed |
-| WF-044 | DSR WF-044 Emit a webhook out of the CRM whe | **READY TO MERGE** | 53 | 0 | closed |
-| WF-046 | DSR WF-046 Throttle and retry under vendor A | **READY TO MERGE** | 53 | 0 | closed |
-| WF-047 | DSR WF-047 Mirror room documents into CRM fi | **READY TO MERGE** | 53 | 0 | closed |
-| WF-048 | DSR WF-048 Validate the connector against a  | **READY TO MERGE** | 55 | 0 | closed |
-| WF-049 | DSR WF-049 Monitor integration health and re | **READY TO MERGE** | 55 | 0 | closed |
-| WF-050 | DSR WF-050 Reconcile gaps and overflows afte | **READY TO MERGE** | 55 | 0 | closed |
-| WF-051 | DSR WF-051 Route and book a demo request inl | **READY TO MERGE** | 55 | 0 | closed |
-| WF-052 | DSR WF-052 Qualify a lead without offering a | **READY TO MERGE** | 55 | 0 | closed |
-| WF-053 | DSR WF-053 Route a booking to the owner of t | **READY TO MERGE** | 55 | 0 | closed |
-| WF-054 | DSR WF-054 Spread bookings across a team by  | **READY TO MERGE** | 55 | 0 | closed |
-| WF-055 | DSR WF-055 Hand a lead off from an SDR sched | **READY TO MERGE** | 55 | 0 | closed |
-| WF-057 | DSR WF-057 Find a time that works for a mult | **READY TO MERGE** | 61 | 0 | closed |
-| WF-058 | DSR WF-058 Embed a bookable calendar inside  | **READY TO MERGE** | 61 | 0 | closed |
-| WF-059 | DSR WF-059 Provision a per-booking video-con | **READY TO MERGE** | 61 | 0 | closed |
-| WF-060 | DSR WF-060 Auto-join and record the meeting, | **READY TO MERGE** | 60 | 0 | closed |
-| WF-061 | DSR WF-061 Send conditional pre- and post-me | **READY TO MERGE** | 61 | 0 | closed |
-| WF-062 | DSR WF-062 Route a requested slot for host a | **READY TO MERGE** | 60 | 0 | closed |
-| WF-063 | DSR WF-063 Reassign a booked meeting to a di | **READY TO MERGE** | 61 | 0 | closed |
-| WF-064 | DSR WF-064 Reschedule or cancel a meeting an | **READY TO MERGE** | 63 | 0 | closed |
-| WF-065 | DSR WF-065 Write the booking back into the C | **READY TO MERGE** | 61 | 0 | closed |
-| WF-056 | DSR WF-056 Book a meeting with no scheduling | **committed, still editing** | 61 | 1 | closed |
+Unknown. This generator cannot list agents it has no record of being
+dispatched, and it will not reconstruct the list from worktree names.
+
 
 ## What the states mean
 
