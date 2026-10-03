@@ -1388,3 +1388,193 @@ part. I sent every heartbeat in this section that way, and Orca delivered them.
 I did not change any shared tooling for this. Section 6 of this file already warns
 that the heartbeat command is fragile. This is the same warning with the exact
 failure mode attached.
+
+- 2026-10-03 — **Agent: security. Five CI checks measured before adoption, three
+  adopted as gates.**
+
+  ## What landed
+
+  `.github/workflows/security.yml`, three jobs. Every number below came from
+  running the tool against this repository.
+
+  | Job | Command | Measured | Verdict |
+  |---|---|---|---|
+  | `secret-scan` | gitleaks 8.30.1, 206 commits | 0 leaks, 2.5 s | gate |
+  | `dependency-audit-python` | `pip-audit --local` | 37 packages, 0 vulns, 4.2 s | gate |
+  | `dependency-audit-node` | `npm audit --omit=dev` | 0 vulns, exit 0 | gate |
+
+  Plus two edits to `ci.yml`: all 14 `uses:` pinned to commit SHAs, and
+  `permissions: contents: read` stated per job instead of inherited.
+
+  ## The gitleaks false positives, all seven read by hand
+
+  gitleaks 8.30.1 (checksum matched the published hash before the binary was
+  trusted) reported 8 findings over 206 commits and 7 in the tree. Every one is
+  a false positive:
+
+  | Count | What | Why it is not a secret |
+  |---|---|---|
+  | 4 | `password: "northwind-2026"` | demo seed literal for the WF-069 link-gating demo |
+  | 2 | `_SECRET_ALPHABET = "23456789...xyz"` | the alphabet a one-time code is drawn from; entropy 5.83 is why it trips |
+  | 2 | `Authorization: Bearer S2S_TOKEN` | a placeholder in two research documents |
+
+  Zero real secrets. `.gitleaks.toml` removes exactly those seven, scoped by
+  path and by value, each with its reason in the file. After it: `no leaks
+  found` across all 206 commits.
+
+  A directory scan on a dirty machine reports an eighth finding that the history
+  scan cannot see: a `__pycache__/vocabulary.cpython-313.pyc`. So the job scans
+  git history, not the directory.
+
+  ## The npm audit scope finding, which is the useful half
+
+  Two commands, same lock file, same tree, both correct:
+
+      npm audit              -> exit 1, 5 findings (1 critical, 1 high, 3 moderate)
+      npm audit --omit=dev   -> exit 0, 0 findings
+
+  The dependency counts are identical in both runs (prod 6, dev 384, optional
+  122, peer 8, total 389). The tree is not the variable. The scope flag is.
+
+  All five findings are devDependencies: vitest, vite, vite-node, esbuild,
+  @vitest/mocker. None reaches the shipped bundle. So the gate is the production
+  scope, which is green today and is what a buyer would actually run, and the
+  dev-tree count is published into the job summary beside it so the flag that
+  makes the job green cannot hide the findings it excludes.
+
+  **This is the fifth way an audit number in this project was wrong.** The
+  Orchestrator measured 0 vulnerabilities and asserted twice that my 5 was
+  wrong. Its own cause, found afterwards: the main repo's `node_modules` had
+  drifted from `package-lock.json` (vite 6.4.3 installed against 5.4.21 locked,
+  esbuild 0.25.12 against 0.21.5, `@vitest/mocker` absent entirely). A stale
+  working copy is the same failure as a single timing sample: one observation,
+  treated as the state of the repository.
+
+  **The rule that came out of it.** An audit is a statement about a resolved
+  dependency set. Before believing anyone's audit number, name the set it was
+  computed from. `npm ci` first, then audit. A `node_modules` that was installed
+  at some other time is not the lock file, and the difference is invisible
+  unless you look.
+
+  I re-measured three ways to rule out my own cache: plain `npm audit`,
+  `npm audit --prefer-online`, and `npm audit --cache <a directory that had
+  never existed>`. All three exit 1 with the same five findings.
+
+  ## Jev: four decisions, three of them escalated rather than decided
+
+  AGENTS.md requires a typed judgment for each decision. Two came back
+  `uncertain` and a third only cleared after the evidence was corrected. None of
+  the three was overridden.
+
+  | # | Decision | Verdict | Confidence | Audit id |
+  |---|---|---|---|---|
+  | Q1 | which candidate checks to adopt | **uncertain** | 0.47 | `jev-20261003T035709-25144-29024` |
+  | Q2 | npm policy, first ask | pass, premise later disproved | 0.78 | `jev-20261003T035709-25144-29351` |
+  | Q3 | pin actions to SHAs | **uncertain** | 0.43 | `jev-20261003T035709-25144-29634` |
+  | Q4 | gitleaks false-positive handling | **pass** | 0.78 | `jev-20261003T035710-25144-30149` |
+  | Q2 | npm policy, re-asked with exit codes | **uncertain** | 0.43 | `jev-20261003T035819-25208-99319` |
+  | Q2 | npm policy, re-asked with scope evidence | **pass** | 0.88 | `jev-20261003T041547-26400-47636` |
+
+  **Q2 is the one worth reading twice.** The first ask passed at 0.78 and Jev
+  selected an option whose stated premise was that `--audit-level=critical`
+  passes today. Measured, every threshold exits 1, because the tree has a
+  critical finding. A `pass` verdict is not a licence to skip the measurement
+  behind it. The second ask, on the real exit codes, came back `uncertain` at
+  0.43. Only the third, which told Jev that all five findings are
+  devDependencies, cleared at 0.88.
+
+  So the sequence was: an unmeasured claim in my own option text -> a `pass`
+  built on it -> measurement -> `uncertain` -> corrected evidence -> `pass`.
+  **Three Jev rows exist for one decision because the state changed twice.** The
+  log is append-only and all three stay. That is what it is for.
+
+  Q1 and Q3 remain `uncertain` and are escalated to the Orchestrator, not
+  decided by me. Q3 in particular is why this branch pins SHAs but adds no
+  Dependabot: adding an updater changes who opens pull requests in this
+  repository, and that is a human's decision.
+
+  ## Action SHAs, and why the risk was small here
+
+  Each SHA was resolved by asking the GitHub API which commit a *fixed patch
+  tag* points at, not by reading a web page:
+
+  | Action | Version | SHA |
+  |---|---|---|
+  | `actions/checkout` | v4.4.0 | `11d5960a326750d5838078e36cf38b85af677262` |
+  | `actions/setup-python` | v5.6.0 | `a26af69be951a213d495a4c3e4e4022e16d87065` |
+  | `actions/setup-node` | v4.4.0 | `49933ea5288caeca8642d1e84afbd3f7d6820020` |
+
+  Every floating major tag resolved to the same commit as the newest patch tag
+  in its series, so pinning changed no behaviour on the day it landed. The
+  trailing comment names the version, so a wrong comment is visible on sight.
+
+  ## Two things I got wrong, both worth recording
+
+  1. **A passing verdict on a false premise went into a permanent log.** I wrote
+     "the critical finding is test-only" into a Jev option, believed it, and
+     built a decision on it. It happened to be true. I had not measured it. If it
+     had been false, the audit log would now carry a confidently-worded wrong
+     claim with a probability attached, and no later reader could tell.
+  2. **I read `jq` as available in CI and never checked.** I removed it in
+     favour of `node`, which `setup-node` guarantees and which I can then test
+     locally. I only found the problem because I extracted the step from the
+     YAML and ran it under bash instead of trusting that it looked right. It did
+     not look right: it would have crashed the build on a reporting step.
+
+  The second one is the method I would keep. **Extract the step from the file and
+  run it.** A shell step that has never been executed is a guess with YAML
+  indentation.
+
+  ## State at hand-off
+
+  Both workflow files parse under PyYAML. All 17 `uses:` resolve to 40-character
+  SHAs. `ruff check` and `ruff format --check` pass from the worktree root with
+  `--config backend/pyproject.toml`. The backend suite is 11,127 passed and 2
+  xfailed, which is the 11,129 the baseline records.
+
+- 2026-10-03 — **Agent: security, addendum. A step that passed locally and died
+  in CI, and the reason my test did not catch it.**
+
+  The first run of PR #103 was 8 green, 1 red. `Dependency audit (npm)` failed in
+  12 s on the reporting step. From the log:
+
+      shell: /usr/bin/bash -e {0}
+      ##[error]Process completed with exit code 1.
+
+  GitHub runs every `run:` block as `bash -e {0}`. **Errexit is already in force
+  before the first line of the script runs.** My step opened with:
+
+      set -uo pipefail
+      npm audit --json > npm-audit-full.json
+
+  That reads like "do not exit on error" and is not. `set -uo pipefail` *adds*
+  `-u` and `pipefail`. It does not remove an `-e` the runner turned on before
+  the script started, and no `set` line inside the script can pre-empt a flag
+  already on the command line. So `npm audit` exited 1 on the second line and
+  killed the step, which is precisely the thing the step existed to prevent.
+
+  The fix is `set +e`, which does take effect at runtime.
+
+  **Why my local test passed it.** The harness ran `bash step.sh`. The runner
+  runs `bash -e step.sh`. One flag apart, and it is the flag that decides
+  whether this script works. A local test that does not reproduce the runner's
+  invocation is not a test of the runner's behaviour, and the gap showed up as a
+  green local result and a red CI result on the same commit.
+
+  The harness now runs `bash -e step.sh`, and I checked that this makes it
+  meaningful rather than assuming it:
+
+      set -uo pipefail; false   under bash -e   -> exit 1, never reaches the next line
+      set +e; set -uo pipefail; false  under bash -e   -> exit 0, reaches the next line
+
+  **The rule, and it is the one I would hand to the next agent.** When you
+  extract a CI step and run it locally, copy the runner's invocation, not just
+  the script. `bash script.sh` and `bash -e script.sh` are different programs.
+  And when a local test disagrees with CI, suspect the harness before you
+  suspect the code: this repository has now produced "CI is red" twice, and both
+  times the red was correct and the local green was the thing that was wrong.
+
+  A step that has never been executed is a guess with YAML indentation. A step
+  that has been executed with the wrong shell flags is only slightly better.
+
+<!-- security-agent-addendum-bash-e -->
