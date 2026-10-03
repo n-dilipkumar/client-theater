@@ -1,0 +1,199 @@
+{
+  "audit_id": "jev-20261003T125426-21676-66745",
+  "decided_at": "2026-10-03T12:54:26+00:00",
+  "agent": "forensics-053",
+  "decision": "Which approach best resolves: Recovered an orphaned build of WF-053 (route a booking to the owner of the CRM record). It is plugin-shaped, adds files only, and passes every CI gate locally. Should it land as a plugin as-is, be reimplemented as a plugin against the current host, or be archived as superseded?",
+  "verdict": "pass",
+  "passed": true,
+  "selected": "land_as_plugin_now",
+  "reason": "selected 'land_as_plugin_now' at confidence 1.00 (margin 1.00 over runner-up) >= 0.75",
+  "threshold": 0.75,
+  "model": "jev-1.13.0",
+  "latency_ms": 456.35,
+  "answers": {
+    "best_approach": {
+      "type": "choice",
+      "value": "land_as_plugin_now",
+      "confidence": 1.0,
+      "probabilities": {
+        "land_as_plugin_now": 1.0,
+        "archive_as_superseded": 0.0,
+        "reimplement_against_current_host": 0.0
+      }
+    },
+    "is_confident": {
+      "type": "noul",
+      "value": 0.87
+    }
+  },
+  "state": {
+    "subject_location": {
+      "path": "C:/Users/Dilip/orca/workspaces/client-theater/dsr-wf-053-build-4",
+      "branch": "dsr-wf-053-build-4",
+      "head_commit": "a9b962e 'WF-053: route a booking to the owner of the CRM record'",
+      "parent_commit": "0d45c21",
+      "on_any_remote_branch": false,
+      "working_tree_clean": true,
+      "commits_ahead_of_merge_base": 1,
+      "recovery_backup": "recovery/orphaned-features, pushed by the coordinator from origin/main"
+    },
+    "the_only_commit_against_its_merge_base": {
+      "files_changed": 17,
+      "insertions": 8290,
+      "deletions": 2,
+      "touches_a_shared_file": false
+    },
+    "file_by_file_classification": {
+      "A_plugin_shaped_and_buildable": [
+        {
+          "path": "backend/dsr/ownership_routing/__init__.py",
+          "lines": 182,
+          "does": "Package facade. Re-exports 70+ names and carries the module map in dependency order. No router and no shared-file edit."
+        },
+        {
+          "path": "backend/dsr/ownership_routing/vocabulary.py",
+          "lines": 384,
+          "does": "The researched terms as served data: five link types, three CRM objects, the two Edge endpoint paths, the discovery operation id, the two rule kinds, the forbidden nodes. Plus the validators: email and domain normalisation, interval shape, link type, rule kind, resolution source. Every constant quotes the sentence in WF-053.md that fixes it."
+        },
+        {
+          "path": "backend/dsr/ownership_routing/errors.py",
+          "lines": 222,
+          "does": "One error hierarchy under OwnershipError, 18 classes. Each carries its own code and status, so a missing guestEmail is 400 and an already-booked routing session is 409, and the feature registers one EXCEPTION_HANDLERS entry for the whole hierarchy."
+        },
+        {
+          "path": "backend/dsr/ownership_routing/crm.py",
+          "lines": 349,
+          "does": "The CRM seam. StoreCrm resolves the owner of the guest's CRM record over crm_owner_record by normalised email or, for an Account with no address, by email domain. Resolves an owner id to a rep row over crm_owner_rep and refuses one id answering to two reps. Reads the workspace Lead-to-Account setting rather than configuring it, and walks a Lead to its Account by record id, account_id or external_id."
+        },
+        {
+          "path": "backend/dsr/ownership_routing/calendars.py",
+          "lines": 296,
+          "does": "Availability arithmetic. The connected-calendar precondition is a refusal, not a fallback. Busy blocks are widened by a per-owner buffer on both sides. Slots land on a grid of the meeting duration aligned from the epoch, so two callers get the same lattice and slots cannot overlap. Minimum notice, a 60-slot cap and a 60-day default horizon are named constants."
+        },
+        {
+          "path": "backend/dsr/ownership_routing/rules.py",
+          "lines": 406,
+          "does": "Chain normalisation. A chain with no catch-all, a catch-all that is not last, a catch-all naming nobody, and an unknown rule kind are all refused on save, so a well-formed chain cannot reach the unroutable state at run time. The forbidden-node check refuses Update Ownership and the Assign To family on an ownership path, with an advisory form for a page that previews a draft."
+        },
+        {
+          "path": "backend/dsr/ownership_routing/engine.py",
+          "lines": 1062,
+          "does": "OwnershipEngine over the audited store: links CRUD with full revalidation on patch, resolve, route, the read-only check, init_simple, book, cancel_booking, the reads, and summary. Every write goes through RecordStore or AuditedDatabase.transaction, so the routing session, the decision record and the link history entry commit together. source is a required keyword on every writing method, built from router.prefix at the route, so the audit log cannot name a path the app stopped serving."
+        },
+        {
+          "path": "backend/dsr/ownership_routing/inferences.py",
+          "lines": 307,
+          "does": "Eleven named judgement calls, each with the research sentence it rests on, why it was chosen, how to change it, and what it would move. Served at GET /api/wf-053/inferences so a reviewer can disagree with one by name instead of by reading a diff."
+        },
+        {
+          "path": "backend/dsr/features/wf053_route_a_booking_to_the_owner_of_the_cr.py",
+          "lines": 800,
+          "does": "The plugin. Exports FEATURE with id wf-053-route-a-booking-to-the-owner-of-the-cr, a router on prefix /api/wf-053 with 21 routes, EXCEPTION_HANDLERS mapping OwnershipError, and seed(db, context). Imports StoreDep from dsr.deps and never imports dsr.api."
+        },
+        {
+          "path": "backend/tests/test_wf053.py",
+          "lines": 2365,
+          "does": "194 tests. Pure domain, the HTTP surface over a temporary database, the error statuses, the audit-source rule checked against the live route registry rather than a written list, and the seed. Four of them were written to catch bugs that shipped during the original build: rules read off the store envelope instead of the payload, the catch-all outcome computed after it was appended, the catch-all owner id dropped, and links_with_chain counted off the envelope."
+        },
+        {
+          "path": "frontend/src/features/wf-053-route-a-booking-to-the-owner-of-the-cr/index.jsx",
+          "lines": 29,
+          "does": "Descriptor only. Default export is { id, label, icon, iconPath, order, Component }, picked up by the existing glob in lib/features.js."
+        },
+        {
+          "path": "frontend/src/features/wf-053-route-a-booking-to-the-owner-of-the-cr/api.js",
+          "lines": 98,
+          "does": "ownershipApi. Calls the feature's own prefix through the shared apiRequest and adds no method to the shared api object."
+        },
+        {
+          "path": "frontend/src/features/wf-053-route-a-booking-to-the-owner-of-the-cr/icons.jsx",
+          "lines": 29,
+          "does": "Five SVG glyph paths passed by path, so the shared PATHS map is not edited."
+        },
+        {
+          "path": "frontend/src/features/wf-053-route-a-booking-to-the-owner-of-the-cr/primitives.jsx",
+          "lines": 106,
+          "does": "Five primitives the shared set cannot express: OutcomeChip, Fact, Note, Quote, Subhead. Built in the feature folder because a feature may not edit components/ui.jsx."
+        },
+        {
+          "path": "frontend/src/features/wf-053-route-a-booking-to-the-owner-of-the-cr/OwnershipRouting.jsx",
+          "lines": 886,
+          "does": "The page. Four tabs in the order the researched flow happens in: routing decisions with the rule chain each one came from, links with the five researched link types and the quoted node guardrail, try a guest running check then init-simple then schedule-simple against a real room, and what this infers."
+        },
+        {
+          "path": "frontend/src/test/wf053-ownership-routing.test.jsx",
+          "lines": 756,
+          "does": "30 component tests over a fetch stub that throws on an unstubbed path. Pins the outcome labels so catch-all is never confused with the CRM owner, that the preview button calls the read-only endpoint and not the writing one, and that booking sends the routingId init returned with a startTime from the offered list."
+        },
+        {
+          "path": "docs/research/digital-sales-room-workflows/wf/WF-053.md",
+          "lines": 66,
+          "does": "Build status updated: Implemented and Tests written and passing ticked, with a note that the page was not verified in a browser. Not a shared file, so the guard passes. Twenty-four other landed features update their own research doc the same way."
+        }
+      ],
+      "B_pre_plugin_host": [],
+      "C_superseded": []
+    },
+    "b_pre_plugin_host_note": "No file edits backend/dsr/api.py, deps.py, store.py, db/audited.py or backend/seed.py. The branch is 16 additions and 1 docs edit. The CI feature guard reports OK: 17 changed files, none shared.",
+    "c_superseded_note": "Nothing on main implements this workflow. backend/dsr/booking_crm is WF-065, write the booking back into the CRM. backend/dsr/scheduling is WF-064, reschedule or cancel. backend/dsr/headless_booking is WF-056, book with no scheduling UI. None resolves a CRM owner in order to route a booking. No feature module for WF-053 exists on main and no other feature claims the prefix /api/wf-053.",
+    "contract_compliance": {
+      "adds_files_only": true,
+      "unique_prefix": "/api/wf-053",
+      "mounted_route_count": 21,
+      "route_collisions": 0,
+      "imports_dependencies_from": "dsr.deps (StoreDep), dsr.store (RecordStore), dsr.db.audited (AuditedDatabase)",
+      "imports_the_app": false,
+      "schema_flexibility": "No migration and no typed column. Arbitrary JSON in seven collections: crm_owner_link, crm_owner_route, crm_owner_booking, crm_owner_decision, crm_owner_record, crm_owner_rep, crm_owner_setting. Filtering uses store.find, which resolves dotted JSON paths through the dynamic index.",
+      "audit_guarantee": "Every write goes through RecordStore or AuditedDatabase.transaction. init_simple writes the routing session, the decision record and the link history entry in one transaction. book writes the booking, the session transition and the history entry in one transaction. No direct sqlite3 connection anywhere.",
+      "demo_data": "seed(db, context) exported in the feature module. backend/seed.py is not edited."
+    },
+    "workflow_board_status": {
+      "ticket": "WF-053",
+      "name": "Route a booking to the owner of the CRM record",
+      "criticality": "supplementary",
+      "state": "Pending",
+      "source": "the coordinator's task brief, and docs/research/digital-sales-room-workflows/wf/WF-053.md"
+    },
+    "branch_state": {
+      "branch": "forensics-053",
+      "recovery_commit": "46f02da",
+      "merge_commit": "445bd33",
+      "behind_ahead_vs_origin_main": "2 ahead, 0 behind",
+      "orphan_base": "0d45c21, three commits behind main at recovery time",
+      "reconciled": "origin/main advanced by two commits during the recovery: 6492c48 and 5d5de7f, which landed WF-044. The branch was merged forward onto current main with git merge, which cannot drop the recovery commit, and every gate was re-run on the merged tree. The merge was clean and touched none of this branch's files."
+    },
+    "changes_made_on_the_way_in": {
+      "behaviour_changes": 0,
+      "mechanical_fixes": [
+        "ruff import sorting and unused-import removal, 3 files, because the CI lint job refuses the branch otherwise",
+        "ruff format, 7 files",
+        "zip(starts, starts[1:]) now passes strict=False in test_wf053.py. starts[1:] is one shorter on purpose, so strict=True would raise rather than compare. This was the only non-automatic edit."
+      ],
+      "one_deliberate_omission": "The orphaned revision also deleted two lines from WF-053.md: 'Criticality: supplementary' and 'Why: Routing policy inside the booking cluster.' Every other workflow doc on main carries both lines and the board records WF-053 as supplementary, so that deletion was not carried. The Build status update from the same revision was carried."
+    },
+    "measurements_run_on_this_branch": {
+      "backend_suite": "11324 tests collected, pytest exit 0",
+      "wf053_suite": "194 tests, pytest exit 0, re-run after the lint fixes with the same result",
+      "coverage_gate": "measured total 94.92730 percent against a 90.0 percent floor, 49422 of 52063 statements over 416 files, gate exit 0",
+      "coverage_gate_per_file_note": "Two files this change touched sit below the floor individually: calendars.py at 88.64 percent and vocabulary.py at 88.07 percent. The gate is on the measured total, so the job is green. Reported rather than left for a reviewer to find.",
+      "ruff_check": "All checks passed",
+      "ruff_format_check": "546 files already formatted",
+      "eslint": "exit 0",
+      "prettier_check": "exit 0",
+      "vitest": "exit 0",
+      "vite_build": "exit 0",
+      "design_floor": "55 feature pages checked, 0 failing, 0 with warnings",
+      "feature_contract_guard": "OK: 17 changed file(s), none shared",
+      "live_registry": "55 loaded, 0 failed. WF-053 mounted, prefix /api/wf-053, 21 routes, handler OwnershipError, nav entry ownership-routing.",
+      "verify_all_routes": "995 routes across 54 features, no 5xx",
+      "verify_localhost": "all headless browser-equivalent checks passed on port 8000",
+      "seed_output": "4 reps, 6 CRM records, 3 links, 5 routes, 2 bookings; outcomes 2 catch_all and 3 resolved; refused ownership_calendar_not_connected and ownership_owner_unknown"
+    },
+    "declared_unverified": [
+      "The page was not looked at in a browser. No browser was attached to this recovery, so the page was exercised through 30 component tests and the headless localhost pass.",
+      "The Reviewer bot gate did not run.",
+      "No real CRM vendor is called. StoreCrm is a class over the audited store, because the research documents Chili Piper and Salesforce request shapes and this product has no client for either."
+    ],
+    "requirements": "Recover stranded work rather than discard it. Land only what can be landed. Do not edit a shared file. Do not change application code to make it fit. Never merge without CI green. Report an uncertain verdict as-is rather than overriding it."
+  }
+}
