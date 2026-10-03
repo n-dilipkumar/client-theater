@@ -329,8 +329,44 @@ class TestOneTimeCodeHashing:
             link_secrets.secrets.randbelow = original
 
     def test_codes_do_not_repeat_in_a_small_sample(self):
-        minted = {link_secrets.mint_code() for _ in range(200)}
+        """The minting must not repeat a code within a small sample.
+
+        This used to draw 200 codes from the real random source and assert they
+        were all distinct. That fails about one run in fifty: the space is
+        1,000,000, so 200 draws collide with probability 1.97 percent, measured
+        at 1.75 percent over 2,000 trials. It went red on CI run 37096412514 with
+        "assert 199 == 200" and would have gone red again on the next unlucky
+        draw.
+
+        A test that fails on a coin flip is not a test, it is a coin. The
+        property being checked is that ``mint_code`` walks the space rather than
+        looping, so the random source is stubbed with a known advancing sequence
+        and the assertion becomes exact.
+        """
+        issued = iter(range(1, 201))
+        original = link_secrets.secrets.randbelow
+        link_secrets.secrets.randbelow = lambda upper: next(issued)
+        try:
+            minted = {link_secrets.mint_code() for _ in range(200)}
+        finally:
+            link_secrets.secrets.randbelow = original
         assert len(minted) == 200
+        assert minted == {f"{n:06d}" for n in range(1, 201)}
+
+    def test_a_repeating_code_is_possible_and_the_minting_does_not_loop(self):
+        """The property the previous test could not express: a stall is visible.
+
+        With the random source pinned to a constant, the minting must still
+        return a well-formed six-digit code every time. A mint that looped on the
+        previous value would pass a uniqueness test and fail this one.
+        """
+        original = link_secrets.secrets.randbelow
+        link_secrets.secrets.randbelow = lambda upper: 7
+        try:
+            codes = [link_secrets.mint_code() for _ in range(50)]
+        finally:
+            link_secrets.secrets.randbelow = original
+        assert codes == ["000007"] * 50
 
     def test_the_code_hash_verifies(self):
         assert link_secrets.verify_code("123456", link_secrets.hash_code("123456"))
