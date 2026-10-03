@@ -1,0 +1,142 @@
+{
+  "agent": "final-wf048",
+  "audit_id": "jev-20261003T163152-28484-12097",
+  "decided_at": "2026-10-03T16:31:52.098850+00:00",
+  "decision": "Should WF-048, validate the connector against a sandbox or test account, be landed as a plugin, or deleted as not worth the maintenance?",
+  "state": {
+    "ticket": "WF-048",
+    "name": "Validate the connector against a sandbox or test account",
+    "decision_owner": "the repository owner. Instruction: if it adds value to the product, land it. If not, delete it and close it. A clean repository is the goal.",
+    "what_the_feature_does": "It registers a CRM connection as a production row, then clones that row into a second test-environment row that keeps the production mapping and replaces only the environment coordinates. It runs a three-probe test sync against the test row with synthetic buyers: a keyed upsert to create an object, the same upsert again to prove the dedupe key was honoured, and an allOrNone composite chunk carrying one good row beside one intentionally poisoned row to prove the rollback fired. It then scores four assertions from the sandbox's own answers and gates promotion to production on the newest run being green, recording which run carried the evidence.",
+    "where_the_code_lives": "13 files, all new additions: backend/dsr/connector_sandbox/ (9 modules), the plugin backend/dsr/features/wf048_validate_the_connector_against_a_sandb.py, backend/tests/test_wf048.py, and two files in frontend/src/features/wf-048-validate-the-connector-against-a-sandb/.",
+    "test_count_and_result": {
+      "wf048_suite": "133 tests collected, 133 passed, pytest exit 0",
+      "full_backend_suite": "12136 tests, 0 failures, 0 errors, 2 pre-existing skips",
+      "frontend_vitest": "10 files, 293 tests, all passed. None of them is a WF-048 test.",
+      "vite_build": "exit 0"
+    },
+    "plugin_shaped": {
+      "exports_FEATURE_and_router": true,
+      "router_prefix": "/api/wf-048",
+      "prefix_is_ticket_derived": true,
+      "imports_dependencies_from": "dsr.deps (StoreDep), dsr.store (RecordStore), dsr.db.audited (AuditedDatabase)",
+      "imports_the_app": false,
+      "migration_or_typed_column": "none. Two collections of arbitrary JSON: connector_sandbox_connection and connector_sandbox_run.",
+      "touches_a_shared_file": false,
+      "shared_file_guard_measured": "tools/check_feature_diff.py: none shared. git diff against origin/main over the 11 shared paths returns nothing."
+    },
+    "network_calls": {
+      "default_route_behaviour": "No outbound call. The route default is SimulatedTransport, a local class that answers each probe from the request. Measured: _transport_for({}) returns SimulatedTransport.",
+      "seed_and_tests": "No socket. The seed and all 133 tests drive ScriptedTransport or SimulatedTransport.",
+      "a_real_transport_exists": "UrllibTransport is selected only when DSR_WF048_TRANSPORT is set to real, urllib or 1. Measured: with the variable set the route returns UrllibTransport.",
+      "why_it_matters": "The default risk profile is the same as the other landed CRM features: no vendor is dialled unless a deployment operator opts in by setting one environment variable."
+    },
+    "duplication_search_on_main": {
+      "searched": "grep for sandbox, connector, validate, test_account, run_test_sync, allOrNone, dedupe_key_honoured, rollback_fired across backend/dsr on origin/main.",
+      "result": "No feature on main performs this workflow. The nearest neighbours and how they differ:",
+      "nearest_neighbours": [
+        "backend/dsr/crm_upsert/connections.py, validate_connection at line 310. Validates a connection spec at save time: vendor present, object present, key_field present, no field mapped onto a record id. It never contacts a vendor and never scores an assertion. Different job.",
+        "backend/dsr/crm_provisioning/vocabulary.py line 110, CONNECTION_ENVIRONMENTS = ('production', 'sandbox'). A two-value label on a provisioned connection row. It has no test sync, no assertions, no promotion gate and no HubSpot test accounts. Vocabulary overlap only.",
+        "backend/dsr/integ_monitor (WF-049, landed). Records a quota reading from a vendor surface and scores health metrics. It does not run a pipeline, does not probe create/dedupe/rollback, and does not gate a cutover.",
+        "backend/dsr/atomic_bundle (WF-039 research). Owns the allOrNone composite request as a write path into the CRM. WF-048 sends one allOrNone chunk as a probe and scores whether the vendor rolled it back. Different job."
+      ],
+      "conclusion": "No duplication. Test environment row, test sync, four scored assertions and the green-only promotion gate exist nowhere else on main."
+    },
+    "frontend_page": {
+      "ships_a_page": "Two files: SandboxValidation.jsx (328 lines) and primitives.jsx (153 lines).",
+      "missing_the_entry_point": "There is no index.jsx. frontend/src/lib/features.js line 21 discovers features with import.meta.glob('../features/*/index.jsx'), so the glob never matches this folder and the page is never discovered.",
+      "measured_in_the_build": "After npm run build the bundle contains 0 occurrences of 'wf-048', 0 of 'wf048', 0 of 'Sandbox validation' and 0 of 'sandbox-validation'. The page is not in the shipped product.",
+      "does_not_compile": "SandboxValidation.jsx line 199 reads 'del body'. That is a Python statement, not JavaScript. esbuild reports 'Expected \";\" but found \"body\"' at 199:10 and eslint reports 'Parsing error: Unexpected token body' at 199:11. This is the only eslint error in the whole frontend.",
+      "the_dead_handler": "onSelfTest posts to the literal string path '/wf-048/connections/self-test-route-placeholder' and discards the response. The self-test form cannot work. The real route is POST /wf-048/rooms/{room_id}/self-test, which needs a room id, and the page has no room picker and never loads rooms.",
+      "ships_no_frontend_test": "There is no frontend/src/test file for WF-048. Of the four features recovered in this programme, WF-053 shipped frontend/src/test/wf053-ownership-routing.test.jsx; WF-049, WF-062 and WF-044 shipped an index.jsx but no frontend test. WF-048 ships neither.",
+      "what_the_others_shipped": "WF-049, WF-053, WF-062 and WF-044 each shipped index.jsx, and each of the first three also shipped api.js. WF-048 ships neither file."
+    },
+    "ci_state_measured_on_this_branch": {
+      "feature_contract_no_shared_files": "PASS",
+      "backend_tests": "PASS",
+      "ruff_check": "FAIL. 17 errors across 5 files. 13 are auto-fixable import sorting and unused imports. One is F821 Undefined name 'VendorRequestError' at backend/dsr/connector_sandbox/transport.py line 124.",
+      "ruff_format_check": "FAIL. 8 files would be reformatted.",
+      "eslint": "FAIL. 1 error, and it is the WF-048 parse error above. 10 pre-existing warnings on other files.",
+      "prettier": "PASS",
+      "frontend_test": "PASS",
+      "frontend_build": "PASS",
+      "design_floor": "PASS, 57 pages checked, 0 findings. WF-048 is not among the 57, because the floor check walks index.jsx files and there is none."
+    },
+    "the_real_defect": {
+      "what": "backend/dsr/connector_sandbox/transport.py line 124 raises VendorRequestError on a network failure but never imports it.",
+      "measured": "UrllibTransport().request('GET', 'http://127.0.0.1:9/nothing') raises NameError: name 'VendorRequestError' is not defined.",
+      "consequence": "The EXCEPTION_HANDLERS entry that maps VendorRequestError to 502 can never fire. With DSR_WF048_TRANSPORT=real an unreachable vendor produces a 500 NameError instead of the intended 502.",
+      "blast_radius": "Latent. It cannot trigger on the default simulated or scripted transport, so all 133 tests pass. It is one line: add the import to transport.py.",
+      "why_it_matters_for_this_decision": "It is the only behavioural defect found. It is a one-line fix in a file this feature owns."
+    },
+    "what_landing_would_require": [
+      "Add the missing import of VendorRequestError to transport.py. One line, in a file this feature owns. This is a real behaviour fix, not a lint fix.",
+      "Run ruff check --fix and ruff format on the 8 files. Mechanical, and the WF-053 recovery did the same.",
+      "Write frontend/src/features/wf-048-validate-the-connector-against-a-sandb/index.jsx. This is the entry point the host globs for. Without it the page does not exist in the product.",
+      "Repair SandboxValidation.jsx so it compiles, and make the self-test form reach the real room-scoped route. This is not mechanical: the page needs a room picker and a working submit handler, because the route it must call takes a room id.",
+      "Write a frontend test for the page, or state plainly in the pull request that the page ships without one."
+    ],
+    "how_big_is_that_work": {
+      "backend_side": "Mechanical apart from one import line. The 133 tests already pin the researched rules, the error statuses, the audit-source rule and the seed.",
+      "frontend_side": "Not mechanical. Four of the five items are frontend. The page as written is roughly one third finished: it has the read paths and the run/promote/revert actions wired, and its create-side form is a placeholder pointing at a path that does not exist.",
+      "honest_reading": "Landing this as-is is not possible, because eslint fails on it and CI would stay red. Landing it after the named work means writing part of the frontend page that was never written, which is a real feature task rather than a recovery."
+    },
+    "seed_safety": {
+      "checked": "Every non-ASCII character in the feature module and the 9 domain modules was enumerated. U+2014 em dash appears 15 times and U+2026 ellipsis 3 times, both encodable in cp1252. U+2192 rightwards arrow appears 13 times and is NOT encodable in cp1252.",
+      "does_the_seeder_print_any_of_it": "No. The seed returns the pure-ASCII string '6 connections, 2 green runs, 3 failed runs, 1 promoted', or '0 sandbox connections (no demo rooms to scope them to)'. Both were encoded against cp1252 and passed.",
+      "measured_end_to_end": "backend/seed.py was run with PYTHONIOENCODING=cp1252 and PYTHONUTF8=0 against a fresh database. Exit code 0. The WF-048 line printed as plain ASCII. The arrows stay inside docstrings and JSON payloads and never reach a console.",
+      "verdict": "PASS. The cp1252 hazard the owner warned about is not present in WF-048."
+    },
+    "board_position": "Supplementary workflow on the programme board, spec complete, state not landed. An earlier Jev gate chose to land WF-049 alone and hold WF-046 and WF-048 back. Nobody revisited that. This decision is the revisit.",
+    "constraints_from_the_brief": "Do not reimplement the feature. Do not delete anything. Never merge without CI green. Never edit a shared file to make a gate pass. Never weaken or delete a test to make something green. An uncertain verdict must be escalated, not overridden."
+  },
+  "model": "jev-1.13.0",
+  "threshold": 0.75,
+  "verdict": "pass",
+  "passed": true,
+  "selected": "land_after_the_named_work",
+  "reason": "selected 'land_after_the_named_work' at confidence 0.80 (margin 0.80 over runner-up) >= 0.75",
+  "latency_ms": 412.99,
+  "usage": {
+    "input_tokens": 3628,
+    "output_tokens": 79
+  },
+  "pass_option": "best_approach",
+  "questions": {
+    "best_approach": {
+      "type": "choice",
+      "instructions": "Should WF-048, validate the connector against a sandbox or test account, be landed as a plugin, or deleted as not worth the maintenance? Weigh the backend evidence against the state of the frontend page and against what landing would still require.",
+      "criteria": {
+        "land_after_the_named_work": "Land it. The backend is sound: 133 tests pass, it is plugin-shaped, it touches no shared file, it makes no network call by default, it duplicates nothing on main, and its one real defect is a missing import that is one line to fix. Ship the backend plus a written index.jsx and a repaired page, then merge with CI green. Cost: the frontend work is a part-built page, so this is a feature task on top of a recovery.",
+        "land_backend_only_no_page": "Land the backend plugin, which is complete and proven, and do not ship the frontend page. The workflow then exists as an audited API with a green promotion gate and a seeded demo, reachable over HTTP, with no page in the nav. Cost: a seeded feature with no page is what docs/FEATURE-CONTRACT.md calls a feature nobody can review, and the two frontend files would have to be deleted rather than carried.",
+        "delete_not_worth_maintenance": "Delete it. Cost: the repository loses a researched workflow that nothing on main duplicates, together with 133 passing tests that pin the Power Platform environment vocabulary, the HubSpot version floors and the four researched assertions. The owner instruction is that a clean repository is the goal, and this is one more unmerged branch to carry."
+      }
+    },
+    "is_confident": {
+      "type": "noul",
+      "instructions": "Does this evidence settle the land-or-delete choice, or is the case for landing and the case for deleting too close on this evidence to decide?",
+      "criteria": {
+        "true": "The evidence points one way and the other option is clearly weaker",
+        "false": "The two options are close on this evidence and a human should choose"
+      }
+    }
+  },
+  "answers": {
+    "best_approach": {
+      "type": "choice",
+      "value": "land_after_the_named_work",
+      "confidence": 0.8,
+      "probabilities": {
+        "land_after_the_named_work": 0.87,
+        "delete_not_worth_maintenance": 0.07,
+        "land_backend_only_no_page": 0.06
+      }
+    },
+    "is_confident": {
+      "type": "noul",
+      "value": 0.43,
+      "confidence": null,
+      "probabilities": {}
+    }
+  }
+}
