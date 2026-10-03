@@ -799,46 +799,59 @@ rejected by argparse, so no pull request can move the threshold.
 
 ### Measured, on commit 0b57667, in this worktree
 
-| Run | Command | Wall clock | Result |
-|---|---|---|---|
-| parallel with coverage | `pytest -n auto --cov=dsr` | 231.84 s | 11127 passed, 2 xfailed, exit 0 |
-| serial with coverage | `pytest -n 0 --cov=dsr` | 420.45 s | 11127 passed, 2 xfailed, exit 0 |
-| parallel without coverage | `pytest -n auto` | 230.65 s | 11127 passed, 2 xfailed, exit 0 |
+Six runs, two interleaved rounds, same machine, same interpreter.
 
-Every coverage run reports the same number:
+| Round | Configuration | Wall clock | percent | missed | exit |
+|---|---|---|---|---|---|
+| 1 | `-n auto --cov=dsr` | 231.84 s | 94.88660 | 2559 | 0 |
+| 1 | `-n 0 --cov=dsr` | 420.45 s | 94.88660 | 2559 | 0 |
+| 1 | `-n auto`, no coverage | 230.65 s | | | 0 |
+| 2 | `-n auto --cov=dsr` | 245.38 s | 94.88660 | 2559 | 0 |
+| 2 | `-n 0 --cov=dsr` | 636.55 s | 94.88660 | 2559 | 0 |
+| 2 | `-n auto`, no coverage | 118.19 s | | | 0 |
+
+Every run reports **11127 passed and 2 xfailed**, which is the 11129 collected on
+`main`. Every coverage run reports the same number:
 
     2559 missed of 50045 statements
     94.88660 percent
     401 files measured, 279 of them with a gap
 
-**Coverage tracing cost about 1.2 seconds on a 231 second run.** That is the
-whole speed cost on this host. The serial run is 1.8 times slower, so coverage
-is not what made `-n auto` worth having.
+**This host cannot measure what coverage costs, and I will not pretend it can.**
+The two `-n auto` runs without coverage took 230.65 s and 118.19 s. That is a
+112 second spread on identical code. The two `-n auto` runs with coverage took
+231.84 s and 245.38 s. The coverage overhead is smaller than the spread between
+two runs of the same code, so any figure I published from this host would be
+measuring the other agents' load and calling it coverage.
+
+The runner figure is the one to believe, and section 7 says why. It is in the
+table at the end of this section.
 
 ### The xdist question, answered by measurement rather than by argument
 
 The task brief warned that coverage under `-n auto` can report only the subset
-one worker saw. Three full runs of the same commit, then a comparison of the
-three JSON reports file by file and uncovered line set by uncovered line set:
+one worker saw. Four full runs of the same commit, then a comparison of all four
+JSON reports file by file and uncovered line set by uncovered line set:
 
-| Run | Command | Wall clock | percent | missed |
-|---|---|---|---|---|
-| 1 | `pytest -n auto --cov=dsr` | 231.84 s | 94.88660 | 2559 |
-| 2 | `pytest -n 0 --cov=dsr` | 420.45 s | 94.88660 | 2559 |
-| 3 | `pytest -n auto --cov=dsr` with `COV_CORE_SOURCE=dsr` | 204.04 s | 94.88660 | 2559 |
+| Run | Command | percent | missed |
+|---|---|---|---|
+| 1 | `pytest -n auto --cov=dsr` | 94.88660 | 2559 |
+| 2 | `pytest -n 0 --cov=dsr` | 94.88660 | 2559 |
+| 3 | `pytest -n auto --cov=dsr` with `COV_CORE_SOURCE=dsr` | 94.88660 | 2559 |
+| 4 | round two of `-n auto --cov=dsr` | 94.88660 | 2559 |
 
     files compared                          401
     files with a count difference            0
     files with a different uncovered set     0
-    totals blocks identical                 yes, all three
+    totals blocks identical                 yes, all four
 
-All three report 11127 passed and 2 xfailed and exit 0. pytest-cov is already
+Every run reports 11127 passed and 2 xfailed and exits 0. pytest-cov is already
 combining the xdist workers correctly. `COV_CORE_SOURCE` changes nothing, which
 is expected: every `dsr` module is imported inside a test rather than at
 interpreter start-up, so there is no early statement for it to catch.
 
 The gated number is the `-n auto` number. It is the same number a serial run
-produces, at half the wall clock.
+produces, at a fraction of the wall clock.
 
 ### A per-file floor is not adoptable today, and the total is sensitive enough
 
@@ -939,57 +952,121 @@ in the job summary, naming the fork and the GitHub error. It does not fail the
 step, because the gate is the job above and a fork is a known limit of the
 `pull_request` trigger rather than a coverage result.
 
-### Two things I got wrong, recorded so nobody copies them
+### Two things I got wrong, and one I got wrong twice
 
-**I corrupted my own measurement by running two coverage runs at once.** While
-the serial coverage run was in flight I started a scoped coverage run in the
-same working tree. Both use `backend/.coverage`. The scoped run reported
-`no such table: line_bits` and `Failed to generate report`. Round two of the
-timing series is therefore worthless and I discarded it.
+**I corrupted a measurement by running two coverage runs at once, and then I
+wrote down the wrong conclusion about it.** While the serial coverage run was
+in flight I started a scoped coverage run in the same working tree. Both use
+`backend/.coverage`. The scoped run reported `no such table: line_bits` and
+`Failed to generate report`.
 
-The serial run had already finished and written its report, so the decisive
-comparison survived. I copied both reports out of the working tree before
-anything could overwrite them. The rule this adds: **a second coverage run in
-the same working tree needs its own `COVERAGE_FILE`.** The next measurement I
-started did exactly that and lost nothing.
+At the moment I wrote this section down I believed round two of the timing
+series was lost to that collision, and I wrote "round two is worthless and I
+discarded it". **That was wrong.** Round two finished later, after the collision
+had passed, and all three of its runs are valid. All six runs agree on the
+coverage number. I discarded nothing.
+
+The serial run had already written its report, so the decisive comparison
+survived regardless, and I copied every report out of the working tree before
+anything could overwrite it.
+
+The rule this adds: **a second coverage run in the same working tree needs its
+own `COVERAGE_FILE`.** The next measurement I started did exactly that and lost
+nothing. Point `COVERAGE_FILE` at a different path, or do not run two coverage
+runs in one tree.
 
 This is section 8 defect 3 wearing different clothes. `git stash push` printed
 success and left nothing. `pytest --cov` printed a warning and produced no
 report. Both printed something and did not do the thing.
 
-**The documented floor of 2553 does not reproduce here, and I did not explain
-the difference.** I measure 2559 on the same commit `0b57667`, in three runs,
-with three byte-identical reports. That is 6 statements, or 0.012 percentage
-points.
+**I published a coverage cost I could not measure, and I withdrew it.** I first
+wrote that coverage tracing cost 1.2 seconds, by comparing one covered run at
+231.84 s against one uncovered run at 230.65 s. Round two then produced an
+uncovered run at 118.19 s, which is faster than either covered run. The honest
+statement is that the run-to-run spread on this host is 112 seconds and the
+coverage cost is smaller than that, so this host cannot resolve it at all. The
+number is in the runner table at the end of this section instead.
+
+**The documented floor of 2553 does not reproduce, and I did not explain it.**
+I measure 2559 on commit `0b57667` in this worktree across six runs, all six
+reports byte-identical. The runner measures 2560 on the same commit under
+CPython 3.12.14 on Linux. The document says 2553. That is a spread of 7
+statements across three environments.
 
 I ruled out what I could and I am not going to guess past that. Ruled out: the
-`frontend/dist` question in section 2, because `frontend/dist` is absent in
-this worktree, which is the 2553 case and not mine. Ruled out: xdist, because
-the serial and parallel reports are identical. Ruled out: the interpreter,
-because this venv is Python 3.13.15 and `pip list` shows it is the same venv
-the earlier measurement used. Not ruled out, and not claimed: something in the
-environment that I did not vary.
+`frontend/dist` question in section 2, because `frontend/dist` is absent here,
+which is the 2553 case and not mine. Ruled out: xdist, because the serial and
+parallel reports are identical. Ruled out: `COV_CORE_SOURCE`, because the report
+is identical with and without it.
 
-The number to defend from here is **2559, measured three times, per-file and
-per-line identical**. It is 4.89 points above the floor, so the discrepancy
-cannot move the gate either way. The orchestrator should correct section 2 or
-record why it cannot be corrected.
+What I did establish is that **the number is platform and version dependent**,
+which section 2 does not say. Two environments I control measure 2559 and 2560.
+So "the floor" is not one number until someone fixes the interpreter and the
+operating system in the same sentence as the percentage.
 
-### Before and after the backend job
+The number to defend from here is **2560 on the runner**, because the runner is
+what the gate runs on, and 2559 in a Windows worktree. Both are 4.88 points
+above the floor, so the discrepancy cannot move the gate either way. The
+orchestrator should correct section 2 and record which environment 2553 came
+from, or record that it cannot be reproduced.
 
-| Where | Before | After |
-|---|---|---|
-| this host, `-n auto` | 230.65 s | 231.84 s |
-| GitHub runner, `main`, section 8 | 118 s | RUNNER_NUMBER s |
+### The job time, before and after
 
-The local pair is two runs on a loaded host, so treat it as a ratio and not as a
-second decimal. The runner number is the one to believe, for the reason section
-7 gives.
+Read from GitHub Actions. Same runner image, same 11,129 tests, all passing.
+
+| Run | Branch | Backend tests job | What changed |
+|---|---|---|---|
+| `37053160255` | `main` | **118 s** | `python -m pytest`, no coverage |
+| `37096073587` | `ci-coverage` | **221 s** | same suite, plus `--cov=dsr`, plus the gate |
+
+**Coverage costs about 103 seconds on the backend job, an 87 percent increase.**
+The local host cannot see this at all, and its run-to-run spread on identical
+code is 112 seconds. This is the clearest argument in the document for the rule
+section 7 states: a local number and a runner number are not the same
+measurement, and only the runner is reproducible.
+
+The pip cache does restore. The log shows
+`Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-...`,
+so `cache-dependency-path: backend/pyproject.toml` is the right key and it is
+being honoured. Part of the 103 seconds is the cache miss on the first run that
+introduced it, and part is coverage tracing. I did not separate the two, because
+separating them needs a second runner run with the cache already warm and the
+speed agent owns CI timing.
+
+### What the runner actually measured
+
+The gate ran on the runner and read the runner's own report:
+
+    measured total   : 94.88460 percent
+    agreed floor     : 90.0 percent
+    covered          : 47485 of 50045 statements
+    missed           : 2560 statements
+    files measured   : 399
+    files below floor: 45
+    files this change touched: 0 measured of 6 changed
+    PASS. Coverage 94.88460 percent is at or above the 90.0 percent floor.
+
+    11127 passed, 2 xfailed, 5 warnings in 193.75s
+
+**The number is platform and version dependent, and now I have both ends of that
+measured rather than assuming it.**
+
+| Where | Interpreter | missed | percent |
+|---|---|---|---|
+| this worktree, Windows | CPython 3.13.15 | 2559 | 94.88660 |
+| the runner, Linux | CPython 3.12.14 | 2560 | 94.88460 |
+| `orchestration/TEST-REFACTOR.md` section 2 | unrecorded | 2553 | 94.89859 |
+
+One statement is platform dependent. Both measured numbers clear the 90 percent
+floor by about 4.88 points, so the gate behaves the same on both.
 
 ### What I could not do
 
-* I did not reproduce 2553. The difference is 6 statements and I did not find
-  the cause.
+* I did not reproduce 2553. The spread across three environments is 7
+  statements. I established that the number is platform and version dependent
+  and I stopped there.
+* I did not separate the cost of coverage tracing from the cost of the first
+  cold pip cache on the runner. Both landed in the same 103 seconds.
 * I did not add a coverage gate to the frontend. `@vitest/coverage-v8` is not
   installed and the existing comment in `ci.yml` records that as a decision for
   a human. This gate is the backend package only.
