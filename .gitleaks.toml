@@ -1,0 +1,85 @@
+# gitleaks configuration for this repository.
+#
+# Every entry below was measured, not guessed. gitleaks 8.30.1 was run over the
+# full history (206 commits) and over the working tree. It reported 8 and 7
+# findings respectively. All of them were read by hand and all of them are false
+# positives. This file removes exactly those and nothing else, so the scan stays
+# a gate and the next real credential still fails the build.
+#
+# `useDefault = true` keeps gitleaks' own 150-odd rules. Nothing here disables a
+# rule; every entry is an allowlist for one measured string in one place.
+#
+# Re-measure after changing this file:
+#
+#   gitleaks git . --config .gitleaks.toml --report-format json \
+#     --report-path /tmp/gl.json
+#
+# An allowlist that grows without a matching finding in this file is the failure
+# mode to watch for. A secret scanner that cries wolf on its own fixtures is a
+# scanner people switch off, and a scanner people switch off finds nothing.
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# 1. The WF-069 demo password.
+#
+# Measured matches (4 in the tree, 4 in history):
+#   backend/dsr/features/wf069_gate_each_buyer_link_with_a_password_a.py:460
+#   backend/dsr/features/wf069_gate_each_buyer_link_with_a_password_a.py:482
+#   backend/tests/test_wf069.py:70
+#   frontend/src/test/wf069-link-gating.test.jsx:31
+#
+# All four are the same literal, "northwind-2026", seeded into the demo dataset
+# so the link-gating demo has something to gate. It is a published fixture for a
+# local demo database, not a credential for anything. Scoped by path as well as
+# by value so that the same literal appearing anywhere else is still reported.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "WF-069 demo seed password, scoped to the four files that seed it"
+paths = [
+  '''^backend/dsr/features/wf069_gate_each_buyer_link_with_a_password_a\.py$''',
+  '''^backend/tests/test_wf069\.py$''',
+  '''^frontend/src/test/wf069-link-gating\.test\.jsx$''',
+]
+regexes = ['''northwind-2026''']
+
+# ---------------------------------------------------------------------------
+# 2. The one-time code alphabet.
+#
+# Measured matches (1 in the tree, 2 in history):
+#   backend/dsr/domains.py:219
+#   backend/dsr/domains.py:220  (earlier commit 94998c4)
+#
+# _SECRET_ALPHABET is the set of characters a one-time code is drawn from. It is
+# a lookup table in the source, not a secret, and it is the one thing in this
+# repository that gitleaks rates above its own confidence floor: entropy 5.83
+# against a generic-api-key threshold near 3.5. That is the whole reason it trips.
+#
+# The regex is anchored on the variable name and on the exact alphabet literal,
+# so it allows that one assignment and not any other high-entropy string that
+# might later sit in the same file.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "_SECRET_ALPHABET, the character set a one-time code is drawn from"
+paths = ['''^backend/dsr/domains\.py$''']
+regexes = [
+  '''_SECRET_ALPHABET\s*=\s*"23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"''',
+]
+
+# ---------------------------------------------------------------------------
+# 3. The documentation bearer placeholder.
+#
+# Measured matches (1 in the tree, 1 in history):
+#   docs/research/digital-sales-room-workflows/wf/WF-026.md:34
+#   docs/research/raw/analytics-intent.md:338
+#
+# Both are the literal word S2S_TOKEN in a curl example that documents how the
+# Outreach API is called. It is a placeholder standing in for a value the reader
+# supplies. Scoped to docs/research, which holds no code, so a bearer token in
+# application source is still reported.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "S2S_TOKEN placeholder in the research corpus, scoped to docs/research"
+paths = ['''^docs/research/''']
+regexes = ['''Authorization: Bearer S2S_TOKEN''']
