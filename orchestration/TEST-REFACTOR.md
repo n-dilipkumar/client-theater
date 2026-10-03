@@ -1010,6 +1010,33 @@ above the floor, so the discrepancy cannot move the gate either way. The
 orchestrator should correct section 2 and record which environment 2553 came
 from, or record that it cannot be reproduced.
 
+### One more instance of the section 7 flake, now on a runner
+
+Run `37096412514` on this branch went red on the backend job. The same code had
+been green on run `37096073587`. The only difference between the two commits is
+this document, which coverage does not measure and no test reads.
+
+    tests/test_wf069.py::TestOneTimeCodeHashing::test_codes_do_not_repeat_in_a_small_sample
+    assert len(minted) == 200
+    E   AssertionError: assert 199 == 200
+
+**This is the flake section 7 already measured, not a new defect.** The proof is
+in the source, not in a guess. `mint_code` is
+`str(secrets.randbelow(10**digits)).zfill(digits)`, so the code space is
+1,000,000. The test takes 200 samples and asserts all 200 differ. The birthday
+probability of at least one collision is about 1.97 percent, and section 7
+measured it at 1.75 percent over 2,000 real calls. This run drew exactly one
+collision.
+
+**The coverage gate passed in the same job.** The log shows
+`TOTAL 50045 2560 95%` and the gate reported 2560 missed, identical to the
+previous run. The job went red because a test failed, not because coverage fell.
+
+I did not touch `backend/tests/test_wf069.py`. That path is another agent's
+territory, and section 7 says the honest fix is to seed the random source rather
+than to widen the sample or delete the assertion. I re-ran CI instead, which is
+the correct response to an event that happens about twice in every hundred runs.
+
 ### The job time, before and after
 
 Read from GitHub Actions. Same runner image, same 11,129 tests, all passing.
