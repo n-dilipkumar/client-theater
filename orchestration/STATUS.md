@@ -8,9 +8,9 @@
 Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `a8e35a3 Record the nineteen lines that only existed on agent branches (#114)` &middot; measured 2026-10-03T20:27:23+05:30
+`main` at `482eb13 Regenerate STATUS.md and WORKFLOW-BOARD.md on current main (#115)` &middot; measured 2026-10-03T21:19:15+05:30
 
-Measured in `C:\Users\Dilip\orca\workspaces\client-theater\final-dashboards`. This file is written by the generator and by nothing
+Measured in `C:\Users\Dilip\Documents\dummy repo\client-theater`. This file is written by the generator and by nothing
 else; if a copy of it lives in another clone, that copy is not this run.
 
 ## Progress
@@ -30,10 +30,14 @@ the same test the plugin host applies. A module that exists only in a
 branch is a claim to verify, not a feature.
 
 It does **not** come from the `## Build status` checkboxes in each
-`wf/WF-NNN.md` page. Only 20 of 138 pages tick `Implemented` while 48
-workflows are built, so those checkboxes understate the programme by more
-than half; they are claims made when the page was generated, and the
-feature registry is the fact.
+`wf/WF-NNN.md` page. Only 27 of 138 pages
+tick `Implemented` while 57 workflows are built, so those
+checkboxes understate the programme; they are claims made when the page
+was generated, and the feature registry is the fact.
+
+Both numbers above are counted when this file runs. An earlier version
+typed them, and the built count went stale while the headline beside it
+stayed correct.
 
 **Critical / supplementary** is the judgment in
 `docs/research/digital-sales-room-workflows/criticality-decisions.json`.
