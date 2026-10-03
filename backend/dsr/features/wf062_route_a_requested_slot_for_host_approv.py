@@ -122,10 +122,14 @@ class ApprovalService:
         constrain the record is a way to read and write another room's
         configuration.
         """
-        record = self._require(approval.EVENT_TYPES, event_type_id, "unknown_event_type", "event type")
+        record = self._require(
+            approval.EVENT_TYPES, event_type_id, "unknown_event_type", "event type"
+        )
         if record.get("room_id") != room_id:
             raise ApprovalError(
-                f"event type {event_type_id} is not in room {room_id}", code="unknown_event_type", status=404
+                f"event type {event_type_id} is not in room {room_id}",
+                code="unknown_event_type",
+                status=404,
             )
         return record
 
@@ -141,10 +145,17 @@ class ApprovalService:
         for record in matches:
             if record.get("room_id") == room_id:
                 return record
-        raise ApprovalError(f"booking {uid} not found in room {room_id}", code="unknown_booking", status=404)
+        raise ApprovalError(
+            f"booking {uid} not found in room {room_id}", code="unknown_booking", status=404
+        )
 
     def overlapping(
-        self, event_type: Mapping[str, Any], start: datetime, end: datetime, *, exclude: str | None = None
+        self,
+        event_type: Mapping[str, Any],
+        start: datetime,
+        end: datetime,
+        *,
+        exclude: str | None = None,
     ) -> list[dict[str, Any]]:
         """Live bookings for this event type that overlap a span, as payloads.
 
@@ -227,7 +238,9 @@ class ApprovalService:
         if code:
             candidates = list(records)
         else:
-            candidates = [record for record in records if (record.get("data") or {}).get("verifiedAt")]
+            candidates = [
+                record for record in records if (record.get("data") or {}).get("verifiedAt")
+            ]
         if not candidates:
             return None
         candidates.sort(key=lambda record: (record.get("created_at") or "", record["id"]))
@@ -239,14 +252,18 @@ class ApprovalService:
         self, room_id: str, payload: Mapping[str, Any], *, actor: str | None, source: str
     ) -> dict[str, Any]:
         data = approval.validate_event_type(payload)
-        record = self.store.create(approval.EVENT_TYPES, data, room_id=room_id, actor=actor, source=source)
+        record = self.store.create(
+            approval.EVENT_TYPES, data, room_id=room_id, actor=actor, source=source
+        )
         # The view, not the raw record: a caller that has just created a type
         # wants to know which gates it actually has open, and returning the bare
         # record would make every client recompute what the server already knows.
         return self.event_type_view(record)
 
     def list_event_types(self, room_id: str, *, limit: int = 200) -> list[dict[str, Any]]:
-        records = self.store.list(approval.EVENT_TYPES, room_id=room_id, limit=limit, order_by="created_at")
+        records = self.store.list(
+            approval.EVENT_TYPES, room_id=room_id, limit=limit, order_by="created_at"
+        )
         return [self.event_type_view(record) for record in records]
 
     def event_type_view(self, record: Mapping[str, Any]) -> dict[str, Any]:
@@ -260,7 +277,13 @@ class ApprovalService:
         }
 
     def patch_event_type(
-        self, room_id: str, event_type_id: str, payload: Mapping[str, Any], *, actor: str | None, source: str
+        self,
+        room_id: str,
+        event_type_id: str,
+        payload: Mapping[str, Any],
+        *,
+        actor: str | None,
+        source: str,
     ) -> dict[str, Any]:
         """The requires-confirmation toggle, and any other field, revalidated.
 
@@ -386,11 +409,18 @@ class ApprovalService:
         moment = self.now()
         updated = self.store.update(
             target["id"],
-            {"verifiedAt": approval.iso(moment), "eventTypeId": event_type_id or (target.get("data") or {}).get("eventTypeId")},
+            {
+                "verifiedAt": approval.iso(moment),
+                "eventTypeId": event_type_id or (target.get("data") or {}).get("eventTypeId"),
+            },
             actor=actor,
             source=source,
         )
-        return {"verification": updated, "already_verified": False, "email": (updated.get("data") or {}).get("email")}
+        return {
+            "verification": updated,
+            "already_verified": False,
+            "email": (updated.get("data") or {}).get("email"),
+        }
 
     # -- the request path -------------------------------------------------- #
 
@@ -451,8 +481,12 @@ class ApprovalService:
             api_version=body.get("apiVersion"),
             bypass=body.get("bypass") or {},
             email_verification_code=body.get("emailVerificationCode"),
-            verification=self.verification_for(address, event_type["id"], body.get("emailVerificationCode")),
-            overlapping=self.overlapping({**data, "id": event_type["id"], "room_id": room_id}, start, end),
+            verification=self.verification_for(
+                address, event_type["id"], body.get("emailVerificationCode")
+            ),
+            overlapping=self.overlapping(
+                {**data, "id": event_type["id"], "room_id": room_id}, start, end
+            ),
             attendee_bookings=self.attendee_bookings(address, event_type["id"]),
         )
         approval.raise_refusals(decision["refusals"])
@@ -505,7 +539,9 @@ class ApprovalService:
             "routing": routing,
             "apiVersion": body.get("apiVersion"),
         }
-        record = self.store.create(approval.BOOKING_REQUESTS, record_payload, room_id=room_id, actor=actor, source=source)
+        record = self.store.create(
+            approval.BOOKING_REQUESTS, record_payload, room_id=room_id, actor=actor, source=source
+        )
 
         result: dict[str, Any] = {
             "created": True,
@@ -521,9 +557,7 @@ class ApprovalService:
         if decision["requires_confirmation"]:
             # A request holds the slot and waits. The webhook fires, and the
             # researched triggers can act on it without anybody opening the room.
-            result["webhooks"] = [
-                self._emit_webhook(record, "BOOKING_REQUESTED", source=source)
-            ]
+            result["webhooks"] = [self._emit_webhook(record, "BOOKING_REQUESTED", source=source)]
             result["dispatches"] = self._dispatch(record, "bookingRequested", source=source)
         else:
             # No confirmation is required, so the booking is already accepted and
@@ -532,7 +566,9 @@ class ApprovalService:
             result["calendar_event"] = self._create_calendar_event(record, source=source)
         return result
 
-    def _emit_webhook(self, record: Mapping[str, Any], event: str, *, source: str) -> dict[str, Any]:
+    def _emit_webhook(
+        self, record: Mapping[str, Any], event: str, *, source: str
+    ) -> dict[str, Any]:
         """Record one researched webhook payload in full.
 
         ``sequence`` is stored rather than left to the reader's sort: two
@@ -542,13 +578,17 @@ class ApprovalService:
         """
         data = dict(record.get("data") or {})
         previous = self.webhooks_for(str(record.get("room_id") or ""), str(data.get("uid") or ""))
-        sequence = max((int(entry["data"].get("sequence") or 0) for entry in previous), default=0) + 1
+        sequence = (
+            max((int(entry["data"].get("sequence") or 0) for entry in previous), default=0) + 1
+        )
         if event == "BOOKING_REQUESTED":
             payload = approval.booking_requested_payload(data, created_at=approval.iso(self.now()))
         elif event == "BOOKING_REJECTED":
             payload = approval.booking_rejected_payload(data, created_at=approval.iso(self.now()))
         else:  # pragma: no cover - the vocabulary is closed
-            raise ApprovalError(f"unknown webhook event {event}", code="invalid_request", status=422)
+            raise ApprovalError(
+                f"unknown webhook event {event}", code="invalid_request", status=422
+            )
         return self.store.create(
             approval.BOOKING_WEBHOOKS,
             {
@@ -566,7 +606,9 @@ class ApprovalService:
             source=source,
         )
 
-    def _dispatch(self, record: Mapping[str, Any], trigger: str, *, source: str) -> list[dict[str, Any]]:
+    def _dispatch(
+        self, record: Mapping[str, Any], trigger: str, *, source: str
+    ) -> list[dict[str, Any]]:
         """Fire every enabled rule on this trigger, and record what it would do.
 
         ``bookingRequested`` "can immediately kick off a rep-facing to-do/SMS/email"
@@ -579,14 +621,20 @@ class ApprovalService:
         # the rules in is the order the rep expects their notifications in, and
         # `list` orders by `updated_at` descending by default.
         rules = self.store.list(
-            approval.BOOKING_AUTOMATIONS, room_id=room_id, limit=200, order_by="created_at", descending=False
+            approval.BOOKING_AUTOMATIONS,
+            room_id=room_id,
+            limit=200,
+            order_by="created_at",
+            descending=False,
         )
         data = dict(record.get("data") or {})
         routing = data.get("routing") or {}
         sent: list[dict[str, Any]] = []
         for rule in approval.matching_rules(rules, trigger):
             for channel in rule["channels"]:
-                recipient = routing.get("hostId") if channel != "to_do" else routing.get("assignedTo")
+                recipient = (
+                    routing.get("hostId") if channel != "to_do" else routing.get("assignedTo")
+                )
                 sent.append(
                     self.store.create(
                         approval.BOOKING_DISPATCHES,
@@ -754,7 +802,9 @@ class ApprovalService:
             records = self.store.find(approval.BOOKING_REQUESTS, where, limit=min(limit, 1000))
             scoped = [record for record in records if record.get("room_id") == room_id]
         else:
-            scoped = self.store.list(approval.BOOKING_REQUESTS, room_id=room_id, limit=min(limit, 1000))
+            scoped = self.store.list(
+                approval.BOOKING_REQUESTS, room_id=room_id, limit=min(limit, 1000)
+            )
         return [self.booking_view(record) for record in scoped[:limit]]
 
     def webhooks_for(self, room_id: str, uid: str) -> list[dict[str, Any]]:
@@ -827,7 +877,9 @@ class ApprovalService:
         )
 
     def list_automations(self, room_id: str, *, limit: int = 200) -> list[dict[str, Any]]:
-        return self.store.list(approval.BOOKING_AUTOMATIONS, room_id=room_id, limit=limit, order_by="created_at")
+        return self.store.list(
+            approval.BOOKING_AUTOMATIONS, room_id=room_id, limit=limit, order_by="created_at"
+        )
 
 
 def get_service(store: RecordStore = StoreDep) -> ApprovalService:
@@ -837,7 +889,9 @@ def get_service(store: RecordStore = StoreDep) -> ApprovalService:
 ServiceDep = Depends(get_service)
 
 
-def _caller(actor: str | None, user_id: str | None, authenticated: bool, roles: str | None) -> dict[str, Any]:
+def _caller(
+    actor: str | None, user_id: str | None, authenticated: bool, roles: str | None
+) -> dict[str, Any]:
     """Assemble the caller the domain asks about.
 
     This product has no session layer, so who is calling is what the route is
@@ -923,7 +977,9 @@ def create_event_type(
     Both default to off, so a room that has not configured anything books
     directly rather than waiting for a host nobody was told about.
     """
-    return service.create_event_type(room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/event-types")
+    return service.create_event_type(
+        room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/event-types"
+    )
 
 
 @router.get("/rooms/{room_id}/event-types/{event_type_id}", summary="One event type")
@@ -948,7 +1004,11 @@ def patch_event_type(
     mention.
     """
     return service.patch_event_type(
-        room_id, event_type_id, payload, actor=actor, source=f"PATCH {router.prefix}/rooms/{room_id}/event-types/{event_type_id}"
+        room_id,
+        event_type_id,
+        payload,
+        actor=actor,
+        source=f"PATCH {router.prefix}/rooms/{room_id}/event-types/{event_type_id}",
     )
 
 
@@ -957,7 +1017,10 @@ def patch_event_type(
 # --------------------------------------------------------------------------- #
 
 
-@router.get("/rooms/{room_id}/email-verification/required", summary="Check if email verification is required")
+@router.get(
+    "/rooms/{room_id}/email-verification/required",
+    summary="Check if email verification is required",
+)
 def verification_required(
     room_id: str,
     event_type_id: str = Query(default="", description="The event type to check against"),
@@ -979,7 +1042,11 @@ def verification_required(
     return service.verification_required(room_id, event_type_id, email)
 
 
-@router.post("/rooms/{room_id}/email-verification/send", status_code=201, summary="Send an email verification code")
+@router.post(
+    "/rooms/{room_id}/email-verification/send",
+    status_code=201,
+    summary="Send an email verification code",
+)
 def send_verification_code(
     room_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -993,7 +1060,10 @@ def send_verification_code(
     guess the code out of a real inbox could not build the flow at all.
     """
     return service.send_verification_code(
-        room_id, str(payload.get("eventTypeId") or ""), payload, actor=actor,
+        room_id,
+        str(payload.get("eventTypeId") or ""),
+        payload,
+        actor=actor,
         source=f"POST {router.prefix}/rooms/{room_id}/email-verification/send",
     )
 
@@ -1006,7 +1076,12 @@ def verify_email(
     service: ApprovalService = ServiceDep,
 ) -> dict[str, Any]:
     """The researched "Verify email with code"."""
-    return service.verify_email(room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/email-verification/verify")
+    return service.verify_email(
+        room_id,
+        payload,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/email-verification/verify",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1154,7 +1229,9 @@ def decline_request(
 
 
 @router.get("/rooms/{room_id}/requests/{uid}/webhooks", summary="The webhooks a request emitted")
-def request_webhooks(room_id: str, uid: str, service: ApprovalService = ServiceDep) -> dict[str, Any]:
+def request_webhooks(
+    room_id: str, uid: str, service: ApprovalService = ServiceDep
+) -> dict[str, Any]:
     """``BOOKING_REQUESTED`` and ``BOOKING_REJECTED`` payloads, in full.
 
     Both are stored rather than delivered, so this route is how a reviewer sees
@@ -1164,14 +1241,22 @@ def request_webhooks(room_id: str, uid: str, service: ApprovalService = ServiceD
     return {"room_id": room_id, "uid": uid, "count": len(listed), "webhooks": listed}
 
 
-@router.get("/rooms/{room_id}/requests/{uid}/calendar-event", summary="The calendar event for a request")
-def request_calendar_event(room_id: str, uid: str, service: ApprovalService = ServiceDep) -> dict[str, Any]:
+@router.get(
+    "/rooms/{room_id}/requests/{uid}/calendar-event", summary="The calendar event for a request"
+)
+def request_calendar_event(
+    room_id: str, uid: str, service: ApprovalService = ServiceDep
+) -> dict[str, Any]:
     """The calendar event, or ``null`` when the booking has not been confirmed.
 
     ``null`` is the researched answer for a pending or declined request, not a
     missing feature: a calendar event is created only on confirm.
     """
-    return {"room_id": room_id, "uid": uid, "calendar_event": service.calendar_event_for(room_id, uid)}
+    return {
+        "room_id": room_id,
+        "uid": uid,
+        "calendar_event": service.calendar_event_for(room_id, uid),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -1199,7 +1284,9 @@ def create_automation(
     rep-facing to-do/SMS/email" and a rejection "can trigger re-routing". A rule
     is a trigger plus the channels to raise on it; each firing is recorded.
     """
-    return service.create_automation(room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/automations")
+    return service.create_automation(
+        room_id, payload, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/automations"
+    )
 
 
 @router.get("/rooms/{room_id}/summary", summary="What is waiting on a host")
@@ -1364,7 +1451,10 @@ def seed(db, context: dict[str, Any]) -> str:
             touched.append(room_id)
             for trigger, channels, label in automations:
                 service.create_automation(
-                    room_id, {"trigger": trigger, "channels": channels, "label": label}, actor=actor, source=source
+                    room_id,
+                    {"trigger": trigger, "channels": channels, "label": label},
+                    actor=actor,
+                    source=source,
                 )
 
         event_type = service.create_event_type(
@@ -1402,7 +1492,10 @@ def seed(db, context: dict[str, Any]) -> str:
             verified += 1
 
         request = service.request_slot(
-            room_id, body, actor=actor, source=source,
+            room_id,
+            body,
+            actor=actor,
+            source=source,
             caller={"userId": "buyer", "authenticated": False, "roles": []},
         )
         requests_made += 1
@@ -1414,8 +1507,12 @@ def seed(db, context: dict[str, Any]) -> str:
             if plan["decide"] == "decline":
                 payload["reason"] = approval.DEFAULT_REJECTION_REASON
             service.decide(
-                room_id, uid, str(plan["decide"]), payload,
-                actor=decider, source=source,
+                room_id,
+                uid,
+                str(plan["decide"]),
+                payload,
+                actor=decider,
+                source=source,
                 caller={"userId": decider, "authenticated": True, "roles": []},
             )
             if plan.get("re_request"):
@@ -1429,7 +1526,8 @@ def seed(db, context: dict[str, Any]) -> str:
                         "start": approval.iso(when),
                         "attendee": {"name": names[index % len(names)], "email": address},
                     },
-                    actor=actor, source=source,
+                    actor=actor,
+                    source=source,
                 )
                 requests_made += 1
         outcomes.append(str(plan["summary"]))

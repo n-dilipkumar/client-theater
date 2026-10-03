@@ -23,11 +23,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 PREFIX = "/api/wf-062"
 MODULE = "wf062_route_a_requested_slot_for_host_approv"
@@ -59,7 +58,13 @@ def make_room(client, name="Northwind") -> dict:
 
 
 def make_event_type(client, room_id, **spec) -> dict:
-    body = {"title": "Discovery call", "hostId": "dana", "ownerId": "dana", "durationMinutes": 30, **spec}
+    body = {
+        "title": "Discovery call",
+        "hostId": "dana",
+        "ownerId": "dana",
+        "durationMinutes": 30,
+        **spec,
+    }
     response = client.post(f"{PREFIX}/rooms/{room_id}/event-types", json=body)
     assert response.status_code == 201, response.text
     return response.json()
@@ -77,10 +82,16 @@ def slot(days=2, hours=1) -> str:
 
 def soon(hours=2) -> str:
     """A moment inside a typical minimum-notice window, for the bounds checks."""
-    return (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=hours)).replace(microsecond=0).isoformat()
+    return (
+        (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=hours))
+        .replace(microsecond=0)
+        .isoformat()
+    )
 
 
-def request_slot(client, room_id, event_type_id, *, start=None, email="ann@example.com", caller=None, **extra) -> dict:
+def request_slot(
+    client, room_id, event_type_id, *, start=None, email="ann@example.com", caller=None, **extra
+) -> dict:
     body = {
         "eventTypeId": event_type_id,
         "start": start or slot(),
@@ -141,7 +152,12 @@ def test_the_core_routes_still_work_alongside_it(client):
 
 def test_vocabulary_is_served_as_data(client):
     body = client.get(f"{PREFIX}/vocabulary").json()
-    assert [entry["value"] for entry in body["statuses"]] == ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED"]
+    assert [entry["value"] for entry in body["statuses"]] == [
+        "PENDING",
+        "ACCEPTED",
+        "REJECTED",
+        "CANCELLED",
+    ]
     assert body["default_rejection_reason"] == "The organizer is no longer available at this time."
     assert body["dispatched_by"] == "simulated"
 
@@ -177,12 +193,17 @@ def test_an_event_type_defaults_both_gates_to_off(client):
 def test_an_event_type_stores_its_configuration_as_payload_not_columns(client):
     """No migration, no typed column: a bound is an ordinary JSON field."""
     room = make_room(client)
-    body = make_event_type(client, room["id"], minimumNoticeMinutes=120, maximumRangeDays=30, ourField={"a": 1})
+    body = make_event_type(
+        client, room["id"], minimumNoticeMinutes=120, maximumRangeDays=30, ourField={"a": 1}
+    )
     assert body["data"]["minimumNoticeMinutes"] == 120
     assert body["data"]["maximumRangeDays"] == 30
     assert body["data"]["ourField"] == {"a": 1}
     collections = client.get("/api/collections").json()["collections"]
-    indexed = {entry["path"] for entry in next(c for c in collections if c["collection"] == "event_type")["fields"]}
+    indexed = {
+        entry["path"]
+        for entry in next(c for c in collections if c["collection"] == "event_type")["fields"]
+    }
     assert {"minimumNoticeMinutes", "maximumRangeDays", "ourField.a"} <= indexed
 
 
@@ -196,7 +217,8 @@ def test_an_event_type_without_a_title_is_422(client):
 def test_an_event_type_with_a_non_boolean_toggle_is_422(client):
     room = make_room(client)
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/event-types", json={"title": "x", "requiresConfirmation": "yes"}
+        f"{PREFIX}/rooms/{room['id']}/event-types",
+        json={"title": "x", "requiresConfirmation": "yes"},
     )
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_event_type"
@@ -215,15 +237,22 @@ def test_reading_an_event_type_from_another_room_is_404(client):
     """A room id in the path that does not constrain the record is not scoping."""
     first, second = make_room(client, "A"), make_room(client, "B")
     event_type = make_event_type(client, first["id"])
-    assert client.get(f"{PREFIX}/rooms/{first['id']}/event-types/{event_type['id']}").status_code == 200
-    assert client.get(f"{PREFIX}/rooms/{second['id']}/event-types/{event_type['id']}").status_code == 404
+    assert (
+        client.get(f"{PREFIX}/rooms/{first['id']}/event-types/{event_type['id']}").status_code
+        == 200
+    )
+    assert (
+        client.get(f"{PREFIX}/rooms/{second['id']}/event-types/{event_type['id']}").status_code
+        == 404
+    )
 
 
 def test_turning_requires_confirmation_on_is_a_merge_patch(client):
     room = make_room(client)
     event_type = make_event_type(client, room["id"], hostName="Dana")
     body = client.patch(
-        f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}", json={"requiresConfirmation": True}
+        f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}",
+        json={"requiresConfirmation": True},
     ).json()
     assert body["requires_confirmation"] is True
     assert body["data"]["hostName"] == "Dana"
@@ -233,15 +262,27 @@ def test_turning_requires_confirmation_on_changes_the_booking_that_follows(clien
     """The researched flow's step one, observable through step two."""
     room = make_room(client)
     event_type = make_event_type(client, room["id"])
-    assert request_slot(client, room["id"], event_type["id"], start=slot(days=2))["request"]["status"] == "ACCEPTED"
-    client.patch(f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}", json={"requiresConfirmation": True})
-    assert request_slot(client, room["id"], event_type["id"], start=slot(days=5))["request"]["status"] == "PENDING"
+    assert (
+        request_slot(client, room["id"], event_type["id"], start=slot(days=2))["request"]["status"]
+        == "ACCEPTED"
+    )
+    client.patch(
+        f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}",
+        json={"requiresConfirmation": True},
+    )
+    assert (
+        request_slot(client, room["id"], event_type["id"], start=slot(days=5))["request"]["status"]
+        == "PENDING"
+    )
 
 
 def test_turning_requires_confirmation_off_returns_a_type_to_direct_booking(client):
     room = make_room(client)
     event_type = make_event_type(client, room["id"], requiresConfirmation=True)
-    client.patch(f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}", json={"requiresConfirmation": False})
+    client.patch(
+        f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}",
+        json={"requiresConfirmation": False},
+    )
     body = request_slot(client, room["id"], event_type["id"])
     assert body["request"]["status"] == "ACCEPTED"
     assert body["request"]["oneTimePassword"] is None
@@ -249,10 +290,16 @@ def test_turning_requires_confirmation_off_returns_a_type_to_direct_booking(clie
 
 def test_turning_email_verification_on_is_refused_for_a_booking_with_no_code(client):
     room = make_room(client)
-    event_type = make_event_type(client, room["id"], requiresConfirmation=True, emailVerification=True)
+    event_type = make_event_type(
+        client, room["id"], requiresConfirmation=True, emailVerification=True
+    )
     response = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests",
-        json={"eventTypeId": event_type["id"], "start": slot(), "attendee": {"email": "ann@example.com"}},
+        json={
+            "eventTypeId": event_type["id"],
+            "start": slot(),
+            "attendee": {"email": "ann@example.com"},
+        },
     )
     assert response.status_code == 422
     assert response.json()["error"] == "email_verification_required"
@@ -260,7 +307,9 @@ def test_turning_email_verification_on_is_refused_for_a_booking_with_no_code(cli
 
 def test_patching_an_unknown_event_type_is_404(client):
     room = make_room(client)
-    response = client.patch(f"{PREFIX}/rooms/{room['id']}/event-types/nope", json={"requiresConfirmation": True})
+    response = client.patch(
+        f"{PREFIX}/rooms/{room['id']}/event-types/nope", json={"requiresConfirmation": True}
+    )
     assert response.status_code == 404
     assert response.json()["error"] == "unknown_event_type"
 
@@ -268,7 +317,9 @@ def test_patching_an_unknown_event_type_is_404(client):
 def test_patching_an_event_type_in_another_room_is_404(client):
     first, second = make_room(client, "A"), make_room(client, "B")
     event_type = make_event_type(client, first["id"])
-    response = client.patch(f"{PREFIX}/rooms/{second['id']}/event-types/{event_type['id']}", json={"title": "x"})
+    response = client.patch(
+        f"{PREFIX}/rooms/{second['id']}/event-types/{event_type['id']}", json={"title": "x"}
+    )
     assert response.status_code == 404
 
 
@@ -335,9 +386,13 @@ def test_a_request_records_the_actor_and_the_start_it_was_asked_for(client):
 def test_a_request_records_the_actor_it_was_given_over_http(client):
     room = make_room(client)
     event_type = gated(client, room["id"])
-    response = client.post(
+    client.post(
         f"{PREFIX}/rooms/{room['id']}/requests",
-        json={"eventTypeId": event_type["id"], "start": slot(), "attendee": {"email": "ann@example.com"}},
+        json={
+            "eventTypeId": event_type["id"],
+            "start": slot(),
+            "attendee": {"email": "ann@example.com"},
+        },
         params={"actor": "dana"},
     )
     assert audit_entries(client, collection="booking_request")[0]["actor"] == "dana"
@@ -358,7 +413,12 @@ def test_a_booking_created_directly_fires_no_booking_requested(client):
     event_type = make_event_type(client, room["id"], requiresConfirmation=False)
     body = request_slot(client, room["id"], event_type["id"])
     assert body["webhooks"] == []
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/requests/{body['request']['uid']}/webhooks").json()["count"] == 0
+    assert (
+        client.get(
+            f"{PREFIX}/rooms/{room['id']}/requests/{body['request']['uid']}/webhooks"
+        ).json()["count"]
+        == 0
+    )
 
 
 def test_a_per_request_override_creates_a_request_on_a_type_that_needs_no_approval(client):
@@ -380,7 +440,8 @@ def test_a_per_request_override_cannot_step_over_the_toggle_the_admin_set(client
 def test_a_request_with_no_event_type_is_422(client):
     room = make_room(client)
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/requests", json={"start": slot(), "attendee": {"email": "a@b.com"}}
+        f"{PREFIX}/rooms/{room['id']}/requests",
+        json={"start": slot(), "attendee": {"email": "a@b.com"}},
     )
     assert response.status_code == 422
     assert "eventTypeId" in response.json()["detail"]
@@ -410,7 +471,8 @@ def test_a_request_with_no_attendee_email_is_422(client):
     room = make_room(client)
     event_type = gated(client, room["id"])
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/requests", json={"eventTypeId": event_type["id"], "start": slot()}
+        f"{PREFIX}/rooms/{room['id']}/requests",
+        json={"eventTypeId": event_type["id"], "start": slot()},
     )
     assert response.status_code == 422
 
@@ -423,7 +485,11 @@ def test_a_second_request_for_a_held_slot_is_409(client):
     request_slot(client, room["id"], event_type["id"], start=when)
     response = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests",
-        json={"eventTypeId": event_type["id"], "start": when, "attendee": {"email": "bob@example.com"}},
+        json={
+            "eventTypeId": event_type["id"],
+            "start": when,
+            "attendee": {"email": "bob@example.com"},
+        },
     )
     assert response.status_code == 409
     assert response.json()["error"] == "slot_conflict"
@@ -436,7 +502,11 @@ def test_a_request_reports_every_failed_check_at_once(client):
     request_slot(client, room["id"], event_type["id"], start=slot(days=4), email="ann@example.com")
     response = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests",
-        json={"eventTypeId": event_type["id"], "start": soon(), "attendee": {"email": "ann@example.com"}},
+        json={
+            "eventTypeId": event_type["id"],
+            "start": soon(),
+            "attendee": {"email": "ann@example.com"},
+        },
     )
     assert response.status_code == 409
     codes = {entry["code"] for entry in response.json()["refusals"]}
@@ -641,7 +711,8 @@ def test_sending_a_code_without_an_email_is_422(client):
     room = make_room(client)
     event_type = make_event_type(client, room["id"], emailVerification=True)
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/email-verification/send", json={"eventTypeId": event_type["id"]}
+        f"{PREFIX}/rooms/{room['id']}/email-verification/send",
+        json={"eventTypeId": event_type["id"]},
     )
     assert response.status_code == 422
 
@@ -649,7 +720,8 @@ def test_sending_a_code_without_an_email_is_422(client):
 def test_sending_a_code_against_an_unknown_event_type_is_404(client):
     room = make_room(client)
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/email-verification/send", json={"eventTypeId": "nope", "email": "a@b.com"}
+        f"{PREFIX}/rooms/{room['id']}/email-verification/send",
+        json={"eventTypeId": "nope", "email": "a@b.com"},
     )
     assert response.status_code == 404
 
@@ -702,7 +774,10 @@ def test_verifying_a_code_that_was_never_sent_is_422(client):
 
 def test_verifying_without_a_code_is_422(client):
     room = make_room(client)
-    assert client.post(f"{PREFIX}/rooms/{room['id']}/email-verification/verify", json={}).status_code == 422
+    assert (
+        client.post(f"{PREFIX}/rooms/{room['id']}/email-verification/verify", json={}).status_code
+        == 422
+    )
 
 
 def test_a_request_with_a_verified_code_goes_through(client):
@@ -731,7 +806,9 @@ def test_verifying_twice_reports_it_was_already_verified(client):
         json={"eventTypeId": event_type["id"], "email": "ann@example.com"},
     ).json()["code"]
     client.post(f"{PREFIX}/rooms/{room['id']}/email-verification/verify", json={"code": code})
-    again = client.post(f"{PREFIX}/rooms/{room['id']}/email-verification/verify", json={"code": code})
+    again = client.post(
+        f"{PREFIX}/rooms/{room['id']}/email-verification/verify", json={"code": code}
+    )
     assert again.json()["already_verified"] is True
 
 
@@ -744,7 +821,10 @@ def test_a_verified_code_is_scoped_to_its_own_event_type(client):
         f"{PREFIX}/rooms/{first['id']}/email-verification/send",
         json={"eventTypeId": one["id"], "email": "ann@example.com"},
     ).json()["code"]
-    client.post(f"{PREFIX}/rooms/{first['id']}/email-verification/verify", json={"code": code, "eventTypeId": one["id"]})
+    client.post(
+        f"{PREFIX}/rooms/{first['id']}/email-verification/verify",
+        json={"code": code, "eventTypeId": one["id"]},
+    )
     response = client.post(
         f"{PREFIX}/rooms/{second['id']}/requests",
         json={
@@ -766,7 +846,9 @@ def test_a_verified_code_is_scoped_to_its_own_event_type(client):
 def test_confirming_a_request_by_the_host_accepts_it(client):
     room = make_room(client)
     uid = pending(client, room["id"])
-    body = client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm", json={}, **as_host()).json()
+    body = client.post(
+        f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm", json={}, **as_host()
+    ).json()
     assert body["request"]["status"] == "ACCEPTED"
     assert body["request"]["data"]["decidedBy"] == "dana"
     assert body["request"]["data"]["decidedAt"]
@@ -777,9 +859,16 @@ def test_confirming_creates_the_calendar_event(client):
     """The research says an event is "created only on confirm"."""
     room = make_room(client)
     uid = pending(client, room["id"])
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/calendar-event").json()["calendar_event"] is None
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/calendar-event").json()[
+            "calendar_event"
+        ]
+        is None
+    )
     client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm", json={}, **as_host())
-    event = client.get(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/calendar-event").json()["calendar_event"]
+    event = client.get(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/calendar-event").json()[
+        "calendar_event"
+    ]
     assert event["data"]["bookingUid"] == uid
     assert event["data"]["createdBecause"] == "a host confirmed the request"
 
@@ -820,7 +909,9 @@ def test_a_declared_org_admin_may_confirm(client):
     room = make_room(client)
     uid = pending(client, room["id"])
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm", json={}, params={"caller": "root", "roles": "org_admin"}
+        f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm",
+        json={},
+        params={"caller": "root", "roles": "org_admin"},
     )
     assert response.status_code == 200
     assert response.json()["authorisation"]["roles"] == ["org_admin"]
@@ -869,7 +960,9 @@ def test_a_confirmed_request_no_longer_counts_as_awaiting_a_host(client):
 
 def test_confirming_an_unknown_booking_is_404(client):
     room = make_room(client)
-    response = client.post(f"{PREFIX}/rooms/{room['id']}/requests/nope/confirm", json={}, **as_host())
+    response = client.post(
+        f"{PREFIX}/rooms/{room['id']}/requests/nope/confirm", json={}, **as_host()
+    )
     assert response.status_code == 404
     assert response.json()["error"] == "unknown_booking"
 
@@ -877,7 +970,9 @@ def test_confirming_an_unknown_booking_is_404(client):
 def test_confirming_a_booking_in_another_room_is_404(client):
     first, second = make_room(client, "A"), make_room(client, "B")
     uid = pending(client, first["id"])
-    response = client.post(f"{PREFIX}/rooms/{second['id']}/requests/{uid}/confirm", json={}, **as_host())
+    response = client.post(
+        f"{PREFIX}/rooms/{second['id']}/requests/{uid}/confirm", json={}, **as_host()
+    )
     assert response.status_code == 404
 
 
@@ -898,7 +993,11 @@ def test_an_unattended_confirmation_by_an_entitled_caller_is_recorded_as_unatten
     uid = pending(client, room["id"])
     body = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm",
-        json={"driver": "unattended", "bypass": {"allowConflicts": True}, "apiVersion": "2026-05-01"},
+        json={
+            "driver": "unattended",
+            "bypass": {"allowConflicts": True},
+            "apiVersion": "2026-05-01",
+        },
         params={"caller": "dana"},
     ).json()
     assert body["request"]["status"] == "ACCEPTED"
@@ -912,7 +1011,11 @@ def test_an_unattended_confirmation_by_an_unauthenticated_caller_is_403(client):
     uid = pending(client, room["id"])
     response = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm",
-        json={"driver": "unattended", "bypass": {"allowConflicts": True}, "apiVersion": "2026-05-01"},
+        json={
+            "driver": "unattended",
+            "bypass": {"allowConflicts": True},
+            "apiVersion": "2026-05-01",
+        },
         params={"caller": "dana", "authenticated": "false"},
     )
     assert response.status_code == 403
@@ -924,7 +1027,11 @@ def test_an_unattended_confirmation_by_a_caller_with_no_role_is_403(client):
     uid = pending(client, room["id"])
     response = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm",
-        json={"driver": "unattended", "bypass": {"allowConflicts": True}, "apiVersion": "2026-05-01"},
+        json={
+            "driver": "unattended",
+            "bypass": {"allowConflicts": True},
+            "apiVersion": "2026-05-01",
+        },
         params={"caller": "mallory"},
     )
     assert response.status_code == 403
@@ -961,7 +1068,9 @@ def test_declining_rejects_the_request_and_records_the_reason(client):
 def test_declining_with_no_reason_records_the_researched_default(client):
     room = make_room(client)
     uid = pending(client, room["id"])
-    body = client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/decline", json={}, **as_host()).json()
+    body = client.post(
+        f"{PREFIX}/rooms/{room['id']}/requests/{uid}/decline", json={}, **as_host()
+    ).json()
     assert body["rejection_reason"] == "The organizer is no longer available at this time."
     assert body["request"]["data"]["reasonSupplied"] is False
 
@@ -984,9 +1093,16 @@ def test_a_decline_fires_booking_rejected_with_the_reason_in_the_payload(client)
 def test_a_decline_creates_no_calendar_event(client):
     room = make_room(client)
     uid = pending(client, room["id"])
-    body = client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/decline", json={}, **as_host()).json()
+    body = client.post(
+        f"{PREFIX}/rooms/{room['id']}/requests/{uid}/decline", json={}, **as_host()
+    ).json()
     assert body["calendar_event"] is None
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/calendar-event").json()["calendar_event"] is None
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/calendar-event").json()[
+            "calendar_event"
+        ]
+        is None
+    )
 
 
 def test_a_decline_releases_the_held_slot_so_the_same_time_can_be_asked_for_again(client):
@@ -997,15 +1113,25 @@ def test_a_decline_releases_the_held_slot_so_the_same_time_can_be_asked_for_agai
     first = request_slot(client, room["id"], event_type["id"], start=when, email="ann@example.com")
     refused = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests",
-        json={"eventTypeId": event_type["id"], "start": when, "attendee": {"email": "bob@example.com"}},
+        json={
+            "eventTypeId": event_type["id"],
+            "start": when,
+            "attendee": {"email": "bob@example.com"},
+        },
     )
     assert refused.status_code == 409
     client.post(
-        f"{PREFIX}/rooms/{room['id']}/requests/{first['request']['uid']}/decline", json={}, **as_host()
+        f"{PREFIX}/rooms/{room['id']}/requests/{first['request']['uid']}/decline",
+        json={},
+        **as_host(),
     )
     again = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests",
-        json={"eventTypeId": event_type["id"], "start": when, "attendee": {"email": "bob@example.com"}},
+        json={
+            "eventTypeId": event_type["id"],
+            "start": when,
+            "attendee": {"email": "bob@example.com"},
+        },
     )
     assert again.status_code == 201
     assert again.json()["request"]["status"] == "PENDING"
@@ -1046,14 +1172,20 @@ def test_a_confirmed_booking_still_holds_its_slot_after_a_later_request_for_the_
     client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm", json={}, **as_host())
     refused = client.post(
         f"{PREFIX}/rooms/{room['id']}/requests",
-        json={"eventTypeId": event_type["id"], "start": when, "attendee": {"email": "bob@example.com"}},
+        json={
+            "eventTypeId": event_type["id"],
+            "start": when,
+            "attendee": {"email": "bob@example.com"},
+        },
     )
     assert refused.status_code == 409
 
 
 def test_declining_an_unknown_booking_is_404(client):
     room = make_room(client)
-    response = client.post(f"{PREFIX}/rooms/{room['id']}/requests/nope/decline", json={}, **as_host())
+    response = client.post(
+        f"{PREFIX}/rooms/{room['id']}/requests/nope/decline", json={}, **as_host()
+    )
     assert response.status_code == 404
 
 
@@ -1062,7 +1194,10 @@ def test_the_webhooks_route_returns_both_payloads_of_a_declined_request_in_order
     uid = pending(client, room["id"])
     client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/decline", json={}, **as_host())
     body = client.get(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/webhooks").json()
-    assert [entry["data"]["event"] for entry in body["webhooks"]] == ["BOOKING_REQUESTED", "BOOKING_REJECTED"]
+    assert [entry["data"]["event"] for entry in body["webhooks"]] == [
+        "BOOKING_REQUESTED",
+        "BOOKING_REJECTED",
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -1085,8 +1220,18 @@ def test_requests_can_be_filtered_by_status_through_the_dynamic_index(client):
     uid = request_slot(client, room["id"], event_type["id"], start=slot(days=2))["request"]["uid"]
     client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm", json={}, **as_host())
     request_slot(client, room["id"], event_type["id"], start=slot(days=3), email="bob@example.com")
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/requests", params={"status": "PENDING"}).json()["count"] == 1
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/requests", params={"status": "ACCEPTED"}).json()["count"] == 1
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/requests", params={"status": "PENDING"}).json()[
+            "count"
+        ]
+        == 1
+    )
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/requests", params={"status": "ACCEPTED"}).json()[
+            "count"
+        ]
+        == 1
+    )
 
 
 def test_requests_can_be_filtered_by_event_type_and_by_host(client):
@@ -1095,10 +1240,18 @@ def test_requests_can_be_filtered_by_event_type_and_by_host(client):
     two = gated(client, room["id"], title="Deep dive", hostId="sam", ownerId="sam")
     request_slot(client, room["id"], one["id"], start=slot(days=2))
     request_slot(client, room["id"], two["id"], start=slot(days=3), email="bob@example.com")
-    assert client.get(
-        f"{PREFIX}/rooms/{room['id']}/requests", params={"event_type_id": one["id"]}
-    ).json()["count"] == 1
-    assert client.get(f"{PREFIX}/rooms/{room['id']}/requests", params={"host_id": "sam"}).json()["count"] == 1
+    assert (
+        client.get(
+            f"{PREFIX}/rooms/{room['id']}/requests", params={"event_type_id": one["id"]}
+        ).json()["count"]
+        == 1
+    )
+    assert (
+        client.get(f"{PREFIX}/rooms/{room['id']}/requests", params={"host_id": "sam"}).json()[
+            "count"
+        ]
+        == 1
+    )
 
 
 def test_reading_one_request_by_its_uid(client):
@@ -1133,7 +1286,9 @@ def test_the_summary_counts_every_status_and_the_held_slots(client):
     room = make_room(client)
     event_type = gated(client, room["id"])
     keep = request_slot(client, room["id"], event_type["id"], start=slot(days=2))["request"]["uid"]
-    gone = request_slot(client, room["id"], event_type["id"], start=slot(days=3), email="b@e.com")["request"]["uid"]
+    gone = request_slot(client, room["id"], event_type["id"], start=slot(days=3), email="b@e.com")[
+        "request"
+    ]["uid"]
     direct = make_event_type(client, room["id"], title="Direct", requiresConfirmation=False)
     request_slot(client, room["id"], direct["id"], start=slot(days=4), email="c@e.com")
     client.post(f"{PREFIX}/rooms/{room['id']}/requests/{keep}/confirm", json={}, **as_host())
@@ -1164,7 +1319,9 @@ def test_the_summary_of_an_empty_room_is_all_zeroes(client):
 # --------------------------------------------------------------------------- #
 
 
-def add_automation(client, room_id, trigger="bookingRequested", channels=("to_do",), **extra) -> dict:
+def add_automation(
+    client, room_id, trigger="bookingRequested", channels=("to_do",), **extra
+) -> dict:
     body = {"trigger": trigger, "channels": list(channels), "label": "Surface it", **extra}
     response = client.post(f"{PREFIX}/rooms/{room_id}/automations", json=body)
     assert response.status_code == 201, response.text
@@ -1181,7 +1338,8 @@ def test_adding_a_workflow_rule(client):
 def test_adding_a_rule_on_an_unresearched_trigger_is_422(client):
     room = make_room(client)
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/automations", json={"trigger": "beforeEvent", "channels": ["to_do"]}
+        f"{PREFIX}/rooms/{room['id']}/automations",
+        json={"trigger": "beforeEvent", "channels": ["to_do"]},
     )
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_automation"
@@ -1190,14 +1348,17 @@ def test_adding_a_rule_on_an_unresearched_trigger_is_422(client):
 def test_adding_a_rule_with_an_unknown_channel_is_422(client):
     room = make_room(client)
     response = client.post(
-        f"{PREFIX}/rooms/{room['id']}/automations", json={"trigger": "bookingRequested", "channels": ["fax"]}
+        f"{PREFIX}/rooms/{room['id']}/automations",
+        json={"trigger": "bookingRequested", "channels": ["fax"]},
     )
     assert response.status_code == 422
 
 
 def test_adding_a_rule_with_no_channel_is_422(client):
     room = make_room(client)
-    response = client.post(f"{PREFIX}/rooms/{room['id']}/automations", json={"trigger": "bookingRequested"})
+    response = client.post(
+        f"{PREFIX}/rooms/{room['id']}/automations", json={"trigger": "bookingRequested"}
+    )
     assert response.status_code == 422
 
 
@@ -1226,7 +1387,9 @@ def test_a_decline_fires_the_booking_rejected_rules(client):
     room = make_room(client)
     add_automation(client, room["id"], trigger="bookingRejected", channels=["to_do", "sms"])
     uid = pending(client, room["id"])
-    body = client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/decline", json={}, **as_host()).json()
+    body = client.post(
+        f"{PREFIX}/rooms/{room['id']}/requests/{uid}/decline", json={}, **as_host()
+    ).json()
     assert [entry["data"]["channel"] for entry in body["dispatches"]] == ["to_do", "sms"]
 
 
@@ -1281,7 +1444,9 @@ def audit_entries(client, **params) -> list[dict]:
 
 
 def my_sources(client) -> set[str]:
-    return {entry["source"] for entry in audit_entries(client) if PREFIX in (entry.get("source") or "")}
+    return {
+        entry["source"] for entry in audit_entries(client) if PREFIX in (entry.get("source") or "")
+    }
 
 
 def drive_every_write(client) -> dict:
@@ -1328,7 +1493,9 @@ def test_every_write_names_the_route_that_served_it(client):
     room = make_room(client)
     event_type = gated(client, room["id"])
     uid = request_slot(client, room["id"], event_type["id"])["request"]["uid"]
-    client.patch(f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}", json={"title": "v2"})
+    client.patch(
+        f"{PREFIX}/rooms/{room['id']}/event-types/{event_type['id']}", json={"title": "v2"}
+    )
     client.post(f"{PREFIX}/rooms/{room['id']}/requests/{uid}/confirm", json={}, **as_host())
     assert my_sources(client) == {
         f"POST {PREFIX}/rooms/{room['id']}/event-types",
@@ -1359,7 +1526,8 @@ def test_every_write_route_appears_in_the_audit_log_once_they_have_been_driven(c
     assert len(recorded) == len(write_routes)
     assert {source.split(" ", 1)[0] for source in recorded} == set(write_routes)
     assert all(
-        source.partition(" ")[2].startswith(f"{PREFIX}/rooms/{driven['room']['id']}") for source in recorded
+        source.partition(" ")[2].startswith(f"{PREFIX}/rooms/{driven['room']['id']}")
+        for source in recorded
     )
 
 
@@ -1430,7 +1598,9 @@ def test_the_decision_writes_name_the_decision_route_that_served_them(client):
     assert audit_entries(client, collection="booking_event")[0]["source"] == (
         f"POST {PREFIX}/rooms/{room['id']}/requests/{uid}/confirm"
     )
-    declined = request_slot(client, room["id"], event_type["id"], start=slot(days=4), email="b@e.com")["request"]["uid"]
+    declined = request_slot(
+        client, room["id"], event_type["id"], start=slot(days=4), email="b@e.com"
+    )["request"]["uid"]
     client.post(f"{PREFIX}/rooms/{room['id']}/requests/{declined}/decline", json={}, **as_host())
     assert audit_entries(client, collection="booking_webhook")[0]["source"] == (
         f"POST {PREFIX}/rooms/{room['id']}/requests/{declined}/decline"
@@ -1486,7 +1656,7 @@ def serves(mounted: dict[str, list[list[str]]], method: str, path: str) -> bool:
             continue
         if all(
             expected.startswith("{") or expected == actual or RECORD_ID.match(actual)
-            for expected, actual in zip(candidate, recorded)
+            for expected, actual in zip(candidate, recorded, strict=True)
         ):
             return True
     return False
@@ -1502,7 +1672,9 @@ def test_every_audit_row_in_the_whole_log_names_a_mounted_route(client):
     """
     drive_every_write(client)
     client.post("/api/records/room", json={"name": "Core room", "account": "Core"})
-    core_room = client.post("/api/records/room", json={"name": "Another", "account": "Other"}).json()
+    core_room = client.post(
+        "/api/records/room", json={"name": "Another", "account": "Other"}
+    ).json()
     client.patch(f"/api/records/room/{core_room['id']}", json={"stage": "evaluation"})
 
     mounted = mounted_routes(client)
@@ -1609,8 +1781,15 @@ def test_the_seed_records_both_researched_webhook_events(seeded_db):
 
 def test_the_seed_records_a_rejection_with_the_researched_reason(seeded_db):
     _db, store, _rooms, _summary = seeded_db
-    rejected = [record for record in store.list("booking_request", limit=50) if record["data"]["status"] == "REJECTED"]
-    assert rejected[0]["data"]["rejectionReason"] == "The organizer is no longer available at this time."
+    rejected = [
+        record
+        for record in store.list("booking_request", limit=50)
+        if record["data"]["status"] == "REJECTED"
+    ]
+    assert (
+        rejected[0]["data"]["rejectionReason"]
+        == "The organizer is no longer available at this time."
+    )
 
 
 def test_the_seed_re_requests_the_released_slot_so_the_release_is_visible(seeded_db):
@@ -1636,7 +1815,9 @@ def test_the_seed_configures_the_bounds_and_the_limit_somewhere(seeded_db):
     """So ``allowBookingOutOfBounds`` and ``skipBookingLimits`` have something to act on."""
     _db, store, _rooms, _summary = seeded_db
     configured = [record["data"] for record in store.list("event_type", limit=20)]
-    assert any(spec.get("minimumNoticeMinutes") and spec.get("maximumRangeDays") for spec in configured)
+    assert any(
+        spec.get("minimumNoticeMinutes") and spec.get("maximumRangeDays") for spec in configured
+    )
     assert any(spec.get("bookingLimitPerAttendee") for spec in configured)
     assert any(spec.get("emailVerification") for spec in configured)
 
@@ -1645,7 +1826,10 @@ def test_the_seed_creates_a_rule_for_each_researched_trigger_in_every_room(seede
     _db, store, room_ids, _summary = seeded_db
     for room_id in room_ids:
         rules = store.list("booking_automation", room_id=room_id, limit=20)
-        assert {rule["data"]["trigger"] for rule in rules} == {"bookingRequested", "bookingRejected"}
+        assert {rule["data"]["trigger"] for rule in rules} == {
+            "bookingRequested",
+            "bookingRejected",
+        }
 
 
 def test_the_seed_creates_each_event_type_in_the_room_that_uses_it(seeded_db):
@@ -1665,7 +1849,15 @@ def test_the_seed_leaves_no_booking_holding_a_slot_it_released(seeded_db):
 def test_the_seed_says_what_it_produced(seeded_db):
     _db, _store, _rooms, summary = seeded_db
     assert isinstance(summary, str)
-    for expected in ("event types", "automations", "bookings", "pending", "declined", "confirmed", "verified email"):
+    for expected in (
+        "event types",
+        "automations",
+        "bookings",
+        "pending",
+        "declined",
+        "confirmed",
+        "verified email",
+    ):
         assert expected in summary
 
 
@@ -1706,6 +1898,7 @@ def test_the_seed_is_reproducible_apart_from_the_issued_credentials(tmp_path):
     first_db, first_store, _r, _s = seeded(tmp_path / "a", rooms=2)
     second_db, second_store, _r2, _s2 = seeded(tmp_path / "b", rooms=2)
     try:
+
         def shape(store):
             return [
                 (
@@ -1714,7 +1907,9 @@ def test_the_seed_is_reproducible_apart_from_the_issued_credentials(tmp_path):
                     record["data"]["start"],
                     record["data"]["holdsSlot"],
                 )
-                for record in store.list("booking_request", limit=50, order_by="created_at", descending=False)
+                for record in store.list(
+                    "booking_request", limit=50, order_by="created_at", descending=False
+                )
             ]
 
         assert shape(first_store) == shape(second_store)

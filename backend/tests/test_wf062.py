@@ -21,7 +21,6 @@ import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from dsr import booking_approval as approval
 from dsr.booking_approval import ApprovalError
 
@@ -66,7 +65,9 @@ def booking(**overrides) -> dict:
     return spec
 
 
-def live(uid: str, status: str, *, start: str, end: str, event_type_id: str = "event_type_1") -> dict:
+def live(
+    uid: str, status: str, *, start: str, end: str, event_type_id: str = "event_type_1"
+) -> dict:
     """A stored booking's payload, as the domain is handed it.
 
     ``eventTypeId`` defaults to the one :func:`event_type` builds so a conflict
@@ -109,10 +110,14 @@ def request_slot(**overrides):
 
 def test_vocabulary_publishes_exactly_the_four_researched_statuses():
     """The API reference names `cancelled|accepted|rejected|pending`."""
-    assert approval.vocabulary()["statuses"] == [
-        *[{"value": status} for status in ("PENDING", "ACCEPTED", "REJECTED", "CANCELLED")]
-    ] or True
-    assert [entry["value"] for entry in approval.vocabulary()["statuses"]] == list(approval.STATUSES)
+    assert (
+        approval.vocabulary()["statuses"]
+        == [*[{"value": status} for status in ("PENDING", "ACCEPTED", "REJECTED", "CANCELLED")]]
+        or True
+    )
+    assert [entry["value"] for entry in approval.vocabulary()["statuses"]] == list(
+        approval.STATUSES
+    )
 
 
 def test_vocabulary_carries_both_researched_spellings_of_a_status():
@@ -354,7 +359,9 @@ def test_iso_and_as_utc_round_trip():
 
 def test_the_one_time_password_has_the_shape_the_evidence_quotes():
     """`"oneTimePassword": "00000000-0000-0000-0000-000000000000"`."""
-    assert re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", approval.mint_one_time_password())
+    assert re.fullmatch(
+        r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", approval.mint_one_time_password()
+    )
 
 
 def test_two_one_time_passwords_differ():
@@ -369,7 +376,9 @@ def test_a_verification_code_is_six_digits_and_zero_padded():
 
 def test_a_verification_code_is_reproducible_from_a_seeded_rng():
     """The rng is a constructor argument, so a test needs no seam in production."""
-    assert approval.mint_verification_code(random.Random(7)) == approval.mint_verification_code(random.Random(7))
+    assert approval.mint_verification_code(random.Random(7)) == approval.mint_verification_code(
+        random.Random(7)
+    )
 
 
 def test_passwords_match_rejects_anything_missing():
@@ -402,11 +411,15 @@ def test_the_host_is_privileged():
 
 
 def test_an_assigned_user_is_privileged():
-    assert approval.privilege_roles(event_type(), {"userId": "priya", "roles": []}) == ["assigned_user"]
+    assert approval.privilege_roles(event_type(), {"userId": "priya", "roles": []}) == [
+        "assigned_user"
+    ]
 
 
 def test_a_declared_team_admin_and_org_admin_are_privileged():
-    roles = approval.privilege_roles(event_type(), {"userId":"root", "roles": ["team_admin", "org_admin"]})
+    roles = approval.privilege_roles(
+        event_type(), {"userId": "root", "roles": ["team_admin", "org_admin"]}
+    )
     assert roles == ["team_admin", "org_admin"]
 
 
@@ -420,7 +433,9 @@ def test_a_caller_without_an_identity_holds_nothing_however_it_claims():
 
 
 def test_a_declared_role_is_not_counted_twice():
-    roles = approval.privilege_roles(event_type(hostId="dana", ownerId="dana"), {"userId": "dana", "roles": ["host"]})
+    roles = approval.privilege_roles(
+        event_type(hostId="dana", ownerId="dana"), {"userId": "dana", "roles": ["host"]}
+    )
     assert roles == ["event_owner", "host"]
 
 
@@ -441,7 +456,9 @@ def test_authentication_is_what_the_caller_asserts_besides_an_identity():
 
 
 def test_nothing_asked_for_means_nothing_honoured():
-    resolved = approval.resolve_bypasses(requested={}, api_version="2026-05-01", roles=["host"], authenticated=True)
+    resolved = approval.resolve_bypasses(
+        requested={}, api_version="2026-05-01", roles=["host"], authenticated=True
+    )
     assert resolved["honoured"] == []
     assert resolved["ignored"] == []
     assert resolved["requested"] == {}
@@ -449,7 +466,10 @@ def test_nothing_asked_for_means_nothing_honoured():
 
 def test_a_flag_set_to_false_is_not_asked_for():
     resolved = approval.resolve_bypasses(
-        requested={"allowConflicts": False}, api_version="2026-05-01", roles=["host"], authenticated=True
+        requested={"allowConflicts": False},
+        api_version="2026-05-01",
+        roles=["host"],
+        authenticated=True,
     )
     assert resolved["honoured"] == []
 
@@ -467,7 +487,10 @@ def test_all_three_flags_are_honoured_for_an_entitled_caller_on_either_version()
 
 def test_a_flag_is_ignored_on_an_unsupported_api_version():
     resolved = approval.resolve_bypasses(
-        requested={"allowConflicts": True}, api_version="2024-08-13", roles=["host"], authenticated=True
+        requested={"allowConflicts": True},
+        api_version="2024-08-13",
+        roles=["host"],
+        authenticated=True,
     )
     assert resolved["honoured"] == []
     assert resolved["ignored"][0]["code"] == "api_version_not_supported"
@@ -539,22 +562,33 @@ def test_a_type_with_no_toggle_at_all_needs_no_approval():
 
 def test_a_per_request_true_always_means_a_request():
     """A request nobody asked to be held must never be silently accepted."""
-    assert approval.requires_confirmation({"requiresConfirmation": False, "requiresConfirmationOverride": True}) is True
+    assert (
+        approval.requires_confirmation(
+            {"requiresConfirmation": False, "requiresConfirmationOverride": True}
+        )
+        is True
+    )
 
 
 def test_a_per_request_false_cannot_step_over_the_toggle_the_admin_set():
     """A request that could declare itself not to need approval would make the
     host's approval a step any caller could skip."""
-    assert approval.requires_confirmation(
-        {"requiresConfirmation": True, "requiresConfirmationOverride": False}
-    ) is True
+    assert (
+        approval.requires_confirmation(
+            {"requiresConfirmation": True, "requiresConfirmationOverride": False}
+        )
+        is True
+    )
 
 
 def test_a_per_request_true_on_a_type_that_needs_no_approval_is_the_flows_second_entry():
     """The flow's "or the booking is created as a request"."""
-    assert approval.requires_confirmation(
-        {"requiresConfirmation": False, "requiresConfirmationOverride": True}
-    ) is True
+    assert (
+        approval.requires_confirmation(
+            {"requiresConfirmation": False, "requiresConfirmationOverride": True}
+        )
+        is True
+    )
 
 
 def test_a_per_request_false_on_a_type_that_does_not_need_approval_is_false():
@@ -567,13 +601,17 @@ def test_a_per_request_false_on_a_type_that_does_not_need_approval_is_false():
 
 
 def test_a_gate_that_is_off_never_asks_for_a_code():
-    state = approval.verification_state(event_type(emailVerification=False), email="a@b.com", supplied_code=None, record=None)
+    state = approval.verification_state(
+        event_type(emailVerification=False), email="a@b.com", supplied_code=None, record=None
+    )
     assert state["required"] is False
     assert state["satisfied"] is True
 
 
 def test_a_gate_that_is_on_and_gets_nothing_says_it_is_required():
-    state = approval.verification_state(event_type(emailVerification=True), email="a@b.com", supplied_code=None, record=None)
+    state = approval.verification_state(
+        event_type(emailVerification=True), email="a@b.com", supplied_code=None, record=None
+    )
     assert state["required"] is True
     assert state["satisfied"] is False
     assert state["code"] == "email_verification_required"
@@ -582,7 +620,10 @@ def test_a_gate_that_is_on_and_gets_nothing_says_it_is_required():
 
 def test_a_code_no_record_matches_is_not_the_right_code():
     state = approval.verification_state(
-        event_type(emailVerification=True), email="a@b.com", supplied_code="123456", record={"code": "654321", "verifiedAt": "now"}
+        event_type(emailVerification=True),
+        email="a@b.com",
+        supplied_code="123456",
+        record={"code": "654321", "verifiedAt": "now"},
     )
     assert state["code"] == "invalid_verification_code"
 
@@ -590,7 +631,10 @@ def test_a_code_no_record_matches_is_not_the_right_code():
 def test_a_code_that_was_sent_but_not_verified_says_so():
     """The triad has three steps; sending is not verifying."""
     state = approval.verification_state(
-        event_type(emailVerification=True), email="a@b.com", supplied_code="123456", record={"code": "123456", "verifiedAt": None}
+        event_type(emailVerification=True),
+        email="a@b.com",
+        supplied_code="123456",
+        record={"code": "123456", "verifiedAt": None},
     )
     assert state["code"] == "email_verification_not_verified"
     assert state["satisfied"] is False
@@ -598,7 +642,10 @@ def test_a_code_that_was_sent_but_not_verified_says_so():
 
 def test_a_verified_code_for_the_address_satisfies_the_gate():
     state = approval.verification_state(
-        event_type(emailVerification=True), email="a@b.com", supplied_code="123456", record={"code": "123456", "verifiedAt": "now"}
+        event_type(emailVerification=True),
+        email="a@b.com",
+        supplied_code="123456",
+        record={"code": "123456", "verifiedAt": "now"},
     )
     assert state["satisfied"] is True
     assert state["code"] is None
@@ -682,7 +729,9 @@ def test_a_rejected_booking_on_the_same_slot_is_not_a_conflict():
 
 def test_a_booking_back_to_back_with_another_is_not_a_conflict():
     decision = request_slot(
-        overlapping=[live("bk_old", "ACCEPTED", start=at(days=2, minutes=30), end=at(days=2, minutes=60))]
+        overlapping=[
+            live("bk_old", "ACCEPTED", start=at(days=2, minutes=30), end=at(days=2, minutes=60))
+        ]
     )
     assert decision["refusals"] == []
 
@@ -712,9 +761,7 @@ def test_an_allow_conflicts_flag_is_ignored_for_a_stranger_and_the_conflict_stil
 
 
 def test_a_start_inside_the_minimum_notice_is_out_of_bounds():
-    decision = request_slot(
-        event_type={"minimumNoticeMinutes": 120}, start=at(minutes=30)
-    )
+    decision = request_slot(event_type={"minimumNoticeMinutes": 120}, start=at(minutes=30))
     assert [entry["code"] for entry in decision["refusals"]] == ["out_of_bounds"]
     assert "120 minutes" in decision["refusals"][0]["detail"]
 
@@ -922,7 +969,9 @@ def test_the_host_may_confirm():
 
 def test_the_event_owner_may_confirm():
     outcome = approval.evaluate_decision(
-        booking(hostId="sam", ownerId="dana"), decision="confirm", caller={"userId": "dana", "roles": []}
+        booking(hostId="sam", ownerId="dana"),
+        decision="confirm",
+        caller={"userId": "dana", "roles": []},
     )
     assert outcome["status"] == "ACCEPTED"
     assert outcome["authorisation"]["by_ownership"] is True
@@ -953,12 +1002,16 @@ def test_the_one_time_password_authorises_a_decision():
 
 def test_a_wrong_one_time_password_does_not_authorise():
     with pytest.raises(ApprovalError) as caught:
-        approval.evaluate_decision(booking(), decision="confirm", caller=STRANGER, one_time_password="nope")
+        approval.evaluate_decision(
+            booking(), decision="confirm", caller=STRANGER, one_time_password="nope"
+        )
     assert caught.value.code == "not_booking_owner"
 
 
 def test_ownership_is_checked_first_and_reported_even_when_a_password_is_presented():
-    outcome = approval.evaluate_decision(booking(), decision="confirm", caller=HOST, one_time_password="ot-pass-1")
+    outcome = approval.evaluate_decision(
+        booking(), decision="confirm", caller=HOST, one_time_password="ot-pass-1"
+    )
     assert outcome["authorisation"]["by_ownership"] is True
     assert outcome["authorisation"]["one_time_password_accepted"] is True
 
@@ -1052,7 +1105,10 @@ def test_a_confirm_keeps_the_hold():
 
 def test_a_decision_spends_the_one_time_password():
     """A credential that has already been used authorises nothing."""
-    assert approval.evaluate_decision(booking(), decision="confirm", caller=HOST)["one_time_password"] is None
+    assert (
+        approval.evaluate_decision(booking(), decision="confirm", caller=HOST)["one_time_password"]
+        is None
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1067,7 +1123,9 @@ def test_confirming_onto_a_slot_another_booking_holds_is_409():
             booking(),
             decision="confirm",
             caller=HOST,
-            overlapping=[live("bk_other", "ACCEPTED", start=at(days=2), end=at(days=2, minutes=30))],
+            overlapping=[
+                live("bk_other", "ACCEPTED", start=at(days=2), end=at(days=2, minutes=30))
+            ],
         )
     assert caught.value.code == "slot_conflict"
     assert caught.value.status == 409
@@ -1126,7 +1184,9 @@ def test_an_allow_conflicts_flag_is_ignored_on_an_unsupported_version_at_decide_
             caller=HOST,
             api_version="2024-08-13",
             bypass={"allowConflicts": True},
-            overlapping=[live("bk_other", "ACCEPTED", start=at(days=2), end=at(days=2, minutes=30))],
+            overlapping=[
+                live("bk_other", "ACCEPTED", start=at(days=2), end=at(days=2, minutes=30))
+            ],
         )
     assert caught.value.code == "slot_conflict"
     assert caught.value.refusals[0]["bypass_honoured"] is False
@@ -1201,7 +1261,9 @@ def test_an_unattended_approval_by_an_entitled_caller_is_recorded_as_unattended(
 
 
 def test_the_driver_defaults_to_host():
-    assert approval.evaluate_decision(booking(), decision="confirm", caller=HOST)["driver"] == "host"
+    assert (
+        approval.evaluate_decision(booking(), decision="confirm", caller=HOST)["driver"] == "host"
+    )
 
 
 def test_an_actor_is_recorded_when_a_password_decided_it_and_there_is_no_caller_identity():
@@ -1254,11 +1316,15 @@ def test_the_host_is_routed_to_either_way():
     would strand it."""
     spec = event_type(hostId="sam", ownerId="dana")
     assert "sam" in approval.resolve_routing(spec, contact_owner="dana")["recipients"]
-    assert approval.resolve_routing(spec, contact_owner="dana", skip_contact_owner=True)["recipients"] == ["sam"]
+    assert approval.resolve_routing(spec, contact_owner="dana", skip_contact_owner=True)[
+        "recipients"
+    ] == ["sam"]
 
 
 def test_a_request_with_no_contact_owner_goes_to_the_host():
-    assert approval.resolve_routing(event_type(hostId="sam"), contact_owner=None)["recipients"] == ["sam"]
+    assert approval.resolve_routing(event_type(hostId="sam"), contact_owner=None)["recipients"] == [
+        "sam"
+    ]
 
 
 def test_routing_reports_the_flag_it_applied():
@@ -1277,12 +1343,17 @@ def test_assigned_to_is_the_first_recipient():
 
 
 def rule(trigger="bookingRequested", channels=("to_do",), enabled=True) -> dict:
-    return {"id": "bk_auto_1", "data": {"trigger": trigger, "channels": list(channels), "label": "L", "enabled": enabled}}
+    return {
+        "id": "bk_auto_1",
+        "data": {"trigger": trigger, "channels": list(channels), "label": "L", "enabled": enabled},
+    }
 
 
 def test_an_enabled_rule_fires_on_its_own_trigger():
     fired = approval.matching_rules([rule()], "bookingRequested")
-    assert fired == [{"id": "bk_auto_1", "label": "L", "trigger": "bookingRequested", "channels": ["to_do"]}]
+    assert fired == [
+        {"id": "bk_auto_1", "label": "L", "trigger": "bookingRequested", "channels": ["to_do"]}
+    ]
 
 
 def test_a_disabled_rule_fires_nothing():
@@ -1299,12 +1370,16 @@ def test_a_rule_with_no_known_channel_fires_nothing():
 
 
 def test_a_rule_keeps_only_the_channels_this_workflow_can_dispatch():
-    fired = approval.matching_rules([rule(channels=["to_do", "email", "carrier-pigeon"])], "bookingRequested")
+    fired = approval.matching_rules(
+        [rule(channels=["to_do", "email", "carrier-pigeon"])], "bookingRequested"
+    )
     assert fired[0]["channels"] == ["to_do", "email"]
 
 
 def test_a_rule_may_be_a_bare_payload_with_no_envelope():
-    assert approval.matching_rules([{"trigger": "bookingRequested", "channels": ["sms"]}], "bookingRequested")
+    assert approval.matching_rules(
+        [{"trigger": "bookingRequested", "channels": ["sms"]}], "bookingRequested"
+    )
 
 
 def test_a_workflow_rule_must_name_a_researched_trigger():
@@ -1328,7 +1403,9 @@ def test_a_workflow_rule_rejects_an_unknown_channel():
 
 def test_a_workflow_rule_rejects_a_non_boolean_enabled():
     with pytest.raises(ApprovalError) as caught:
-        approval.validate_automation({"trigger": "bookingRequested", "channels": ["sms"], "enabled": "yes"})
+        approval.validate_automation(
+            {"trigger": "bookingRequested", "channels": ["sms"], "enabled": "yes"}
+        )
     assert caught.value.code == "invalid_automation"
 
 
@@ -1388,7 +1465,9 @@ def test_an_event_type_rejects_a_negative_bound():
 
 
 def test_an_event_type_accepts_an_absent_or_null_bound():
-    spec = approval.validate_event_type({"title": "x", "minimumNoticeMinutes": None, "maximumRangeDays": None})
+    spec = approval.validate_event_type(
+        {"title": "x", "minimumNoticeMinutes": None, "maximumRangeDays": None}
+    )
     assert spec["maximumRangeDays"] is None
 
 
@@ -1400,7 +1479,9 @@ def test_an_event_type_passes_unknown_fields_through():
 
 def test_an_event_type_drops_reserved_envelope_keys():
     """A payload cannot smuggle a revision or a room through the payload."""
-    spec = approval.validate_event_type({"title": "x", "id": "nope", "room_id": "nope", "revision": 9})
+    spec = approval.validate_event_type(
+        {"title": "x", "id": "nope", "room_id": "nope", "revision": 9}
+    )
     assert "id" not in spec and "room_id" not in spec and "revision" not in spec
 
 
@@ -1459,13 +1540,24 @@ def test_a_webhook_carries_the_vendor_envelope():
 
 
 def test_a_webhook_payload_names_the_uid_the_api_calls_a_booking_uid():
-    assert approval.booking_requested_payload(requested_booking(), created_at=at())["payload"]["uid"] == "bk_1"
+    assert (
+        approval.booking_requested_payload(requested_booking(), created_at=at())["payload"]["uid"]
+        == "bk_1"
+    )
 
 
 def test_a_webhook_payload_keeps_a_null_rejection_reason_rather_than_dropping_the_key():
     """A client reading one payload shape should not have to branch on the key."""
-    assert "rejectionReason" in approval.booking_requested_payload(requested_booking(), created_at=at())["payload"]
-    assert approval.booking_requested_payload(requested_booking(), created_at=at())["payload"]["rejectionReason"] is None
+    assert (
+        "rejectionReason"
+        in approval.booking_requested_payload(requested_booking(), created_at=at())["payload"]
+    )
+    assert (
+        approval.booking_requested_payload(requested_booking(), created_at=at())["payload"][
+            "rejectionReason"
+        ]
+        is None
+    )
 
 
 def test_a_calendar_event_says_it_was_created_because_a_host_confirmed():
@@ -1488,7 +1580,14 @@ def test_the_domain_module_touches_neither_a_database_nor_the_framework():
     import dsr.booking_approval as module
 
     text = Path(module.__file__).read_text(encoding="utf-8")
-    for forbidden in ("import sqlite3", "from fastapi", "from starlette", "from dsr.api", "from dsr.store", "AuditedDatabase"):
+    for forbidden in (
+        "import sqlite3",
+        "from fastapi",
+        "from starlette",
+        "from dsr.api",
+        "from dsr.store",
+        "AuditedDatabase",
+    ):
         assert forbidden not in text, f"the pure domain imports {forbidden}"
 
 

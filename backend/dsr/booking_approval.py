@@ -523,7 +523,15 @@ def validate_event_type(payload: Mapping[str, Any]) -> dict[str, Any]:
     know about it.
     """
     data = dict(payload or {})
-    for reserved in ("id", "collection", "room_id", "revision", "created_at", "updated_at", "deleted_at"):
+    for reserved in (
+        "id",
+        "collection",
+        "room_id",
+        "revision",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+    ):
         data.pop(reserved, None)
 
     title = str(data.get("title") or "").strip()
@@ -747,7 +755,10 @@ def evaluate_request(
     record(
         str(gate["code"] or "email_verification_not_required"),
         bool(gate["satisfied"]),
-        str(gate.get("detail") or "this event type has email verification off, so no code is required"),
+        str(
+            gate.get("detail")
+            or "this event type has email verification off, so no code is required"
+        ),
         rule="emailVerification is a separate optional gate",
         status=422,
     )
@@ -901,7 +912,9 @@ def evaluate_decision(
 
     roles = privilege_roles(booking, caller)
     authenticated = is_authenticated(caller)
-    presented_password = passwords_match(one_time_password, str(booking.get("oneTimePassword") or ""))
+    presented_password = passwords_match(
+        one_time_password, str(booking.get("oneTimePassword") or "")
+    )
     resolved_bypasses = resolve_bypasses(
         requested=bypass,
         api_version=api_version,
@@ -1075,7 +1088,9 @@ def matching_rules(rules: Iterable[Mapping[str, Any]], trigger: str) -> list[dic
             continue
         if str(data.get("trigger") or "") != trigger:
             continue
-        channels = [str(name) for name in (data.get("channels") or []) if str(name) in NOTIFICATION_CHANNELS]
+        channels = [
+            str(name) for name in (data.get("channels") or []) if str(name) in NOTIFICATION_CHANNELS
+        ]
         if not channels:
             continue
         fired.append(
@@ -1220,7 +1235,8 @@ def vocabulary() -> dict[str, Any]:
             {"event": event, "meaning": WEBHOOK_MEANING[event]} for event in WEBHOOK_EVENTS
         ],
         "workflow_triggers": [
-            {"trigger": trigger, "meaning": TRIGGER_MEANING[trigger]} for trigger in WORKFLOW_TRIGGERS
+            {"trigger": trigger, "meaning": TRIGGER_MEANING[trigger]}
+            for trigger in WORKFLOW_TRIGGERS
         ],
         "notification_channels": list(NOTIFICATION_CHANNELS),
         "dispatched_by": DISPATCHED_BY,
@@ -1264,7 +1280,7 @@ def capabilities() -> dict[str, Any]:
         "apis": [
             {
                 "researched": "POST /v2/bookings",
-                "here": f"POST /api/wf-062/rooms/{{room_id}}/requests",
+                "here": "POST /api/wf-062/rooms/{room_id}/requests",
                 "implements": (
                     "Creating the booking with requiresConfirmation semantics. Returns "
                     "requiresConfirmation, oneTimePassword, status and rejectionReason."
@@ -1273,7 +1289,7 @@ def capabilities() -> dict[str, Any]:
             },
             {
                 "researched": "POST /v2/bookings/{bookingUid}/confirm",
-                "here": f"POST /api/wf-062/rooms/{{room_id}}/requests/{{uid}}/confirm",
+                "here": "POST /api/wf-062/rooms/{room_id}/requests/{uid}/confirm",
                 "implements": (
                     "Confirm a booking. The authorization header refers to the owner of the "
                     "booking; a one-time password is accepted as an alternative credential."
@@ -1282,7 +1298,7 @@ def capabilities() -> dict[str, Any]:
             },
             {
                 "researched": "POST /v2/bookings/{bookingUid}/decline",
-                "here": f"POST /api/wf-062/rooms/{{room_id}}/requests/{{uid}}/decline",
+                "here": "POST /api/wf-062/rooms/{room_id}/requests/{uid}/decline",
                 "implements": (
                     "Decline a booking, optionally with a reason. Emits BOOKING_REJECTED "
                     "carrying rejectionReason and releases the held slot."
@@ -1306,7 +1322,7 @@ def capabilities() -> dict[str, Any]:
             },
             {
                 "researched": "Webhooks BOOKING_REQUESTED and BOOKING_REJECTED",
-                "here": f"GET /api/wf-062/rooms/{{room_id}}/requests/{{uid}}/webhooks",
+                "here": "GET /api/wf-062/rooms/{room_id}/requests/{uid}/webhooks",
                 "implements": "Both payloads are recorded in full, in the researched shape.",
                 "implemented": True,
             },
