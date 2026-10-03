@@ -12,11 +12,11 @@ audit trail, and the three properties the feature actually promises:
 * the link secret is non-removable, and a domain cannot be stolen;
 * changing or releasing a domain does not break a link already shared.
 
-One test on the branch is *not* carried over as written, and the reason is in
-``test_the_generic_record_route_can_still_clear_the_link_secret``: the
-non-removable-secret guarantee was implemented on the branch by editing
-``dsr/api.py``, which a feature must not edit. The assertion is kept, as a
-strict xfail, rather than deleted -- see the comment on that test.
+One test on the branch is *not* carried over as written. On the branch the
+non-removable-secret guarantee was implemented by editing ``dsr/api.py``,
+which a feature must not edit, so the port shipped the assertion as a strict
+xffail instead. The integrator has since wired ``guard_room_payload`` into
+``update_record``, and the marker is gone -- see the comment on that test.
 """
 
 from __future__ import annotations
@@ -290,11 +290,11 @@ def test_share_url_is_stable_when_the_domain_changes(room, client):
 
 
 def test_guard_room_payload_drops_the_product_owned_fields():
-    """The guard that ``api.py`` would need in order to close the gap below.
+    """The guard ``api.py`` calls to close the gap below.
 
-    Asserted directly against the exported function, because wiring it into the
-    generic record route means editing a shared file and that is a report, not a
-    change.
+    Asserted directly against the exported function as well as through the
+    route, because the two failures are different: this one says the guard
+    stopped working, and the route one says the host stopped calling it.
     """
     patch = {
         "name": "Renamed",
@@ -306,14 +306,6 @@ def test_guard_room_payload_drops_the_product_owned_fields():
     assert feature.guard_room_payload(patch) == {"name": "Renamed"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The non-removable-secret guarantee needs a filter in dsr/api.py's update_record, "
-        "and a feature must not edit that file. Recorded as a finding; the assertion is kept "
-        "so that the day the guard is wired in, this test fails and asks to be un-xfailed."
-    ),
-)
 def test_the_generic_record_route_cannot_clear_the_link_secret(room, client):
     """Sourced: the secret is a "non-removable identifier".
 
@@ -323,12 +315,9 @@ def test_the_generic_record_route_cannot_clear_the_link_secret(room, client):
 
     The branch closed this by editing ``update_record`` in ``dsr/api.py`` to run
     every room patch through ``DomainService.strip_reserved``. That file is
-    shared, so the port cannot carry the closure -- only the guard, exported as
-    ``guard_room_payload`` for whoever owns it. Until then the generic record
-    route is a back door, and this xfail is the visible record of that.
-    ``strict=True`` is the load-bearing part: when someone wires the guard in,
-    the assertions pass, and pytest reports the XPASS as a failure, which is the
-    signal to delete the marker.
+    shared, so the port could not carry the closure. The guard is now wired in
+    by the integrator, which is why this test no longer carries the
+    ``xfail(strict=True)`` marker it held while the gap was open.
     """
     client.post(_wl(f"/rooms/{room['id']}/white-label/link-secret"))
     secret = client.get(_wl(f"/rooms/{room['id']}/white-label")).json()["slug"].rsplit("-", 1)[1]
