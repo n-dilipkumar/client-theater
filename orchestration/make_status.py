@@ -107,6 +107,23 @@ PY_REL = ".venv/Scripts/python"
 DESCRIPTION_RE = re.compile(r"^-\s+\*\*name:?\*\*:?\s*(.+)$", re.M)
 
 
+def implemented_pages() -> int:
+    """How many specification pages tick `Implemented` in their Build status.
+
+    Counted, never typed. The sentence that cites this used to carry a literal,
+    and the built count in it went stale while the headline bar beside it stayed
+    right. A dashboard that is correct where you look and wrong where you read
+    the reasoning is the one failure it must not have.
+    """
+    n = 0
+    for page in sorted(CORPUS.glob("wf/WF-*.md")):
+        body = page.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"(?ms)^##\s*Build status.*?(?=^##\s|\Z)", body)
+        if m and re.search(r"\[x\]\s*Implemented", m.group(0), re.I):
+            n += 1
+    return n
+
+
 def description_of(ticket: str) -> str:
     """The one line on what this workflow does, read from its own spec page.
 
@@ -539,10 +556,14 @@ def render() -> tuple[str, dict]:
     A("branch is a claim to verify, not a feature.")
     A("")
     A("It does **not** come from the `## Build status` checkboxes in each")
-    A("`wf/WF-NNN.md` page. Only 20 of 138 pages tick `Implemented` while 48")
-    A("workflows are built, so those checkboxes understate the programme by more")
-    A("than half; they are claims made when the page was generated, and the")
-    A("feature registry is the fact.")
+    A(f"`wf/WF-NNN.md` page. Only {implemented_pages()} of {len(rows)} pages")
+    A(f"tick `Implemented` while {len(done)} workflows are built, so those")
+    A("checkboxes understate the programme; they are claims made when the page")
+    A("was generated, and the feature registry is the fact.")
+    A("")
+    A("Both numbers above are counted when this file runs. An earlier version")
+    A("typed them, and the built count went stale while the headline beside it")
+    A("stayed correct.")
     A("")
     A("**Critical / supplementary** is the judgment in")
     A("`docs/research/digital-sales-room-workflows/criticality-decisions.json`.")
