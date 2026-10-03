@@ -2,6 +2,15 @@
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode/space-bunny-free",
   "small_model": "opencode/space-bunny-free",
+  "agents": {
+    "build": { "model": "opencode/space-bunny-free#max" },
+    "plan": { "model": "opencode/space-bunny-free#max" },
+    "general": { "model": "opencode/space-bunny-free#max" },
+    "explore": { "model": "opencode/space-bunny-free#max" },
+    "compaction": { "model": "opencode/space-bunny-free#max" },
+    "title": { "model": "opencode/space-bunny-free#max" },
+    "summary": { "model": "opencode/space-bunny-free#max" }
+  },
   "autoupdate": false,
   "share": "disabled",
   "permissions": [
