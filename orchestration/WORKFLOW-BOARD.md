@@ -7,7 +7,7 @@
 **What is built, what is not, and what each one is worth.**
 
 Regenerate with `.venv/Scripts/python orchestration/make_workflow_board.py`.
-Verified against `origin/main` at `baaa07f` (2026-10-01T19:20:35+05:30); generated 2026-10-01T22:24:43+05:30.
+Verified against `origin/main` at `a8e35a3` (2026-10-03T20:27:23+05:30); generated 2026-10-03T21:10:04+05:30.
 
 This is the board to open a branch from. For live route counts, test counts
 and in-flight agent worktrees, see `orchestration/STATUS.md` — that file
@@ -17,18 +17,18 @@ measures the running product, this one measures the workflow corpus.
 
 | | Count |
 |---|---:|
-| **Built and landed** | **48** |
-| Pending — critical | 5 |
-| Pending — supplementary | 85 |
-| **Pending total** | **90** |
+| **Built and landed** | **57** |
+| Pending — critical | 0 |
+| Pending — supplementary | 81 |
+| **Pending total** | **81** |
 | Corpus researched | 138 tickets, 133 after dedupe |
 | Target | 138 |
 
-**48 of 138 built (34%), 90 to go.**
+**57 of 138 built (41%), 81 to go.**
 
 The target is the whole corpus: 138 researched workflows, all of
 them to be built. There is no cap and no shortlist to be chosen from -
-90 remain, and criticality is what decides the order they are
+81 remain, and criticality is what decides the order they are
 worked in, not which of them are worth doing.
 
 ## How status is decided
@@ -52,7 +52,7 @@ Criticality is the judgment in
 
 ## Built
 
-All 48 workflows with a feature module on `origin/main`.
+All 57 workflows with a feature module on `origin/main`.
 
 | Workflow | Name | Criticality | Basis | Tests |
 |---|---|---|---|---|
@@ -63,7 +63,12 @@ All 48 workflows with a feature module on `origin/main`.
 | ✅ **WF-006** | Review buyer engagement and prioritise follow-up | critical | C1 | — |
 | ✅ **WF-007** | Ingest a document or deck into the content library | critical | C1 | `test_wf007.py` |
 | ✅ **WF-011** | Take a room from draft to live and hand over the link | critical | C1 | `test_wf011.py` |
+| ✅ **WF-014** | Expire or cap access to a room | critical | C2 | `test_wf014_http.py` |
 | ✅ **WF-015** | Verify buyer identity and restrict by email domain | critical | C2 | `test_wf015.py` |
+| ✅ **WF-069** | Gate each buyer link with a password, an expiry and email verification | critical | C2 | `test_wf069.py` |
+| ✅ **WF-076** | Revoke access early and keep the audit row | critical | C2 | `test_wf076.py` |
+| ✅ **WF-077** | Manage internal workspace roles and least-privilege integration scopes | critical | C2 | `test_wf077.py` |
+| ✅ **WF-079** | Export a tamper-evident audit trail with IP and verification outcomes | critical | C2 | `test_wf079.py` |
 | ✅ **WF-005** | Archive and restore a room | supplementary | None | `test_wf005.py` |
 | ✅ **WF-008** | Auto-sync an external cloud file into the content library | supplementary | None | `test_wf008_http.py` |
 | ✅ **WF-009** | Approve and publish library content, immediately or on schedule | supplementary | None | `test_wf009.py` |
@@ -95,35 +100,27 @@ All 48 workflows with a feature module on `origin/main`.
 | ✅ **WF-040** | Surface partial failures and reject invalid writes before commit | supplementary | None | `test_wf040.py` |
 | ✅ **WF-041** | Detect and block duplicate records during sync | supplementary | None | `test_wf041.py` |
 | ✅ **WF-043** | Stream CRM record changes into the room in near real time | supplementary | None | `test_wf043.py` |
+| ✅ **WF-044** | Emit a webhook out of the CRM when a deal stage changes | supplementary | None | `test_wf044.py` |
 | ✅ **WF-045** | Backfill historical records on a schedule with a resumable cursor | supplementary | None | `test_wf045_perf.py` |
+| ✅ **WF-049** | Monitor integration health and remaining API quota | supplementary | None | `test_wf049.py` |
+| ✅ **WF-053** | Route a booking to the owner of the CRM record | supplementary | None | `test_wf053.py` |
 | ✅ **WF-056** | Book a meeting with no scheduling UI (headless / AI agent) | supplementary | None | `test_wf056.py` |
 | ✅ **WF-057** | Find a time that works for a multi-person panel | supplementary | None | `test_wf057.py` |
 | ✅ **WF-058** | Embed a bookable calendar inside the sales room / app | supplementary | None | `test_wf058.py` |
 | ✅ **WF-059** | Provision a per-booking video-conference link (Meet / Zoom / Teams / Gong) | supplementary | None | `test_wf059.py` |
 | ✅ **WF-061** | Send conditional pre- and post-meeting reminders and SMS nudges | supplementary | None | `test_wf061.py` |
+| ✅ **WF-062** | Route a requested slot for host approval before confirming | supplementary | None | `test_wf062_http.py` |
 | ✅ **WF-063** | Reassign a booked meeting to a different host | supplementary | None | `test_wf063.py` |
 | ✅ **WF-064** | Reschedule or cancel a meeting and propagate the change | supplementary | None | `test_wf064.py` |
 | ✅ **WF-065** | Write the booking back into the CRM | supplementary | None | `test_wf065.py` |
 
 ## Pending
 
-90 researched workflows with no code on `main`. Ordered
+81 researched workflows with no code on `main`. Ordered
 critical-first, then by ticket number, so the queue is reviewable. Each is
 a candidate for a feature branch or an issue.
 
-### Critical (5)
-
-Removing any of these leaves no usable sales room.
-
-| Workflow | Name | Basis | Spec |
-|---|---|---|---|
-| ⬜ **WF-014** | Expire or cap access to a room | C2 | complete |
-| ⬜ **WF-069** | Gate each buyer link with a password, an expiry and email verification | C2 | complete |
-| ⬜ **WF-076** | Revoke access early and keep the audit row | C2 | complete |
-| ⬜ **WF-077** | Manage internal workspace roles and least-privilege integration scopes | C2 | complete |
-| ⬜ **WF-079** | Export a tamper-evident audit trail with IP and verification outcomes | C2 | complete |
-
-### Supplementary (85)
+### Supplementary (81)
 
 The primary loop closes without these; they add reach, automation,
 polish or adjacent surface.
@@ -133,19 +130,15 @@ polish or adjacent surface.
 | ⬜ WF-029 | Score DSR activity as CRM lead-score criteria | complete |
 | ⬜ WF-031 | Identify anonymous web visitors as companies and filter by pages visited | complete |
 | ⬜ WF-042 | Pull CRM deal, account and contact data into the room for display | complete |
-| ⬜ WF-044 | Emit a webhook out of the CRM when a deal stage changes | complete |
 | ⬜ WF-046 | Throttle and retry under vendor API rate limits | complete |
 | ⬜ WF-047 | Mirror room documents into CRM files | complete |
 | ⬜ WF-048 | Validate the connector against a sandbox or test account | complete |
-| ⬜ WF-049 | Monitor integration health and remaining API quota | complete |
 | ⬜ WF-050 | Reconcile gaps and overflows after a dropped change stream | complete |
 | ⬜ WF-051 | Route and book a demo request inline from a web form | complete |
 | ⬜ WF-052 | Qualify a lead without offering any calendar | complete |
-| ⬜ WF-053 | Route a booking to the owner of the CRM record | complete |
 | ⬜ WF-054 | Spread bookings across a team by availability-weighted round robin | complete |
 | ⬜ WF-055 | Hand a lead off from an SDR scheduler to an AE | complete |
 | ⬜ WF-060 | Auto-join and record the meeting, gated by recording consent | complete |
-| ⬜ WF-062 | Route a requested slot for host approval before confirming | complete |
 | ⬜ WF-066 | Push meeting lifecycle events to downstream systems | complete |
 | ⬜ WF-067 | Collect mutual-action-plan approval by e-signature and track it | complete |
 | ⬜ WF-068 | Prepare for the meeting, then run the post-meeting follow-up sequence | complete |
