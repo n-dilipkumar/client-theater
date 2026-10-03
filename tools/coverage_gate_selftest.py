@@ -35,6 +35,7 @@ from tools.coverage_gate import (  # noqa: E402
     load_report,
     main,
     measure,
+    normalise_path,
     render_comment,
 )
 
@@ -238,6 +239,35 @@ def main_() -> int:
             "a repository-relative path matches a report key",
             len(rows) == 1 and rows[0]["percent"] == 80.0,
             f"rows={len(rows)}",
+        )
+
+        # ---- 13. a dotfile path survives normalisation -------------------
+        # `.github/workflows/ci.yml` is a real path in this repository. An
+        # earlier version stripped the leading dot and printed a path that does
+        # not exist, which is the kind of thing a reviewer cannot act on.
+        dotted = build_report([("dsr/api.py", 90, 100)])
+        dotted_path = write(tmp / "dotted.json", dotted)
+        body = render_comment(
+            measure(load_report(dotted_path)), [".github/workflows/ci.yml", "./tools/x.py"]
+        )
+        check(
+            "a dotfile path keeps its leading dot",
+            "`.github/workflows/ci.yml`" in body,
+            "printed path must be .github/workflows/ci.yml",
+        )
+        check(
+            "the same path is not printed without its dot",
+            "`github/workflows/ci.yml`" not in body,
+        )
+        check(
+            "a leading ./ is removed",
+            normalise_path("./tools/x.py") == "tools/x.py",
+            normalise_path("./tools/x.py"),
+        )
+        check(
+            "a leading dot is kept",
+            normalise_path(".github/workflows/ci.yml") == ".github/workflows/ci.yml",
+            normalise_path(".github/workflows/ci.yml"),
         )
 
     print()

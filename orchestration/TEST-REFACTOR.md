@@ -1062,6 +1062,19 @@ Shipping a measured one-second regression to satisfy a line in a task brief is
 the wrong trade. The note is left in `ci.yml` so the next agent does not add it
 back without reading section 10 first.
 
+**The comment printed a path that does not exist, and I only noticed by reading
+the posted comment.** `normalise_path` began with `str.lstrip("./")`, which
+strips every leading dot and every leading slash, not the `./` prefix. So
+`.github/workflows/ci.yml` came out as `github/workflows/ci.yml`. The lookup
+still worked, because both sides go through the same function, so nothing failed
+and nothing looked wrong. The number was right and the table was empty and the
+check was green.
+
+A reviewer reading that comment could not act on `github/workflows/ci.yml`,
+because there is no such file. The fix removes a leading `./` only. Four cases
+were added to the self-test, because a check that passes on a wrong path is
+exactly the failure mode this document keeps warning about.
+
 ### The job time, before and after
 
 **Merged note, 2026-10-03.** The speed agent landed PR 100 while this branch was

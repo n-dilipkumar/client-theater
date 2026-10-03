@@ -73,8 +73,16 @@ def normalise_path(raw: str) -> str:
     the caller. Windows git output uses backslashes. Both are folded to a
     forward-slash repository-relative path here so a lookup either matches or
     is honestly absent.
+
+    A leading ``./`` is removed and a leading dot is NOT. ``.github/workflows/
+    ci.yml`` is a real path in this repository, and an earlier version of this
+    function printed it as ``github/workflows/ci.yml`` in the comment, which is
+    a path that does not exist. ``str.lstrip("./")`` is the wrong tool here
+    because it strips every leading dot and slash, not the prefix.
     """
-    path = raw.replace("\\", "/").lstrip("./")
+    path = raw.replace("\\", "/")
+    while path.startswith("./"):
+        path = path[2:]
     if path.startswith("backend/"):
         path = path[len("backend/") :]
     return path
