@@ -78,21 +78,24 @@ jobs:
           pip install -e 'backend[dev]'
 
       # >>> SPEED AGENT START
-      # EXPERIMENT. The worker count is measured on this branch and reported
-      # either way.
+      # MEASUREMENT BRANCH ONLY. This step is the experiment. It is not for main.
       #
-      # The number of xdist workers has never been measured on a GitHub runner.
-      # The measurement recorded in backend/pyproject.toml was taken on an
-      # 8-core workstation, and this runner has 4 vCPU. The suite is setup-bound,
-      # and pytest-xdist pays one full collection per worker plus one on the
-      # controller. So the best worker count on 4 cores is not the best count on
-      # 8, and 4 may not be the best count on 4.
+      # Twelve runs of `python -m pytest` on this repository ranged from 94 s to
+      # 181 s with no code change to explain it, so one sample cannot settle
+      # which worker count is faster. Both arms run here on one runner, back to
+      # back, alternating, so the comparison has no cross-run variance in it.
       #
-      # `-o addopts=-q` replaces the addopts string from backend/pyproject.toml
-      # instead of appending to it, so exactly one -n reaches pytest.
-      - name: Run the suite
+      # The job still gates on the suite passing. Six passes is also the flakiness
+      # check for the larger worker count.
+      - name: Measure the suite
         working-directory: backend
-        run: python -m pytest -o addopts=-q -n 6
+        run: |
+          for arm in auto 6 auto 6 auto 6; do
+            start=$(date +%s)
+            python -m pytest -o addopts=-q -n "$arm" || exit 1
+            end=$(date +%s)
+            echo "ARM $arm SECONDS $((end - start))"
+          done
       # <<< SPEED AGENT END
 
   # The linter is a gate, not a report. See the "no escape hatches" note below:
