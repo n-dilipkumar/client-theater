@@ -911,3 +911,50 @@ Append here. Newest last. Write for an agent who has never seen this work.
   SHAs. `ruff check` and `ruff format --check` pass from the worktree root with
   `--config backend/pyproject.toml`. The backend suite is 11,127 passed and 2
   xfailed, which is the 11,129 the baseline records.
+
+- 2026-10-03 — **Agent: security, addendum. A step that passed locally and died
+  in CI, and the reason my test did not catch it.**
+
+  The first run of PR #103 was 8 green, 1 red. `Dependency audit (npm)` failed in
+  12 s on the reporting step. From the log:
+
+      shell: /usr/bin/bash -e {0}
+      ##[error]Process completed with exit code 1.
+
+  GitHub runs every `run:` block as `bash -e {0}`. **Errexit is already in force
+  before the first line of the script runs.** My step opened with:
+
+      set -uo pipefail
+      npm audit --json > npm-audit-full.json
+
+  That reads like "do not exit on error" and is not. `set -uo pipefail` *adds*
+  `-u` and `pipefail`. It does not remove an `-e` the runner turned on before
+  the script started, and no `set` line inside the script can pre-empt a flag
+  already on the command line. So `npm audit` exited 1 on the second line and
+  killed the step, which is precisely the thing the step existed to prevent.
+
+  The fix is `set +e`, which does take effect at runtime.
+
+  **Why my local test passed it.** The harness ran `bash step.sh`. The runner
+  runs `bash -e step.sh`. One flag apart, and it is the flag that decides
+  whether this script works. A local test that does not reproduce the runner's
+  invocation is not a test of the runner's behaviour, and the gap showed up as a
+  green local result and a red CI result on the same commit.
+
+  The harness now runs `bash -e step.sh`, and I checked that this makes it
+  meaningful rather than assuming it:
+
+      set -uo pipefail; false   under bash -e   -> exit 1, never reaches the next line
+      set +e; set -uo pipefail; false  under bash -e   -> exit 0, reaches the next line
+
+  **The rule, and it is the one I would hand to the next agent.** When you
+  extract a CI step and run it locally, copy the runner's invocation, not just
+  the script. `bash script.sh` and `bash -e script.sh` are different programs.
+  And when a local test disagrees with CI, suspect the harness before you
+  suspect the code: this repository has now produced "CI is red" twice, and both
+  times the red was correct and the local green was the thing that was wrong.
+
+  A step that has never been executed is a guess with YAML indentation. A step
+  that has been executed with the wrong shell flags is only slightly better.
+
+<!-- security-agent-addendum-bash-e -->

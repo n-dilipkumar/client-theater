@@ -187,11 +187,19 @@ jobs:
 
       # The dev tree, counted and published but not enforced.
       #
-      # `set -uo pipefail` with no `-e` is the whole point of this step, and it is
-      # not a `|| true` in disguise. npm audit exits non-zero whenever it finds
-      # anything, so with -e the step would abort on line two and the count would
-      # be the thing we lose. The exit status is captured, printed, and written to
-      # the summary rather than discarded.
+      # `set +e` is load-bearing and it is easy to get wrong. GitHub runs every
+      # `run:` block as `bash -e {0}`, so errexit is ALREADY in force before a
+      # single line of this script executes. Writing `set -uo pipefail` here does
+      # not cancel it: it adds -u and pipefail and leaves -e exactly where it
+      # was. npm audit exits non-zero whenever it finds anything, so the step
+      # died on line two and the count was the thing we lost. `set +e` is what
+      # actually turns it off, at runtime, after the fact.
+      #
+      # This is the second time this step was wrong in a way that a casual look
+      # would not catch. It also passed locally, because the local harness ran
+      # `bash step.sh` with no -e. The harness now runs `bash -e step.sh` so it
+      # matches the runner. A local test that does not reproduce the runner's
+      # invocation is not a test of the runner's behaviour.
       #
       # A parse failure is reported, not fatal. The gate is the step above and it
       # already passed, so this step must not block a merge for a reporting
@@ -207,6 +215,7 @@ jobs:
         env:
           SUMMARY: ${{ github.step_summary }}
         run: |
+          set +e
           set -uo pipefail
           npm audit --json > npm-audit-full.json
           status=$?
