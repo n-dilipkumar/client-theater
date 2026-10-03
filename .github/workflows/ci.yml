@@ -128,12 +128,15 @@ jobs:
       # On a pull request, the files this change touched. On a push to main,
       # the files this commit touched. Both are written to one file so the gate
       # and the comment read the same list.
+      #
+      # `fetch-depth: 0` above is what makes `origin/<base>` exist, so no fetch
+      # is needed here. The three-dot form asks git for the merge base, which is
+      # what makes the list the change rather than the whole branch.
       - name: List the files this change touched
         run: |
           set -euo pipefail
           mkdir -p backend
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" > backend/coverage-changed.txt
           else
             git diff --name-only "HEAD^...HEAD" > backend/coverage-changed.txt

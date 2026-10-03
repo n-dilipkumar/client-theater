@@ -768,3 +768,236 @@ Append here. Newest last. Write for an agent who has never seen this work.
   One more consequence, which is the useful part: **CI is a better measurement
   than any local run here.** It runs on an isolated runner with no competing load.
   When CI disagrees with a local number, CI is right.
+
+---
+
+## 9. Agent `coverage` — the gate the floor never had
+
+Branch `ci-coverage`. Files: `tools/coverage_gate.py`,
+`tools/coverage_comment.py`, `tools/coverage_gate_selftest.py`, and a marked
+region of `.github/workflows/ci.yml`. No test file, no application source, no
+`backend/pyproject.toml`. `pytest-cov` was already in the `dev` extras, so
+nothing had to be added to install coverage.
+
+### The gate
+
+`tools/coverage_gate.py` reads `backend/coverage.json`. It recomputes the
+percentage from the per-file `covered_lines` and `num_statements` counts in
+that file. It never reads a printed line of pytest output. It cross-checks the
+report's own `totals` block against the sum of the per-file rows and refuses to
+report a number when the two disagree.
+
+| Exit | Meaning |
+|---|---|
+| 0 | the measured total is at or above the floor |
+| 1 | the measured total is below the floor |
+| 2 | the report is missing, unreadable, or contradicts itself |
+
+`FLOOR_PERCENT = 90.0` is a module constant. There is no flag and no workflow
+input. `coverage_gate_selftest.py` proves that passing `--floor 10` is
+rejected by argparse, so no pull request can move the threshold.
+
+### Measured, on commit 0b57667, in this worktree
+
+| Run | Command | Wall clock | Result |
+|---|---|---|---|
+| parallel with coverage | `pytest -n auto --cov=dsr` | 231.84 s | 11127 passed, 2 xfailed, exit 0 |
+| serial with coverage | `pytest -n 0 --cov=dsr` | 420.45 s | 11127 passed, 2 xfailed, exit 0 |
+| parallel without coverage | `pytest -n auto` | 230.65 s | 11127 passed, 2 xfailed, exit 0 |
+
+Every coverage run reports the same number:
+
+    2559 missed of 50045 statements
+    94.88660 percent
+    401 files measured, 279 of them with a gap
+
+**Coverage tracing cost about 1.2 seconds on a 231 second run.** That is the
+whole speed cost on this host. The serial run is 1.8 times slower, so coverage
+is not what made `-n auto` worth having.
+
+### The xdist question, answered by measurement rather than by argument
+
+The task brief warned that coverage under `-n auto` can report only the subset
+one worker saw. Three full runs of the same commit, then a comparison of the
+three JSON reports file by file and uncovered line set by uncovered line set:
+
+| Run | Command | Wall clock | percent | missed |
+|---|---|---|---|---|
+| 1 | `pytest -n auto --cov=dsr` | 231.84 s | 94.88660 | 2559 |
+| 2 | `pytest -n 0 --cov=dsr` | 420.45 s | 94.88660 | 2559 |
+| 3 | `pytest -n auto --cov=dsr` with `COV_CORE_SOURCE=dsr` | 204.04 s | 94.88660 | 2559 |
+
+    files compared                          401
+    files with a count difference            0
+    files with a different uncovered set     0
+    totals blocks identical                 yes, all three
+
+All three report 11127 passed and 2 xfailed and exit 0. pytest-cov is already
+combining the xdist workers correctly. `COV_CORE_SOURCE` changes nothing, which
+is expected: every `dsr` module is imported inside a test rather than at
+interpreter start-up, so there is no early statement for it to catch.
+
+The gated number is the `-n auto` number. It is the same number a serial run
+produces, at half the wall clock.
+
+### A per-file floor is not adoptable today, and the total is sensitive enough
+
+The distribution, measured, not estimated. 399 files carry statements.
+
+| Floor | Files that fail today |
+|---|---|
+| 60 percent | 0 |
+| 70 percent | 8 |
+| 80 percent | 13 |
+| 90 percent | 45 |
+| 95 percent | 131 |
+| 100 percent | 279 |
+
+No file is below 60 percent. A floor at 60 passes with an empty allowlist and
+catches almost nothing. Any floor worth having needs an allowlist of 13 to 131
+files that already exist.
+
+Meanwhile the total already reacts. Removing every covered statement from
+`dsr/db/audited.py`, the largest file with a gap at 395 statements, moves the
+total from 94.88660 to 94.12329 percent. That is 0.76 points against 4.89
+points of headroom, so roughly six abandoned large files would fire the gate.
+
+### What Jev decided
+
+Every decision is in `orchestration/decisions/jev-audit.jsonl`.
+
+| Question | Verdict | Selected | Confidence | Audit id |
+|---|---|---|---|---|
+| Fail the job, or warn? | pass | `fail_the_job` | 0.98 | `jev-20261003T035005-26256-05268` |
+| Total, per-file, or both? | **uncertain**, then pass | `total_floor_with_touched_file_report` | 0.29, then 0.98 | `jev-20261003T035944-7856-84791`, `jev-20261003T040119-3756-79213` |
+| Whole package, or touched files? | **uncertain**, then pass | `whole_package_gate_with_touched_file_report` | 0.64, then 0.99 | `jev-20261003T040135-26636-95267`, `jev-20261003T040747-3204-67531` |
+| How to combine under xdist? | **uncertain**, then pass | `pytest_cov_dist_no_core_source` | 0.52, then 0.98 | `jev-20261003T040904-27596-44047`, `jev-20261003T041354-22944-34922` |
+
+**Three verdicts came back `uncertain` and I did not override any of them.** All
+three were resolved by gathering more evidence, not by rephrasing the question
+until it agreed with me.
+
+The gate-shape question returned `uncertain` at confidence 0.29 with a margin
+of 0.21 over the runner-up. What it had not been given was the cost of a
+per-file floor. I measured that a floor at 80 fails 13 files today, that a
+floor at 95 fails 131, that one abandoned large file costs 0.76 points of the
+total, and that bringing every sub-90 file to 100 percent would lift the total
+only to 96.34. With that evidence it returned `pass` at 0.98.
+
+The measurement-scope question returned `uncertain` at 0.64. What it had not
+been given was what a scoped run actually reports. I measured it:
+
+    pytest tests/test_wf001.py tests/test_wf002.py tests/test_wf003.py -n 0 --cov=dsr
+    168 tests of 11127
+    29.78 percent
+
+**A run of 1.5 percent of the suite reports 29.78 percent, not 94.89.** A gate
+that ran only the touched tests could not produce the agreed number at all. It
+would have to change the measured target per pull request, and its number would
+not be comparable to the floor or to any earlier run. With that, it returned
+`pass` at 0.99.
+
+The combining question returned `uncertain` at 0.52, and the near-tie was
+between adding `COV_CORE_SOURCE=dsr` and not adding it. That one is settleable
+by measurement, so I ran the suite a third time with `COV_CORE_SOURCE=dsr` set.
+All three reports came back identical. With that, it returned `pass` at 0.98
+for the simplest option: one pytest command, no environment variable, no extra
+combine step, and no serial pass of the suite.
+
+The fail-or-warn question was answered with the rule, not with taste:
+
+    gh api repos/n-dilipkumar/client-theater/branches/main/protection
+    {"message":"Branch not protected","status":"404"}
+
+The main ruleset lists zero required status checks, so a failed job does not
+block a merge today. Jev still chose `fail_the_job` at 0.98, and the reason is
+in the state I gave it: the same workflow file records the house position that
+a check which reports and passes is worse than no check. A warning would have
+been the fourth defect in section 8 wearing a new hat.
+
+### The pull request comment
+
+`tools/coverage_comment.py` renders the body from the report and a changed-file
+list. It runs from the repository root with no arguments beyond two paths, so a
+human reads the exact body before it is merged. `actions/github-script@v7`
+posts it. That action ships with the runner, so it adds no dependency and no
+lockfile.
+
+The body carries the marker `<!-- ci-coverage-gate -->`. The posting step finds
+a comment with that marker and updates it in place, so forty pushes produce one
+comment. The step refuses to post a body without the marker, because a format
+change would otherwise silently turn the sticky comment into one new comment
+per push.
+
+When the total is below the floor the first line says so:
+
+    ### Coverage is below the floor. Total 40.00 percent against a 90.0 percent floor.
+
+A pull request from a fork gets a read-only token, so the comment cannot be
+written. The step catches that and states it in plain words on the run page and
+in the job summary, naming the fork and the GitHub error. It does not fail the
+step, because the gate is the job above and a fork is a known limit of the
+`pull_request` trigger rather than a coverage result.
+
+### Two things I got wrong, recorded so nobody copies them
+
+**I corrupted my own measurement by running two coverage runs at once.** While
+the serial coverage run was in flight I started a scoped coverage run in the
+same working tree. Both use `backend/.coverage`. The scoped run reported
+`no such table: line_bits` and `Failed to generate report`. Round two of the
+timing series is therefore worthless and I discarded it.
+
+The serial run had already finished and written its report, so the decisive
+comparison survived. I copied both reports out of the working tree before
+anything could overwrite them. The rule this adds: **a second coverage run in
+the same working tree needs its own `COVERAGE_FILE`.** The next measurement I
+started did exactly that and lost nothing.
+
+This is section 8 defect 3 wearing different clothes. `git stash push` printed
+success and left nothing. `pytest --cov` printed a warning and produced no
+report. Both printed something and did not do the thing.
+
+**The documented floor of 2553 does not reproduce here, and I did not explain
+the difference.** I measure 2559 on the same commit `0b57667`, in three runs,
+with three byte-identical reports. That is 6 statements, or 0.012 percentage
+points.
+
+I ruled out what I could and I am not going to guess past that. Ruled out: the
+`frontend/dist` question in section 2, because `frontend/dist` is absent in
+this worktree, which is the 2553 case and not mine. Ruled out: xdist, because
+the serial and parallel reports are identical. Ruled out: the interpreter,
+because this venv is Python 3.13.15 and `pip list` shows it is the same venv
+the earlier measurement used. Not ruled out, and not claimed: something in the
+environment that I did not vary.
+
+The number to defend from here is **2559, measured three times, per-file and
+per-line identical**. It is 4.89 points above the floor, so the discrepancy
+cannot move the gate either way. The orchestrator should correct section 2 or
+record why it cannot be corrected.
+
+### Before and after the backend job
+
+| Where | Before | After |
+|---|---|---|
+| this host, `-n auto` | 230.65 s | 231.84 s |
+| GitHub runner, `main`, section 8 | 118 s | RUNNER_NUMBER s |
+
+The local pair is two runs on a loaded host, so treat it as a ratio and not as a
+second decimal. The runner number is the one to believe, for the reason section
+7 gives.
+
+### What I could not do
+
+* I did not reproduce 2553. The difference is 6 statements and I did not find
+  the cause.
+* I did not add a coverage gate to the frontend. `@vitest/coverage-v8` is not
+  installed and the existing comment in `ci.yml` records that as a decision for
+  a human. This gate is the backend package only.
+* I did not add `backend/.coverage` or `backend/*.json` to `.gitignore`. That
+  file belongs to whoever owns it, and the report artefacts are written only on
+  a runner. They are left out of every commit here by explicit path rather than
+  by ignore rule.
+* I did not add a required status check. That is a repository setting, not a
+  file, and until `main` is protected a red coverage job does not stop a merge.
+  **The gate is only as strong as the ruleset, and the ruleset is still empty.**
+  That is the one thing left to do, and it needs a human with admin rights.
