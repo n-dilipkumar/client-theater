@@ -277,12 +277,28 @@ def test_the_limits_resource_picks_the_declared_row():
 
 
 def test_the_limits_resource_keeps_the_whole_table_verbatim():
-    body = {"limits": [{"name": "API Requests", "max": 100000, "remaining": 91240}]}
+    body = {
+        "limits": [
+            {"name": "API Requests", "max": 100000, "remaining": 91240},
+            {"name": "DataStorageMB", "max": 1024, "remaining": 890},
+        ]
+    }
     reading = normalise("salesforce", "limits_resource", body, limit_name="API Requests")
     assert reading["daily"]["remaining"] == 91240
-    # The verbatim table is on the observation, so the rows the connector could
-    # read are on the record even though only one forms the pair.
-    # (Checked in the engine test for the stored shape; here, the pair only.)
+    # The whole table is published, not only the row that forms the pair, so the
+    # rows a connector could have read stay auditable after the fact. The second
+    # row is the assertion that carries the weight: a version that published only
+    # the matched row would still pass every other test in this file.
+    #
+    # This assertion used to be absent. The test kept its name, asserted only the
+    # pair, and carried a comment saying the verbatim table was "checked in the
+    # engine test for the stored shape". No engine test checked it. The branch in
+    # quota.py computed these rows and dropped them, and nothing noticed until
+    # ruff reported F841 on the assignment.
+    assert reading["daily"]["verbatim"] == [
+        {"name": "API Requests", "max": 100000, "remaining": 91240},
+        {"name": "DataStorageMB", "max": 1024, "remaining": 890},
+    ]
 
 
 def test_an_unmatched_limit_name_is_unknown_with_the_rows_named():

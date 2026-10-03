@@ -819,7 +819,19 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
             source=source,
             now=real_now - timedelta(minutes=6),
         )
-        drift_note = f"drift={drifted['drift']} ({drifted['previous_version']} -> {drifted['globalmetadataversion']})"
+        # Plain ASCII on purpose. This string is interpolated into the summary
+        # below, and seed.py prints that summary on a console whose encoding is
+        # not always UTF-8. A U+2192 arrow here raised UnicodeEncodeError on a
+        # cp1252 Windows host, and because seed.py's print sits outside the
+        # per-feature try/except, one unencodable character aborted the whole
+        # seed and every other feature's demo data with it. Words, not a glyph.
+        # The separator seed.py prints before this summary is already an arrow,
+        # so a second one here read as two meanings in one line.
+        drift_note = (
+            f"drift={drifted['drift']}, "
+            f"globalmetadataversion {drifted['previous_version']} "
+            f"to {drifted['globalmetadataversion']}"
+        )
 
     # One connector paused by the operator, the researched step 4 in action:
     # Adventure Works took a burst of 429s, the operator paused it from the

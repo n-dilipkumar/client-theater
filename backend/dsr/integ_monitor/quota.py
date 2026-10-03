@@ -421,6 +421,11 @@ def normalise(
         daily = _sf_from_limits(payload, limit_name)
         window = empty_half("Salesforce reports no burst window on this surface")
         verbatim = _verbatim_limits(payload)
+        # Publish the rows the caller sent, the way the event_usage_metric branch
+        # below does. This branch used to compute them and drop them, so a caller
+        # asking for limits_resource got a parsed pair and no way to see the rows
+        # behind it. ruff's F841 is what caught it; no test did.
+        daily["verbatim"] = verbatim
     elif vendor == "salesforce" and surface_id == "event_usage_metric":
         # [sourced] the object is named and the sentence about Enhanced Usage
         # Metrics is quoted, but its record shape is not, so this stores the
