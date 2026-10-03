@@ -77,9 +77,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e 'backend[dev]'
 
+      # >>> SPEED AGENT START
+      # EXPERIMENT. The worker count is measured on this branch and reported
+      # either way.
+      #
+      # The number of xdist workers has never been measured on a GitHub runner.
+      # The measurement recorded in backend/pyproject.toml was taken on an
+      # 8-core workstation, and this runner has 4 vCPU. The suite is setup-bound,
+      # and pytest-xdist pays one full collection per worker plus one on the
+      # controller. So the best worker count on 4 cores is not the best count on
+      # 8, and 4 may not be the best count on 4.
+      #
+      # `-o addopts=-q` replaces the addopts string from backend/pyproject.toml
+      # instead of appending to it, so exactly one -n reaches pytest.
       - name: Run the suite
         working-directory: backend
-        run: python -m pytest
+        run: python -m pytest -o addopts=-q -n 6
+      # <<< SPEED AGENT END
 
   # The linter is a gate, not a report. See the "no escape hatches" note below:
   # a lint job that reports and passes is worse than no lint job, because it looks
