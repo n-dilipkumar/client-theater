@@ -30,6 +30,7 @@ from dsr.deps import (
     mirror_dir as _mirror_dir,
 )
 from dsr.features import load_features
+from dsr.features.wf_017_white_label import guard_room_payload
 from dsr.store import RecordStore, parse_where
 
 __all__ = ["app", "get_store", "StoreDep", "FRONTEND_DIST"]
@@ -199,7 +200,16 @@ def update_record(
     expected_revision: int | None = Query(default=None),
     store: RecordStore = StoreDep,
 ) -> dict[str, Any]:
-    """Merge a partial payload into ``data`` and audit the change."""
+    """Merge a partial payload into ``data`` and audit the change.
+
+    A room patch is first filtered by ``guard_room_payload``, the guard WF-017
+    exports for this exact call. It drops ``domain``, ``link_secret`` and
+    ``collaborator_token``, the three fields the product owns. Those change
+    only through WF-017's own routes, because the share-link secret is a
+    non-removable identifier and a generic record patch must not be a back door
+    that strips it. Every other collection keeps the schema-flexible behaviour
+    the product promises: an arbitrary JSON body merges as written.
+    """
     existing = store.get(record_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"record {record_id} not found")
@@ -207,7 +217,7 @@ def update_record(
         raise HTTPException(status_code=404, detail=f"record {record_id} is not in {collection}")
     return store.update(
         record_id,
-        payload,
+        guard_room_payload(payload) if collection == "room" else payload,
         actor=actor,
         source=f"PATCH /api/records/{collection}/{record_id}",
         expected_revision=expected_revision,

@@ -50,7 +50,7 @@ Six deliberate departures from the branch, each forced by the contract:
   of this prefix**, i.e. ``/api/wf-017-white-label/rooms/{room_id}/white-label``.
   It reads as redundant, and the redundancy is the point: it keeps the room id in
   the path the reviewer expects while making the owning feature unambiguous.
-* **The ``link_secret`` guard is exported, not wired.** See
+* **The ``link_secret`` guard is exported, not wired by this feature.** See
   :func:`guard_room_payload`.
 * **Demo data lives here.** See :func:`seed`.
 
@@ -62,13 +62,11 @@ The research states the share-link secret is a "unique, non-removable identifier
 must not be a back door for clearing it. On the branch that guarantee was
 implemented by editing ``update_record`` in ``dsr/api.py`` to filter
 ``domain``, ``link_secret`` and ``collaborator_token`` out of any room patch.
-``api.py`` is shared and a feature must not edit it, so on this branch the
-guarantee holds for this feature's own routes and for
-:meth:`DomainService.strip_reserved` itself, but a caller can still clear the
-secret through the generic record surface. :func:`guard_room_payload` is exported
-for exactly the one-line change that closes it, and
-``test_the_generic_record_route_can_still_clear_the_link_secret`` records the gap
-as a strict xfail so that the day someone closes it, the suite says so.
+``api.py`` is shared and a feature must not edit it, so the port shipped the
+filter as :func:`guard_room_payload`, exported and tested, with the wiring left
+to whoever owns the host. The integrator has since called it from
+``update_record``, and ``test_the_generic_record_route_cannot_clear_the_link_secret``
+covers the closed route.
 """
 
 from __future__ import annotations
@@ -196,8 +194,9 @@ def guard_room_payload(
     This is the "no bypass" guard from the research's non-removable-secret rule,
     exported for the same reason :func:`dsr.features.wf013_rules.guard_rule_payload`
     is: on the branch it was called from ``dsr/api.py``, and the file that needs
-    it is one a feature may not edit. Whichever change closes the gap needs this
-    function, and it is here for it.
+    it is one a feature may not edit. ``update_record`` in that file now calls
+    it for every ``room`` patch, which is why this module does not import the
+    host back and the filter has one implementation rather than two.
     """
     return DomainService.strip_reserved(payload)
 
