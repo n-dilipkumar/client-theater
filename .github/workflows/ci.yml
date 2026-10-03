@@ -15,6 +15,85 @@ name: CI
 #   * The tests run everywhere. There is no "tests are only needed on features"
 #     escape hatch, because the audit guarantee is the product.
 
+# >>> SPEED AGENT START
+#
+# MEASURED 2026-10-03. Read this before you try to make this workflow faster.
+# Source: step timings from twelve runs of this workflow on GitHub Actions,
+# databaseId 37009181528 through 37060049338, runner image ubuntu-24.04
+# 20260927.320.1. Whole seconds, as GitHub reports them. No number here comes
+# from a stopwatch on a developer machine, because agents run this repository on a
+# host where three suites share eight cores.
+#
+#   Job                                 median of 12 runs
+#   Backend tests                            143 s   <- slowest in all 12
+#   Local host app (headless)                 44 s
+#   Lint (ruff, eslint, prettier)             44 s
+#   Frontend build                            30 s
+#   Feature contract (no shared files)         8 s
+#   Design floor                               7 s
+#                                        ---------
+#   total                                    276 s of runner time per run
+#
+# The jobs run in parallel, so the Backend tests job sets the wall clock by
+# itself. Its 143 s is checkout 3 s, setup-python 0 s, install 10 s, pytest 125 s.
+# One second off pytest is one second off the wall clock. One second off any other
+# job is runner minutes only, and this repository is public, so those minutes cost
+# nothing.
+#
+# SIX CANDIDATES, MEASURED AND SETTLED. Each one went to Jev with these numbers.
+# The audit ids and the full write-up are in orchestration/TEST-REFACTOR.md,
+# section 9.
+#
+# 1. Share one npm install across the three jobs that need it. REJECTED.
+#    npm ci takes 4 s: median of 35 CI samples, range 2 s to 6 s, not 40 s.
+#    Consolidating saves 8 runner-seconds and 0 wall-clock seconds. Every way to
+#    share the tree costs more than 8 s. actions/cache cannot save from three
+#    parallel jobs that all miss it. upload-artifact plus download-artifact costs
+#    about 7 s for a 400 MB node_modules. Combining the jobs lengthens the
+#    critical path. The comment in the lint job below argues for keeping the
+#    second npm ci, and the measurement backs that comment.
+#
+# 2. setup-node with cache: npm. VERIFIED WORKING. NO CHANGE.
+#    Across twelve run logs: 36 npm cache hits, 12 pip cache hits, 0 misses.
+#    The npm cache reports 35058354 B every time. The key never misses, so there
+#    is nothing to correct here.
+#
+# 3. Add cache: pip to the guard, backend and end-to-end jobs. REJECTED.
+#    The cached install takes 9 s median and the uncached install 10 s median, so
+#    the saving is inside the noise. setup-python with a cache costs 2 s median
+#    against 0 s without one. Net effect about minus 1 s per Python job. The
+#    install resolves 34 packages in about 10 s, so the download is a small part
+#    of it, and the cache restore costs more than the download it replaces.
+#
+# 4. Combine jobs to cut machine allocations. REJECTED.
+#    Lint and Frontend build finish in 44 s in parallel today. One combined job
+#    would take about 63 s, which is the sum of the steps the combined job keeps.
+#    That trades 19 s of wall clock for 11 free runner-seconds. Guard and Design
+#    floor could fold for 9 runner-seconds, which merges two named checks to save
+#    something that costs nothing.
+#
+# 5. Add path filters. REJECTED, and not because of the fraction.
+#    37 of the 60 pull requests here, 62 percent, touch no file under frontend/.
+#    So the Frontend build job has nothing to do on most pull requests. It still
+#    saves 0 wall-clock seconds, because that job takes 30 s and the critical path
+#    takes 143 s. A job that a path filter skips reports as skipped, and a skipped
+#    required check blocks the merge. And paths: on pull_request does not apply to
+#    push to main, so the pull request run would check less than the push run.
+#
+# 6. Concurrency. VERIFIED CORRECT. NO CHANGE.
+#    github.ref reads refs/pull/N/merge for a pull request and refs/heads/main for
+#    a push, so one group never mixes the two events.
+#
+# WHAT IS WORTH THE NEXT AGENT'S TIME: in the Backend tests job, pytest-xdist
+# prints "bringing up nodes..." 39.7 s after the pytest step starts on a cold
+# runner. Those seconds cover collection and worker startup, and they live in
+# backend/. A workflow file cannot reach them. The suite itself needs 73.6 s warm
+# and 99.9 s cold, so about 26 s of every run is a cold-cache premium that one
+# suite run per job can never avoid.
+#
+# ==============================================================================
+# <<< SPEED AGENT END
+
 on:
   push:
     branches: [main]
@@ -77,9 +156,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e 'backend[dev]'
 
+      # >>> SPEED AGENT START
+      # `-n auto` stays. It was measured on an 8-core workstation. I measured it
+      # again on this 4 vCPU runner, both arms interleaved on one runner, three
+      # rounds each. Six workers lost by 3.9 s at the warm minimum and the two
+      # arms did not overlap once warm. Collection scales with the worker count,
+      # and six workers cost 4.5 s more of it than four did. The measurement is
+      # in orchestration/TEST-REFACTOR.md, section 9.
       - name: Run the suite
         working-directory: backend
         run: python -m pytest
+      # <<< SPEED AGENT END
 
   # The linter is a gate, not a report. See the "no escape hatches" note below:
   # a lint job that reports and passes is worse than no lint job, because it looks
