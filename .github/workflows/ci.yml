@@ -67,19 +67,220 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # >>> COVERAGE AGENT START
+          # Full history, not a shallow clone of the pull request branch. Two
+          # things below need the merge base: the list of files this change
+          # touched, and the `origin/<base>` ref that list is diffed against. A
+          # shallow clone has neither, and an empty changed-file list is
+          # indistinguishable from "this pull request touched no Python".
+          fetch-depth: 0
+          # <<< COVERAGE AGENT END
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          # >>> COVERAGE AGENT START
+          # setup-python's pip cache is keyed on the dependency file named here.
+          # backend/pyproject.toml is the only file in this repository that
+          # declares the backend dependencies, so it is the key. Without this the
+          # step looks for a requirements.txt that does not exist, finds nothing,
+          # and silently never restores a cache.
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+          # <<< COVERAGE AGENT END
 
       - name: Install backend
         run: |
           python -m pip install --upgrade pip
           pip install -e 'backend[dev]'
 
-      - name: Run the suite
+      # >>> COVERAGE AGENT START
+      #
+      # The gate is checked before it is trusted. This runs in under a second,
+      # needs no test suite, and proves the four exit codes and the comment body
+      # against synthetic reports. It runs first so a broken gate is reported
+      # before the suite spends four minutes producing a report nobody can read.
+      - name: Prove the coverage gate fails when it should
+        run: python tools/coverage_gate_selftest.py
+      #
+      # The floor in orchestration/TEST-REFACTOR.md section 2 had nothing behind
+      # it. This job is what puts something behind it.
+      #
+      # `addopts` in backend/pyproject.toml already carries `-n auto`, so pytest
+      # runs under xdist here exactly as it did before this change. pytest-cov
+      # has each xdist worker write its own data file and combines them in the
+      # controller, so the report below is the union across workers and not one
+      # worker's subset. That was measured, not assumed: see
+      # orchestration/TEST-REFACTOR.md, section "Agent coverage".
+      #
+      # No `-p no:cacheprovider`, no second `-q`. `addopts` already has one `-q`
+      # and a second one suppresses the final counts line entirely, which is how a
+      # run prints progress to 100 percent and reports nothing.
+      - name: Run the suite with coverage
         working-directory: backend
-        run: python -m pytest
+        run: >
+          python -m pytest
+          --cov=dsr
+          --cov-report=json:coverage.json
+          --cov-report=term:skip-covered
+
+      # On a pull request, the files this change touched. On a push to main,
+      # the files this commit touched. Both are written to one file so the gate
+      # and the comment read the same list.
+      - name: List the files this change touched
+        run: |
+          set -euo pipefail
+          mkdir -p backend
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > backend/coverage-changed.txt
+          else
+            git diff --name-only "HEAD^...HEAD" > backend/coverage-changed.txt
+          fi
+          echo "Files this change touched:"
+          cat backend/coverage-changed.txt
+
+      # The gate. It reads backend/coverage.json, recomputes the percentage from
+      # the per-file counts in that file, and exits non-zero when the total is
+      # below the floor. No threshold is passed on the command line, because
+      # FLOOR_PERCENT is a constant in tools/coverage_gate.py and a threshold a
+      # pull request can change is not a threshold.
+      - name: Enforce the coverage floor
+        run: >
+          python tools/coverage_gate.py
+          --report backend/coverage.json
+          --changed-from backend/coverage-changed.txt
+          --comment-out backend/coverage-comment.md
+
+      # The comment body is an artifact so the job below does not need to run the
+      # suite a second time to produce it.
+      - name: Upload the coverage report and comment body
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            backend/coverage.json
+            backend/coverage-changed.txt
+            backend/coverage-comment.md
+          if-no-files-found: warn
+          retention-days: 14
+
+      # The plain `python -m pytest` step that used to be here is replaced, not
+      # kept alongside. Two suite runs would double this job's cost to measure
+      # one number, and the second run would report a different coverage figure
+      # from the one the gate has just judged. This block is the only place the
+      # backend suite runs in this workflow.
+
+      # <<< COVERAGE AGENT END
+
+  # >>> COVERAGE AGENT START
+  coverage-comment:
+    name: Coverage comment
+    needs: backend
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    # Job-level permissions replace the workflow-level block for this job only.
+    # Declaring them here rather than editing the workflow-level `permissions`
+    # is deliberate: another agent owns that line, and this job needs a write
+    # scope the backend suite does not.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
+      # `actions/github-script` is bundled with the runner, so this adds no
+      # dependency to install and no lockfile to keep current. The comment body
+      # was formatted by tools/coverage_gate.py in the job above, which is the
+      # same script a human runs locally before merging a format change.
+      #
+      # The body carries a marker. This step finds an existing comment carrying
+      # that marker and updates it in place, so forty pushes produce one comment
+      # and not forty. A pull request nobody reads is a pull request with no
+      # gate on it.
+      #
+      # A permission failure is stated in plain words on the run page and in the
+      # job summary. It does not fail the step: the gate above is the enforcement
+      # point, and a fork pull request that cannot comment is a known limit of
+      # the `pull_request` trigger, not a reason to report the coverage job red.
+      - name: Post or update the coverage comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const marker = '<!-- ci-coverage-gate -->';
+            const bodyPath = path.join(
+              process.env.GITHUB_WORKSPACE, 'coverage-report', 'coverage-comment.md'
+            );
+
+            if (!fs.existsSync(bodyPath)) {
+              const note = 'The coverage job produced no comment body, so there is nothing to post. '
+                + 'Open backend/coverage.json in the coverage-report artifact to see why.';
+              core.warning(note);
+              await core.summary.addRaw(note).write();
+              return;
+            }
+
+            const body = fs.readFileSync(bodyPath, 'utf8');
+            if (!body.includes(marker)) {
+              // Refuse to post a body the marker step cannot find again. Without
+              // this a format change silently turns the sticky comment into one
+              // new comment per push.
+              core.setFailed('The comment body does not carry the sticky marker ' + marker);
+              return;
+            }
+
+            const head = context.payload.pull_request.head.repo.full_name;
+            const base = context.payload.repository.full_name;
+            const isFork = head !== base;
+
+            try {
+              const listed = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              });
+              const existing = listed.data.find((c) => c.body && c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+                core.info('Updated the existing coverage comment ' + existing.id);
+              } else {
+                const created = await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body,
+                });
+                core.info('Created the coverage comment ' + created.data.id);
+              }
+            } catch (error) {
+              const note = isFork
+                ? 'The coverage comment was not posted because this pull request comes from the '
+                  + 'fork ' + head + '. GitHub gives a pull_request workflow on a fork a read-only '
+                  + 'token, so writing a comment is refused. The coverage gate itself ran and its '
+                  + 'result is in the backend job. Read the number from that job, or from '
+                  + 'backend/coverage.json in the coverage-report artifact. GitHub failure reason: '
+                  + error.message
+                : 'The coverage comment was not posted. GitHub failure reason: ' + error.message;
+              core.warning(note);
+              await core.summary.addRaw(note).write();
+            }
+  # <<< COVERAGE AGENT END
 
   # The linter is a gate, not a report. See the "no escape hatches" note below:
   # a lint job that reports and passes is worse than no lint job, because it looks
