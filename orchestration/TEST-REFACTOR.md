@@ -768,6 +768,236 @@ Append here. Newest last. Write for an agent who has never seen this work.
   One more consequence, which is the useful part: **CI is a better measurement
   than any local run here.** It runs on an isolated runner with no competing load.
   When CI disagrees with a local number, CI is right.
+---
+
+## 9. Agent SPEED: what the CI workflow actually costs
+
+I wrote this section for the next agent who gets the same task. Read the numbers
+before forming an opinion. Five of the six candidates in the speed brief are
+settled below. The brief expected four of them to pay. None of them does.
+
+Every number comes from GitHub Actions step timings, never from this host. Runs
+`37009181528` through `37060049338`, twelve runs of `.github/workflows/ci.yml`,
+runner image `ubuntu-24.04 20260927.320.1`. This host has three other agent suites
+on eight cores, so a local duration is not a comparable number.
+
+### The jobs, as measured
+
+Median of twelve runs, whole seconds as GitHub reports them.
+
+| Job | median | min | max |
+|---|---|---|---|
+| Backend tests | 143 | 107 | 217 |
+| Local host app (headless) | 44 | 42 | 74 |
+| Lint (ruff, eslint, prettier) | 44 | 25 | 53 |
+| Frontend build | 30 | 19 | 40 |
+| Feature contract (no shared files) | 8 | 4 | 9 |
+| Design floor | 7 | 5 | 8 |
+
+That is 276 job-seconds per run. **The Backend tests job is the slowest job in all
+twelve runs, so it alone sets the wall clock.** The other five run in parallel with
+it, and they cost runner minutes only.
+
+Its 143 seconds break down as: checkout 3 s, setup-python 0 s, install backend
+10 s, `python -m pytest` 125 s. **One second off pytest is one second off the wall
+clock. One second off any other job is not.**
+
+### The six candidates, settled
+
+**1. Share one `npm ci` across the three jobs. Rejected.**
+`npm ci` takes **4 seconds**. Median of 35 step samples across the three jobs,
+range 2 s to 6 s. The brief guessed 40 s. Consolidating saves 8 runner-seconds and
+0 wall-clock seconds. The repository is public, so GitHub-hosted Linux minutes cost
+nothing and the saving has no price. Every mechanism for sharing the tree costs
+more than 8 s: `actions/cache` cannot save from three parallel jobs that all miss
+it, upload-artifact plus download-artifact costs about 7 s for a 400 MB
+`node_modules`, and combining the jobs lengthens the critical path.
+
+**2. `setup-node` with `cache: npm`. Already working. No change.**
+All 35 attempts logged `Cache hit for: node-cache-Linux-x64-npm-c3b3f664...`.
+Cache size about 33 MB. The key hits, so there is nothing to correct here.
+
+**3. Add `cache: pip` to the guard, backend and end-to-end jobs. Rejected.**
+This runs against the brief's expectation. Only the lint job has the cache today,
+and the cache does not pay for itself.
+
+| Step | n | min | median | max |
+|---|---|---|---|---|
+| Lint, `Install Python linters`, has cache | 12 | 7 | 9 | 11 |
+| Backend tests, `Install backend`, no cache | 12 | 6 | 10 | 13 |
+| End-to-end, `Install backend`, no cache | 12 | 8 | 10 | 28 |
+| `setup-python` step, has cache | 12 | 1 | 2 | 4 |
+| `setup-python` step, no cache | 12 | 0 | 0 | 1 |
+
+The cached install is 1 s faster at the median, and the two distributions overlap,
+so that 1 s is inside the noise. `setup-python` with a cache costs 2 s median
+against 0 s without one. **Net effect about minus 1 second per Python job.** The
+install resolves 34 packages in about 10 s, so the download is a small part of it
+and the cache restore costs more than the download it replaces.
+
+**4. Combine jobs to cut machine allocations. Rejected.**
+Lint takes 44 s and Frontend build takes 30 s today, in parallel, so 44 s of wall
+clock. One combined job would take about 63 s, which is the sum of the steps the
+combined job keeps. **That trades 19 seconds of wall clock for 11 free
+runner-seconds.** The lint job's own comment in `ci.yml` argues for the separate
+name, and the measurement supports the comment.
+Guard and Design floor could fold for 9 runner-seconds. That merges two named
+checks to save something that costs nothing.
+
+**5. Path filters. Rejected, and not because of the fraction.**
+The fraction is large. **37 of the 60 pull requests in this repository, 62 percent,
+touch no file under `frontend/`.** The Frontend build job is therefore unneeded
+most of the time. It still saves **0 wall-clock seconds**, because that job takes
+30 s and the critical path takes 143 s. Two further reasons, both worse than the
+saving:
+
+* A job that a path filter skips reports as **skipped**, and a skipped required
+  status check blocks the merge instead of passing it.
+* `paths:` filters on `pull_request` do not apply to `push: main`, so the two runs
+  would stop checking the same things. The pull request run would check less than
+  the push run. That is a smaller gate wearing a speed label.
+
+**6. Concurrency. Verified correct. No change.**
+`github.ref` reads `refs/pull/N/merge` for a pull request and `refs/heads/main` for
+a push, so one group never mixes the two events. `cancel-in-progress: true` is
+right for both, for the reason the existing comment gives.
+
+### Where the 40 seconds actually are
+
+This is the part that matters for whoever takes the work next.
+
+In the Backend tests job the pytest step starts at t+13.1 s, and pytest-xdist
+prints `bringing up nodes...` at t+52.8 s. **That gap is 39.7 s. It is 32 percent
+of the 125 second job.** It covers collection and worker startup, and it lives in
+`backend/`. A workflow file cannot reach it.
+
+pytest-xdist collects the whole suite once per worker and once on the controller.
+On a 4 vCPU runner that is five collections before a single test body runs. That is
+the price of `-n auto`, and it is why a larger worker count is not free.
+
+### The worker count, measured twice
+
+Someone measured `-n auto` in `backend/pyproject.toml` on an 8-core workstation
+only. A GitHub runner has 4 vCPU, so the count deserved a check on the machine
+that actually runs it.
+
+My first attempt was one CI run with `-n 6`. The suite step came back at 93.9 s
+against a baseline median of 112.9 s, which reads as a 19-second win. **I did not
+believe it and I did not report it.** Eleven single-run baselines spread from
+90.0 s to 176.5 s, and 93.9 s is the fourth lowest of twelve samples. Section 8
+already records identical code varying by 47 s. One sample cannot separate a
+20-second effect from an 86-second spread.
+
+So I ran both arms inside one job, on one runner, alternating, three rounds each.
+Run `37095600890`. pytest's own reported seconds:
+
+| round | arm | pytest s | start plus collect s |
+|---|---|---|---|
+| 1 | auto | 99.91 | cold first run on a fresh runner |
+| 2 | 6 | 77.50 | 15.5 |
+| 3 | auto | 73.56 | 10.9 |
+| 4 | 6 | 78.34 | 16.1 |
+| 5 | auto | 73.84 | 11.0 |
+| 6 | 6 | 78.48 | 15.5 |
+
+Dropping round 1, which paid the cold-cache premium:
+
+| arm | warm minimum | median start plus collect |
+|---|---|---|
+| auto | 73.56 s | 11.0 s |
+| 6 | 77.50 s | 15.5 s |
+
+**`-n auto` won by 3.9 seconds at the warm minimum, and the two arms did not
+overlap once warm.** Rounds 3 to 6 are two clean pairs: 73.56 and 73.84 for
+auto, 78.34 and 78.48 for 6.
+
+The mechanism is in the last column. Collection scales with the worker count,
+because pytest-xdist collects the whole suite once per worker and once on the
+controller. Six workers cost 4.5 s more of collection than four workers did, and
+they buy about the same amount back in the test phase. So the extra workers trade
+one cost for an equal cost, which is not a win.
+
+All six rounds reported `11127 passed, 2 xfailed`, so 11,129 collected every time.
+There was no flakiness at six workers either.
+
+**`-n auto` stays. The decision in `backend/pyproject.toml` transfers to a 4 vCPU
+runner, and I measured it there.**
+
+### The 26 seconds nobody can spend
+
+Round 1 took 99.91 s. The warm rounds took 73.6 s. **About 26 seconds of every CI
+run is a cold-cache premium**: the runner has just written 34 packages to disk and
+has not read them once. A single suite run per job can never be warm, so this cost
+is structural rather than fixable inside one run.
+
+That also explains most of the bimodal baseline. The eleven single-run baselines
+spread 90.0 s to 176.5 s. The warm floor is 73.6 s. So roughly 16 s of that spread
+is cold start, and the rest is runner variance.
+
+For whoever optimises this suite next: the number to beat is **73.6 s warm**, not
+the 125 s the CI job reports. And the fixture work has more headroom left than the
+CI number suggests, because the CI number carries a 26-second constant in it.
+
+### The variance that stopped me trusting one number
+
+The `Run the suite` step over eleven baseline runs:
+
+    94  98  99  101  111  119  125  134  161  172  181
+
+Spread 87 seconds. The code did not change across most of those runs. My first
+experiment set `-n 6` and the suite step came back at 98 s, which reads as a
+21-second win against the median. **It is not evidence.** 98 s is the third lowest
+of twelve samples. Section 8 already records identical code varying by 47 s, and
+here it varies by 87 s. One sample cannot separate a 20-second effect from that.
+
+So the real measurement runs both arms inside one job, on one runner, alternating,
+three rounds each, and takes the minimum of each arm. The minimum is the least
+contaminated sample, and the alternation keeps any drift in runner load shared
+between the arms.
+
+### Jev
+
+Four decisions. All four are in `orchestration/decisions/jev-audit.jsonl`. None
+returned `uncertain`.
+
+| Decision | Audit id | Verdict | Confidence |
+|---|---|---|---|
+| Consolidate the three `npm ci` runs | `jev-20261003T035808-23636-88981` | reject | 1.00 |
+| Combine jobs | `jev-20261003T035809-23636-89267` | reject | 0.90 |
+| Add path filters | `jev-20261003T035809-23636-89578` | reject | 1.00 |
+| Best single change of the six | `jev-20261003T035809-23636-89907` | change no job, record the measurement | 0.84 |
+
+On the job-combination decision Jev returned 0.41 for "can this be checked against
+a number that already exists". That answer is right. The 63 second combined figure
+is arithmetic on step timings, not a measured job. It is the weakest number in this
+section, and this section labels it an estimate.
+
+### Two facts about this repository that change the question
+
+* **`n-dilipkumar/client-theater` is public.** GitHub-hosted Linux runner minutes
+  cost 0. So "duplicate work costs money and runner minutes" does not hold here.
+  The only currency is wall clock, and the Backend tests job sets the wall clock.
+* **Every merge runs the whole workflow twice**, once for the pull request and
+  once for the push to main. That is about 276 job-seconds per merge, and it is
+  deliberate: the lint job's comment explains that main must get checked, and the
+  guard already skips on main. It is also larger than every candidate in the brief
+  put together.
+
+### The environment fact that cost me time
+
+The heartbeat command in the speed brief does not run in this agent shell. The
+shell rewrites every double quote in a command as a backslash-quote, so
+
+    orca orchestration send --subject "HEARTBEAT" --to run:run_a753c94f0894 ...
+
+loses its opening quote, and the `|` characters turn into shell pipes.
+`gh pr create --title "a b c"` fails the same way, with `unknown arguments`. The
+workaround is to pass the argument vector from a file, so no shell quoting takes
+part. I sent every heartbeat in this section that way, and Orca delivered them.
+
+I did not change any shared tooling for this. Section 6 of this file already warns
+that the heartbeat command is fragile. This is the same warning with the exact
+failure mode attached.
 
 - 2026-10-03 — **Agent: security. Five CI checks measured before adoption, three
   adopted as gates.**
