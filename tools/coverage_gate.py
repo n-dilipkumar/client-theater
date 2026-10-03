@@ -121,7 +121,10 @@ def measure(report: dict[str, Any]) -> dict[str, Any]:
                 "percent": percent,
                 "covered": file_covered,
                 "statements": file_statements,
-                "missing": int(summary.get("missing_lines", file_statements - file_covered)),
+                # Derived, never read from the report. A producer that writes a
+                # wrong missing_lines would otherwise put a wrong number in the
+                # per-file table the reviewer acts on.
+                "missing": file_statements - file_covered,
             }
         )
         if percent < FLOOR_PERCENT:
