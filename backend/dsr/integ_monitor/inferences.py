@@ -115,8 +115,13 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "sourced: any status-to-class mapping. WF-040's research quotes Salesforce's "
             "403 REQUEST_LIMIT_EXCEEDED, which is a 403 behaving as a throttle."
         ),
-        "value": {"401": "auth", "429": "throttle", "5xx": "vendor_5xx", "other_4xx": "validation",
-                  "explicit_class": "wins"},
+        "value": {
+            "401": "auth",
+            "429": "throttle",
+            "5xx": "vendor_5xx",
+            "other_4xx": "validation",
+            "explicit_class": "wins",
+        },
         "why": (
             "403 is the one status that is genuinely ambiguous - Salesforce uses it for "
             "REQUEST_LIMIT_EXCEEDED and HubSpot for FORBIDDEN - so the mapping deliberately "
@@ -134,7 +139,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "Not sourced. The research says the dashboard shows a sync success rate and a "
             "mean latency and names no window for either."
         ),
-        "value": {"window_seconds": 86400, "param": "window_seconds", "bounds": "1 minute to 30 days"},
+        "value": {
+            "window_seconds": 86400,
+            "param": "window_seconds",
+            "bounds": "1 minute to 30 days",
+        },
         "why": (
             "Twenty-four hours is the only span every vendor in the source set already "
             "speaks of - Salesforce's usage data covers 'the last 24 hours' without Enhanced "
@@ -177,7 +186,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "patched through the same route the pause button uses, and the bounds are "
             "refusals rather than silent clamps so an operator typing 0 finds out now."
         ),
-        "change_it": "PATCH /api/wf-049/connectors/{id} with {\"concurrency\": N}.",
+        "change_it": 'PATCH /api/wf-049/connectors/{id} with {"concurrency": N}.',
         "effect_on_default": "every monitored connector starts at 4 and says so on the record.",
     },
     {
@@ -188,7 +197,11 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "seconds. Not sourced: how a connector measures the lag, or which of the two "
             "timestamps to prefer."
         ),
-        "value": {"direct": "lag_seconds", "computed": "observed_at - source_event_at", "negative": "clamped to 0"},
+        "value": {
+            "direct": "lag_seconds",
+            "computed": "observed_at - source_event_at",
+            "negative": "clamped to 0",
+        },
         "why": (
             "Both shapes exist in real streams: some connectors are told the lag by their "
             "client, some can only subtract the vendor's event time from their own receipt "
@@ -261,7 +274,10 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "operator's page shows all of this at once. Not sourced: any scheduler this "
             "product owns."
         ),
-        "value": {"on": "every dashboard load and every evaluate call", "endpoint": "POST /rooms/{room_id}/alerts/evaluate"},
+        "value": {
+            "on": "every dashboard load and every evaluate call",
+            "endpoint": "POST /rooms/{room_id}/alerts/evaluate",
+        },
         "why": (
             "The room has no background job to hide an evaluation behind, and a rule that "
             "only a timer can see is a rule nobody can debug. Evaluating on read also makes "

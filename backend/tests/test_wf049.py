@@ -52,8 +52,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
@@ -65,16 +63,15 @@ from dsr.integ_monitor import (
     DEFAULT_WINDOW_SECONDS,
     FIRE_HISTORY_LIMIT,
     INFERENCES,
-    InvalidPayload,
-    InvalidQuotaSurface,
-    InvalidRule,
-    InvalidTelemetry,
-    MonitorError,
     QUOTA_COLLECTION,
     RULE_COLLECTION,
     STREAM_COLLECTION,
     TELEMETRY_COLLECTION,
     IntegrationMonitor,
+    InvalidPayload,
+    InvalidQuotaSurface,
+    InvalidRule,
+    InvalidTelemetry,
     UnknownConnector,
     UnknownRoom,
     UnknownRule,
@@ -84,7 +81,6 @@ from dsr.integ_monitor import (
     check_rule,
     check_samples,
     class_from_status,
-    describe_inferences,
     evaluate_rules,
     metric_value,
     normalise,
@@ -92,6 +88,7 @@ from dsr.integ_monitor import (
     vocabulary,
 )
 from dsr.store import RecordStore
+from fastapi.testclient import TestClient
 
 #: The feature's own prefix. Written out here rather than imported, so a renamed
 #: prefix fails a test instead of following silently.
@@ -457,7 +454,13 @@ def test_every_reading_carries_the_pair_and_the_instant():
     )
     assert set(reading) == {"vendor", "surface", "observed_at", "daily", "window", "notes"}
     assert set(reading["daily"]) == {
-        "known", "max", "used", "remaining", "remaining_pct", "window_seconds", "notes"
+        "known",
+        "max",
+        "used",
+        "remaining",
+        "remaining_pct",
+        "window_seconds",
+        "notes",
     }
     assert reading["observed_at"]
 
@@ -533,7 +536,10 @@ def test_the_aggregate_computes_the_researched_numbers():
     assert result["success_rate"] == round(3 / 7, 4)
     assert result["mean_latency_ms"] == round((200 + 100 + 300 + 600 + 1200) / 5, 1)
     assert result["error_breakdown"] == {
-        "validation": 1, "throttle": 1, "auth": 1, "vendor_5xx": 1,
+        "validation": 1,
+        "throttle": 1,
+        "auth": 1,
+        "vendor_5xx": 1,
     }
 
 
@@ -619,8 +625,18 @@ def test_a_rule_validates_every_field_the_evaluator_reads():
 
 
 def test_a_lag_rule_exceeds_and_a_budget_rule_fires_below():
-    assert check_rule({"metric": "stream_lag", "threshold": 300, "channels": ["webhook"]})["comparison"] == "exceeds"
-    assert check_rule({"metric": "window_remaining", "threshold": 10, "channels": ["email"]})["comparison"] == "below"
+    assert (
+        check_rule({"metric": "stream_lag", "threshold": 300, "channels": ["webhook"]})[
+            "comparison"
+        ]
+        == "exceeds"
+    )
+    assert (
+        check_rule({"metric": "window_remaining", "threshold": 10, "channels": ["email"]})[
+            "comparison"
+        ]
+        == "below"
+    )
 
 
 def test_an_unknown_metric_is_refused_not_stored():
@@ -652,13 +668,30 @@ def test_a_partial_patch_is_merged_then_revalidated():
 
 def test_the_evaluation_fires_a_budget_rule_that_is_below_its_threshold():
     values = [
-        {"connector_id": "c1", "label": "Starved", "vendor": "hubspot",
-         "metric": "daily_remaining", "value": 0.7, "known": True},
-        {"connector_id": "c2", "label": "Healthy", "vendor": "salesforce",
-         "metric": "daily_remaining", "value": 91.2, "known": True},
+        {
+            "connector_id": "c1",
+            "label": "Starved",
+            "vendor": "hubspot",
+            "metric": "daily_remaining",
+            "value": 0.7,
+            "known": True,
+        },
+        {
+            "connector_id": "c2",
+            "label": "Healthy",
+            "vendor": "salesforce",
+            "metric": "daily_remaining",
+            "value": 91.2,
+            "known": True,
+        },
     ]
     rules = [
-        {"id": "r1", "data": check_rule({"metric": "daily_remaining", "threshold": 20, "channels": ["slack"]})}
+        {
+            "id": "r1",
+            "data": check_rule(
+                {"metric": "daily_remaining", "threshold": 20, "channels": ["slack"]}
+            ),
+        }
     ]
     result = evaluate_rules(rules, values, now=NOW)
     assert len(result["fired"]) == 1
@@ -671,11 +704,22 @@ def test_the_evaluation_fires_a_budget_rule_that_is_below_its_threshold():
 
 def test_the_evaluation_names_the_rule_that_did_not_fire_and_why():
     values = [
-        {"connector_id": "c2", "label": "Healthy", "vendor": "salesforce",
-         "metric": "daily_remaining", "value": 91.2, "known": True},
+        {
+            "connector_id": "c2",
+            "label": "Healthy",
+            "vendor": "salesforce",
+            "metric": "daily_remaining",
+            "value": 91.2,
+            "known": True,
+        },
     ]
     rules = [
-        {"id": "r1", "data": check_rule({"metric": "daily_remaining", "threshold": 20, "channels": ["slack"]})}
+        {
+            "id": "r1",
+            "data": check_rule(
+                {"metric": "daily_remaining", "threshold": 20, "channels": ["slack"]}
+            ),
+        }
     ]
     entry = evaluate_rules(rules, values, now=NOW)["rules"][0]
     assert entry["fired"] is False
@@ -684,7 +728,12 @@ def test_the_evaluation_names_the_rule_that_did_not_fire_and_why():
 
 def test_a_rule_with_no_readable_reading_says_so_rather_than_firing_a_zero():
     rules = [
-        {"id": "r1", "data": check_rule({"metric": "window_remaining", "threshold": 10, "channels": ["slack"]})}
+        {
+            "id": "r1",
+            "data": check_rule(
+                {"metric": "window_remaining", "threshold": 10, "channels": ["slack"]}
+            ),
+        }
     ]
     entry = evaluate_rules(rules, [], now=NOW)["rules"][0]
     assert entry["fired"] is False
@@ -695,20 +744,30 @@ def test_the_cooldown_suppresses_the_second_poll():
     """Sourced silence, coded: a crossing fires once, not on every poll."""
     rule_data = check_rule({"metric": "daily_remaining", "threshold": 20, "channels": ["slack"]})
     values = [
-        {"connector_id": "c1", "label": "Starved", "vendor": "hubspot",
-         "metric": "daily_remaining", "value": 5.0, "known": True},
+        {
+            "connector_id": "c1",
+            "label": "Starved",
+            "vendor": "hubspot",
+            "metric": "daily_remaining",
+            "value": 5.0,
+            "known": True,
+        },
     ]
     first = evaluate_rules([{"id": "r1", "data": rule_data}], values, now=NOW)
     assert first["fired"]
 
     after_fire = dict(rule_data)
     after_fire.update(record_fire(rule_data, first["fired"][0], moment=NOW))
-    second = evaluate_rules([{"id": "r1", "data": after_fire}], values, now=NOW + timedelta(minutes=5))
+    second = evaluate_rules(
+        [{"id": "r1", "data": after_fire}], values, now=NOW + timedelta(minutes=5)
+    )
     assert second["rules"][0]["suppressed"] is True
     assert second["fired"] == []
 
     third = evaluate_rules(
-        [{"id": "r1", "data": after_fire}], values, now=NOW + timedelta(minutes=DEFAULT_COOLDOWN_MINUTES + 1)
+        [{"id": "r1", "data": after_fire}],
+        values,
+        now=NOW + timedelta(minutes=DEFAULT_COOLDOWN_MINUTES + 1),
     )
     assert third["fired"]
 
@@ -717,8 +776,14 @@ def test_a_disabled_rule_is_reported_and_never_fires():
     rule_data = check_rule({"metric": "daily_remaining", "threshold": 20, "channels": ["slack"]})
     rule_data["enabled"] = False
     values = [
-        {"connector_id": "c1", "label": "Starved", "vendor": "hubspot",
-         "metric": "daily_remaining", "value": 1.0, "known": True},
+        {
+            "connector_id": "c1",
+            "label": "Starved",
+            "vendor": "hubspot",
+            "metric": "daily_remaining",
+            "value": 1.0,
+            "known": True,
+        },
     ]
     result = evaluate_rules([{"id": "r1", "data": rule_data}], values, now=NOW)
     assert result["rules"][0]["reason"] == "disabled"
@@ -727,11 +792,22 @@ def test_a_disabled_rule_is_reported_and_never_fires():
 
 def test_a_vendor_scoped_rule_ignores_the_other_vendors():
     rule_data = check_rule(
-        {"metric": "daily_remaining", "threshold": 20, "channels": ["slack"], "vendor": "salesforce"}
+        {
+            "metric": "daily_remaining",
+            "threshold": 20,
+            "channels": ["slack"],
+            "vendor": "salesforce",
+        }
     )
     values = [
-        {"connector_id": "c1", "label": "HubSpot", "vendor": "hubspot",
-         "metric": "daily_remaining", "value": 1.0, "known": True},
+        {
+            "connector_id": "c1",
+            "label": "HubSpot",
+            "vendor": "hubspot",
+            "metric": "daily_remaining",
+            "value": 1.0,
+            "known": True,
+        },
     ]
     result = evaluate_rules([{"id": "r1", "data": rule_data}], values, now=NOW)
     assert result["fired"] == []
@@ -739,7 +815,9 @@ def test_a_vendor_scoped_rule_ignores_the_other_vendors():
 
 
 def test_a_fire_is_recorded_with_its_connector_and_channels():
-    data = check_rule({"metric": "daily_remaining", "threshold": 20, "channels": ["slack", "email"]})
+    data = check_rule(
+        {"metric": "daily_remaining", "threshold": 20, "channels": ["slack", "email"]}
+    )
     entry = {"worst_connector_id": "c1", "worst_connector": "Starved", "worst_value": 3.0}
     after = record_fire(data, entry, moment=NOW)
     assert after["last_fired_at"]
@@ -789,22 +867,34 @@ def test_a_connector_is_registered_with_its_vendors_declared_policy(monitor, roo
 def test_an_unregistered_vendor_is_refused_at_registration(monitor, room):
     with pytest.raises(UnknownVendor):
         monitor.register_connector(
-            {"vendor": "zendesk", "label": "Zen"}, room_id=room["id"], actor="dana",
+            {"vendor": "zendesk", "label": "Zen"},
+            room_id=room["id"],
+            actor="dana",
             source=f"POST {PREFIX}/connectors",
         )
 
 
 def test_a_connector_outside_the_concurrency_bounds_is_refused(monitor, room, connector):
     with pytest.raises(InvalidPayload):
-        monitor.update_connector(connector["id"], {"concurrency": 0}, actor="dana", source=f"PATCH {PREFIX}/connectors/x")
+        monitor.update_connector(
+            connector["id"], {"concurrency": 0}, actor="dana", source=f"PATCH {PREFIX}/connectors/x"
+        )
     with pytest.raises(InvalidPayload):
-        monitor.update_connector(connector["id"], {"concurrency": 100}, actor="dana", source=f"PATCH {PREFIX}/connectors/x")
+        monitor.update_connector(
+            connector["id"],
+            {"concurrency": 100},
+            actor="dana",
+            source=f"PATCH {PREFIX}/connectors/x",
+        )
 
 
 def test_pause_and_resume_come_from_the_same_patch(monitor, room, connector, clock):
     """The researched step 4: "lowers its concurrency or pauses it from the same page"."""
     paused = monitor.update_connector(
-        connector["id"], {"paused": True, "concurrency": 2}, actor="dana", source=f"PATCH {PREFIX}/connectors/x"
+        connector["id"],
+        {"paused": True, "concurrency": 2},
+        actor="dana",
+        source=f"PATCH {PREFIX}/connectors/x",
     )
     assert paused["paused"] is True
     assert paused["paused_at"]
@@ -832,7 +922,8 @@ def test_a_removed_connector_is_soft_deleted_and_its_observations_outlive_it(
     monitor.record_quota(
         connector["id"],
         {"surface": "limit_info_header", "header": "api-usage=10/500000"},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     monitor.remove_connector(connector["id"], actor="dana", source=f"DELETE {PREFIX}/connectors/x")
     with pytest.raises(UnknownConnector):
@@ -847,7 +938,8 @@ def test_a_quota_reading_is_stored_with_the_pair_it_parsed(monitor, connector, c
     result = monitor.record_quota(
         connector["id"],
         {"surface": "limit_info_header", "header": "api-usage=123/500000"},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     stored = result["observation"]
     assert stored["vendor"] == "salesforce"
@@ -858,15 +950,19 @@ def test_a_quota_reading_is_stored_with_the_pair_it_parsed(monitor, connector, c
 def test_the_quota_view_reports_the_latest_pair_and_the_delta(monitor, connector, clock):
     monitor.record_quota(
         connector["id"],
-        {"surface": "limits_resource",
-         "body": {"limits": [{"name": "API Requests", "max": 100000, "remaining": 91240}]}},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        {
+            "surface": "limits_resource",
+            "body": {"limits": [{"name": "API Requests", "max": 100000, "remaining": 91240}]},
+        },
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     clock.advance(minutes=10)
     monitor.record_quota(
         connector["id"],
         {"surface": "limit_info_header", "header": "api-usage=10310/100000"},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     view = monitor.quota_view(connector["id"])
     assert view["count"] == 2
@@ -880,7 +976,8 @@ def test_the_delta_is_null_when_either_side_is_unknown(monitor, connector):
     monitor.record_quota(
         connector["id"],
         {"surface": "limit_info_header", "header": "api-usage=123/500000"},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     view = monitor.quota_view(connector["id"])
     assert view["delta"] is None
@@ -889,11 +986,15 @@ def test_the_delta_is_null_when_either_side_is_unknown(monitor, connector):
 def test_a_quota_reading_for_a_dataverse_connector_is_refused_with_the_gap(monitor, room, clock):
     contoso = monitor.register_connector(
         {"vendor": "dataverse", "label": "Contoso — Dataverse"},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/connectors",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/connectors",
     )
     with pytest.raises(InvalidQuotaSurface) as raised:
         monitor.record_quota(
-            contoso["id"], {"surface": "limits_resource"}, actor="dana",
+            contoso["id"],
+            {"surface": "limits_resource"},
+            actor="dana",
             source=f"POST {PREFIX}/connectors/x/quota",
         )
     assert "not found at a readable URL" in str(raised.value)
@@ -908,7 +1009,8 @@ def test_telemetry_is_stored_one_record_per_call_and_aggregated(monitor, connect
                 {"ok": False, "status": 429, "latency_ms": 600},
             ]
         },
-        actor="dana", source=f"POST {PREFIX}/connectors/x/telemetry",
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/telemetry",
     )
     assert result["recorded"] == 2
     assert result["aggregate"]["success_rate"] == 0.5
@@ -920,8 +1022,10 @@ def test_telemetry_is_stored_one_record_per_call_and_aggregated(monitor, connect
 
 def test_the_telemetry_view_is_a_read(monitor, connector):
     monitor.record_telemetry(
-        connector["id"], {"calls": [{"ok": True, "status": 200, "latency_ms": 100}]},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/telemetry",
+        connector["id"],
+        {"calls": [{"ok": True, "status": 200, "latency_ms": 100}]},
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/telemetry",
     )
     view = monitor.telemetry_view(connector["id"])
     assert view["known"] is True
@@ -936,7 +1040,8 @@ def test_a_stream_observation_is_stored_with_how_it_was_computed(monitor, connec
             "source_event_at": (NOW - timedelta(seconds=90)).isoformat(),
             "observed_at": NOW.isoformat(),
         },
-        actor="dana", source=f"POST {PREFIX}/connectors/x/stream",
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/stream",
     )
     assert result["observation"]["lag_seconds"] == 90
     assert result["observation"]["source_event_at"] is not None
@@ -944,7 +1049,10 @@ def test_a_stream_observation_is_stored_with_how_it_was_computed(monitor, connec
 
     clock.advance(seconds=60)
     again = monitor.record_stream(
-        connector["id"], {"lag_seconds": 8}, actor="dana", source=f"POST {PREFIX}/connectors/x/stream"
+        connector["id"],
+        {"lag_seconds": 8},
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/stream",
     )
     assert again["previous_lag_seconds"] == 90
 
@@ -964,7 +1072,9 @@ def test_the_change_tracking_audit_records_the_tables_being_tracked(monitor, roo
                 {"schema_name": "quote", "change_tracking_enabled": False},
             ],
         },
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/change-tracking",
     )
     assert view["tracked"] == 1
     assert view["drift"] is False
@@ -975,12 +1085,16 @@ def test_a_moved_schema_version_is_a_drift_signal_not_a_failure(monitor, room, c
     """Sourced: 'you might need to refresh any schema data that your application cached'."""
     monitor.record_change_tracking(
         {"globalmetadataversion": "100", "entities": [{"schema_name": "opportunity"}]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/change-tracking",
     )
     clock.advance(minutes=5)
     view = monitor.record_change_tracking(
         {"globalmetadataversion": "167", "entities": [{"schema_name": "opportunity"}]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/change-tracking",
     )
     assert view["drift"] is True
     assert view["previous_version"] == "100"
@@ -990,12 +1104,16 @@ def test_a_moved_schema_version_is_a_drift_signal_not_a_failure(monitor, room, c
 def test_an_unchanged_version_is_not_drift(monitor, room, clock):
     monitor.record_change_tracking(
         {"globalmetadataversion": "100", "entities": [{"schema_name": "opportunity"}]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/change-tracking",
     )
     clock.advance(minutes=5)
     view = monitor.record_change_tracking(
         {"globalmetadataversion": "100", "entities": [{"schema_name": "opportunity"}]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/change-tracking",
     )
     assert view["drift"] is False
 
@@ -1003,8 +1121,14 @@ def test_an_unchanged_version_is_not_drift(monitor, room, clock):
 def test_the_change_tracking_audit_is_dataverses_surface(monitor, room):
     with pytest.raises(InvalidPayload) as raised:
         monitor.record_change_tracking(
-            {"vendor": "salesforce", "globalmetadataversion": "1", "entities": [{"schema_name": "x"}]},
-            room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+            {
+                "vendor": "salesforce",
+                "globalmetadataversion": "1",
+                "entities": [{"schema_name": "x"}],
+            },
+            room_id=room["id"],
+            actor="dana",
+            source=f"POST {PREFIX}/rooms/x/change-tracking",
         )
     assert "EntityDefinitions" in str(raised.value)
 
@@ -1012,7 +1136,9 @@ def test_the_change_tracking_audit_is_dataverses_surface(monitor, room):
 def test_an_audit_without_tables_is_refused(monitor, room):
     with pytest.raises(InvalidPayload):
         monitor.record_change_tracking(
-            {"globalmetadataversion": "1"}, room_id=room["id"], actor="dana",
+            {"globalmetadataversion": "1"},
+            room_id=room["id"],
+            actor="dana",
             source=f"POST {PREFIX}/rooms/x/change-tracking",
         )
 
@@ -1020,12 +1146,16 @@ def test_an_audit_without_tables_is_refused(monitor, room):
 def test_the_change_tracking_view_counts_drifts(monitor, room, clock):
     monitor.record_change_tracking(
         {"globalmetadataversion": "100", "entities": [{"schema_name": "opportunity"}]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/change-tracking",
     )
     clock.advance(minutes=1)
     monitor.record_change_tracking(
         {"globalmetadataversion": "101", "entities": [{"schema_name": "opportunity"}]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/change-tracking",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/change-tracking",
     )
     view = monitor.change_tracking_view(room["id"])
     assert view["count"] == 2
@@ -1041,17 +1171,30 @@ def test_the_change_tracking_view_counts_drifts(monitor, room, clock):
 def test_the_dashboard_shows_the_researched_numbers_per_connector(monitor, room, connector, clock):
     monitor.record_quota(
         connector["id"],
-        {"surface": "limits_resource",
-         "body": {"limits": [{"name": "API Requests", "max": 100000, "remaining": 91240}]}},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        {
+            "surface": "limits_resource",
+            "body": {"limits": [{"name": "API Requests", "max": 100000, "remaining": 91240}]},
+        },
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     monitor.record_telemetry(
         connector["id"],
-        {"calls": [{"ok": True, "status": 200, "latency_ms": 200},
-                    {"ok": False, "status": 401, "latency_ms": 60}]},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/telemetry",
+        {
+            "calls": [
+                {"ok": True, "status": 200, "latency_ms": 200},
+                {"ok": False, "status": 401, "latency_ms": 60},
+            ]
+        },
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/telemetry",
     )
-    monitor.record_stream(connector["id"], {"lag_seconds": 4}, actor="dana", source=f"POST {PREFIX}/connectors/x/stream")
+    monitor.record_stream(
+        connector["id"],
+        {"lag_seconds": 4},
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/stream",
+    )
 
     board = monitor.dashboard(room["id"])
     row = board["connectors"][0]
@@ -1073,26 +1216,39 @@ def test_the_dashboard_shows_the_researched_numbers_per_connector(monitor, room,
 def test_the_dashboard_preview_never_fires_a_rule(monitor, room, clock):
     """A GET that starts cooldowns would be a read that lies about having read."""
     hub = monitor.register_connector(
-        {"vendor": "hubspot", "label": "Starved"}, room_id=room["id"], actor="dana",
+        {"vendor": "hubspot", "label": "Starved"},
+        room_id=room["id"],
+        actor="dana",
         source=f"POST {PREFIX}/connectors",
     )
     monitor.create_rule(
         {"metric": "daily_remaining", "threshold": 99, "channels": ["slack"]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/rules",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/alerts/rules",
     )
     monitor.record_quota(
         hub["id"],
-        {"surface": "rate_limit_headers",
-         "headers": {"X-HubSpot-RateLimit-Max": "190", "X-HubSpot-RateLimit-Remaining": "2",
-                      "X-HubSpot-RateLimit-Daily": "250000", "X-HubSpot-RateLimit-Daily-Remaining": "300"}},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        {
+            "surface": "rate_limit_headers",
+            "headers": {
+                "X-HubSpot-RateLimit-Max": "190",
+                "X-HubSpot-RateLimit-Remaining": "2",
+                "X-HubSpot-RateLimit-Daily": "250000",
+                "X-HubSpot-RateLimit-Daily-Remaining": "300",
+            },
+        },
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     board = monitor.dashboard(room["id"])
     assert board["alert_preview"]["fired"], "the preview should show what would fire"
     rule = monitor.list_rules(room["id"])[0]
     assert rule["last_fired_at"] is None
 
-    fired = monitor.evaluate_alerts(room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate")
+    fired = monitor.evaluate_alerts(
+        room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate"
+    )
     assert fired["fired"]
     rule = monitor.list_rules(room["id"])[0]
     assert rule["last_fired_at"] is not None
@@ -1100,24 +1256,37 @@ def test_the_dashboard_preview_never_fires_a_rule(monitor, room, clock):
 
 def test_a_paused_connector_drops_out_of_evaluation(monitor, room, clock):
     hub = monitor.register_connector(
-        {"vendor": "hubspot", "label": "Paused"}, room_id=room["id"], actor="dana",
+        {"vendor": "hubspot", "label": "Paused"},
+        room_id=room["id"],
+        actor="dana",
         source=f"POST {PREFIX}/connectors",
     )
     monitor.record_quota(
         hub["id"],
-        {"surface": "rate_limit_headers",
-         "headers": {"X-HubSpot-RateLimit-Max": "190", "X-HubSpot-RateLimit-Remaining": "1"}},
-        actor="dana", source=f"POST {PREFIX}/connectors/x/quota",
+        {
+            "surface": "rate_limit_headers",
+            "headers": {"X-HubSpot-RateLimit-Max": "190", "X-HubSpot-RateLimit-Remaining": "1"},
+        },
+        actor="dana",
+        source=f"POST {PREFIX}/connectors/x/quota",
     )
     monitor.create_rule(
         {"metric": "window_remaining", "threshold": 10, "channels": ["slack"]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/rules",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/alerts/rules",
     )
-    before = monitor.evaluate_alerts(room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate")
+    before = monitor.evaluate_alerts(
+        room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate"
+    )
     assert before["fired"]
 
-    monitor.update_connector(hub["id"], {"paused": True}, actor="dana", source=f"PATCH {PREFIX}/connectors/x")
-    after = monitor.evaluate_alerts(room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate")
+    monitor.update_connector(
+        hub["id"], {"paused": True}, actor="dana", source=f"PATCH {PREFIX}/connectors/x"
+    )
+    after = monitor.evaluate_alerts(
+        room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate"
+    )
     assert after["rules"][0]["in_scope"] == 0
     assert after["fired"] == []
 
@@ -1135,7 +1304,9 @@ def test_the_dashboard_on_an_unknown_room_is_a_404(monitor):
 def test_a_rule_is_created_listed_and_deleted(monitor, room):
     rule = monitor.create_rule(
         {"metric": "stream_lag", "threshold": 300, "channels": ["webhook"]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/rules",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/alerts/rules",
     )
     assert rule["comparison"] == "exceeds"
     assert monitor.list_rules(room["id"])[0]["id"] == rule["id"]
@@ -1143,34 +1314,49 @@ def test_a_rule_is_created_listed_and_deleted(monitor, room):
     monitor.delete_rule(rule["id"], actor="dana", source=f"DELETE {PREFIX}/alerts/rules/x")
     assert monitor.list_rules(room["id"]) == []
     with pytest.raises(UnknownRule):
-        monitor.update_rule(rule["id"], {"threshold": 1}, actor="dana", source=f"PATCH {PREFIX}/alerts/rules/x")
+        monitor.update_rule(
+            rule["id"], {"threshold": 1}, actor="dana", source=f"PATCH {PREFIX}/alerts/rules/x"
+        )
 
 
 def test_rules_are_room_scoped(monitor, room):
     other_room = monitor.store.create("room", {**ROOM, "name": "Other"}, actor="dana")
     monitor.create_rule(
         {"metric": "stream_lag", "threshold": 300, "channels": ["webhook"]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/rules",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/alerts/rules",
     )
     assert len(monitor.list_rules(other_room["id"])) == 0
     with pytest.raises(UnknownRule):
         monitor.update_rule(
-            monitor.list_rules(room["id"])[0]["id"], {"threshold": 1}, room_id=other_room["id"],
-            actor="dana", source=f"PATCH {PREFIX}/alerts/rules/x",
+            monitor.list_rules(room["id"])[0]["id"],
+            {"threshold": 1},
+            room_id=other_room["id"],
+            actor="dana",
+            source=f"PATCH {PREFIX}/alerts/rules/x",
         )
 
 
 def test_a_patch_preserves_the_fire_history(monitor, room, clock):
     rule = monitor.create_rule(
         {"metric": "stream_lag", "threshold": 300, "channels": ["webhook"]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/rules",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/alerts/rules",
     )
     hub = monitor.register_connector(
-        {"vendor": "hubspot", "label": "Lagging"}, room_id=room["id"], actor="dana",
+        {"vendor": "hubspot", "label": "Lagging"},
+        room_id=room["id"],
+        actor="dana",
         source=f"POST {PREFIX}/connectors",
     )
-    monitor.record_stream(hub["id"], {"lag_seconds": 999}, actor="dana", source=f"POST {PREFIX}/connectors/x/stream")
-    monitor.evaluate_alerts(room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate")
+    monitor.record_stream(
+        hub["id"], {"lag_seconds": 999}, actor="dana", source=f"POST {PREFIX}/connectors/x/stream"
+    )
+    monitor.evaluate_alerts(
+        room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate"
+    )
     after = monitor.list_rules(room["id"])[0]
     assert after["fire_count"] == 1
 
@@ -1185,9 +1371,13 @@ def test_a_patch_preserves_the_fire_history(monitor, room, clock):
 def test_the_evaluation_on_a_room_with_no_readings_says_so(monitor, room):
     monitor.create_rule(
         {"metric": "daily_remaining", "threshold": 20, "channels": ["slack"]},
-        room_id=room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/rules",
+        room_id=room["id"],
+        actor="dana",
+        source=f"POST {PREFIX}/rooms/x/alerts/rules",
     )
-    result = monitor.evaluate_alerts(room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate")
+    result = monitor.evaluate_alerts(
+        room["id"], actor="dana", source=f"POST {PREFIX}/rooms/x/alerts/evaluate"
+    )
     assert result["fired"] == []
     assert "no daily_remaining reading is available" in result["rules"][0]["reason"]
 
@@ -1245,7 +1435,12 @@ def test_feature_module_does_not_import_the_shared_app():
 
 def test_frontend_descriptor_id_matches_the_backend_feature_id():
     descriptor = (
-        Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / FEATURE_ID / "index.jsx"
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "src"
+        / "features"
+        / FEATURE_ID
+        / "index.jsx"
     )
     text = descriptor.read_text(encoding="utf-8")
     module = load_feature(MODULE)
@@ -1257,9 +1452,7 @@ def test_frontend_descriptor_id_matches_the_backend_feature_id():
 def test_the_frontend_only_calls_its_own_prefix():
     folder = Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / FEATURE_ID
     others = sorted(
-        path.name
-        for path in folder.parent.iterdir()
-        if path.is_dir() and path.name != FEATURE_ID
+        path.name for path in folder.parent.iterdir() if path.is_dir() and path.name != FEATURE_ID
     )
 
     for name in ("api.js", "index.jsx", "IntegrationMonitor.jsx", "icons.js", "primitives.jsx"):
@@ -1327,8 +1520,11 @@ def test_a_connector_lifecycle_over_http(http, http_room):
         f"{PREFIX}/connectors/{connector_id}/quota",
         json={
             "surface": "rate_limit_headers",
-            "headers": {"X-HubSpot-RateLimit-Max": "190", "X-HubSpot-RateLimit-Remaining": "95",
-                         "X-HubSpot-RateLimit-Interval-Milliseconds": "10000"},
+            "headers": {
+                "X-HubSpot-RateLimit-Max": "190",
+                "X-HubSpot-RateLimit-Remaining": "95",
+                "X-HubSpot-RateLimit-Interval-Milliseconds": "10000",
+            },
         },
     )
     assert quota.status_code == 200
@@ -1355,8 +1551,13 @@ def test_a_connector_lifecycle_over_http(http, http_room):
 def test_the_dashboard_over_http(http, http_room):
     room_id = http_room["id"]
     http.post(
-        f"{PREFIX}/connectors", params={"room_id": room_id},
-        json={"vendor": "salesforce", "label": "Northwind — Salesforce", "limit_name": "API Requests"},
+        f"{PREFIX}/connectors",
+        params={"room_id": room_id},
+        json={
+            "vendor": "salesforce",
+            "label": "Northwind — Salesforce",
+            "limit_name": "API Requests",
+        },
     )
     board = http.get(f"{PREFIX}/rooms/{room_id}/dashboard")
     assert board.status_code == 200
@@ -1380,7 +1581,8 @@ def test_an_unknown_room_over_http_is_a_404(http):
 
 def test_an_unparseable_quota_surface_is_a_400_with_a_hint(http, http_room):
     created = http.post(
-        f"{PREFIX}/connectors", params={"room_id": http_room["id"]},
+        f"{PREFIX}/connectors",
+        params={"room_id": http_room["id"]},
         json={"vendor": "salesforce"},
     ).json()
     response = http.post(
@@ -1449,7 +1651,7 @@ def _matches_registered_route(source, routes):
             continue
         if all(
             expected.startswith("{") or expected == found
-            for expected, found in zip(template, actual)
+            for expected, found in zip(template, actual, strict=True)
         ):
             return True
     return False
@@ -1457,14 +1659,17 @@ def _matches_registered_route(source, routes):
 
 def _exercise_every_write(http, room_id):
     created = http.post(
-        f"{PREFIX}/connectors", params={"room_id": room_id},
+        f"{PREFIX}/connectors",
+        params={"room_id": room_id},
         json={"vendor": "hubspot", "label": "Northwind — HubSpot"},
     ).json()
     http.patch(f"{PREFIX}/connectors/{created['id']}", json={"concurrency": 2})
     http.post(
         f"{PREFIX}/connectors/{created['id']}/quota",
-        json={"surface": "rate_limit_headers",
-              "headers": {"X-HubSpot-RateLimit-Max": "190", "X-HubSpot-RateLimit-Remaining": "95"}},
+        json={
+            "surface": "rate_limit_headers",
+            "headers": {"X-HubSpot-RateLimit-Max": "190", "X-HubSpot-RateLimit-Remaining": "95"},
+        },
     )
     http.post(
         f"{PREFIX}/connectors/{created['id']}/telemetry",
@@ -1555,9 +1760,9 @@ def test_no_domain_module_hardcodes_a_literal_string_as_an_audit_source():
                 continue
             for keyword in node.keywords:
                 if keyword.arg == "source":
-                    assert not isinstance(
-                        keyword.value, ast.Constant
-                    ), f"{module} passes a literal string as source="
+                    assert not isinstance(keyword.value, ast.Constant), (
+                        f"{module} passes a literal string as source="
+                    )
 
 
 def test_no_domain_module_touches_sqlite_directly():

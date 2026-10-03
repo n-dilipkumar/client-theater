@@ -98,8 +98,15 @@ def half(
 
 def empty_half(note: str) -> dict[str, Any]:
     """The unknown half: the vendor said nothing this room can read."""
-    return {"known": False, "max": None, "used": None, "remaining": None,
-            "remaining_pct": None, "window_seconds": None, "notes": [note]}
+    return {
+        "known": False,
+        "max": None,
+        "used": None,
+        "remaining": None,
+        "remaining_pct": None,
+        "window_seconds": None,
+        "notes": [note],
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -190,9 +197,7 @@ def _sf_from_limits(payload: Mapping[str, Any], limit_name: str | None) -> dict[
             "the limits resource answer carried no row with readable name, max and remaining"
         )
     wanted = str(limit_name or "").strip().lower()
-    match = next(
-        (entry for entry in parsed if wanted and wanted in entry["name"].lower()), None
-    )
+    match = next((entry for entry in parsed if wanted and wanted in entry["name"].lower()), None)
     if match is None:
         names = ", ".join(entry["name"] for entry in parsed)
         return {
@@ -245,7 +250,9 @@ def _hs_from_headers(payload: Mapping[str, Any]) -> tuple[dict[str, Any], dict[s
     That note is the whole of the daily rule for OAuth connections: absent
     daily headers mean *unknown*, never zero, and the observation says so.
     """
-    maximum = _number(_hs_header(payload, "X-HubSpot-RateLimit-Max"), name="X-HubSpot-RateLimit-Max")
+    maximum = _number(
+        _hs_header(payload, "X-HubSpot-RateLimit-Max"), name="X-HubSpot-RateLimit-Max"
+    )
     remaining = _number(
         _hs_header(payload, "X-HubSpot-RateLimit-Remaining"), name="X-HubSpot-RateLimit-Remaining"
     )
@@ -253,7 +260,9 @@ def _hs_from_headers(payload: Mapping[str, Any]) -> tuple[dict[str, Any], dict[s
         _hs_header(payload, "X-HubSpot-RateLimit-Interval-Milliseconds"),
         name="X-HubSpot-RateLimit-Interval-Milliseconds",
     )
-    daily_max = _number(_hs_header(payload, "X-HubSpot-RateLimit-Daily"), name="X-HubSpot-RateLimit-Daily")
+    daily_max = _number(
+        _hs_header(payload, "X-HubSpot-RateLimit-Daily"), name="X-HubSpot-RateLimit-Daily"
+    )
     daily_remaining = _number(
         _hs_header(payload, "X-HubSpot-RateLimit-Daily-Remaining"),
         name="X-HubSpot-RateLimit-Daily-Remaining",
@@ -288,10 +297,14 @@ def _hs_from_headers(payload: Mapping[str, Any]) -> tuple[dict[str, Any], dict[s
         # reading rather than nothing.
         present, absent = ("max", "remaining") if daily_max is not None else ("remaining", "max")
         value = daily_max if present == "max" else daily_remaining
-        daily = half(max_value=value if present == "max" else None,
-                     remaining=value if present == "remaining" else None)
-        daily["notes"].append(f"only the Daily-{present} header was sent; the Daily-{absent} "
-                              "header was not, so this half is partial")
+        daily = half(
+            max_value=value if present == "max" else None,
+            remaining=value if present == "remaining" else None,
+        )
+        daily["notes"].append(
+            f"only the Daily-{present} header was sent; the Daily-{absent} "
+            "header was not, so this half is partial"
+        )
     return daily, window
 
 
@@ -313,7 +326,9 @@ def _hs_from_account(payload: Mapping[str, Any]) -> dict[str, Any]:
         try:
             body = json.loads(body)
         except json.JSONDecodeError as exc:
-            raise InvalidQuotaSurface(f"the account-information body is not valid JSON ({exc})") from exc
+            raise InvalidQuotaSurface(
+                f"the account-information body is not valid JSON ({exc})"
+            ) from exc
     if not isinstance(body, Mapping):
         raise InvalidQuotaSurface("the account-information body must be a JSON object")
 

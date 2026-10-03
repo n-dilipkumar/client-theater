@@ -26,10 +26,9 @@ means from the room's side.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from dsr.integ_monitor.errors import InvalidRule
-from dsr.integ_monitor.health import check_lag
 from dsr.integ_monitor.timestamps import iso, parse_instant
 from dsr.integ_monitor.vocabulary import CHANNELS, METRIC_COMPARISON, METRICS
 
@@ -160,13 +159,15 @@ def evaluate_rules(
         data = rule.get("data") if isinstance(rule, Mapping) and "data" in rule else rule
         rule_id = rule.get("id") if isinstance(rule, Mapping) else None
         if not data.get("enabled", True):
-            evaluated.append({
-                "rule_id": rule_id,
-                "metric": data.get("metric"),
-                "fired": False,
-                "suppressed": False,
-                "reason": "disabled",
-            })
+            evaluated.append(
+                {
+                    "rule_id": rule_id,
+                    "metric": data.get("metric"),
+                    "fired": False,
+                    "suppressed": False,
+                    "reason": "disabled",
+                }
+            )
             continue
         wanted_vendor = data.get("vendor")
         in_scope = [
@@ -176,14 +177,16 @@ def evaluate_rules(
             and value.get("known")
             and (not wanted_vendor or value.get("vendor") == wanted_vendor)
         ]
-        candidates = [
-            value for value in in_scope if _crosses(data, float(value["value"]))
-        ]
+        candidates = [value for value in in_scope if _crosses(data, float(value["value"]))]
         worst = (
-            min(candidates, key=lambda value: float(value["value"]))
-            if data.get("comparison") == "below"
-            else max(candidates, key=lambda value: float(value["value"]))
-        ) if candidates else None
+            (
+                min(candidates, key=lambda value: float(value["value"]))
+                if data.get("comparison") == "below"
+                else max(candidates, key=lambda value: float(value["value"]))
+            )
+            if candidates
+            else None
+        )
 
         last_fired = parse_instant(data.get("last_fired_at"))
         cooldown = timedelta(minutes=float(data.get("cooldown_minutes", DEFAULT_COOLDOWN_MINUTES)))
@@ -272,8 +275,13 @@ def record_fire(
     }
 
 
-def metric_value(metric: str, *, daily: Mapping[str, Any] | None, window: Mapping[str, Any] | None,
-                 lag_seconds: float | None = None) -> float | None:
+def metric_value(
+    metric: str,
+    *,
+    daily: Mapping[str, Any] | None,
+    window: Mapping[str, Any] | None,
+    lag_seconds: float | None = None,
+) -> float | None:
     """The reading one metric asks of one connector's current state.
 
     Budget metrics are percentages when a maximum is known and counts when it

@@ -53,25 +53,14 @@ from fastapi.responses import JSONResponse
 from dsr.db.audited import AuditedDatabase
 from dsr.deps import StoreDep
 from dsr.integ_monitor import (
-    CHANGE_COLLECTION,
-    CONNECTOR_COLLECTION,
     DEFAULT_WINDOW_SECONDS,
-    ERROR_CLASSES,
-    InvalidPayload,
-    InvalidQuotaSurface,
-    InvalidRule,
-    InvalidTelemetry,
     METRICS,
-    MonitorError,
-    QUOTA_COLLECTION,
-    RULE_COLLECTION,
-    STREAM_COLLECTION,
-    TELEMETRY_COLLECTION,
     IntegrationMonitor,
+    InvalidQuotaSurface,
+    MonitorError,
     UnknownConnector,
     UnknownRoom,
     UnknownRule,
-    UnknownVendor,
     describe_inferences,
     vocabulary,
 )
@@ -235,7 +224,9 @@ def update_connector(
     ``concurrency: 0`` finds out now, not when the connector stops syncing.
     """
     return monitor.update_connector(
-        connector_id, payload, actor=actor,
+        connector_id,
+        payload,
+        actor=actor,
         source=f"PATCH {router.prefix}/connectors/{connector_id}",
     )
 
@@ -248,7 +239,9 @@ def delete_connector(
 ) -> Response:
     """Soft delete. The observations and the audit trail outlive it, so the
     history of a connector that was monitored and then removed is still here."""
-    monitor.remove_connector(connector_id, actor=actor, source=f"DELETE {router.prefix}/connectors/{connector_id}")
+    monitor.remove_connector(
+        connector_id, actor=actor, source=f"DELETE {router.prefix}/connectors/{connector_id}"
+    )
     return Response(status_code=204)
 
 
@@ -282,12 +275,16 @@ def record_quota(
     stores it.
     """
     return monitor.record_quota(
-        connector_id, payload, actor=actor,
+        connector_id,
+        payload,
+        actor=actor,
         source=f"POST {router.prefix}/connectors/{connector_id}/quota",
     )
 
 
-@router.get("/connectors/{connector_id}/quota", summary="One connector's latest pair, and its delta")
+@router.get(
+    "/connectors/{connector_id}/quota", summary="One connector's latest pair, and its delta"
+)
 def read_quota(connector_id: str, monitor: IntegrationMonitor = MonitorDep) -> dict[str, Any]:
     """The normalised "remaining today / remaining this window" pair.
 
@@ -323,7 +320,9 @@ def record_telemetry(
     REQUEST_LIMIT_EXCEEDED counts as a throttle rather than a validation.
     """
     return monitor.record_telemetry(
-        connector_id, payload, actor=actor,
+        connector_id,
+        payload,
+        actor=actor,
         source=f"POST {router.prefix}/connectors/{connector_id}/telemetry",
     )
 
@@ -342,7 +341,9 @@ def read_telemetry(
     return monitor.telemetry_view(connector_id, window_seconds=window_seconds)
 
 
-@router.post("/connectors/{connector_id}/stream", summary="Record one change-stream lag observation")
+@router.post(
+    "/connectors/{connector_id}/stream", summary="Record one change-stream lag observation"
+)
 def record_stream(
     connector_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -357,7 +358,9 @@ def record_stream(
     negative lag, which would make a lag rule un-fireable.
     """
     return monitor.record_stream(
-        connector_id, payload, actor=actor,
+        connector_id,
+        payload,
+        actor=actor,
         source=f"POST {router.prefix}/connectors/{connector_id}/stream",
     )
 
@@ -391,7 +394,9 @@ def room_dashboard(
 # --------------------------------------------------------------------------- #
 
 
-@router.post("/rooms/{room_id}/change-tracking", status_code=201, summary="Record the change-tracking audit")
+@router.post(
+    "/rooms/{room_id}/change-tracking", status_code=201, summary="Record the change-tracking audit"
+)
 def record_change_tracking(
     room_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -412,7 +417,10 @@ def record_change_tracking(
     the change-stream lag's own health from the vendor's side.
     """
     return monitor.record_change_tracking(
-        payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/change-tracking"
+        payload,
+        room_id=room_id,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/change-tracking",
     )
 
 
@@ -466,7 +474,10 @@ def create_alert_rule(
     is a rule that looks armed and never fires.
     """
     return monitor.create_rule(
-        payload, room_id=room_id, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/alerts/rules"
+        payload,
+        room_id=room_id,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/alerts/rules",
     )
 
 
@@ -489,7 +500,9 @@ def delete_alert_rule(
     actor: str | None = Query(default=None),
     monitor: IntegrationMonitor = MonitorDep,
 ) -> Response:
-    monitor.delete_rule(rule_id, actor=actor, source=f"DELETE {router.prefix}/alerts/rules/{rule_id}")
+    monitor.delete_rule(
+        rule_id, actor=actor, source=f"DELETE {router.prefix}/alerts/rules/{rule_id}"
+    )
     return Response(status_code=204)
 
 
@@ -502,17 +515,19 @@ def evaluate_alerts(
 ) -> dict[str, Any]:
     """The researched automation, evaluated on demand.
 
-    [sourced] "Quota polling on a fixed interval" is the poll; this is what the
-    poll calls. Rules that cross fire into their channels and start their
-    cooldown; rules that are mid-cooldown are suppressed and say so; a rule
-    with no readable reading says so rather than firing a zero.
+     [sourced] "Quota polling on a fixed interval" is the poll; this is what the
+     poll calls. Rules that cross fire into their channels and start their
+     cooldown; rules that are mid-cooldown are suppressed and say so; a rule
+     with no readable reading says so rather than firing a zero.
 
-    The room does not deliver to Slack or email itself - this product holds no
-    outbound credentials - so a fire is a record with the channel list and the
-   connector it is about, which is the seam a delivery integration consumes.
+     The room does not deliver to Slack or email itself - this product holds no
+     outbound credentials - so a fire is a record with the channel list and the
+    connector it is about, which is the seam a delivery integration consumes.
     """
     return monitor.evaluate_alerts(
-        room_id, actor=actor, source=f"POST {router.prefix}/rooms/{room_id}/alerts/evaluate",
+        room_id,
+        actor=actor,
+        source=f"POST {router.prefix}/rooms/{room_id}/alerts/evaluate",
         window_seconds=window_seconds,
     )
 
@@ -725,16 +740,14 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
 
     # Quota readings, each through the real parser.
     for plan in DEMO_QUOTA:
-        label = plan if not plan.endswith("(later)") else plan[:-len(" (later)")]
+        label = plan if not plan.endswith("(later)") else plan[: -len(" (later)")]
         connector = by_label.get(label)
         if connector is None:
             continue
         reading = dict(DEMO_QUOTA[plan])
         if label == "Northwind — Salesforce":
             clock["now"] = real_now - timedelta(minutes=48)
-        monitor.record_quota(
-            connector["id"], reading, actor=actor, source=source, now=clock["now"]
-        )
+        monitor.record_quota(connector["id"], reading, actor=actor, source=source, now=clock["now"])
         clock["now"] = real_now
 
     # Telemetry, each sample its own audited record, the clock wound back.
@@ -763,7 +776,10 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         at = real_now - timedelta(minutes=5)
         monitor.record_stream(
             connector["id"],
-            {"lag_seconds": reading["lag_seconds"], "observed_at": at.isoformat(timespec="seconds")},
+            {
+                "lag_seconds": reading["lag_seconds"],
+                "observed_at": at.isoformat(timespec="seconds"),
+            },
             actor=actor,
             source=source,
         )
@@ -803,7 +819,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
             source=source,
             now=real_now - timedelta(minutes=6),
         )
-        drift_note = f"drift={drifted['drift']} ({drifted['previous_version']} → {drifted['globalmetadataversion']})"
+        drift_note = f"drift={drifted['drift']} ({drifted['previous_version']} -> {drifted['globalmetadataversion']})"
 
     # One connector paused by the operator, the researched step 4 in action:
     # Adventure Works took a burst of 429s, the operator paused it from the
@@ -837,7 +853,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         actor=actor,
         source=source,
     )
-    lag_rule = monitor.create_rule(
+    monitor.create_rule(
         {
             "label": "Change-stream lag over 5 minutes",
             "metric": "stream_lag",

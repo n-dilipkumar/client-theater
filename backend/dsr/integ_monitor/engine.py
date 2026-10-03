@@ -35,17 +35,19 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from dsr.integ_monitor import alerts as alert_module
-from dsr.integ_monitor import health
-from dsr.integ_monitor import quota as quota_module
+from dsr.integ_monitor import alerts as alert_module, health, quota as quota_module
 from dsr.integ_monitor.errors import (
     InvalidPayload,
     UnknownConnector,
     UnknownRoom,
     UnknownRule,
 )
-from dsr.integ_monitor.timestamps import first_present, iso, parse_instant  # noqa: F401
-from dsr.integ_monitor.timestamps import check_not_ahead
+from dsr.integ_monitor.timestamps import (  # noqa: F401
+    check_not_ahead,
+    first_present,
+    iso,
+    parse_instant,
+)
 from dsr.integ_monitor.vocabulary import (
     CHANGE_COLLECTION,
     CONNECTOR_COLLECTION,
@@ -55,8 +57,8 @@ from dsr.integ_monitor.vocabulary import (
     STREAM_COLLECTION,
     TELEMETRY_COLLECTION,
     require_vendor,
+    vocabulary as published_vocabulary,
 )
-from dsr.integ_monitor.vocabulary import vocabulary as published_vocabulary
 from dsr.store import RecordStore
 
 #: Keys of a connector payload this workflow owns. Anything else is the
@@ -127,7 +129,11 @@ class IntegrationMonitor:
     # -- connectors ---------------------------------------------------------- #
 
     def register_connector(
-        self, payload: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None,
+        self,
+        payload: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
         source: str,
     ) -> dict[str, Any]:
         """Register a connector for monitoring.
@@ -144,7 +150,9 @@ class IntegrationMonitor:
         declared policy of its vendor, which the caller never has to repeat.
         """
         if not isinstance(payload, Mapping):
-            raise InvalidPayload(f"the connector payload must be a JSON object; got {type(payload).__name__}")
+            raise InvalidPayload(
+                f"the connector payload must be a JSON object; got {type(payload).__name__}"
+            )
         room = self.require_room(room_id or payload.get("room_id"))
         vendor = require_vendor(payload.get("vendor"))
         label = str(payload.get("label") or "").strip() or f"{vendor} connector"
@@ -164,7 +172,10 @@ class IntegrationMonitor:
         return self.connector_view(record)
 
     def _policy(self, vendor: str, patch: Any) -> dict[str, Any]:
-        base = dict(DEFAULT_POLICIES.get(vendor) or {"kind": "unknown", "surfaces": [], "window_seconds": None})
+        base = dict(
+            DEFAULT_POLICIES.get(vendor)
+            or {"kind": "unknown", "surfaces": [], "window_seconds": None}
+        )
         if patch is None:
             return base
         if not isinstance(patch, Mapping):
@@ -180,7 +191,11 @@ class IntegrationMonitor:
         return self.connector_view(record)
 
     def list_connectors(
-        self, *, room_id: str | None = None, vendor: str | None = None, paused: bool | None = None,
+        self,
+        *,
+        room_id: str | None = None,
+        vendor: str | None = None,
+        paused: bool | None = None,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
         """Monitored connectors, newest first, as dashboard rows."""
@@ -198,7 +213,12 @@ class IntegrationMonitor:
         return [self.connector_view(record) for record in selected[: max(1, min(int(limit), 1000))]]
 
     def update_connector(
-        self, connector_id: str, patch: Mapping[str, Any], *, actor: str | None = None, source: str,
+        self,
+        connector_id: str,
+        patch: Mapping[str, Any],
+        *,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         """Patch a connector: pause, resume, lower concurrency, retarget a limit.
 
@@ -233,10 +253,14 @@ class IntegrationMonitor:
             data["limit_name"] = str(patch["limit_name"] or "").strip() or None
             changed.append("limit_name")
         if "quota_policy" in patch:
-            data["quota_policy"] = self._policy(str(data.get("vendor") or ""), patch["quota_policy"])
+            data["quota_policy"] = self._policy(
+                str(data.get("vendor") or ""), patch["quota_policy"]
+            )
             changed.append("quota_policy")
 
-        unknown = sorted(set(patch) - {"paused", "concurrency", "label", "limit_name", "quota_policy"})
+        unknown = sorted(
+            set(patch) - {"paused", "concurrency", "label", "limit_name", "quota_policy"}
+        )
         if unknown:
             raise InvalidPayload(
                 f"unknown patch key(s) {', '.join(unknown)}; the monitored fields are "
@@ -249,9 +273,7 @@ class IntegrationMonitor:
         view["changed"] = changed
         return view
 
-    def remove_connector(
-        self, connector_id: str, *, actor: str | None = None, source: str
-    ) -> None:
+    def remove_connector(self, connector_id: str, *, actor: str | None = None, source: str) -> None:
         """Soft-delete a connector. Its observations outlive it."""
         record = self._require_connector(connector_id)
         self.store.delete(record["id"], actor=actor, source=source)
@@ -259,8 +281,13 @@ class IntegrationMonitor:
     # -- quota --------------------------------------------------------------- #
 
     def record_quota(
-        self, connector_id: str, payload: Mapping[str, Any], *, actor: str | None = None,
-        source: str, now: datetime | None = None,
+        self,
+        connector_id: str,
+        payload: Mapping[str, Any],
+        *,
+        actor: str | None = None,
+        source: str,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
         """One quota reading in, one normalised observation stored.
 
@@ -273,7 +300,9 @@ class IntegrationMonitor:
         connector's own state: a reading is a measurement, not an event.
         """
         if not isinstance(payload, Mapping):
-            raise InvalidPayload(f"the quota payload must be a JSON object; got {type(payload).__name__}")
+            raise InvalidPayload(
+                f"the quota payload must be a JSON object; got {type(payload).__name__}"
+            )
         connector = self._require_connector(connector_id)
         vendor = str((connector.get("data") or {}).get("vendor") or "")
         reading = quota_module.normalise(
@@ -284,7 +313,9 @@ class IntegrationMonitor:
             now=now or self._now_datetime(),
         )
         data = {**reading, "connector_id": connector["id"]}
-        record = self.store.create(QUOTA_COLLECTION, data, room_id=connector["room_id"], actor=actor, source=source)
+        record = self.store.create(
+            QUOTA_COLLECTION, data, room_id=connector["room_id"], actor=actor, source=source
+        )
         return {"recorded": True, "observation": self._observation_view(record)}
 
     def quota_view(self, connector_id: str) -> dict[str, Any]:
@@ -322,8 +353,13 @@ class IntegrationMonitor:
     # -- telemetry ------------------------------------------------------------ #
 
     def record_telemetry(
-        self, connector_id: str, payload: Mapping[str, Any], *, actor: str | None = None,
-        source: str, now: datetime | None = None,
+        self,
+        connector_id: str,
+        payload: Mapping[str, Any],
+        *,
+        actor: str | None = None,
+        source: str,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
         """The calls a connector made, stored one record per call.
 
@@ -349,7 +385,11 @@ class IntegrationMonitor:
             }
             written.append(
                 self.store.create(
-                    TELEMETRY_COLLECTION, data, room_id=connector["room_id"], actor=actor, source=source
+                    TELEMETRY_COLLECTION,
+                    data,
+                    room_id=connector["room_id"],
+                    actor=actor,
+                    source=source,
                 )
             )
         return {
@@ -363,8 +403,13 @@ class IntegrationMonitor:
     # -- change-stream lag ----------------------------------------------------- #
 
     def record_stream(
-        self, connector_id: str, payload: Mapping[str, Any], *, actor: str | None = None,
-        source: str, now: datetime | None = None,
+        self,
+        connector_id: str,
+        payload: Mapping[str, Any],
+        *,
+        actor: str | None = None,
+        source: str,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
         """One lag observation, stored with how it was computed.
 
@@ -373,7 +418,9 @@ class IntegrationMonitor:
         ``lag_seconds`` or the two instants the lag is the difference between.
         """
         if not isinstance(payload, Mapping):
-            raise InvalidPayload(f"the stream payload must be a JSON object; got {type(payload).__name__}")
+            raise InvalidPayload(
+                f"the stream payload must be a JSON object; got {type(payload).__name__}"
+            )
         connector = self._require_connector(connector_id)
         moment = now or self._now_datetime()
         lag = health.check_lag(payload, now=moment)
@@ -390,14 +437,21 @@ class IntegrationMonitor:
         return {
             "recorded": True,
             "observation": self._stream_view(record),
-            "previous_lag_seconds": (previous.get("data") or {}).get("lag_seconds") if previous else None,
+            "previous_lag_seconds": (previous.get("data") or {}).get("lag_seconds")
+            if previous
+            else None,
         }
 
     # -- change tracking (the Dataverse drift surface) --------------------------- #
 
     def record_change_tracking(
-        self, payload: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None,
-        source: str, now: datetime | None = None,
+        self,
+        payload: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
         """Record the Dataverse ``EntityDefinitions`` audit, and drift.
 
@@ -427,10 +481,7 @@ class IntegrationMonitor:
 
         previous, _truncated = self._latest_change_tracking(room["id"])
         previous_version = (previous or {}).get("data", {}).get("globalmetadataversion")
-        drift = (
-            previous_version is not None
-            and str(previous_version) != str(version)
-        )
+        drift = previous_version is not None and str(previous_version) != str(version)
         data = {
             "vendor": vendor,
             "globalmetadataversion": str(version),
@@ -438,9 +489,13 @@ class IntegrationMonitor:
             "tracked": sum(1 for entity in entities if entity.get("change_tracking_enabled")),
             "drift": drift,
             "previous_version": str(previous_version) if previous_version is not None else None,
-            "observed_at": iso(parse_instant(first_present(payload, ("observed_at", "at"))) or moment),
+            "observed_at": iso(
+                parse_instant(first_present(payload, ("observed_at", "at"))) or moment
+            ),
         }
-        record = self.store.create(CHANGE_COLLECTION, data, room_id=room["id"], actor=actor, source=source)
+        record = self.store.create(
+            CHANGE_COLLECTION, data, room_id=room["id"], actor=actor, source=source
+        )
         view = self._change_view(record)
         if drift:
             view["note"] = (
@@ -454,7 +509,9 @@ class IntegrationMonitor:
         """The room's change-tracking audits, newest first, drift first."""
         room = self.require_room(room_id)
         records, _truncated = self._scan(CHANGE_COLLECTION, room_id=room["id"])
-        records.sort(key=lambda r: str((r.get("data") or {}).get("observed_at") or ""), reverse=True)
+        records.sort(
+            key=lambda r: str((r.get("data") or {}).get("observed_at") or ""), reverse=True
+        )
         capped = records[: max(1, min(int(limit), 1000))]
         drifts = [record for record in records if (record.get("data") or {}).get("drift")]
         latest = self._change_view(capped[0]) if capped else None
@@ -470,12 +527,18 @@ class IntegrationMonitor:
     # -- alert rules ------------------------------------------------------------ #
 
     def create_rule(
-        self, payload: Mapping[str, Any], *, room_id: str | None = None, actor: str | None = None,
+        self,
+        payload: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
         source: str,
     ) -> dict[str, Any]:
         """Store an alert rule. [sourced] "room alert rules (Slack/email/webhook)"."""
         if not isinstance(payload, Mapping):
-            raise InvalidPayload(f"the rule payload must be a JSON object; got {type(payload).__name__}")
+            raise InvalidPayload(
+                f"the rule payload must be a JSON object; got {type(payload).__name__}"
+            )
         room = self.require_room(room_id or payload.get("room_id"))
         data = alert_module.check_rule(payload)
         if payload.get("label"):
@@ -498,8 +561,13 @@ class IntegrationMonitor:
         return [self._rule_view(record) for record in selected]
 
     def update_rule(
-        self, rule_id: str, patch: Mapping[str, Any], *, room_id: str | None = None,
-        actor: str | None = None, source: str,
+        self,
+        rule_id: str,
+        patch: Mapping[str, Any],
+        *,
+        room_id: str | None = None,
+        actor: str | None = None,
+        source: str,
     ) -> dict[str, Any]:
         """Patch a rule. The fire history survives the patch."""
         if not isinstance(patch, Mapping):
@@ -509,16 +577,28 @@ class IntegrationMonitor:
         merged = alert_module.merge_rule(current, patch)
         if "label" in patch:
             merged["label"] = str(patch["label"] or "").strip() or None
-        unknown = set(patch) - {"metric", "threshold", "channels", "cooldown_minutes",
-                                 "enabled", "vendor", "label"}
+        unknown = set(patch) - {
+            "metric",
+            "threshold",
+            "channels",
+            "cooldown_minutes",
+            "enabled",
+            "vendor",
+            "label",
+        }
         if unknown:
             raise InvalidPayload(
                 f"unknown patch key(s) {', '.join(sorted(unknown))}; a rule's tunable fields are "
                 "metric, threshold, channels, cooldown_minutes, enabled, vendor and label"
             )
         merged.update({k: v for k, v in current.items() if k not in merged})
-        merged.update({"fires": current.get("fires") or [], "last_fired_at": current.get("last_fired_at"),
-                       "fire_count": current.get("fire_count", 0)})
+        merged.update(
+            {
+                "fires": current.get("fires") or [],
+                "last_fired_at": current.get("last_fired_at"),
+                "fire_count": current.get("fire_count", 0),
+            }
+        )
         updated = self.store.update(record["id"], merged, actor=actor, source=source)
         return self._rule_view(updated)
 
@@ -531,7 +611,12 @@ class IntegrationMonitor:
     # -- evaluation, and the dashboard ------------------------------------------ #
 
     def evaluate_alerts(
-        self, room_id: str, *, actor: str | None = None, source: str, now: datetime | None = None,
+        self,
+        room_id: str,
+        *,
+        actor: str | None = None,
+        source: str,
+        now: datetime | None = None,
         window_seconds: float = DEFAULT_WINDOW_SECONDS,
     ) -> dict[str, Any]:
         """The researched automation, evaluated and fired.
@@ -557,13 +642,17 @@ class IntegrationMonitor:
                 continue
             self.store.update(
                 record["id"],
-                alert_module.record_fire(record.get("data") or {}, entry, moment=now or self._now_datetime()),
+                alert_module.record_fire(
+                    record.get("data") or {}, entry, moment=now or self._now_datetime()
+                ),
                 actor=actor,
                 source=source,
             )
         return result
 
-    def dashboard(self, room_id: str, *, window_seconds: float = DEFAULT_WINDOW_SECONDS) -> dict[str, Any]:
+    def dashboard(
+        self, room_id: str, *, window_seconds: float = DEFAULT_WINDOW_SECONDS
+    ) -> dict[str, Any]:
         """The researched dashboard, in the order the research lists it.
 
         [sourced] "Dashboard shows remaining daily + burst quota, sync success
@@ -581,7 +670,8 @@ class IntegrationMonitor:
         values = self._metric_values(room["id"], window_seconds=window_seconds)
         rules = self.list_rules(room["id"])
         preview = alert_module.evaluate_rules(
-            [{"id": rule["id"], "data": rule} for rule in rules], values,
+            [{"id": rule["id"], "data": rule} for rule in rules],
+            values,
             now=self._now_datetime(),
         )
         return {
@@ -675,7 +765,9 @@ class IntegrationMonitor:
 
     def _latest_change_tracking(self, room_id: str) -> tuple[dict[str, Any] | None, bool]:
         records, truncated = self._scan(CHANGE_COLLECTION, room_id=room_id)
-        records.sort(key=lambda r: str((r.get("data") or {}).get("observed_at") or ""), reverse=True)
+        records.sort(
+            key=lambda r: str((r.get("data") or {}).get("observed_at") or ""), reverse=True
+        )
         return (records[0] if records else None), truncated
 
     def _telemetry_records(self, connector_id: str) -> list[dict[str, Any]]:
@@ -687,9 +779,11 @@ class IntegrationMonitor:
             if str((record.get("data") or {}).get("connector_id") or "") == connector_id
         ]
         mine.sort(key=lambda r: str((r.get("data") or {}).get("at") or ""), reverse=True)
-        return mine[: _MAX_RECORDS]
+        return mine[:_MAX_RECORDS]
 
-    def telemetry_view(self, connector_id: str, *, window_seconds: float = DEFAULT_WINDOW_SECONDS) -> dict[str, Any]:
+    def telemetry_view(
+        self, connector_id: str, *, window_seconds: float = DEFAULT_WINDOW_SECONDS
+    ) -> dict[str, Any]:
         """One connector's aggregate, without recording anything."""
         connector = self._require_connector(connector_id)
         _check_window(window_seconds)
@@ -701,13 +795,20 @@ class IntegrationMonitor:
         )
         return {"connector_id": connector["id"], **aggregate}
 
-    def _scan(self, collection: str, *, room_id: str | None = None) -> tuple[list[dict[str, Any]], bool]:
+    def _scan(
+        self, collection: str, *, room_id: str | None = None
+    ) -> tuple[list[dict[str, Any]], bool]:
         """Every live record in a collection, paged on the id so nothing is skipped."""
         records: list[dict[str, Any]] = []
         offset = 0
         while len(records) < _MAX_RECORDS:
             page = self.store.list(
-                collection, room_id=room_id, limit=_PAGE, offset=offset, order_by="id", descending=False
+                collection,
+                room_id=room_id,
+                limit=_PAGE,
+                offset=offset,
+                order_by="id",
+                descending=False,
             )
             if not page:
                 break
@@ -717,7 +818,9 @@ class IntegrationMonitor:
             offset += len(page)
         return records, len(records) >= _MAX_RECORDS
 
-    def _require_connector(self, connector_id: str, *, room_id: str | None = None) -> dict[str, Any]:
+    def _require_connector(
+        self, connector_id: str, *, room_id: str | None = None
+    ) -> dict[str, Any]:
         text = str(connector_id or "").strip()
         record = self.store.get(text) if text else None
         if record is None or record.get("collection") != CONNECTOR_COLLECTION:
