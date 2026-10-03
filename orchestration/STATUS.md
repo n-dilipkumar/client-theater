@@ -8,20 +8,20 @@
 Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `5d84552 Merge pull request #87 from n-dilipkumar/fix/status-truth` &middot; measured 2026-10-02T12:01:48+05:30
+`main` at `a8e35a3 Record the nineteen lines that only existed on agent branches (#114)` &middot; measured 2026-10-03T20:27:23+05:30
 
-Measured in `C:\Users\Dilip\Documents\dummy repo\client-theater`. This file is written by the generator and by nothing
+Measured in `C:\Users\Dilip\orca\workspaces\client-theater\final-dashboards`. This file is written by the generator and by nothing
 else; if a copy of it lives in another clone, that copy is not this run.
 
 ## Progress
 
-    workflows  [###########.......................] 48/138
-    routes     881
-    tests      9995 passed, 0 failed, 2 xfailed  (measured now)
+    workflows  [##############....................] 57/138
+    routes     1055
+    tests      12001 passed, 0 failed, 2 xfailed  (measured now)
     features   0 failed to load
-    to go      90
+    to go      81
 
-138 researched workflows; **48 built**, **90 pending** (5 critical, 85 supplementary).
+138 researched workflows; **57 built**, **81 pending** (0 critical, 81 supplementary).
 
 ## How status is decided
 
@@ -70,7 +70,12 @@ critical-first, so the queue reads in the order it should be worked.
 | `WF-006` | Review buyer engagement and prioritise follow-up | Review buyer engagement and prioritise follow-up | critical (C1) | Built — 8 routes, UI, no test file | |
 | `WF-007` | Ingest a document or deck into the content library | Ingest a document into the content library | critical (C1) | Built — 12 routes, UI | |
 | `WF-011` | Take a room from draft to live and hand over the link | Take a room from draft to live | critical (C1) | Built — 10 routes, UI | |
+| `WF-014` | Expire or cap access to a room | Expire or cap access to a room | critical (C2) | Built — 13 routes, UI | |
 | `WF-015` | Verify buyer identity and restrict by email domain | Verify buyer identity and restrict by domain | critical (C2) | Built — 12 routes, UI | |
+| `WF-069` | Gate each buyer link with a password, an expiry and email verification | Gate a buyer link with password + expiry + email verification | critical (C2) | Built — 17 routes, UI | |
+| `WF-076` | Revoke access early and keep the audit row | Revoke access early and keep the audit row | critical (C2) | Built — 24 routes, UI | |
+| `WF-077` | Manage internal workspace roles and least-privilege integration scopes | Manage internal roles and least-privilege integration scopes | critical (C2) | Built — 24 routes, UI | |
+| `WF-079` | Export a tamper-evident audit trail with IP and verification outcomes | Export a tamper-evident audit trail | critical (C2) | Built — 15 routes, UI | |
 | `WF-005` | Archive and restore a room | Archive and restore a room | supplementary | Built — 8 routes, API only | |
 | `WF-008` | Auto-sync an external cloud file into the content library | Auto-sync an external cloud file | supplementary | Built — 8 routes, UI | |
 | `WF-009` | Approve and publish library content, immediately or on schedule | Approve and publish library content | supplementary | Built — 13 routes, UI | |
@@ -102,36 +107,31 @@ critical-first, so the queue reads in the order it should be worked.
 | `WF-040` | Surface partial failures and reject invalid writes before commit | Surface partial failures and reject invalid writes | supplementary | Built — 14 routes, UI | |
 | `WF-041` | Detect and block duplicate records during sync | Detect and block duplicate records during sync | supplementary | Built — 20 routes, UI | |
 | `WF-043` | Stream CRM record changes into the room in near real time | Stream CRM record changes into the room | supplementary | Built — 37 routes, UI | |
+| `WF-044` | Emit a webhook out of the CRM when a deal stage changes | Emit a webhook out of the CRM on a deal stage change | supplementary | Built — 20 routes, UI | |
 | `WF-045` | Backfill historical records on a schedule with a resumable cursor | Backfill history on a resumable cursor | supplementary | Built — 16 routes, UI | |
+| `WF-049` | Monitor integration health and remaining API quota | Monitor integration health and quota | supplementary | Built — 20 routes, UI | |
+| `WF-053` | Route a booking to the owner of the CRM record | Book with the CRM record owner | supplementary | Built — 21 routes, UI | |
 | `WF-056` | Book a meeting with no scheduling UI (headless / AI agent) | Book headlessly via API or MCP | supplementary | Built — 22 routes, UI | |
 | `WF-057` | Find a time that works for a multi-person panel | Find a shared slot across several calendars | supplementary | Built — 21 routes, UI | |
 | `WF-058` | Embed a bookable calendar inside the sales room / app | Embed an in-room booking calendar | supplementary | Built — 36 routes, UI | |
 | `WF-059` | Provision a per-booking video-conference link (Meet / Zoom / Teams / Gong) | Generate and swap the video meeting link | supplementary | Built — 29 routes, UI | |
 | `WF-061` | Send conditional pre- and post-meeting reminders and SMS nudges | Send conditional meeting reminders and nudges | supplementary | Built — 29 routes, UI | |
+| `WF-062` | Route a requested slot for host approval before confirming | Hold a meeting request pending host approval | supplementary | Built — 20 routes, UI | |
 | `WF-063` | Reassign a booked meeting to a different host | Reassign a booked meeting to another host | supplementary | Built — 23 routes, UI | |
 | `WF-064` | Reschedule or cancel a meeting and propagate the change | Reschedule or cancel a booked meeting | supplementary | Built — 31 routes, UI | |
 | `WF-065` | Write the booking back into the CRM | Write the meeting back to the CRM | supplementary | Built — 25 routes, UI | |
-| `WF-014` | Expire or cap access to a room | Expire or cap access to a room | critical (C2) | Pending | |
-| `WF-069` | Gate each buyer link with a password, an expiry and email verification | Gate a buyer link with password + expiry + email verification | critical (C2) | Pending | |
-| `WF-076` | Revoke access early and keep the audit row | Revoke access early and keep the audit row | critical (C2) | Pending | |
-| `WF-077` | Manage internal workspace roles and least-privilege integration scopes | Manage internal roles and least-privilege integration scopes | critical (C2) | Pending | |
-| `WF-079` | Export a tamper-evident audit trail with IP and verification outcomes | Export a tamper-evident audit trail | critical (C2) | Pending | |
 | `WF-029` | Score DSR activity as CRM lead-score criteria | Score DSR activity as CRM lead-score criteria | supplementary | Pending | |
 | `WF-031` | Identify anonymous web visitors as companies and filter by pages visited | Identify anonymous web visitors as companies and filter by pages visited | supplementary | Pending | |
 | `WF-042` | Pull CRM deal, account and contact data into the room for display | Pull CRM records into the room for display | supplementary | Pending | |
-| `WF-044` | Emit a webhook out of the CRM when a deal stage changes | Emit a webhook out of the CRM on a deal stage change | supplementary | Pending | |
 | `WF-046` | Throttle and retry under vendor API rate limits | Throttle and retry under API rate limits | supplementary | Pending | |
 | `WF-047` | Mirror room documents into CRM files | Mirror room documents into CRM files | supplementary | Pending | |
 | `WF-048` | Validate the connector against a sandbox or test account | Validate the connector against a sandbox | supplementary | Pending | |
-| `WF-049` | Monitor integration health and remaining API quota | Monitor integration health and quota | supplementary | Pending | |
 | `WF-050` | Reconcile gaps and overflows after a dropped change stream | Reconcile gaps after a dropped change stream | supplementary | Pending | |
 | `WF-051` | Route and book a demo request inline from a web form | Route-and-book a web form request inline | supplementary | Pending | |
 | `WF-052` | Qualify a lead without offering any calendar | Qualify-and-assign without scheduling | supplementary | Pending | |
-| `WF-053` | Route a booking to the owner of the CRM record | Book with the CRM record owner | supplementary | Pending | |
 | `WF-054` | Spread bookings across a team by availability-weighted round robin | Distribute bookings across a team by round robin | supplementary | Pending | |
 | `WF-055` | Hand a lead off from an SDR scheduler to an AE | Handoff-schedule a lead from SDR to AE | supplementary | Pending | |
 | `WF-060` | Auto-join and record the meeting, gated by recording consent | Auto-join and record with consent | supplementary | Pending | |
-| `WF-062` | Route a requested slot for host approval before confirming | Hold a meeting request pending host approval | supplementary | Pending | |
 | `WF-066` | Push meeting lifecycle events to downstream systems | Fan out meeting events via signed webhooks | supplementary | Pending | |
 | `WF-067` | Collect mutual-action-plan approval by e-signature and track it | Send a mutual action plan for e-signature approval | supplementary | Pending | |
 | `WF-068` | Prepare for the meeting, then run the post-meeting follow-up sequence | Prepare for and follow up on a meeting | supplementary | Pending | |
@@ -204,19 +204,7 @@ critical-first, so the queue reads in the order it should be worked.
 
 ## Critical and pending
 
-5 workflows are judged critical and have no code.
-Every one of them is the same area — access and audit — which is the
-argument for choosing the next one by product judgement rather than by
-lowest ticket number: the supplementary workflows are numbered lower and
-will otherwise always look like the obvious queue.
-
-| Ticket | What it does | Basis |
-|---|---|---|
-| `WF-014` | Expire or cap access to a room | C2 |
-| `WF-069` | Gate each buyer link with a password, an expiry and email verification | C2 |
-| `WF-076` | Revoke access early and keep the audit row | C2 |
-| `WF-077` | Manage internal workspace roles and least-privilege integration scopes | C2 |
-| `WF-079` | Export a tamper-evident audit trail with IP and verification outcomes | C2 |
+None — every critical workflow has a feature module on `main`.
 
 ## Every feature the host loads
 
@@ -236,6 +224,7 @@ will otherwise always look like the obvious queue.
 | `wf-011-room-handover` | `/api/publishing` | 10 |
 | `wf-012-room-generation` | `/api/wf-012` | 9 |
 | `wf-013-conditional-rules` | `/api/wf-013` | 11 |
+| `wf-014-access-controls` | `/api/wf-014` | 13 |
 | `wf-015-identity-gate` | `/api/wf-015-identity-gate` | 12 |
 | `wf-016-crm-sync` | `/api/wf-016` | 16 |
 | `wf-017-white-label` | `/api/wf-017-white-label` | 10 |
@@ -262,15 +251,23 @@ will otherwise always look like the obvious queue.
 | `wf-040-surface-partial-failures-and-reject-in` | `/api/wf-040` | 14 |
 | `wf-041-detect-and-block-duplicate-records-dur` | `/api/wf-041` | 20 |
 | `wf-043-stream-crm-record-changes-into-the-roo` | `/api/wf-043` | 37 |
+| `wf-044-emit-a-webhook-out-of-the-crm-when-a-d` | `/api/wf-044` | 20 |
 | `wf-045-backfill-historical-records-on-a-sched` | `/api/wf-045` | 16 |
+| `wf-049-monitor-integration-health-and-remaini` | `/api/wf-049` | 20 |
+| `wf-053-route-a-booking-to-the-owner-of-the-cr` | `/api/wf-053` | 21 |
 | `wf-056-book-a-meeting-with-no-scheduling-ui-h` | `/api/wf-056` | 22 |
 | `wf-057-find-a-time-that-works-for-a-multi-per` | `/api/wf-057` | 21 |
 | `wf-058-embed-a-bookable-calendar-inside-the-s` | `/api/wf-058` | 36 |
 | `wf-059-provision-a-per-booking-video-conferen` | `/api/wf-059` | 29 |
 | `wf-061-send-conditional-pre-and-post-meeting-` | `/api/wf-061` | 29 |
+| `wf-062-route-a-requested-slot-for-host-approv` | `/api/wf-062` | 20 |
 | `wf-063-reassign-a-booked-meeting-to-a-differe` | `/api/wf-063` | 23 |
 | `wf-064-reschedule-or-cancel-a-meeting-and-pro` | `/api/wf-064` | 31 |
 | `wf-065-write-the-booking-back-into-the-crm` | `/api/wf-065` | 25 |
+| `wf-069-gate-each-buyer-link-with-a-password-a` | `/api/wf-069` | 17 |
+| `wf-076-revoke-access-early-and-keep-the-audit` | `/api/wf-076` | 24 |
+| `wf-077-manage-internal-workspace-roles-and-le` | `/api/wf-077` | 24 |
+| `wf-079-export-a-tamper-evident-audit-trail-wi` | `/api/wf-079` | 15 |
 
 ## Provenance
 
