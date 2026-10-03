@@ -768,9 +768,399 @@ Append here. Newest last. Write for an agent who has never seen this work.
   One more consequence, which is the useful part: **CI is a better measurement
   than any local run here.** It runs on an isolated runner with no competing load.
   When CI disagrees with a local number, CI is right.
+
 ---
 
-## 9. Agent SPEED: what the CI workflow actually costs
+## 9. Agent `coverage` — the gate the floor never had
+
+Branch `ci-coverage`. Files: `tools/coverage_gate.py`,
+`tools/coverage_comment.py`, `tools/coverage_gate_selftest.py`, and a marked
+region of `.github/workflows/ci.yml`. No test file, no application source, no
+`backend/pyproject.toml`. `pytest-cov` was already in the `dev` extras, so
+nothing had to be added to install coverage.
+
+### The gate
+
+`tools/coverage_gate.py` reads `backend/coverage.json`. It recomputes the
+percentage from the per-file `covered_lines` and `num_statements` counts in
+that file. It never reads a printed line of pytest output. It cross-checks the
+report's own `totals` block against the sum of the per-file rows and refuses to
+report a number when the two disagree.
+
+| Exit | Meaning |
+|---|---|
+| 0 | the measured total is at or above the floor |
+| 1 | the measured total is below the floor |
+| 2 | the report is missing, unreadable, or contradicts itself |
+
+`FLOOR_PERCENT = 90.0` is a module constant. There is no flag and no workflow
+input. `coverage_gate_selftest.py` proves that passing `--floor 10` is
+rejected by argparse, so no pull request can move the threshold.
+
+### Measured, on commit 0b57667, in this worktree
+
+Six runs, two interleaved rounds, same machine, same interpreter.
+
+| Round | Configuration | Wall clock | percent | missed | exit |
+|---|---|---|---|---|---|
+| 1 | `-n auto --cov=dsr` | 231.84 s | 94.88660 | 2559 | 0 |
+| 1 | `-n 0 --cov=dsr` | 420.45 s | 94.88660 | 2559 | 0 |
+| 1 | `-n auto`, no coverage | 230.65 s | | | 0 |
+| 2 | `-n auto --cov=dsr` | 245.38 s | 94.88660 | 2559 | 0 |
+| 2 | `-n 0 --cov=dsr` | 636.55 s | 94.88660 | 2559 | 0 |
+| 2 | `-n auto`, no coverage | 118.19 s | | | 0 |
+
+Every run reports **11127 passed and 2 xfailed**, which is the 11129 collected on
+`main`. Every coverage run reports the same number:
+
+    2559 missed of 50045 statements
+    94.88660 percent
+    401 files measured, 279 of them with a gap
+
+**This host cannot measure what coverage costs, and I will not pretend it can.**
+The two `-n auto` runs without coverage took 230.65 s and 118.19 s. That is a
+112 second spread on identical code. The two `-n auto` runs with coverage took
+231.84 s and 245.38 s. The coverage overhead is smaller than the spread between
+two runs of the same code, so any figure I published from this host would be
+measuring the other agents' load and calling it coverage.
+
+The runner figure is the one to believe, and section 7 says why. It is in the
+table at the end of this section.
+
+### The xdist question, answered by measurement rather than by argument
+
+The task brief warned that coverage under `-n auto` can report only the subset
+one worker saw. Four full runs of the same commit, then a comparison of all four
+JSON reports file by file and uncovered line set by uncovered line set:
+
+| Run | Command | percent | missed |
+|---|---|---|---|
+| 1 | `pytest -n auto --cov=dsr` | 94.88660 | 2559 |
+| 2 | `pytest -n 0 --cov=dsr` | 94.88660 | 2559 |
+| 3 | `pytest -n auto --cov=dsr` with `COV_CORE_SOURCE=dsr` | 94.88660 | 2559 |
+| 4 | round two of `-n auto --cov=dsr` | 94.88660 | 2559 |
+
+    files compared                          401
+    files with a count difference            0
+    files with a different uncovered set     0
+    totals blocks identical                 yes, all four
+
+Every run reports 11127 passed and 2 xfailed and exits 0. pytest-cov is already
+combining the xdist workers correctly. `COV_CORE_SOURCE` changes nothing, which
+is expected: every `dsr` module is imported inside a test rather than at
+interpreter start-up, so there is no early statement for it to catch.
+
+The gated number is the `-n auto` number. It is the same number a serial run
+produces, at a fraction of the wall clock.
+
+### A per-file floor is not adoptable today, and the total is sensitive enough
+
+The distribution, measured, not estimated. 399 files carry statements.
+
+| Floor | Files that fail today |
+|---|---|
+| 60 percent | 0 |
+| 70 percent | 8 |
+| 80 percent | 13 |
+| 90 percent | 45 |
+| 95 percent | 131 |
+| 100 percent | 279 |
+
+No file is below 60 percent. A floor at 60 passes with an empty allowlist and
+catches almost nothing. Any floor worth having needs an allowlist of 13 to 131
+files that already exist.
+
+Meanwhile the total already reacts. Removing every covered statement from
+`dsr/db/audited.py`, the largest file with a gap at 395 statements, moves the
+total from 94.88660 to 94.12329 percent. That is 0.76 points against 4.89
+points of headroom, so roughly six abandoned large files would fire the gate.
+
+### What Jev decided
+
+Every decision is in `orchestration/decisions/jev-audit.jsonl`.
+
+| Question | Verdict | Selected | Confidence | Audit id |
+|---|---|---|---|---|
+| Fail the job, or warn? | pass | `fail_the_job` | 0.98 | `jev-20261003T035005-26256-05268` |
+| Total, per-file, or both? | **uncertain**, then pass | `total_floor_with_touched_file_report` | 0.29, then 0.98 | `jev-20261003T035944-7856-84791`, `jev-20261003T040119-3756-79213` |
+| Whole package, or touched files? | **uncertain**, then pass | `whole_package_gate_with_touched_file_report` | 0.64, then 0.99 | `jev-20261003T040135-26636-95267`, `jev-20261003T040747-3204-67531` |
+| How to combine under xdist? | **uncertain**, then pass | `pytest_cov_dist_no_core_source` | 0.52, then 0.98 | `jev-20261003T040904-27596-44047`, `jev-20261003T041354-22944-34922` |
+
+**Three verdicts came back `uncertain` and I did not override any of them.** All
+three were resolved by gathering more evidence, not by rephrasing the question
+until it agreed with me.
+
+The gate-shape question returned `uncertain` at confidence 0.29 with a margin
+of 0.21 over the runner-up. What it had not been given was the cost of a
+per-file floor. I measured that a floor at 80 fails 13 files today, that a
+floor at 95 fails 131, that one abandoned large file costs 0.76 points of the
+total, and that bringing every sub-90 file to 100 percent would lift the total
+only to 96.34. With that evidence it returned `pass` at 0.98.
+
+The measurement-scope question returned `uncertain` at 0.64. What it had not
+been given was what a scoped run actually reports. I measured it:
+
+    pytest tests/test_wf001.py tests/test_wf002.py tests/test_wf003.py -n 0 --cov=dsr
+    168 tests of 11127
+    29.78 percent
+
+**A run of 1.5 percent of the suite reports 29.78 percent, not 94.89.** A gate
+that ran only the touched tests could not produce the agreed number at all. It
+would have to change the measured target per pull request, and its number would
+not be comparable to the floor or to any earlier run. With that, it returned
+`pass` at 0.99.
+
+The combining question returned `uncertain` at 0.52, and the near-tie was
+between adding `COV_CORE_SOURCE=dsr` and not adding it. That one is settleable
+by measurement, so I ran the suite a third time with `COV_CORE_SOURCE=dsr` set.
+All three reports came back identical. With that, it returned `pass` at 0.98
+for the simplest option: one pytest command, no environment variable, no extra
+combine step, and no serial pass of the suite.
+
+The fail-or-warn question was answered with the rule, not with taste:
+
+    gh api repos/n-dilipkumar/client-theater/branches/main/protection
+    {"message":"Branch not protected","status":"404"}
+
+The main ruleset lists zero required status checks, so a failed job does not
+block a merge today. Jev still chose `fail_the_job` at 0.98, and the reason is
+in the state I gave it: the same workflow file records the house position that
+a check which reports and passes is worse than no check. A warning would have
+been the fourth defect in section 8 wearing a new hat.
+
+### The pull request comment
+
+`tools/coverage_comment.py` renders the body from the report and a changed-file
+list. It runs from the repository root with no arguments beyond two paths, so a
+human reads the exact body before it is merged. `actions/github-script@v7`
+posts it. That action ships with the runner, so it adds no dependency and no
+lockfile.
+
+The body carries the marker `<!-- ci-coverage-gate -->`. The posting step finds
+a comment with that marker and updates it in place, so forty pushes produce one
+comment. The step refuses to post a body without the marker, because a format
+change would otherwise silently turn the sticky comment into one new comment
+per push.
+
+When the total is below the floor the first line says so:
+
+    ### Coverage is below the floor. Total 40.00 percent against a 90.0 percent floor.
+
+A pull request from a fork gets a read-only token, so the comment cannot be
+written. The step catches that and states it in plain words on the run page and
+in the job summary, naming the fork and the GitHub error. It does not fail the
+step, because the gate is the job above and a fork is a known limit of the
+`pull_request` trigger rather than a coverage result.
+
+### Two things I got wrong, and one I got wrong twice
+
+**I corrupted a measurement by running two coverage runs at once, and then I
+wrote down the wrong conclusion about it.** While the serial coverage run was
+in flight I started a scoped coverage run in the same working tree. Both use
+`backend/.coverage`. The scoped run reported `no such table: line_bits` and
+`Failed to generate report`.
+
+At the moment I wrote this section down I believed round two of the timing
+series was lost to that collision, and I wrote "round two is worthless and I
+discarded it". **That was wrong.** Round two finished later, after the collision
+had passed, and all three of its runs are valid. All six runs agree on the
+coverage number. I discarded nothing.
+
+The serial run had already written its report, so the decisive comparison
+survived regardless, and I copied every report out of the working tree before
+anything could overwrite it.
+
+The rule this adds: **a second coverage run in the same working tree needs its
+own `COVERAGE_FILE`.** The next measurement I started did exactly that and lost
+nothing. Point `COVERAGE_FILE` at a different path, or do not run two coverage
+runs in one tree.
+
+This is section 8 defect 3 wearing different clothes. `git stash push` printed
+success and left nothing. `pytest --cov` printed a warning and produced no
+report. Both printed something and did not do the thing.
+
+**I published a coverage cost I could not measure, and I withdrew it.** I first
+wrote that coverage tracing cost 1.2 seconds, by comparing one covered run at
+231.84 s against one uncovered run at 230.65 s. Round two then produced an
+uncovered run at 118.19 s, which is faster than either covered run. The honest
+statement is that the run-to-run spread on this host is 112 seconds and the
+coverage cost is smaller than that, so this host cannot resolve it at all. The
+number is in the runner table at the end of this section instead.
+
+**The documented floor of 2553 does not reproduce, and I did not explain it.**
+I measure 2559 on commit `0b57667` in this worktree across six runs, all six
+reports byte-identical. The runner measures 2560 on the same commit under
+CPython 3.12.14 on Linux. The document says 2553. That is a spread of 7
+statements across three environments.
+
+I ruled out what I could and I am not going to guess past that. Ruled out: the
+`frontend/dist` question in section 2, because `frontend/dist` is absent here,
+which is the 2553 case and not mine. Ruled out: xdist, because the serial and
+parallel reports are identical. Ruled out: `COV_CORE_SOURCE`, because the report
+is identical with and without it.
+
+What I did establish is that **the number is platform and version dependent**,
+which section 2 does not say. Two environments I control measure 2559 and 2560.
+So "the floor" is not one number until someone fixes the interpreter and the
+operating system in the same sentence as the percentage.
+
+The number to defend from here is **2560 on the runner**, because the runner is
+what the gate runs on, and 2559 in a Windows worktree. Both are 4.88 points
+above the floor, so the discrepancy cannot move the gate either way. The
+orchestrator should correct section 2 and record which environment 2553 came
+from, or record that it cannot be reproduced.
+
+### One more instance of the section 7 flake, now on a runner
+
+Run `37096412514` on this branch went red on the backend job. The same code had
+been green on run `37096073587`. The only difference between the two commits is
+this document, which coverage does not measure and no test reads.
+
+    tests/test_wf069.py::TestOneTimeCodeHashing::test_codes_do_not_repeat_in_a_small_sample
+    assert len(minted) == 200
+    E   AssertionError: assert 199 == 200
+
+**This is the flake section 7 already measured, not a new defect.** The proof is
+in the source, not in a guess. `mint_code` is
+`str(secrets.randbelow(10**digits)).zfill(digits)`, so the code space is
+1,000,000. The test takes 200 samples and asserts all 200 differ. The birthday
+probability of at least one collision is about 1.97 percent, and section 7
+measured it at 1.75 percent over 2,000 real calls. This run drew exactly one
+collision.
+
+**The coverage gate passed in the same job.** The log shows
+`TOTAL 50045 2560 95%` and the gate reported 2560 missed, identical to the
+previous run. The job went red because a test failed, not because coverage fell.
+
+I did not touch `backend/tests/test_wf069.py`. That path is another agent's
+territory, and section 7 says the honest fix is to seed the random source rather
+than to widen the sample or delete the assertion. I re-ran CI instead, which is
+the correct response to an event that happens about twice in every hundred runs.
+
+### What I asked for and then withdrew
+
+My brief told me to confirm the pip cache key covered `backend/pyproject.toml`.
+I confirmed it, and the log showed `Cache restored successfully`, so the key was
+right. **I removed the cache anyway.**
+
+The speed agent measured it on this runner, in section 10 above, and their
+numbers are about the backend job specifically:
+
+| Step | n | min | median | max |
+|---|---|---|---|---|
+| Backend tests, install, **no** cache | 12 | 6 | 10 | 13 |
+| Lint, install, **has** cache | 12 | 7 | 9 | 11 |
+| `setup-python`, **has** cache | 12 | 1 | 2 | 4 |
+| `setup-python`, **no** cache | 12 | 0 | 0 | 1 |
+
+A cached install is 1 s faster at the median and the distributions overlap, so
+that 1 s is inside the noise. The cache step costs 2 s against 0 s. **Net
+effect about minus 1 second per Python job.** The install resolves 34 packages
+in about 10 s, so the download the cache replaces is the small part of it.
+
+Shipping a measured one-second regression to satisfy a line in a task brief is
+the wrong trade. The note is left in `ci.yml` so the next agent does not add it
+back without reading section 10 first.
+
+**The comment printed a path that does not exist, and I only noticed by reading
+the posted comment.** `normalise_path` began with `str.lstrip("./")`, which
+strips every leading dot and every leading slash, not the `./` prefix. So
+`.github/workflows/ci.yml` came out as `github/workflows/ci.yml`. The lookup
+still worked, because both sides go through the same function, so nothing failed
+and nothing looked wrong. The number was right and the table was empty and the
+check was green.
+
+A reviewer reading that comment could not act on `github/workflows/ci.yml`,
+because there is no such file. The fix removes a leading `./` only. Four cases
+were added to the self-test, because a check that passes on a wrong path is
+exactly the failure mode this document keeps warning about.
+
+### The job time, before and after
+
+**Merged note, 2026-10-03.** The speed agent landed PR 100 while this branch was
+open, and it edited `.github/workflows/ci.yml` and this file. The comment
+markers did what they were put there for: the conflict was textual and the
+resolution was mechanical. Two things changed and both are deliberate.
+
+1. The speed agent's `Run the suite` step is **absorbed, not deleted**. Two suite
+   runs would double this job to measure one number, and the second run would
+   report a different coverage figure from the one the gate has just judged. Its
+   measurement comment is kept verbatim inside `# >>> SPEED AGENT NOTE` so the
+   reasoning survives.
+2. Both agents had written a section 9 here. The speed agent's is now section 10,
+   and the two cross references in `ci.yml` were repointed at it. Nothing was
+   dropped.
+
+Read from GitHub Actions. Same runner image, same 11,129 tests, all passing.
+
+| Run | Branch | Backend tests job | What changed |
+|---|---|---|---|
+| `37053160255` | `main` | **118 s** | `python -m pytest`, no coverage |
+| `37096073587` | `ci-coverage` | **221 s** | same suite, plus `--cov=dsr`, plus the gate |
+
+**Coverage costs about 103 seconds on the backend job, an 87 percent increase.**
+The local host cannot see this at all, and its run-to-run spread on identical
+code is 112 seconds. This is the clearest argument in the document for the rule
+section 7 states: a local number and a runner number are not the same
+measurement, and only the runner is reproducible.
+
+The pip cache does restore. The log shows
+`Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-...`,
+so `cache-dependency-path: backend/pyproject.toml` is the right key and it is
+being honoured. Part of the 103 seconds is the cache miss on the first run that
+introduced it, and part is coverage tracing. I did not separate the two, because
+separating them needs a second runner run with the cache already warm and the
+speed agent owns CI timing.
+
+### What the runner actually measured
+
+The gate ran on the runner and read the runner's own report:
+
+    measured total   : 94.88460 percent
+    agreed floor     : 90.0 percent
+    covered          : 47485 of 50045 statements
+    missed           : 2560 statements
+    files measured   : 399
+    files below floor: 45
+    files this change touched: 0 measured of 6 changed
+    PASS. Coverage 94.88460 percent is at or above the 90.0 percent floor.
+
+    11127 passed, 2 xfailed, 5 warnings in 193.75s
+
+**The number is platform and version dependent, and now I have both ends of that
+measured rather than assuming it.**
+
+| Where | Interpreter | missed | percent |
+|---|---|---|---|
+| this worktree, Windows | CPython 3.13.15 | 2559 | 94.88660 |
+| the runner, Linux | CPython 3.12.14 | 2560 | 94.88460 |
+| `orchestration/TEST-REFACTOR.md` section 2 | unrecorded | 2553 | 94.89859 |
+
+One statement is platform dependent. Both measured numbers clear the 90 percent
+floor by about 4.88 points, so the gate behaves the same on both.
+
+### What I could not do
+
+* I did not reproduce 2553. The spread across three environments is 7
+  statements. I established that the number is platform and version dependent
+  and I stopped there.
+* I did not separate the cost of coverage tracing from the cost of the first
+  cold pip cache on the runner. Both landed in the same 103 seconds.
+* I did not add a coverage gate to the frontend. `@vitest/coverage-v8` is not
+  installed and the existing comment in `ci.yml` records that as a decision for
+  a human. This gate is the backend package only.
+* I did not add `backend/.coverage` or `backend/*.json` to `.gitignore`. That
+  file belongs to whoever owns it, and the report artefacts are written only on
+  a runner. They are left out of every commit here by explicit path rather than
+  by ignore rule.
+* I did not add a required status check. That is a repository setting, not a
+  file, and until `main` is protected a red coverage job does not stop a merge.
+  **The gate is only as strong as the ruleset, and the ruleset is still empty.**
+  That is the one thing left to do, and it needs a human with admin rights.
+
+---
+
+## 10. Agent SPEED: what the CI workflow actually costs
 
 I wrote this section for the next agent who gets the same task. Read the numbers
 before forming an opinion. Five of the six candidates in the speed brief are
