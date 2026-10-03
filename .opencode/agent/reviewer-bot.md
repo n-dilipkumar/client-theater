@@ -2,7 +2,7 @@
 name: reviewer-bot
 description: Use to review a Digital Sales Room feature branch before merge. Checks the diff against the repo standards and the ticket's scope, runs the tests, and returns a quality score against the merge threshold. Use after a feature is implemented and its tests pass.
 mode: subagent
-model: opencode-go/opencode-go/space-bunny-free
+model: opencode/space-bunny-free#max
 tools:
   - read
   - grep

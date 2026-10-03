@@ -7,7 +7,7 @@ Orchestrator and every sub-agent must follow.
 
 | Role | Model | Notes |
 |------|-------|-------|
-| Orchestrator and all sub-agents | `opencode-go/opencode-go/space-bunny-free` | The only model permitted for implementation work. |
+| Orchestrator and all sub-agents | `opencode/space-bunny-free#max` | The only model permitted for implementation work. Pinned in `opencode.json` for every agent; reasoning effort is `max`. |
 | Validation and decisions | `jev-latest` via `pi` / the Jev bridge | Never an LLM opinion. See "Validation" below. |
 
 **Jev is not an OpenCode model.** It is a TypeSafe System One model reached over

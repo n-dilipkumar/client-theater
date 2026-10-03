@@ -2,7 +2,7 @@
 name: ui-verifier
 description: Use when a Digital Sales Room feature must be verified visually in a real browser on localhost. Opens the app, exercises the feature, captures screenshots, and checks it against design-system/digital-sales-room/MASTER.md. Use after a feature is built and tested but before it is called done.
 mode: subagent
-model: opencode-go/opencode-go/space-bunny-free
+model: opencode/space-bunny-free#max
 tools:
   - read
   - grep
