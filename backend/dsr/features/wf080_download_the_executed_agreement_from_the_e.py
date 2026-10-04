@@ -54,11 +54,13 @@ sentence.
 and 200 on a repeat, with ``outcome: "duplicate"``. A repeat is not a fault and must not
 be reported as one: the vendor would read 201 as a state change it did not get.
 
-**Two variants that are not interchangeable.** The two retrieval routes are separate
-paths rather than one route with a flag, because "the ``/download-protected`` endpoint
-always returns the same digitally sealed PDF file, while ``/download`` allows for
-watermark customization" is a statement about two endpoints. One path per endpoint also
-makes the watermark a body field on exactly the endpoint that accepts one.
+**Two variants that are not interchangeable.** The two retrieval routes are separate paths
+rather than one route with a flag, because "the ``/download-protected`` endpoint always
+returns the same digitally sealed PDF file, while ``/download`` allows for watermark
+customization" is a statement about two endpoints. One path per endpoint only holds if the
+sealed path cannot be made to serve the plain one, so ``/retrieve`` refuses a body naming
+``variant: "plain"`` and refuses a ``watermark`` outright, rather than quietly honouring
+either.
 
 The statuses here are the researched ones
 -----------------------------------------
@@ -642,18 +644,33 @@ def retrieve(
     * **401** or **429**, mapped by the handlers above, with the code the specification
       names.
 
-    A body may carry ``environment`` to stand in for the vendor key's environment, and a
-    plain retrieval may carry ``watermark``. A watermark sent to the sealed variant is
-    ignored rather than refused, because the sealed bytes must not vary with the caller:
-    see ``DERIVED_ARTIFACT_BYTES``.
+    A body may carry ``environment`` to stand in for the vendor key's environment. It may not
+    carry ``variant``: this route *is* the sealed variant, and reading the variant from the
+    body would let a POST here return watermarked bytes from the path documented as the
+    sealed write half. A body that names the plain variant is refused rather than ignored,
+    because a caller that asked for one endpoint and was served the other has been misled
+    quietly, and a quiet misdirection on a sealed artifact is the failure this workflow most
+    needs to avoid. A watermark sent here is likewise refused, since the sealed bytes must
+    not vary with the caller: see ``DERIVED_ARTIFACT_BYTES``.
     """
+
+    requested = payload.get("variant")
+    if requested is not None and rules.coerce_variant(requested) != vocab.VARIANT_SEALED:
+        raise rules.DocumentInvalid(
+            "This route retrieves the sealed variant. Use retrieve-plain for the plain one.",
+            {"variant": "variant is not a field on this route."},
+        )
+    if payload.get("watermark"):
+        raise rules.DocumentInvalid(
+            "The sealed variant does not take a watermark. Use retrieve-plain for that.",
+            {"watermark": "watermark is not a field on this route."},
+        )
 
     result = engine.retrieve(
         document_id,
         room_id=room_id,
-        variant=payload.get("variant") or vocab.VARIANT_SEALED,
+        variant=vocab.VARIANT_SEALED,
         environment=payload.get("environment"),
-        watermark=payload.get("watermark"),
         actor=actor,
         source=_source("POST", "/rooms/{room_id}/documents/{document_id}/retrieve"),
     )

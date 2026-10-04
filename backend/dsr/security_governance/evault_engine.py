@@ -609,13 +609,12 @@ class EvaultEngine:
                 "detail": "The signed document file is not ready yet.",
             }
 
-        # The document is sealed, so the file is in the vault and the retrieval is a
-        # fetch rather than a wait. `_build_artifact` returns the stored sealed artifact
-        # when one exists and builds the bytes when one does not, so asking twice is
-        # idempotent for the sealed variant and produces a new file for the plain one.
+        # The document is sealed, so the file is in the vault and the retrieval is a fetch
+        # rather than a wait. `_build_artifact` returns the stored sealed artifact when one
+        # exists and builds the bytes when one does not, so asking twice is idempotent for
+        # the sealed variant and produces a new file for the plain one. It cannot return
+        # None: the row was resolved above and neither branch is conditional on anything else.
         artifact = self._build_artifact(document_id, chosen_variant, watermark, source, actor)
-        if artifact is None:  # pragma: no cover - the row was resolved a few lines above
-            raise rules.DocumentNotFound(document_id)
 
         attempt = self._record_attempt(
             document_id,
@@ -925,7 +924,7 @@ class EvaultEngine:
         watermark: str | None,
         source: str | None,
         actor: str | None,
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, Any]:
         """Build and store the artifact for a document whose vault read succeeded.
 
         The bytes come from :func:`~dsr.security_governance.evault_rules.build_pdf`, which
@@ -935,8 +934,9 @@ class EvaultEngine:
         same sealed artifact twice must not write a second row, because a second row would
         suggest the vault can hold two different sealed copies of one agreement.
 
-        Returns the stored record, or ``None`` for the sealed variant when one already
-        exists, which the caller reads as "serve the stored one".
+        Always returns a record. The sealed variant returns the stored one when it exists and
+        builds it otherwise; the plain variant builds a new record every time, because a
+        watermark is meant to change the bytes.
         """
         if variant == vocab.VARIANT_SEALED:
             existing = self._artifact(document_id, vocab.VARIANT_SEALED)

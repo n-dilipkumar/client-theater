@@ -597,10 +597,31 @@ class TestTheRetrievalRoutes:
         assert plain["watermark"] == "NORTHWIND CONFIDENTIAL"
         assert plain["byte_stable"] is False
 
-    def test_the_sealed_route_ignores_a_watermark(self, client: TestClient):
+    def test_the_sealed_route_refuses_a_watermark(self, client: TestClient):
+        """Refused, not ignored.
+
+        An ignored watermark would leave a caller who asked for one believing it had been
+        applied. The sealed bytes must not vary with the caller, and the caller is told.
+        """
         document = make_document(client, state=vocab.STATE_SEALED)
-        body = retrieve(client, ROOM_A, document["id"], watermark="ACME").json()
-        assert body["artifact"]["watermark"] == ""
+        response = retrieve(client, ROOM_A, document["id"], watermark="ACME")
+        assert response.status_code == 400
+        assert "watermark" in response.json()["errors"]
+
+    def test_the_sealed_route_refuses_to_serve_the_plain_variant(self, client: TestClient):
+        """One path per endpoint only holds if the sealed path cannot be made to serve the
+        other. Without this a POST to /retrieve with `variant: "plain"` returned watermarked
+        bytes from the path documented as the sealed write half."""
+        document = make_document(client, state=vocab.STATE_SEALED)
+        response = retrieve(client, ROOM_A, document["id"], variant=vocab.VARIANT_PLAIN)
+        assert response.status_code == 400
+        assert "variant" in response.json()["errors"]
+
+    def test_the_sealed_route_still_accepts_the_sealed_variant_by_name(self, client: TestClient):
+        document = make_document(client, state=vocab.STATE_SEALED)
+        response = retrieve(client, ROOM_A, document["id"], variant=vocab.VARIANT_SEALED)
+        assert response.status_code == 200
+        assert response.json()["variant"] == vocab.VARIANT_SEALED
 
     def test_the_throttle_answers_429_with_the_named_code(self, client: TestClient):
         document = make_document(client, state=vocab.STATE_SEALED)
@@ -871,13 +892,27 @@ class TestTheHonestyRule:
     The specification forbids describing a generated file as a digitally sealed artifact,
     and the cheapest way to keep that true is to make the caveat part of the data rather
     than part of a page someone has to remember to render.
+
+    **JSON responses**, precisely. The mirrored download route is the one exception and the
+    exception is deliberate: it answers the vendor's own shape, and a `202` from that endpoint
+    carries a `Retry-After` header and no body. Adding a caveat to it would break the
+    compatibility that is the whole point of mirroring it, so the rule is stated for what it
+    covers rather than overstated. ``test_the_binary_download_is_the_one_exception`` pins the
+    exception so it cannot widen unnoticed.
     """
 
+    #: The routes that answer JSON with no path parameters beyond the room.
     READ_ROUTES = (
         "/summary",
         "/vocabulary",
         "/whoami",
+        "/decisions",
     )
+
+    #: Path markers that identify a route answering bytes rather than JSON. One marker per
+    #: byte-serving route, and `test_the_binary_download_is_the_one_exception` asserts the
+    #: count, so a new byte route cannot be added without this list growing with it.
+    BYTE_ROUTE_MARKERS = ("/download-protected",)
 
     def test_the_four_fields_are_the_researched_sentences(self):
         assert vocab.EFFECT == "recorded_not_verified"
@@ -890,6 +925,59 @@ class TestTheHonestyRule:
         for path in self.READ_ROUTES:
             body = client.get(f"{PREFIX}{path}", params={"room_id": ROOM_A}).json()
             self._assert_carries(body, path)
+
+    def test_every_json_route_this_router_serves_carries_them(self, client: TestClient):
+        """The read routes above are a sample, so the rule is checked against the route table.
+
+        Every `GET` that returns JSON rather than bytes is walked here. ``APIRouter.routes``
+        already carry the prefix, so these paths are absolute. The byte-serving route is
+        excluded by name, and the next test asserts there is exactly one of them, so the
+        exclusion cannot quietly grow.
+        """
+        module = importlib.import_module(FEATURE_MODULE)
+        document = make_document(client, state=vocab.STATE_SEALED)
+        retrieve(client, ROOM_A, document["id"])
+
+        json_paths = [
+            route.path
+            for route in module.router.routes
+            if "GET" in (route.methods or set())
+            and not any(marker in route.path for marker in self.BYTE_ROUTE_MARKERS)
+        ]
+        assert len(json_paths) >= 8, json_paths
+
+        walked: list[str] = []
+        for path in json_paths:
+            concrete = (
+                path.replace("{room_id}", ROOM_A)
+                .replace("{document_id}", document["id"])
+                .replace("{artifact_id}", "wa_absent")
+                .replace("{subscription_id}", "sub_absent")
+                .replace("{decision_id}", "DERIVED_RETRY_AFTER_SECONDS")
+            )
+            response = client.get(concrete)
+            # A 404 is a refusal, and a refusal carries the fields too, so it is still read.
+            assert response.status_code in (200, 404), (path, response.status_code)
+            self._assert_carries(response.json(), path)
+            walked.append(path)
+
+        assert len(walked) == len(json_paths)
+
+    def test_the_binary_download_is_the_one_exception(self, client: TestClient):
+        """Stated as a fact about the route table rather than left unasserted.
+
+        One GET serves bytes, so it is the only route that cannot carry four JSON fields. The
+        count is asserted, and the excluded markers are checked to cover every one of them, so
+        a second byte-serving route cannot appear unnoticed.
+        """
+        module = importlib.import_module(FEATURE_MODULE)
+        streaming = [
+            route.path
+            for route in module.router.routes
+            if "GET" in (route.methods or set())
+            and any(marker in route.path for marker in self.BYTE_ROUTE_MARKERS)
+        ]
+        assert len(streaming) == 1, streaming
 
     def test_every_created_row_carries_them(self, client: TestClient):
         self._assert_carries(make_subscription(client), "subscription")
@@ -935,6 +1023,22 @@ class TestTheHonestyRule:
             assert "signature verified" not in joined
             assert "certificate validated" not in joined
             assert body[vocab.EFFECT_FIELD] == "recorded_not_verified"
+
+    def test_the_served_bytes_never_claim_a_seal(self, client: TestClient):
+        """The JSON envelope is discarded the moment a reader forwards the file.
+
+        So the bytes are read here, not the body around them. The four fields above prove the
+        envelope is honest; this proves the deliverable is too.
+        """
+        document = make_document(client, state=vocab.STATE_SEALED)
+        retrieve(client, ROOM_A, document["id"])
+        response = client.get(
+            f"{PREFIX}/rooms/{ROOM_A}/documents/{document['id']}/download-protected"
+        )
+        assert response.status_code == 200
+        body = response.content.decode("latin-1").lower()
+        assert "digitally sealed" not in body
+        assert "no vendor signed" in body
 
     def test_an_artifact_says_it_is_generated(self, client: TestClient):
         document = make_document(client, state=vocab.STATE_SEALED)

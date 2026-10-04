@@ -260,7 +260,15 @@ export const PDF_READY_TRIGGER = 'document_completed_pdf_ready'
 /** The dedupe header, spelled once. */
 export const DEDUPE_HEADER = 'X-PandaDoc-Webhook-Event-Id'
 
-/** The four sentences the server sends with every response, restated for the render path. */
+/**
+ * Fallbacks for the render before the first response lands.
+ *
+ * These three are close paraphrases of the server's sentences, not copies of them. The
+ * server's `VARIANT_TRADEOFF` names both concrete vendor endpoints and this one does not,
+ * because a sentence that arrives after the first paint is the wrong place to learn what a
+ * seal is worth. Once any response has landed the page renders the server's own field, so
+ * everything a reader actually reads comes from the API and the two cannot disagree.
+ */
 export const HONESTY_FIELDS = ['effect', 'tradeoff', 'seal_scope', 'no_polling']
 
 /**
@@ -270,8 +278,8 @@ export const HONESTY_FIELDS = ['effect', 'tradeoff', 'seal_scope', 'no_polling']
  * SHA-256 digest, so what it can prove is that the file has not changed. It does not
  * validate a certificate chain, and it does not verify a signature it cannot see." The page
  * renders this above the fold rather than in a footnote, because a page that opens with a
- * download button and no caveat is the reading the specification forbids. The server sends
- * the same sentence with every response, so the page and the API cannot disagree.
+ * download button and no caveat is the reading the specification forbids. This is the
+ * pre-response fallback; once a response has landed the page renders `seal_scope` from it.
  */
 export const SEAL_SCOPE_FALLBACK =
   'A sealed artifact is byte-stable and immutable. This room records the bytes and their ' +
