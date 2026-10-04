@@ -5,19 +5,17 @@ when the room will try again. Both need the same three things: an ISO string tha
 sorts lexicographically, a parse that treats a naive value as UTC rather than
 guessing, and a ``plus_seconds`` that keeps the arithmetic in one line.
 
-The vocabulary is deliberately small. A module that needed four date helpers
-would be a module whose dates disagreed.
+The vocabulary is deliberately small, and there is deliberately **no**
+``utcnow()``. The clock belongs to :class:`~dsr.throttle.engine.ThrottleEngine`,
+which takes one as a constructor argument so a test can place a batch at a moment
+and move it without sleeping. A module-level "now" would be a second, untestable
+clock competing with it.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
-
-
-def utcnow() -> datetime:
-    """The current instant, in UTC."""
-    return datetime.now(timezone.utc)
 
 
 def iso(moment: datetime) -> str:
@@ -59,4 +57,4 @@ def plus_seconds(moment: datetime, seconds: float) -> datetime:
     return moment + timedelta(seconds=int(seconds))
 
 
-__all__ = ["utcnow", "iso", "parse_instant", "plus_seconds"]
+__all__ = ["iso", "parse_instant", "plus_seconds"]

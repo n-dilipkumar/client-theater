@@ -44,6 +44,7 @@ from dsr.throttle import (
     keys as throttle_keys,
     policies as throttle_policies,
     quota as throttle_quota,
+    timestamps as throttle_timestamps,
     vocabulary,
 )
 from dsr.throttle.engine import ThrottleEngine
@@ -772,6 +773,63 @@ def test_same_reads_two_absences_as_no_match_rather_than_as_a_kept_key():
     assert throttle_keys.same(None, "") is False
     assert throttle_keys.same("", "") is False
     assert throttle_keys.same("k", "j") is False
+
+
+# --------------------------------------------------------------------------- #
+# Instants, and the one that must not crash the queue
+# --------------------------------------------------------------------------- #
+
+
+def test_an_instant_is_written_with_seconds_so_two_lines_of_one_decision_can_tie():
+    """Seconds precision, not laziness: the throttle log's ordering breaks a tie on
+    insertion order, and a deferral writes several lines at the same instant."""
+    assert throttle_timestamps.iso(NOW) == "2026-09-27T12:00:00+00:00"
+    assert throttle_timestamps.iso(NOW.replace(microsecond=123456)) == "2026-09-27T12:00:00+00:00"
+
+
+def test_a_naive_instant_is_read_as_utc_rather_than_as_local_time():
+    """Treating it as local would make the same row defer for a different length of
+    time depending on which machine read it."""
+    assert throttle_timestamps.parse_instant(datetime(2026, 9, 27, 12, 0)) == NOW
+    assert throttle_timestamps.parse_instant("2026-09-27T12:00:00") == NOW
+    assert throttle_timestamps.parse_instant(NOW) == NOW
+
+
+def test_an_instant_the_room_cannot_read_is_absent_rather_than_an_exception():
+    """A corrupt ``next_attempt_at`` must not take the queue down. Absent means
+    "due now", which is what a batch nobody holds a schedule for should be."""
+    for junk in ("not a date", "", None, 0, [], {}):
+        assert throttle_timestamps.parse_instant(junk) is None, junk
+
+
+def test_a_corrupt_schedule_does_not_stop_the_drain(engine, room):
+    """The end-to-end consequence of the line above, on the route that reads it.
+
+    The batch is deferred first, because that is the state the drain works on: a
+    batch nobody has sent yet is ``proceeding``, and the drain correctly leaves it
+    alone. Driven through the engine rather than by poking the parser, because a
+    test that calls the parser proves the parser works and not that the queue
+    survives a record written by something else.
+    """
+    connection = make_connection(engine, room, "salesforce")
+    batch = engine.submit(
+        room["id"], {"connection_id": connection["id"], "rows": rows(1)}, source="test"
+    )
+    engine.observe(
+        room["id"],
+        batch["id"],
+        {"status": 429, "headers": {"Retry-After": "600"}},
+        source="test",
+    )
+    stored = engine.store.get(batch["id"])
+    engine.store.update(
+        batch["id"],
+        {**stored["data"], "next_attempt_at": "the day before yesterday"},
+        source="test",
+    )
+    # Unreadable means absent, and absent means due now, so the queue sends it
+    # rather than skipping a batch it can never read a schedule for.
+    assert batch["id"] in engine.drain(room["id"], source="test")["retried"]
 
 
 # --------------------------------------------------------------------------- #
