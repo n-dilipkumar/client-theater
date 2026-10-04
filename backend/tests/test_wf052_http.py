@@ -3,7 +3,7 @@
 What is under test, and why
 ---------------------------
 
-The domain rules live in ``tests/test052.py``. What is here is the half the
+The domain rules live in ``tests/test_wf052.py``. What is here is the half the
 domain cannot see:
 
 * the router is **mounted by discovery alone**, with no edit to ``dsr/api.py``

@@ -3,7 +3,7 @@
 What is under test, and why
 ---------------------------
 
-The HTTP surface is in ``tests/test052_http.py``. What is here is the layer under
+The HTTP surface is in ``tests/test_wf052_http.py``. What is here is the layer under
 it, where the claims this workflow exists to make actually live:
 
 * ``qualify`` **writes nothing**. Counted, not asserted: the row count and the
@@ -234,6 +234,14 @@ def test_an_ordered_comparison_never_matches_a_non_number():
     assert compare("gte", "many", 200) is False
     assert compare("gte", None, 200) is False
     assert compare("gte", True, 0) is False
+
+
+def test_a_boolean_is_compared_as_the_word_a_form_would_send():
+    """A checkbox posts "true", and a rule may name the boolean instead."""
+    assert compare("equals", "true", True) is True
+    assert compare("equals", "false", True) is False
+    assert compare("not_equals", "false", True) is True
+    assert compare("equals", "TRUE", True) is True
 
 
 def test_a_comparison_against_a_missing_field_is_false():
