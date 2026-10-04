@@ -22,6 +22,8 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { Field, inputClass } from '@/components/ui'
+
 import page from './index'
 import {
   DOCUMENT_STATES,
@@ -31,7 +33,14 @@ import {
   outcomeLabel,
   stateLabel,
 } from './api'
-import { RetryBanner, RetryCountBadge, VariantMatrix, OutcomeBadge } from './primitives'
+import {
+  INPUT_CLASS,
+  OutcomeBadge,
+  RetryBanner,
+  RetryCountBadge,
+  Select,
+  VariantMatrix,
+} from './primitives'
 
 // The host reads the default export as the descriptor, so the page is reached through
 // `page.Component` rather than as a named export. Rendering the descriptor itself would
@@ -757,28 +766,45 @@ describe('loading, empty and error', () => {
 })
 
 // --------------------------------------------------------------------------- //
-// the accessibility floor, measured on the source
+// the accessibility floor, measured on the components
 // --------------------------------------------------------------------------- //
 
 describe('the accessibility floor', () => {
-  it('gives every button the shared 44px floor rather than a local one', () => {
+  it('gives its own select the shared 44px floor', () => {
+    // The control that re-declares `inputClass` for a `<select>`. Rendering it here is the
+    // point: a copy of the shared string is exactly the thing that can drift, so the copy is
+    // what gets asserted against the original, not a hand-written button.
     render(
-      <button type="button" className="min-h-11">
-        Save
-      </button>,
+      <Field label="Room" id="floor-room">
+        <Select id="floor-room" value="room_a" onChange={() => {}}>
+          <option value="room_a">Northwind</option>
+        </Select>
+      </Field>,
     )
-    expect(screen.getByRole('button', { name: 'Save' }).className).toContain('min-h-11')
+    const control = screen.getByLabelText('Room')
+    expect(control.tagName).toBe('SELECT')
+    expect(control.className).toBe(INPUT_CLASS)
+    expect(control.className).toContain('min-h-11')
   })
 
-  it('puts a word in every outcome badge', () => {
-    render(<OutcomeBadge outcome="back_pressure" label="Wait and retry" />)
-    expect(screen.getByText('Wait and retry')).toBeTruthy()
+  it('keeps its select copy identical to the shared inputClass', () => {
+    // The claim in primitives.jsx that "a test asserts the two match". This is that test.
+    expect(INPUT_CLASS).toBe(inputClass)
   })
 
-  it('never relies on colour alone for an outcome', () => {
+  it('gives every outcome badge a word, not only a colour', () => {
     render(<OutcomeBadge outcome="throttled" label="Throttled" />)
     const badge = screen.getByText('Throttled')
-    expect(badge.textContent).toContain('Throttled')
     expect(badge.className).toContain('font-mono')
+  })
+
+  it('gives every outcome badge a distinct label for each of the five outcomes', () => {
+    for (const outcome of FETCH_OUTCOMES) {
+      const { unmount } = render(
+        <OutcomeBadge outcome={outcome.id} label={outcomeLabel(outcome.id)} />,
+      )
+      expect(screen.getByText(outcomeLabel(outcome.id))).toBeTruthy()
+      unmount()
+    }
   })
 })

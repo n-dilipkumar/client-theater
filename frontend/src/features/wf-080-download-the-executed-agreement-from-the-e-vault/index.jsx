@@ -909,11 +909,13 @@ function EvaultDownloadPage() {
 
       {honesty.effect === 'recorded_not_verified' && (
         <p className="text-xs text-muted-foreground">
-          Every response from this feature carries <span className="font-mono">effect</span>,{' '}
+          Every JSON response from this feature carries <span className="font-mono">effect</span>,{' '}
           <span className="font-mono">tradeoff</span>,{' '}
           <span className="font-mono">seal_scope</span> and{' '}
           <span className="font-mono">no_polling</span>, so a client cannot read a control here
-          without also reading what it is worth.
+          without also reading what it is worth. The one exception is the mirrored download
+          route, which answers the vendor's own shape: a 202 with a Retry-After header and no
+          body at all.
         </p>
       )}
     </div>

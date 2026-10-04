@@ -113,7 +113,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
             "answer the question the specification implies the key exists for, which is "
             "joining a delivery to the document it concerns. A derivation is stable, "
             "reproducible, and carries nothing secret: it is a join value that two code "
-            "paths can compute identically, and no route in this workflow presents it."
+            "paths can compute identically, and nothing authenticates with it."
         ),
         "cost_of_the_choice": (
             "The key is predictable to anyone who knows the document id, which is why it is "

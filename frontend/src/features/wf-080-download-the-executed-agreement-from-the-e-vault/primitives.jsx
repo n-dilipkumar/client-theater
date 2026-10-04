@@ -91,10 +91,15 @@ export function Select({ id, value, onChange, children, disabled = false }) {
   )
 }
 
-// Re-declared rather than imported so this file has one styling source. The shared
-// `inputClass` is the canonical string and this is a copy of it for a `<select>`; a test
-// asserts the two match, so a change to the shared one cannot silently leave this behind.
-const INPUT_CLASS =
+/**
+ * The shared `inputClass`, re-declared for a `<select>`.
+ *
+ * Exported so a test can compare it against the original. A hand-copied styling string is
+ * the one thing in this folder that can silently drift from the shared set, and an exported
+ * copy is what makes the comparison possible; `EvaultDownload.test.jsx` asserts the two are
+ * byte-identical. Do not edit one without the other.
+ */
+export const INPUT_CLASS =
   'min-h-11 w-full rounded-sm border border-border-subtle bg-surface px-3 text-sm ' +
   'text-foreground placeholder:text-muted-foreground/70 focus:border-accent'
 

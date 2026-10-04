@@ -155,8 +155,9 @@ VARIANT_ENDPOINTS = {
 #: than paraphrased there, so the page cannot drift from the evidence.
 VARIANT_SUMMARIES = {
     VARIANT_SEALED: (
-        "Digitally sealed and verifiable. The same bytes for every request, so the "
-        "artifact is immutable and its digest is the proof."
+        "The vendor's sealed endpoint returns a digitally sealed and verifiable file, and "
+        "the same bytes for every request. What this room stores is generated, so what it can "
+        "prove is that those bytes have not changed."
     ),
     VARIANT_PLAIN: (
         "The plain PDF. A watermark or branding can be applied, so the bytes differ "
@@ -315,8 +316,8 @@ PDF_MEDIA_TYPE = "application/pdf"
 # --------------------------------------------------------------------------- #
 #
 # The specification records "429 -> ``throttled``" without saying when a room is
-#: throttled. The window and the count are derived, recorded as DERIVED_THROTTLE_WINDOW
-#: and DERIVED_THROTTLE_LIMIT in dsr.security_governance.evault_inferences.
+#: throttled. The window and the count are derived together, and the derivation is recorded
+#: as DERIVED_THROTTLE_WINDOW in dsr.security_governance.evault_inferences.
 
 #: The width of the sliding window, in seconds.
 THROTTLE_WINDOW_SECONDS = 60

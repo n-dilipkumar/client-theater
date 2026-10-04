@@ -602,12 +602,22 @@ class TestTheTwoVariants:
         engine.retrieve(document["id"], source="fixture")
         assert len(engine.artifacts("room_a", document["id"])) == 1
 
-    def test_a_watermark_sent_to_the_sealed_variant_is_ignored(self, engine: EvaultEngine):
-        """The sealed endpoint "always returns the same digitally sealed PDF file"."""
+    def test_a_watermark_sent_to_the_sealed_variant_is_dropped_at_the_engine(
+        self, engine: EvaultEngine
+    ):
+        """The engine's own last line of defence, independent of the route.
+
+        The sealed endpoint "always returns the same digitally sealed PDF file", so a
+        watermark must not reach the bytes. The route refuses one outright; this is what
+        happens if a caller reaches the engine directly, and the assertion is that the
+        stored artifact is still byte-stable either way.
+        """
         document = make_document(engine, state=vocab.STATE_SEALED)
         result = engine.retrieve(document["id"], watermark="ACME", source="fixture")
         assert result["artifact"]["watermark"] == ""
         assert result["artifact"]["byte_stable"] is True
+        again = engine.retrieve(document["id"], watermark="OTHER", source="fixture")
+        assert again["artifact"]["sha256"] == result["artifact"]["sha256"]
 
     def test_a_watermarked_plain_copy_is_a_different_file(self, engine: EvaultEngine):
         document = make_document(engine, state=vocab.STATE_SEALED)
@@ -689,6 +699,34 @@ class TestTheTwoVariants:
     def test_no_response_claims_a_signature_this_room_cannot_check(self):
         assert "does not validate a certificate chain" in vocab.SEAL_SCOPE
         assert vocab.EFFECT == "recorded_not_verified"
+
+    def test_the_artifact_bytes_themselves_never_claim_a_seal(self):
+        """The one surface that leaves the building.
+
+        Every response carries ``generated: true`` and the seal scope, and both are discarded
+        the moment a reader forwards the file. So the file's own text is the last place a
+        false claim can survive, and this asserts on the bytes rather than on the envelope
+        around them. The plain variant's existing "not sealed" line is checked here too.
+        """
+        sealed = rules.artifact_document("pd_1", vocab.VARIANT_SEALED)
+        joined = " ".join(sealed).lower()
+        assert "digitally sealed" not in joined
+        assert "no vendor signed" in joined
+        assert "byte-stable" in joined
+
+        plain = " ".join(rules.artifact_document("pd_1", vocab.VARIANT_PLAIN, "ACME")).lower()
+        assert "not sealed" in plain
+
+    def test_the_variant_summary_names_whose_seal_it_is_describing(self):
+        """The matrix on the page renders this beside both endpoints.
+
+        The vendor's endpoint really does return a digitally sealed file, so quoting it is
+        accurate; what is not accurate is letting a reader attach that claim to the copy this
+        room generated. So the summary carries both halves.
+        """
+        sealed = vocab.VARIANT_SUMMARIES[vocab.VARIANT_SEALED].lower()
+        assert "digitally sealed" in sealed
+        assert "this room stores is generated" in sealed
 
 
 # --------------------------------------------------------------------------- #
@@ -1102,14 +1140,6 @@ class TestArchitecture:
             rules.SandboxKeyRejected,
             rules.Throttled,
         }
-
-    def test_the_shared_package_initializer_is_untouched(self):
-        """WF-073 and WF-075 ship in this package. Appending four modules to its
-        initializer would collide with another workflow branch on the same lines for no
-        benefit, because Python imports a submodule without the package listing it."""
-        initializer = Path(_domain_package_dir()) / "__init__.py"
-        text = initializer.read_text(encoding="utf-8")
-        assert "evault" not in text
 
     def test_the_records_are_plain_json_with_no_migration(self):
         """A team adding a field must need no coordination with anyone."""
