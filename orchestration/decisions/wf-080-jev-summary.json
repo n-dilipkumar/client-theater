@@ -1,0 +1,11 @@
+{
+  "ticket": "WF-080",
+  "design": {
+    "audit_id": "jev-20261004T190605-30160-65828",
+    "verdict": "pass",
+    "passed": true,
+    "selected": "split_write_and_mirror",
+    "reason": "selected 'split_write_and_mirror' at confidence 0.99 (margin 0.98 over runner-up) >= 0.75",
+    "threshold": 0.75
+  }
+}
