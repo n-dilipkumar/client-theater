@@ -71,7 +71,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "timestamp_header": TIMESTAMP_HEADER,
             "timestamp_unit": "unix seconds",
         },
-        "change_it": "dsr/scheduling_meetings/signing.py:signing_input. Do not change it.",
+        "change_it": "dsr/meeting_webhook_fanout/signing.py:signing_input. Do not change it.",
     },
     {
         "id": "cancel-maps-to-deleted",
@@ -88,7 +88,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "meeting_update": "Updated",
             "canceled_meeting": "Deleted",
         },
-        "change_it": "dsr/scheduling_meetings/vocabulary.py:EVENT_TYPES.",
+        "change_it": "dsr/meeting_webhook_fanout/vocabulary.py:EVENT_TYPES.",
     },
     {
         "id": "one-flat-envelope-for-the-three-chili-types",
@@ -113,7 +113,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "out_of_scope": ["MEETING_STARTED", "MEETING_ENDED", "RECORDING_READY"],
         },
         "change_it": (
-            "dsr/scheduling_meetings/payloads.py:build_payload. Adding a wrapper is a "
+            "dsr/meeting_webhook_fanout/payloads.py:build_payload. Adding a wrapper is a "
             "per-subscription envelope mode, and it is a new collection field, not a "
             "migration."
         ),
@@ -135,7 +135,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "window_owner": "the consumer",
         },
         "change_it": (
-            "dsr/scheduling_meetings/signing.py:verify takes window_seconds and the "
+            "dsr/meeting_webhook_fanout/signing.py:verify takes window_seconds and the "
             "sender never passes one. A subscriber uses verify with the shipped window."
         ),
     },
@@ -157,7 +157,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         },
         "change_it": (
             "Set deployment_mode on the room to 'saas' to turn the policy on. "
-            "dsr/scheduling_meetings/fanout.py:validate_url."
+            "dsr/meeting_webhook_fanout/fanout.py:validate_url."
         ),
     },
     {
@@ -181,7 +181,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             ),
         },
         "change_it": (
-            "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.subscribe. The lookup is "
+            "dsr/meeting_webhook_fanout/fanout.py:MeetingWebhookFanout.subscribe. The lookup is "
             "a find() on two JSON paths, so adding a third dimension needs no migration."
         ),
     },
@@ -202,7 +202,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "per_room": True,
             "rotation": "a write to the key collection, audited",
         },
-        "change_it": "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.set_secret.",
+        "change_it": "dsr/meeting_webhook_fanout/fanout.py:MeetingWebhookFanout.set_secret.",
     },
     {
         "id": "one-attempt-and-a-person-redelivers",
@@ -220,7 +220,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "retryable_flag": "advice for the person reading the log, never a schedule",
         },
         "change_it": (
-            "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.emit. A ladder needs a "
+            "dsr/meeting_webhook_fanout/fanout.py:MeetingWebhookFanout.emit. A ladder needs a "
             "policy the research does not state, so it would need its own evidence."
         ),
     },
@@ -238,7 +238,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "delivery_rows": "one per enabled subscription it reached",
             "skip_reasons": ["subscription_disabled", "no_enabled_subscriptions"],
         },
-        "change_it": "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.emit.",
+        "change_it": "dsr/meeting_webhook_fanout/fanout.py:MeetingWebhookFanout.emit.",
     },
     {
         "id": "not-built",
