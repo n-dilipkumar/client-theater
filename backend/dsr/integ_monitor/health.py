@@ -25,6 +25,7 @@ from typing import Any, Mapping, Sequence
 from dsr.integ_monitor.errors import InvalidTelemetry
 from dsr.integ_monitor.timestamps import check_not_ahead, iso, parse_instant
 from dsr.integ_monitor.vocabulary import ERROR_CLASSES, require_vendor  # noqa: F401
+from dsr.throttle.classify import THROTTLE_STATUS, is_throttle_status
 
 #: The status-to-class mapping used when a sample names no class itself.
 #:
@@ -37,9 +38,17 @@ from dsr.integ_monitor.vocabulary import ERROR_CLASSES, require_vendor  # noqa: 
 #: same status means "forbidden" on one vendor and "limit exceeded" on
 #: another, and a connector that knows which should say so (see the
 #: ``throttle-is-429-and-the-vendors-word-wins`` inference).
+#:
+#: **Whether 429 is a throttle is now asked of :mod:`dsr.throttle.classify`.**
+#: Three modules in this product answer "which answers are a throttle" - this
+#: one, ``dsr.partial_failures``, and the throttle package that queues the
+#: retries - and the resolution recorded in ``orchestration/decisions`` is that
+#: there is one answer. So the status comes from that table and this mapping stays
+#: a statement about *error classes*, which is a question the throttle package does
+#: not have an opinion about.
 STATUS_CLASSES: tuple[tuple[int, str], ...] = (
     (401, "auth"),
-    (429, "throttle"),
+    (THROTTLE_STATUS, "throttle"),
 )
 
 #: Successful calls are not an error class, but the room records them so the
@@ -61,6 +70,10 @@ def class_from_status(status: int | None) -> str | None:
     status = int(status) if status is not None else None
     if status is None or status in OK_STATUSES:
         return None
+    if is_throttle_status(status):
+        # Delegated, so the dashboard cannot disagree with the queue about which
+        # calls were throttled. The loop below still carries the remaining pairs.
+        return "throttle"
     for boundary, error_class in STATUS_CLASSES:
         if status == boundary:
             return error_class

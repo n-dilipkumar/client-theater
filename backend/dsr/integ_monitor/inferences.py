@@ -33,6 +33,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from dsr.throttle.classify import THROTTLE_STATUS
+
 SOURCED_AUTOMATION = (
     "Quota polling on a fixed interval; alert rules fire when remaining budget crosses a "
     "threshold or when the change-stream lag exceeds N seconds."
@@ -117,7 +119,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
         ),
         "value": {
             "401": "auth",
-            "429": "throttle",
+            str(THROTTLE_STATUS): "throttle",
             "5xx": "vendor_5xx",
             "other_4xx": "validation",
             "explicit_class": "wins",
@@ -129,7 +131,7 @@ INFERENCES: tuple[dict[str, Any], ...] = (
             "explicitly and that wins; a 403 with no class falls to validation, which is the "
             "conservative reading, and the sample carries the status so the gap is visible."
         ),
-        "change_it": "Pass error_class on the call sample; STATUS_CLASSES in dsr/integ_monitor/health.py holds the rest.",
+        "change_it": "Pass error_class on the call sample; STATUS_CLASSES in dsr/integ_monitor/health.py holds the rest, and which status is a throttle is read from dsr/throttle/classify.py.",
         "effect_on_default": "a bare 403 lands in validation and says so; a 403 named as throttle counts as throttle.",
     },
     {

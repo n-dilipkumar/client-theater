@@ -19,6 +19,23 @@ inference rather than built in quietly:
   from :data:`BASE_BACKOFF_SECONDS`, capped at :data:`MAX_BACKOFF_SECONDS`. An
   immediate retry into a rate limit is a second request the vendor will also
   refuse, and the room has no way to ask the vendor when it will be ready.
+
+  **The ladder now lives in :mod:`dsr.throttle.backoff`.** The three numbers and
+  the function moved there unchanged and are imported below, because a second
+  copy of an exponential ladder is a second answer to "how long do we wait", and
+  two answers drift. They are re-exported from this module under their original
+  names because the whole product, WF-046 included, reads the wait from here. The
+  names in this module are now aliases rather than definitions: :func:`backoff_seconds`
+  *is* :func:`dsr.throttle.backoff.backoff_seconds`, so a test that pins a rung
+  pins the one function rather than a copy of it.
+
+  **No jitter is applied here, on purpose.** :mod:`dsr.throttle.backoff` offers
+  the ladder with the jitter as a separate modifier, because this module stores a
+  wait on a row that a person reads and this workflow's tests pin every rung.
+  Adding jitter to a published schedule would change the behaviour of a workflow
+  that is already running, which is a different decision from owning the ladder.
+  WF-046's own deferral calls ``dsr.throttle.backoff.schedule``, which is where
+  the jitter is.
 * **What happens on a retried row that fails differently.** The attempt counter
   does not reset. A row that has been refused six times is a row with a mapping
   problem, and forgetting the history would put it back in the queue as though it
@@ -38,6 +55,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from dsr.partial_failures.timestamps import parse_instant, plus_seconds
+from dsr.throttle import backoff as throttle_backoff
 
 #: How many times the automatic queue will send a row before handing it to a person.
 #:
@@ -45,15 +63,20 @@ from dsr.partial_failures.timestamps import parse_instant, plus_seconds
 #: says when to stop, and a queue with no bound is a loop that spends quota and
 #: produces a log nobody reads. Five is chosen because it spans the usual short
 #: throttle windows with room to spare, and because it is a PATCH.
-MAX_ATTEMPTS = 5
+#:
+#: Owned by :mod:`dsr.throttle.backoff` since the throttle package landed. The
+#: bound is a rate-limiting decision, and WF-046's own queue needs the same one.
+MAX_ATTEMPTS = throttle_backoff.MAX_ATTEMPTS
 
 #: The first automatic wait, doubling each attempt, capped.
-BASE_BACKOFF_SECONDS = 30
-MAX_BACKOFF_SECONDS = 1800
+#:
+#: Owned by :mod:`dsr.throttle.backoff`. See :data:`MAX_ATTEMPTS` for why.
+BASE_BACKOFF_SECONDS = throttle_backoff.BASE_SECONDS
+MAX_BACKOFF_SECONDS = throttle_backoff.MAX_SECONDS
 
 #: The room's own label for a wait, so a client can render one schedule rather
 #: than three slightly different ones.
-BACKOFF_LABEL = "exponential from 30s, doubling, capped at 30m"
+BACKOFF_LABEL = throttle_backoff.LABEL
 
 
 def backoff_seconds(attempt: int) -> int:
@@ -63,10 +86,13 @@ def backoff_seconds(attempt: int) -> int:
     :data:`BASE_BACKOFF_SECONDS`. Negative and zero attempts are read as the first,
     because a caller that lost count should still get a real wait rather than
     zero.
+
+    This is :func:`dsr.throttle.backoff.backoff_seconds` under this module's own
+    name. It is wrapped rather than imported so this module's documented contract
+    - that the wait is read from here - still holds for anything that reads the
+    source, and it delegates rather than recomputes so there is one ladder.
     """
-    made = max(1, int(attempt))
-    exponent = min(made - 1, 16)
-    return int(min(BASE_BACKOFF_SECONDS * (2**exponent), MAX_BACKOFF_SECONDS))
+    return throttle_backoff.backoff_seconds(attempt)
 
 
 def next_attempt_at(attempt: int, now) -> Any:
