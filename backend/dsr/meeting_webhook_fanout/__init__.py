@@ -1,232 +1,128 @@
-"""Domain rules for WF-067: a mutual action plan sent out for e-signature approval.
+"""WF-066: fan out meeting lifecycle events via signed webhooks.
 
-This package is pure. It imports the record store and nothing else: no web
-framework, no dependency seam, no database handle of its own. Everything a client
-needs to render the workflow lives here, so the vocabulary and the validator can
-never disagree about what is legal.
+The domain behind the researched workflow. The research document is the
+specification: ``docs/research/digital-sales-room-workflows/wf/WF-066.md``, built
+from section 16 of ``docs/research/raw/scheduling-meetings.md``.
 
-The research this builds on is ``docs/research/raw/scheduling-meetings.md``
-section 17. The five points that shape this package:
+The shape of it
+---------------
+An admin registers a subscriber URL against one of the three researched event
+types. When a meeting is created, updated or cancelled, this package serialises
+the meeting payload once, signs the exact bytes, and POSTs them to every enabled
+subscription naming that event type.
 
-* **A buyer signs for themselves.** "The API cannot: Sign documents on behalf of
-  recipients". Nothing in this package writes a signature, and no route offers to.
-  A signing status only ever changes because a verified event said it did.
-* **An approver gates the signers.** "APPROVER | Must approve before signers can
-  sign". That is a real constraint on whether a signer may proceed, and it is
-  enforced in :func:`dsr.scheduling_meetings.envelopes.signing_unlocked`.
-* **Webhooks are untrusted and repeat.** "Check the ``X-Documenso-Secret`` header
-  matches your configured secret" and "Webhooks may be retried, so handle duplicate
-  events". Both are rules, and both have tests.
-* **The join key is the sender's.** "``externalId`` is the join key back to the
-  deal room." Its shape here is a derivation, recorded in
-  :mod:`dsr.scheduling_meetings.inferences`.
-* **The room reacts to completion.** "The sales room consumes ``DOCUMENT_COMPLETED``
-  ... to flip the MAP milestone to *Approved*".
+* :mod:`~dsr.meeting_webhook_fanout.vocabulary` - the researched vocabulary: three
+  event types, the payload field names, the two headers, the deployment modes,
+  the collection names.
+* :mod:`~dsr.meeting_webhook_fanout.signing` - the signing rule, which is the exact
+  rule the research quotes rather than a choice this build made.
+* :mod:`~dsr.meeting_webhook_fanout.payloads` - the flat Chili Piper envelope and the
+  exact bytes that get signed.
+* :mod:`~dsr.meeting_webhook_fanout.transport` - the seam a destination has to have,
+  and the standard-library implementation of it.
+* :mod:`~dsr.meeting_webhook_fanout.fanout` - :class:`MeetingWebhookFanout`, the
+  whole store-facing half.
+* :mod:`~dsr.meeting_webhook_fanout.errors` - one hierarchy, one HTTP handler.
+* :mod:`~dsr.meeting_webhook_fanout.inferences` - every judgement call, named,
+  traceable, bounded, and served.
 
-Every value in :mod:`dsr.scheduling_meetings.vocabulary` carries the sentence from
-the research that makes it part of the specification rather than a preference of
-this build.
+This package imports the store and the standard library. It imports no framework
+and no HTTP layer, so it can be unit tested against a plain
+:class:`~dsr.store.RecordStore`. Every writing method takes a required
+``source=``, so the audit row names the route that actually served the write.
+
+The envelope decision
+---------------------
+The research quotes two payload shapes and warns against mixing them silently.
+This build sends one flat Chili Piper envelope for all three event types it fires
+and does not implement Cal's wrapped envelope or its two flat exceptions. Jev
+chose that option at confidence 0.96, audit
+``jev-20261004T070110-25984-70596``. The full argument is in
+``orchestration/decisions/WF-066-DESIGN.md`` and the entry
+``one-flat-envelope-for-the-three-chili-types`` in
+:mod:`~dsr.meeting_webhook_fanout.inferences`.
 """
 
 from __future__ import annotations
 
-from dsr.scheduling_meetings.engine import MapEngine
-from dsr.scheduling_meetings.envelopes import (
-    approver_block,
-    build_recipients,
-    external_id_for,
-    read_external_id,
-    require_external_id,
-    required_roles,
-    secret_matches,
-    signing_unlocked,
-    validate_field,
+from dsr.meeting_webhook_fanout.errors import (
+    AlreadyExists,
+    InvalidEventType,
+    InvalidRequest,
+    InvalidSubscriberUrl,
+    MeetingWebhookError,
+    MissingSecret,
+    NoRoom,
+    UnknownDelivery,
+    UnknownEvent,
+    UnknownSubscription,
 )
-from dsr.scheduling_meetings.errors import (
-    AlreadyDistributed,
-    DuplicateEvent,
-    EventBeforeDistribution,
-    InvalidExternalId,
-    MalformedEvent,
-    MalformedField,
-    MalformedRecipient,
-    MapError,
-    MissingRecipients,
-    NoSuchPlan,
-    NoSuchRecipient,
-    NoSuchTemplate,
-    NotAnApprover,
-    PlanStateConflict,
-    SignersBlocked,
-    TerminalPlan,
-    UnauthenticatedEvent,
-    UnknownEventType,
-    UnknownFieldType,
-    UnknownRecipientRole,
-    UnresolvedPlan,
+from dsr.meeting_webhook_fanout.fanout import MeetingWebhookFanout, Transport, UrllibTransport
+from dsr.meeting_webhook_fanout.inferences import (
+    INFERENCES,
+    by_id,
+    describe as describe_inferences,
 )
-from dsr.scheduling_meetings.events import (
-    OUTCOME_APPLIED,
-    OUTCOME_DUPLICATE,
-    OUTCOME_NOTED,
-    apply_event,
-    event_fingerprint,
-    plan_is_complete,
-    require_known_event,
+from dsr.meeting_webhook_fanout.payloads import (
+    build_payload,
+    canonical_bytes,
+    event_type_for_payload,
+    payload_type_for_event_type,
 )
-from dsr.scheduling_meetings.inferences import inferences
-from dsr.scheduling_meetings.vocabulary import (
-    APPROVER,
-    ASSISTANT,
-    CC,
-    COLLECTION_EVENT,
-    COLLECTION_NOTICE,
-    COLLECTION_PLAN,
-    COLLECTION_RECIPIENT,
-    COLLECTION_TEMPLATE,
+from dsr.meeting_webhook_fanout.signing import (
+    MAX_AGE_SECONDS,
+    SIGNATURE_HEADER,
+    TIMESTAMP_HEADER,
+    sign,
+    signing_input,
+    unix_seconds,
+    verify,
+)
+from dsr.meeting_webhook_fanout.vocabulary import (
     COLLECTIONS,
-    COORDINATE_MAX,
-    COORDINATE_MIN,
-    COORDINATE_QUOTE,
-    DISTRIBUTE_TRANSITION_QUOTE,
-    DISTRIBUTION_METHODS,
-    EVENT_DOCUMENT_CANCELLED,
-    EVENT_DOCUMENT_COMPLETED,
-    EVENT_DOCUMENT_CREATED,
-    EVENT_DOCUMENT_OPENED,
-    EVENT_DOCUMENT_RECIPIENT_COMPLETED,
-    EVENT_DOCUMENT_REJECTED,
-    EVENT_DOCUMENT_REMINDER_SENT,
-    EVENT_DOCUMENT_SENT,
-    EVENT_DOCUMENT_SIGNED,
-    EVENT_RECIPIENT_EXPIRED,
-    EVENT_SOURCE_DIRECT_LINK,
-    EVENT_TYPE_TEMPLATE_CREATED,
-    EVENT_TYPE_TEMPLATE_DELETED,
-    EVENT_TYPE_TEMPLATE_UPDATED,
-    EVENT_TYPE_TEMPLATE_USED,
-    EVENTS,
-    FIELD_TYPES,
-    IDENTIFIER_QUOTE,
-    INVITE_PATH_EMBED,
-    INVITE_PATHS,
-    MALFORMED_FIELD_GUARD,
-    MILESTONE_APPROVED,
-    MILESTONE_AWAITING_SIGNATURE,
-    MILESTONE_CANCELLED,
-    MILESTONE_DRAFT,
-    MILESTONE_EXPIRED,
-    MILESTONE_REFUSED_BY_APPROVER,
-    MILESTONE_REFUSED_BY_SIGNER,
-    MILESTONES,
-    RECIPIENT_ROLES,
-    SIGNER,
-    SIGNING_ORDERS,
-    SIGNING_ROLES,
-    STATUS_CANCELLED,
-    STATUS_COMPLETED,
-    STATUS_DRAFT,
-    STATUS_PENDING,
-    STATUS_REJECTED,
-    VIEWER,
-    WEBHOOK_SECRET_HEADER,
-    describe,
+    DEPLOYMENT_MODES,
+    EVENT_TYPES,
+    PAYLOAD_FIELDS,
+    PRODUCT_FEATURE_TYPES,
+    STATUS_DISABLED,
+    STATUS_ENABLED,
+    describe as describe_vocabulary,
 )
 
 __all__ = [
-    "APPROVER",
-    "ASSISTANT",
-    "CC",
-    "COLLECTION_EVENT",
-    "COLLECTION_NOTICE",
-    "COLLECTION_PLAN",
-    "COLLECTION_RECIPIENT",
-    "COLLECTION_TEMPLATE",
-    COLLECTIONS,
-    "COORDINATE_MAX",
-    "COORDINATE_MIN",
-    "COORDINATE_QUOTE",
-    "DISTRIBUTION_METHODS",
-    "DISTRIBUTE_TRANSITION_QUOTE",
-    "EVENTS",
-    "EVENTS_THIS_BUILD_HANDLES",
-    "EVENT_DOCUMENT_CANCELLED",
-    "EVENT_DOCUMENT_COMPLETED",
-    "EVENT_DOCUMENT_CREATED",
-    "EVENT_DOCUMENT_OPENED",
-    "EVENT_DOCUMENT_RECIPIENT_COMPLETED",
-    "EVENT_DOCUMENT_REJECTED",
-    "EVENT_DOCUMENT_REMINDER_SENT",
-    "EVENT_DOCUMENT_SENT",
-    "EVENT_DOCUMENT_SIGNED",
-    "EVENT_RECIPIENT_EXPIRED",
-    "EVENT_SOURCE_DIRECT_LINK",
-    "EVENT_TYPE_TEMPLATE_CREATED",
-    "EVENT_TYPE_TEMPLATE_DELETED",
-    "EVENT_TYPE_TEMPLATE_UPDATED",
-    "EVENT_TYPE_TEMPLATE_USED",
-    "FIELD_TYPES",
-    "IDENTIFIER_QUOTE",
-    "INVITE_PATH_EMBED",
-    "INVITE_PATHS",
-    "MILESTONE_APPROVED",
-    "MILESTONE_AWAITING_SIGNATURE",
-    "MILESTONE_CANCELLED",
-    "MILESTONE_DRAFT",
-    "MILESTONE_EXPIRED",
-    "MILESTONE_REFUSED_BY_APPROVER",
-    "MILESTONE_REFUSED_BY_SIGNER",
-    "MILESTONES",
-    "MALFORMED_FIELD_GUARD",
-    "OUTCOME_APPLIED",
-    "OUTCOME_DUPLICATE",
-    "OUTCOME_NOTED",
-    "RECIPIENT_ROLES",
-    "SIGNER",
-    "SIGNING_ORDERS",
-    "SIGNING_ROLES",
-    "STATUS_CANCELLED",
-    "STATUS_COMPLETED",
-    "STATUS_DRAFT",
-    "STATUS_PENDING",
-    "STATUS_REJECTED",
-    "VIEWER",
-    "WEBHOOK_SECRET_HEADER",
-    "AlreadyDistributed",
-    "DuplicateEvent",
-    "EventBeforeDistribution",
-    "InvalidExternalId",
-    "MalformedEvent",
-    "MalformedField",
-    "MalformedRecipient",
-    "MapEngine",
-    "MapError",
-    "MissingRecipients",
-    "NoSuchPlan",
-    "NoSuchRecipient",
-    "NoSuchTemplate",
-    "NotAnApprover",
-    "PlanStateConflict",
-    "SignersBlocked",
-    "TerminalPlan",
-    "UnauthenticatedEvent",
-    "UnknownEventType",
-    "UnknownFieldType",
-    "UnknownRecipientRole",
-    "UnresolvedPlan",
-    "apply_event",
-    "approver_block",
-    "build_recipients",
-    "describe",
-    "event_fingerprint",
-    "external_id_for",
-    "inferences",
-    "plan_is_complete",
-    "read_external_id",
-    "require_external_id",
-    "require_known_event",
-    "required_roles",
-    "secret_matches",
-    "signing_unlocked",
-    "validate_field",
+    "COLLECTIONS",
+    "DEPLOYMENT_MODES",
+    "EVENT_TYPES",
+    "INFERENCES",
+    "MAX_AGE_SECONDS",
+    "PAYLOAD_FIELDS",
+    "PRODUCT_FEATURE_TYPES",
+    "SIGNATURE_HEADER",
+    "STATUS_DISABLED",
+    "STATUS_ENABLED",
+    "TIMESTAMP_HEADER",
+    "AlreadyExists",
+    "InvalidEventType",
+    "InvalidRequest",
+    "InvalidSubscriberUrl",
+    "MeetingWebhookError",
+    "MeetingWebhookFanout",
+    "MissingSecret",
+    "NoRoom",
+    "Transport",
+    "UnknownDelivery",
+    "UnknownEvent",
+    "UnknownSubscription",
+    "UrllibTransport",
+    "build_payload",
+    "by_id",
+    "canonical_bytes",
+    "describe_inferences",
+    "describe_vocabulary",
+    "event_type_for_payload",
+    "payload_type_for_event_type",
+    "sign",
+    "signing_input",
+    "unix_seconds",
+    "verify",
 ]

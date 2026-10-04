@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import pathlib
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -1149,11 +1150,21 @@ def test_the_domain_module_imports_nothing_but_the_store_and_the_standard_librar
     The first-party allowance is exactly two modules - the store this package
     reads through, and this package's own siblings - so a new first-party import
     has to be added here on purpose rather than arriving by accident.
+
+    The directory is read from the package this test already imported rather than
+    spelled out as a path. A hard-coded path is how this test came to check
+    ``dsr/scheduling_meetings`` after the package was renamed to
+    ``dsr/meeting_webhook_fanout``: it still passed, because it was reading
+    another workflow's package, whose imports satisfied the same assertion.
+    Reading ``__file__`` off the imported package cannot drift from it.
     """
-    import pathlib
+    import dsr.meeting_webhook_fanout as package_module
 
     allowed = ("dsr.store", "dsr.meeting_webhook_fanout")
-    package = pathlib.Path(__file__).resolve().parents[1] / "dsr" / "scheduling_meetings"
+    package = pathlib.Path(package_module.__file__).resolve().parent
+    assert package.name == "meeting_webhook_fanout", (
+        f"this test is reading {package}, which is not the package it imported"
+    )
     for module in sorted(package.glob("*.py")):
         text = module.read_text(encoding="utf-8")
         assert "dsr.api" not in text, module.name
@@ -1163,6 +1174,16 @@ def test_the_domain_module_imports_nothing_but_the_store_and_the_standard_librar
             if stripped.startswith(("import ", "from ")) and " dsr" in stripped:
                 assert any(name in stripped for name in allowed), f"{module.name}: {stripped}"
     assert allowed, "the allowance, named so the assertion above reads as one"
+    assert sorted(p.name for p in package.glob("*.py")) == [
+        "__init__.py",
+        "errors.py",
+        "fanout.py",
+        "inferences.py",
+        "payloads.py",
+        "signing.py",
+        "transport.py",
+        "vocabulary.py",
+    ], "the package holds these eight modules and no others"
 
 
 def test_every_writing_method_takes_a_required_source():
