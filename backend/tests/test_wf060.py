@@ -312,6 +312,95 @@ def test_every_bad_field_is_reported_in_one_pass():
     assert {"name", "locales"} <= set(caught.value.errors)
 
 
+# -- the shapes a JSON body realistically carries ---------------------------- #
+#
+# The store is schema-flexible and the callers are a form, a config file and a
+# script. These are the three spellings a switch arrives in, and each one is a
+# path a caller can genuinely take, so each is tested rather than assumed.
+
+
+@pytest.mark.parametrize(
+    ("sent", "expected"),
+    [
+        (True, True),
+        (False, False),
+        (1, True),
+        (0, False),
+        ("true", True),
+        ("false", False),
+        ("TRUE", True),
+    ],
+)
+def test_a_switch_accepts_every_spelling_a_json_body_carries(sent, expected):
+    assert (
+        profiles.normalise(enforcing_profile(enforce_consent_page=sent))["enforce_consent_page"]
+        is expected
+    )
+
+
+def test_a_switch_that_is_not_boolean_is_refused_by_name():
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(enforce_consent_page="sometimes"))
+    assert caught.value.errors["enforce_consent_page"] == "must be true or false"
+
+
+def test_a_name_that_is_not_text_is_refused_rather_than_stringified():
+    """`str(123)` would store the number 123 as a profile's name, and a compliance
+    record with a numeric name is worse than one that was refused."""
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(name=123))
+    assert caught.value.errors["name"] == "must be text"
+
+
+def test_providers_that_are_not_an_object_are_refused():
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(providers=["zoom"]))
+    assert caught.value.errors["providers"] == "must be an object keyed by provider"
+
+
+def test_an_unknown_default_provider_is_refused_and_the_research_named_set_is_offered():
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(default_provider="skype"))
+    message = caught.value.errors["default_provider"]
+    assert "must be one of" in message
+    for provider in vocab.PROVIDERS:
+        assert provider in message
+
+
+def test_locales_that_are_not_a_list_are_refused():
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(locales="en"))
+    assert caught.value.errors["locales"] == "must be a list of language codes"
+
+
+def test_a_precall_email_that_is_not_an_object_is_refused():
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(precall_email_enabled=True, precall_email="Subject"))
+    assert caught.value.errors["precall_email"] == "must be an object"
+
+
+def test_an_audio_prompt_that_is_not_an_object_is_refused():
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(audio_prompt_enabled=True, audio_prompt="on"))
+    assert caught.value.errors["audio_prompt"] == "must be an object"
+
+
+def test_an_unknown_prompt_mode_is_refused_and_the_recorded_choice_still_applies():
+    """An unknown mode falls back to the mode this workflow implements, so a profile
+    cannot end up storing a mode the state that reads it does not understand."""
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.normalise(enforcing_profile(audio_prompt={"mode": "every_other_guest"}))
+    assert "must be one of" in caught.value.errors["audio_prompt.mode"]
+    for mode in vocab.PROMPT_MODES:
+        assert mode in caught.value.errors["audio_prompt.mode"]
+
+
+def test_a_patch_that_is_not_an_object_is_refused():
+    with pytest.raises(ProfileInvalid) as caught:
+        profiles.patch(profiles.normalise(enforcing_profile()), ["name"])
+    assert caught.value.errors["body"] == "must be an object"
+
+
 # -- the pre-call email ----------------------------------------------------- #
 
 
@@ -541,6 +630,52 @@ def test_a_directory_entry_needs_an_email_and_a_name():
     with pytest.raises(ProfileInvalid) as caught:
         directory.normalise_user({"email": "dana@northwind.example"})
     assert caught.value.errors["name"] == "is required"
+
+
+def test_a_directory_entry_that_is_not_an_object_is_refused():
+    with pytest.raises(ProfileInvalid) as caught:
+        directory.normalise_user(["dana@northwind.example"])
+    assert caught.value.errors["body"] == "must be an object"
+
+
+def test_a_directory_flag_accepts_zero_and_one_and_refuses_anything_else():
+    """Same reason as the profile switches: a JSON client may send 0/1, and the
+    schema-flexible store does not stop it."""
+    assert (
+        directory.normalise_user({"email": "d@n.example", "name": "D", "record_by_gong": 0})[
+            "record_by_gong"
+        ]
+        is False
+    )
+    with pytest.raises(ProfileInvalid) as caught:
+        directory.normalise_user({"email": "d@n.example", "name": "D", "record_by_gong": "no"})
+    assert caught.value.errors["record_by_gong"] == "must be true or false"
+
+
+def test_a_profile_id_that_is_not_a_string_is_refused():
+    """`profile_id` is the join key onto another record, so a number here would resolve
+    to nothing and would do it quietly."""
+    with pytest.raises(ProfileInvalid) as caught:
+        directory.normalise_user({"email": "d@n.example", "name": "D", "profile_id": 7})
+    assert caught.value.errors["profile_id"] == "must be a consent profile id or null"
+
+
+def test_resolving_an_empty_organiser_email_is_refused_with_the_key_named():
+    """The research resolves the profile by `organizerEmail`, so an absent one is not a
+    lookup that finds nothing - it is a request missing the key the lookup is on."""
+    with pytest.raises(OrganizerUnmapped) as caught:
+        directory.resolve([], "")
+    # The research names the field `organizerEmail`; the constant names the key this
+    # package resolves on. Both appear, so the refusal is traceable to either.
+    assert "organizerEmail" in str(caught.value)
+    assert vocab.PROFILE_RESOLUTION_KEY in caught.value.errors
+
+
+def test_asking_whether_an_unmapped_organiser_can_record_is_refused_not_answered():
+    """Guessing `True` for an unknown organiser would issue a link for a person the
+    research documents as a 404."""
+    with pytest.raises(OrganizerUnmapped):
+        directory.can_record([], "stranger@elsewhere.example")
 
 
 # --------------------------------------------------------------------------- #

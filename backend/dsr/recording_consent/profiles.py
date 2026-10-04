@@ -206,12 +206,17 @@ def normalise(payload: Any) -> dict[str, Any]:
 
     result["providers"] = validate_providers(payload.get("providers"), errors)
 
-    if result[vocab.CONSENT_PAGE_SWITCH] and not result["providers"]:
+    if result[vocab.CONSENT_PAGE_SWITCH] and not result["providers"] and "providers" not in errors:
         # Step 3 is "Admin adds web conference providers", and Gong will not issue a
         # consent meeting without one. A consent page with no provider behind it is a
         # page that would issue a link on the wrong conference, or none at all, so the
         # profile is refused here rather than falling back to a default provider at
         # booking time.
+        #
+        # Guarded on `"providers" not in errors` so this does not overwrite a more
+        # specific complaint. A caller who sent `providers` in the wrong shape is told
+        # to fix the shape; replacing that with "add a provider" would send them to fix
+        # the wrong thing.
         errors["providers"] = "at least one provider is required when the consent page is on"
 
     default_provider = payload.get(vocab.DEFAULT_PROVIDER_FIELD)
