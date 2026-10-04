@@ -442,7 +442,22 @@ describe('WF-066 meeting webhook page', () => {
       await screen.findByText('the shape of the payload this sender emits'),
     ).toBeInTheDocument()
     expect(screen.getByText(/Replay protection is left to the consumer/)).toBeInTheDocument()
-    expect(screen.getByText(/dsr\/scheduling_meetings\/payloads.py:build_payload/)).toBeInTheDocument()
+    // The pointer is asserted against the stub rather than written out, so the
+    // assertion cannot drift from the register it is checking. It did once: the
+    // fixture was repointed to the renamed package and this line kept the old
+    // path, so the test failed on CI and passed nowhere else.
+    expect(screen.getByText(INFERENCES.inferences[0].change_it)).toBeInTheDocument()
+    expect(screen.getByText(INFERENCES.inferences[1].change_it)).toBeInTheDocument()
+  })
+
+  it('every change_it pointer names a file in this package', () => {
+    // A pointer is how a reviewer changes a decision, so one naming a path that
+    // does not exist is worse than no pointer. Only the two pointers the stub
+    // carries are checked here; the whole register is checked against the real
+    // files in test_wf066.py, which can stat the paths this test can only read.
+    for (const entry of INFERENCES.inferences) {
+      expect(entry.change_it).toContain('dsr/meeting_webhook_fanout/'), entry.id
+    }
   })
 })
 

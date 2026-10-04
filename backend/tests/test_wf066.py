@@ -1186,6 +1186,49 @@ def test_the_domain_module_imports_nothing_but_the_store_and_the_standard_librar
     ], "the package holds these eight modules and no others"
 
 
+def test_every_change_it_pointer_names_a_file_that_exists():
+    """Every published ``change_it`` must resolve to a real file.
+
+    The inference register is served to a reviewer precisely so they can change a
+    decision without reading a function body, and the pointer is how they do it.
+    A pointer naming a path this package does not have sends them looking for a
+    file the workflow never wrote, and it is worse than no pointer at all.
+
+    This drifted once: the package was renamed from ``dsr.scheduling_meetings`` to
+    ``dsr.meeting_webhook_fanout`` and the pointers were left naming the old path,
+    which is the same class of staleness as an audit row naming a route the app
+    stopped serving.
+    """
+    import re
+
+    import dsr.meeting_webhook_fanout as package_module
+
+    package = pathlib.Path(package_module.__file__).resolve().parent
+    backend_root = package.parents[1]  # <repo>/backend
+    #: A pointer is a sentence, so the path is matched rather than split: the file
+    #: name, its extension, and the symbol after the colon have to travel together
+    #: or the match truncates at the first period.
+    pointer = re.compile(r"dsr/meeting_webhook_fanout/[a-z_]+\.py")
+    #: Entries whose change_it is deliberately not a file pointer. The boundary
+    #: entry lists what this build did not do and points at a ticket rather than
+    #: at code, so demanding a file of it would be demanding the wrong thing.
+    without_a_pointer = {"not-built"}
+    for entry in INFERENCES:
+        found = pointer.findall(str(entry["change_it"]))
+        if entry["id"] in without_a_pointer:
+            assert not found, (
+                f"{entry['id']} is a boundary and should point at a ticket, not at {found}"
+            )
+            continue
+        assert found, f"{entry['id']} has no file pointer in its change_it: {entry['change_it']!r}"
+        for relative in found:
+            resolved = backend_root / relative
+            assert resolved.exists(), f"{entry['id']} points at {relative}, which does not exist"
+            assert package in resolved.parents, (
+                f"{entry['id']} points outside this package at {relative}"
+            )
+
+
 def test_every_writing_method_takes_a_required_source():
     """A URL string hardcoded inside a domain method is a defect, and the audit row
     then names a route the app does not serve.
