@@ -1573,6 +1573,82 @@ def test_operating_on_a_row_that_is_not_there_reports_nothing(engine: ReconcileE
     assert engine.reader.entities(ROOM) == []
 
 
+def test_the_in_memory_reader_answers_every_one_of_the_five_questions():
+    """The seam is five questions. A reader that answers four of them is a reader a
+    repair path will call and get nothing back from."""
+    reader = SimulatedCrm()
+    assert reader.entities(ROOM) == []
+    assert reader.record(ROOM, ENTITY, "absent") is None
+    assert reader.live_records(ROOM, ENTITY) == []
+    assert reader.recycle_bin(ROOM, ENTITY) == []
+    assert reader.delta(ROOM, ENTITY) == {"@odata.deltaLink": f"dl:{ENTITY}:1", "value": []}
+
+    reader.put(ENTITY, "006A000001", {"Name": "Northwind"})
+    reader.put(ENTITY, "006A000002", {"Name": "Contoso"})
+    assert reader.entities(ROOM) == [ENTITY]
+    assert [row["Id"] for row in reader.live_records(ROOM, ENTITY)] == [
+        "006A000001",
+        "006A000002",
+    ]
+    assert reader.delete(ENTITY, "006A000001") is True
+    assert reader.delete(ENTITY, "absent") is False
+    assert [row["Id"] for row in reader.recycle_bin(ROOM, ENTITY)] == ["006A000001"]
+    # The page carries the deletion inline, found by its markers rather than by
+    # position: the rows are ordered by id, and the deleted one is not last.
+    page = reader.delta(ROOM, ENTITY)
+    deletions = [row for row in page["value"] if row.get("reason") == "deleted"]
+    assert deletions == [
+        {
+            "@odata.context": f"https://example.test/{ENTITY}/$deletedEntity",
+            "id": "006A000001",
+            "reason": "deleted",
+        }
+    ]
+    assert [row["Id"] for row in page["value"] if "Id" in row] == ["006A000002"]
+    # Only the questions are logged. ``put``, ``delete`` and ``purge`` set the world
+    # up and are not questions the repair asked, so a test that counted them would be
+    # counting the test rather than the reader.
+    asked = [call[0] for call in reader.calls]
+    assert set(asked) == {"entities", "record", "live_records", "recycle_bin", "delta"}
+    assert asked[0] == "entities"
+    assert asked[1] == "record"
+    # Every argument carries the room, because the vendor's tables are reached
+    # through the room's connection.
+    assert reader.calls[0] == ("entities", (ROOM,))
+    assert reader.calls[1] == ("record", (ENTITY, "absent"))
+    assert [call[1] for call in reader.calls if call[0] == "record"] == [(ENTITY, "absent")]
+
+
+def test_the_in_memory_delta_link_advances_when_a_caller_resumes_from_it():
+    """A link that never advances would hand a caller the page it already read."""
+    reader = SimulatedCrm({ENTITY: {"006A000001": {"Name": "Northwind"}}})
+    assert reader.delta(ROOM, ENTITY)["@odata.deltaLink"] == f"dl:{ENTITY}:1"
+    assert reader.delta(ROOM, ENTITY, f"dl:{ENTITY}:1")["@odata.deltaLink"] == f"dl:{ENTITY}:2"
+    assert reader.delta(ROOM, ENTITY, f"dl:{ENTITY}:2")["@odata.deltaLink"] == f"dl:{ENTITY}:3"
+    assert reader.delta(ROOM, ENTITY, "not a link")["@odata.deltaLink"] == f"dl:{ENTITY}:1"
+    assert reader.delta(ROOM, ENTITY, f"dl:{ENTITY}:x")["@odata.deltaLink"] == f"dl:{ENTITY}:1"
+
+
+def test_the_default_reader_is_the_stored_one(store):
+    """A room with no org connection reads the room's own copy of the vendor's
+    tables. A room with one passes its own reader, and nothing above changes."""
+    from dsr.crm_integration.gap_sources import default_reader
+
+    reader = default_reader(store, vendor=DATAV)
+    assert isinstance(reader, StoredCrm)
+    assert reader.vendor == DATAV
+    assert reader.entities(ROOM) == []
+
+    engine = ReconcileEngine(store, clock=Clock())
+    assert isinstance(engine.reader, StoredCrm)
+    assert engine.reader.vendor == VENDOR, "the default carries the researched vendor"
+
+    # A vendor the research does not describe has no cursor kind at all, and a room
+    # that holds none has nothing to mismatch. Answering "there is none" is the
+    # honest answer; inventing a cursor kind for HubSpot would not be.
+    assert engine._cursor_for(ROOM, "hubspot", ENTITY) is None
+
+
 def test_the_in_memory_reader_records_which_question_each_repair_asked():
     """A repair that silently read the wrong thing is the failure this recovery path
     cannot afford, so the reader keeps its own call log."""
