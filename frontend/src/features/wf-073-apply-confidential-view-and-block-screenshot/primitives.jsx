@@ -147,6 +147,30 @@ export function Toggle({ id, label, hint, checked, onChange, disabled = false })
  * overlapped unevenly. What the reader needs from this diagram is which one is sharp
  * and how many are not, and equal bars say that without implying a scale that is not
  * there.
+ *
+ * On the 44px floor
+ * -----------------
+ *
+ * `tools/check_design_floor.py` reports a tap-target warning for the narrow minimum
+ * width this strip used to put on a bar, and it is right to look: the rule exists so a
+ * control a person has to hit is big enough to hit. A band bar is not a control. The
+ * strip is a single `role="img"` with one label, it takes no pointer event, and a
+ * person cannot address one band rather than another. The bars are laid out with
+ * `flex-1` inside a full-width parent, which already stops a band collapsing to nothing
+ * once there are seven of them, so the minimum width guarded a case that cannot occur.
+ * It is removed rather than allowlisted, because the allowlist is for a real exception
+ * and this is not one.
+ *
+ * The token itself is described rather than written out on purpose: the design-floor
+ * check reads raw lines, comments included, so spelling it here would put the very
+ * utility it flags back into the file and make this docstring a tripwire for whoever
+ * trims it next.
+ *
+ * The alternative was to make each band a button, and that was rejected for the reason
+ * the role is `img`: there is nothing for a band click to do. Resolving a band is a
+ * function of the scroll position, which is already an input, so a clickable band would
+ * be a control whose only action is to restate the state the reader is already looking
+ * at.
  */
 export function BandStrip({ geometry, className = '' }) {
   if (!geometry || !Array.isArray(geometry.bands) || geometry.bands.length === 0) {
@@ -166,7 +190,7 @@ export function BandStrip({ geometry, className = '' }) {
           <div
             key={band.index}
             title={`Band ${band.index + 1}: ${band.sharp ? 'sharp' : 'blurred'}`}
-            className={`min-w-[6px] flex-1 rounded-xs ${
+            className={`flex-1 rounded-xs ${
               band.sharp
                 ? 'bg-accent'
                 : 'bg-[repeating-linear-gradient(135deg,var(--color-border-subtle)_0_2px,var(--color-muted)_2px_5px)]'
