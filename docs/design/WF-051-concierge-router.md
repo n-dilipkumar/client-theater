@@ -260,7 +260,7 @@ colour, never by colour alone. Loading, error and empty states on every read.
 
 ## Testing
 
-``backend/tests/test051.py`` covers the declaration rules, rule evaluation, the
-availability engine, both calls, and every inference. ``test051_http.py``
+``backend/tests/test_wf051.py`` covers the declaration rules, rule evaluation, the
+availability engine, both calls, and every inference. ``test_wf051_http.py``
 covers the HTTP surface, the audit-source rule against the live route table, and
 the no-5xx-with-an-empty-body rule.
