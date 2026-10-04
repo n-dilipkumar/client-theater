@@ -160,8 +160,18 @@ describe('what the page claims', () => {
     // The page fetches the decision rather than typing it, so the id shown is the one the
     // server recorded and a stale copy cannot survive here.
     const panel = screen.getByRole('heading', { name: /derived/ }).closest('div.glass')
-    expect(within(panel).getByText(DECISIONS.decisions[0].jev_audit_id)).toBeInTheDocument()
     expect(within(panel).getByText('OWNERSHIP_WF078_OWNS_THE_GATE')).toBeInTheDocument()
+
+    // The audit id is read from the notice that names the decision, not from a text query.
+    // It is rendered inside a sentence, so no element's entire text is the id on its own,
+    // and a substring matcher over the whole panel would match every ancestor as well.
+    // Asserting on one element's textContent is the assertion that means what it says.
+    const notice = within(panel).getByText('Which workflow owns the setting').closest(
+      '[role="status"]',
+    )
+    const auditId = DECISIONS.decisions[0].jev_audit_id
+    expect(notice.textContent).toContain(auditId)
+    expect(notice.textContent).toContain('confidence 0.93')
   })
 })
 
