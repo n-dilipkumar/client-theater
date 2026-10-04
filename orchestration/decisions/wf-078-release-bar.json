@@ -1,0 +1,53 @@
+{
+  "ticket": "WF-078",
+  "verdict": "pass",
+  "passed": true,
+  "reason": "chose 'merge' at confidence 1.00",
+  "audit_id": "jev-20261004T153433-25656-73018",
+  "measurements": {
+    "tests_added_backend": 197,
+    "tests_added_frontend": 53,
+    "own_backend_files": "tests/test_wf078.py and tests/test_wf078_http.py, 197 tests, run alone, 197 passed",
+    "own_frontend_file": "RecipientVerification.test.jsx, 53 tests, run alone, 53 passed",
+    "whole_backend_suite": "15058 passed, 1 xfailed, 0 failed, exit code 0, measured under pytest-xdist with four agents running on the same machine",
+    "whole_frontend_suite": "27 test files, 731 tests, all passing",
+    "backend_coverage_total_percent": 95,
+    "coverage_gate_threshold_percent": 90,
+    "coverage_of_new_modules_percent": {
+      "dsr/features/wf078_require_recipient_identity_verification.py": 90,
+      "dsr/identity_verification/engine.py": 97,
+      "dsr/identity_verification/rules.py": 87,
+      "dsr/identity_verification/vocabulary.py": "complete, skipped by skip-covered",
+      "dsr/identity_verification/inferences.py": "complete, skipped by skip-covered"
+    },
+    "feature_routes": 20,
+    "routes_called_over_real_http": 1392,
+    "routes_returning_5xx": 0,
+    "routes_failing_to_answer": 0,
+    "live_http_checks_against_uvicorn": 48,
+    "live_http_checks_passing": 48,
+    "seed_ran": "backend/seed.py printed the WF-078 line with states that are not all successes: 4 verified documents, 5 recipients (4 gated, 1 ungated), 1 carrying both moments at once, 3 attempts, 2 passed and 1 failed",
+    "ruff_check": "All checks passed, from the repository root with --config backend/pyproject.toml",
+    "ruff_format_check": "765 files already formatted",
+    "frontend_build": "vite build succeeded, 383 modules transformed",
+    "frontend_lint": "0 errors; the 12 remaining warnings are in other agents' pre-existing files",
+    "frontend_format_check": "npm run format:check reported All matched files use Prettier code style!",
+    "contract_guard": "python tools/check_feature_diff.py --base origin/main reported OK: 15 changed file(s), none shared",
+    "design_floor": "python tools/check_design_floor.py --feature wf-078-... reported 0 failing, 0 with warnings",
+    "jev_design_gate": {
+      "audit_id": "jev-20261004T140557-22596-57651",
+      "verdict": "pass",
+      "selected": "wf078_owns_gate",
+      "confidence": 0.93
+    },
+    "diff_after_rebase": "git diff --stat origin/main..HEAD showed 15 files changed, 8346 insertions, 0 deletions"
+  },
+  "declared_unverified": [
+    "No screen reader was run. The ARIA roles and labels are asserted from source and the accessible names are asserted through jsdom queries, but no assistive technology was driven.",
+    "No browser was driven. The page is proven by 53 jsdom tests against recorded API fixtures and by a successful production build; the design-floor checker reads source patterns rather than a render.",
+    "Contrast ratios were not measured. The page uses semantic tokens only and no raw hex, and docs/DESIGN-SYSTEM.md states that foreground and muted-foreground pass 4.5:1 on background and surface, but no computed style was read from a render.",
+    "Responsive behaviour was not checked at 375, 768, 1024 or 1440 pixels. The layout uses the documented grid and collapse classes, which the checker does not read.",
+    "No SMS was actually sent. The gate is proven end to end because this room generates and holds the code, which DERIVED_SMS_CODE_IS_THE_ROOM'S records as a decision: no gateway is named in any cited source.",
+    "The whole-suite numbers were measured on a machine running four agents at once, so the wall-clock figure understates what a clean runner would show. The pass and fail counts are not affected by contention."
+  ]
+}
