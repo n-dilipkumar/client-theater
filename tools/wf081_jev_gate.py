@@ -60,10 +60,8 @@ CONTEXT = {
         "Signature request reminder emails will be sent to the signer 3 and 7 days "
         "before the signature request expires, this is in addition to our other current "
         "automated reminders.",
-        "If a signer was already reminded within 24 hours, we will skip the automated "
-        "reminder.",
-        "expires_at must be an integer epoch timestamp in seconds between 1-90 days in "
-        "the future.",
+        "If a signer was already reminded within 24 hours, we will skip the automated reminder.",
+        "expires_at must be an integer epoch timestamp in seconds between 1-90 days in the future.",
         "expires_at will be rounded down to the nearest hour.",
         "Only signature requests that explicitly set an expires_at will expire. By "
         "default signature requests do not expire.",

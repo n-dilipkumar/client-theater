@@ -66,7 +66,9 @@ def main() -> int:
     refused = call(
         base, "POST", f"{PREFIX}/rooms/{room_id}/requests", {"expires_at": deadline + 400 * 86400}
     )
-    print("POST   /requests  (deadline past 90 days)            ", refused[0], refused[1].get("error"))
+    print(
+        "POST   /requests  (deadline past 90 days)            ", refused[0], refused[1].get("error")
+    )
 
     checks = [
         ("GET", f"{PREFIX}/vocabulary", None),
@@ -75,12 +77,28 @@ def main() -> int:
         ("GET", f"{PREFIX}/rooms/{room_id}/requests?status=pending", None),
         ("GET", f"{PREFIX}/rooms/{room_id}/requests/{request_id}?tz=+05:30", None),
         ("GET", f"{PREFIX}/rooms/{room_id}/requests/absent-id", None),
-        ("PUT", f"{PREFIX}/rooms/{room_id}/requests/{request_id}/expiry", {"expires_at": deadline + 86400}),
+        (
+            "PUT",
+            f"{PREFIX}/rooms/{room_id}/requests/{request_id}/expiry",
+            {"expires_at": deadline + 86400},
+        ),
         ("POST", f"{PREFIX}/rooms/{room_id}/requests/{request_id}/reminders", {}),
         ("GET", f"{PREFIX}/rooms/{room_id}/reminders", None),
-        ("GET", f"{PREFIX}/rooms/{room_id}/requests/{request_id}/can-sign?email=probe@example.com", None),
-        ("POST", f"{PREFIX}/rooms/{room_id}/requests/{request_id}/sign", {"email": "probe@example.com"}),
-        ("POST", f"{PREFIX}/rooms/{room_id}/requests/{request_id}/sign", {"email": "probe@example.com"}),
+        (
+            "GET",
+            f"{PREFIX}/rooms/{room_id}/requests/{request_id}/can-sign?email=probe@example.com",
+            None,
+        ),
+        (
+            "POST",
+            f"{PREFIX}/rooms/{room_id}/requests/{request_id}/sign",
+            {"email": "probe@example.com"},
+        ),
+        (
+            "POST",
+            f"{PREFIX}/rooms/{room_id}/requests/{request_id}/sign",
+            {"email": "probe@example.com"},
+        ),
         ("POST", f"{PREFIX}/rooms/{room_id}/sweep", {}),
         ("GET", f"{PREFIX}/rooms/{room_id}/events", None),
         ("GET", f"{PREFIX}/rooms/{room_id}/summary", None),
@@ -89,7 +107,7 @@ def main() -> int:
     for method, path, payload in checks:
         status, body = call(base, method, path, payload)
         note = body.get("error") if isinstance(body, dict) else ""
-        print(f"{method:6} {path[len(PREFIX):]:45}", status, note or "")
+        print(f"{method:6} {path[len(PREFIX) :]:45}", status, note or "")
         if status == 0 or status >= 500:
             faults.append((method, path, status))
 
