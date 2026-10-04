@@ -1706,6 +1706,19 @@ def test_the_inference_ids_are_unique(armed):
     assert len(ids) == len(set(ids))
 
 
+def test_a_named_inference_can_be_fetched_on_its_own():
+    """``by_id`` is the accessor every sibling package's inferences register exports,
+    so it is pinned here rather than left as the one uncovered function in this
+    package."""
+    from dsr.lead_score.inferences import by_id
+
+    entry = by_id("no-outbound-crm-call")
+    assert entry is not None
+    assert entry["id"] == "no-outbound-crm-call"
+    assert entry["jev_audit"] == "jev-20261004T024259-6152-79173"
+    assert by_id("no-such-inference") is None
+
+
 def test_the_boundary_is_recorded_rather_than_left_unstated(armed):
     """A feature whose page does not show its own edges overstates itself."""
     served = armed.inferences()
