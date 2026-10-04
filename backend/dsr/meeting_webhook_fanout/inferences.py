@@ -1,323 +1,293 @@
-"""Every judgement call this workflow rests on, and how to change each one.
+"""Every judgement call this package makes, in one inspectable place.
 
-The research for WF-067 is unusually explicit about the vendor's behaviour and
-almost silent about what a sales room should do with it. It says what
-Documenso will accept and what its webhooks report, and it leaves open the parts
-this workflow actually turns on. The issue's own notes are blunt about it: "This
-is a thin spec. The statement above the evidence block is not a formality... Most
-of the decisions below are yours to derive."
+The research for WF-066 is unusually specific about the *sender's* contract: it
+names the three subscription types, quotes the signing rule step by step, gives
+both header definitions, lists the payload fields, and states twice what replay
+protection belongs to whom. What it does not do is say how this deployment
+behaves on the edges of that description, and the edges are where a build has to
+decide something.
 
-So every derivation is recorded here, named, bounded and served, rather than left
-as a comment in a function body where the next reader cannot find it or disagree
-with it. Each entry states what the research fixed, what it left open, which
-reading this build took, and what it would cost to choose differently.
+Those decisions are collected here rather than left as comments in function
+bodies, because a judgement call in a comment is one nobody re-reads and a wrong
+one becomes product behaviour without anyone noticing. Each entry is:
 
-Nothing here is a preference dressed as a rule. Where the research states
-something, the entry says so and cites it. Where it does not, the entry says that
-too, and the reading is defensible rather than arbitrary.
+* **named**, so it can be argued with by name;
+* **traceable** - ``basis`` says what the research does and does not say;
+* **bounded** - ``value`` is what this build chose, and ``change_it`` says how to
+  change it without editing a function body;
+* **visible** - :func:`describe` is served at ``GET /api/wf-066/inferences``, so a
+  reviewer reads the list instead of reconstructing it from a diff.
+
+Two entries are not inferences at all. ``hmac-signing-rule`` and the three
+subscription types are facts the research states outright, and they are listed
+because a register of decisions that hid its own certainties would be useless to
+a reader checking whether anything here is load-bearing. The last entry is a
+boundary rather than a judgement call, and is listed for that reason: ``not-built``
+records what this build deliberately does not do, because a feature whose page
+does not show its own edges overstates itself.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-#: Each entry: the decision, the quote that fixes it (or ``None``), the reading
-#: this build took, and what would go wrong otherwise. Served whole by
-#: :func:`inferences` so a reviewer reads the list rather than reconstructing it
-#: from a diff.
-REGISTER: tuple[dict[str, Any], ...] = (
+from dsr.meeting_webhook_fanout.signing import MAX_AGE_SECONDS
+from dsr.meeting_webhook_fanout.transport import DEFAULT_TIMEOUT_SECONDS
+from dsr.meeting_webhook_fanout.vocabulary import (
+    COLLECTIONS,
+    DEFAULT_DEPLOYMENT_MODE,
+    DEPLOYMENT_MODES,
+    EVENT_TYPES,
+    PAYLOAD_TYPES,
+    SIGNATURE_HEADER,
+    TIMESTAMP_HEADER,
+)
+
+#: The sentence from the research that governs the whole sending half.
+SOURCED_QUOTE = (
+    "Step 2: Construct the signed payload by concatenating the timestamp and the raw "
+    "request body, separated by a period: `{timestamp}.{raw_request_body}`"
+)
+
+INFERENCES: tuple[dict[str, Any], ...] = (
     {
-        "id": "never-sign-for-a-recipient",
-        "question": "What happens when a signer should have signed but did not?",
-        "research_says": (
-            'The API cannot: "Sign documents on behalf of recipients (recipients must '
-            'sign themselves)."'
+        "id": "hmac-signing-rule",
+        "topic": "the exact bytes a signature covers",
+        "topic_note": "a fact the research states outright, not an inference",
+        "basis": (
+            "Quoted verbatim: 'Step 2: Construct the signed payload by concatenating the "
+            "timestamp and the raw request body, separated by a period: "
+            "{timestamp}.{raw_request_body}'. The header table adds 'X-Chili-Signature | "
+            "HMAC-SHA256 signature of the payload (hex-encoded)' and 'X-Chili-Timestamp | "
+            "Unix timestamp (seconds) when the request was signed'. Nothing here is a "
+            "choice, so this entry exists to say which part of the build is not negotiable."
         ),
-        "reading": (
-            "This product never writes a signature. A recipient's status changes only "
-            "because a verified event said it did. No route accepts a status a caller "
-            "asserts, and there is no route that could complete a plan on the buyer's "
-            "behalf."
-        ),
-        "otherwise": (
-            "A mutual action plan whose approval the seller can produce on demand is "
-            "not mutual, and the guardrail the vendor publishes would be the one part "
-            "of it this product did not keep."
-        ),
-        "changeable_by": "Not a judgement call. The research states it as a limit.",
+        "value": {
+            "algorithm": "HMAC-SHA256",
+            "signing_input": "{timestamp}.{raw_body}",
+            "separator": "a single period",
+            "signature_encoding": "hex",
+            "signature_header": SIGNATURE_HEADER,
+            "timestamp_header": TIMESTAMP_HEADER,
+            "timestamp_unit": "unix seconds",
+        },
+        "change_it": "dsr/scheduling_meetings/signing.py:signing_input. Do not change it.",
     },
     {
-        "id": "external-id-is-derived",
-        "question": "What format does externalId take?",
-        "research_says": (
-            'The research names the key and not its format: "externalId is the join key '
-            "back to the deal room\", and it publishes the vendor's own example "
-            '"?externalId=order-12345", which is a vendor transaction id this product '
-            "cannot produce."
+        "id": "cancel-maps-to-deleted",
+        "topic": "which payload type a cancellation fires",
+        "basis": (
+            "The research lists the three subscription names and the three payload values "
+            "separately: 'For New Meeting', 'For Meeting Update', 'For Canceled Meeting' "
+            "against 'type: Created|Updated|Deleted'. The mapping is positional and the "
+            "third name is the only one of the three that is a deletion, so 'For Canceled "
+            "Meeting' fires 'Deleted'. The research does not say so in those words."
         ),
-        "reading": (
-            "dsr-map.<room>.<plan>.<token>, with a 12-character unguessable token. It "
-            "carries every part the join must survive (which room, which plan) and stays "
-            "one URL query parameter. A caller with its own transaction id sets "
-            "external_id on the plan and the derivation never runs."
-        ),
-        "otherwise": (
-            "A join key of just the room id would let a stale or forged event naming a "
-            "different room resolve to this room's plan. The token is what makes two "
-            "plans in one room unconfusable."
-        ),
-        "changeable_by": "Set external_id on the plan. The derivation is the default, not a policy.",
+        "value": {
+            "new_meeting": "Created",
+            "meeting_update": "Updated",
+            "canceled_meeting": "Deleted",
+        },
+        "change_it": "dsr/scheduling_meetings/vocabulary.py:EVENT_TYPES.",
     },
     {
-        "id": "approver-refusal-differs-from-signer-refusal",
-        "question": "Does a DOCUMENT_REJECTED from an approver mean the same as one from a signer?",
-        "research_says": '"APPROVER | Must approve before signers can sign".',
-        "reading": (
-            "No. Two milestones: refused_by_approver and refused_by_signer. An approver "
-            "refuses before any signature is gathered, so the seller can fix the plan and "
-            "send it again. A signer refuses the terms, so it does not go back out "
-            "unchanged. Recording both as rejected loses exactly the distinction the "
-            "seller needs."
+        "id": "one-flat-envelope-for-the-three-chili-types",
+        "topic": "the shape of the payload this sender emits",
+        "basis": (
+            "The research quotes two envelopes and warns against mixing them silently: Cal "
+            'sends \'{"triggerEvent", "createdAt", "payload": {...}}\' for most events '
+            "but 'MEETING_STARTED and MEETING_ENDED are exceptions - they use a flat "
+            "payload where booking fields are at the top level alongside triggerEvent, "
+            "with no payload wrapper'. The Chili Piper payload field list is flat. This "
+            "build fires only the three Chili Piper subscription types and none of Cal's, "
+            "so it has no occasion to emit a wrapper. Reproducing Cal's wrapper as well "
+            "would put three shapes in one product and turn the research's warning into a "
+            "real risk. Jev chose the flat envelope at confidence 0.96, audit "
+            "jev-20261004T070110-25984-70596."
         ),
-        "otherwise": (
-            "A seller reading 'rejected' cannot tell whether to edit the plan and resend "
-            "or to abandon it, and the approver gate - the one role the research "
-            "emphasises - would be indistinguishable from any other refusal."
+        "value": {
+            "envelope": "flat",
+            "payload_wrapper": "never sent",
+            "event_types": [row["id"] for row in EVENT_TYPES],
+            "payload_types": list(PAYLOAD_TYPES),
+            "out_of_scope": ["MEETING_STARTED", "MEETING_ENDED", "RECORDING_READY"],
+        },
+        "change_it": (
+            "dsr/scheduling_meetings/payloads.py:build_payload. Adding a wrapper is a "
+            "per-subscription envelope mode, and it is a new collection field, not a "
+            "migration."
         ),
-        "changeable_by": "Refusal milestones are served from vocabulary.MILESTONES.",
     },
     {
-        "id": "invitation-path-is-the-embed",
-        "question": "Email invite, redirect, or embed?",
-        "research_says": (
-            "The research offers all three and then says the embed is the one that lets "
-            '"a MAP approval live inside the sales room": "either iframe '
-            "https://app.documenso.com/embed/direct/{token} or redirect to "
-            'https://app.documenso.com/d/{token}", and separately that "After '
-            'distribution, recipients receive an email with a link to sign the document."'
+        "id": "replay-protection-belongs-to-the-consumer",
+        "topic": "whether the sender refuses a delivery on age",
+        "basis": (
+            "Quoted: 'Replay protection is left to the consumer (MAX_AGE_SECONDS = 300)'. "
+            "The room ships the timestamp header and publishes the window. It does not "
+            "enforce it, because a sender enforcing a freshness window on its own "
+            "outbound POSTs refuses a correctly signed delivery whose clock runs fast, "
+            "and that is a clock bug wearing the costume of a security control."
         ),
-        "reading": (
-            "Embed is the default, because the research names in-room approval as the "
-            "reason this workflow exists. Email and redirect are both offered as "
-            "distributable alternatives on the plan rather than left out, because the "
-            "research quotes them as first-class."
+        "value": {
+            "sender_enforces_window": False,
+            "ship_timestamp_header": True,
+            "published_window_seconds": MAX_AGE_SECONDS,
+            "window_owner": "the consumer",
+        },
+        "change_it": (
+            "dsr/scheduling_meetings/signing.py:verify takes window_seconds and the "
+            "sender never passes one. A subscriber uses verify with the shipped window."
         ),
-        "otherwise": (
-            "Choosing email alone would make this a workflow that emails a PDF, which is "
-            "what the research says this workflow is *not* for. Choosing embed alone would "
-            "refuse a path the vendor's own documentation calls a normal option."
-        ),
-        "changeable_by": "distribution_method on the plan.",
     },
     {
-        "id": "webhook-events-are-accepted-unknown-ones-refused",
-        "question": "What happens to a webhook whose event name this build does not know?",
-        "research_says": (
-            "The research enumerates fourteen event names and says 'Process "
-            "idempotently - Webhooks may be retried, so handle duplicate events', and "
-            "'Verify the signature - Check the X-Documenso-Secret header matches your "
-            "configured secret'."
+        "id": "saas-url-policy-is-a-room-setting",
+        "topic": "which subscriber URLs this deployment accepts",
+        "basis": (
+            "The research gives two deployment modes that disagree: 'Cal.com SaaS: Only "
+            "HTTPS URLs are accepted. HTTP, private/internal IP addresses (e.g., 10.x.x.x, "
+            "192.168.x.x, 127.0.0.1), and localhost are blocked. Self-hosted: Both HTTP and "
+            "HTTPS URLs are accepted, and private IP addresses are allowed for internal "
+            "webhooks.' It does not say which one this product is."
         ),
-        "reading": (
-            "An unknown name is refused with 422 and writes nothing. A caller holding the "
-            "right secret can send any string, and storing it would let that string be "
-            "rendered on a page as though it were a real event. The fourteen are a closed "
-            "list because the research closes it."
+        "value": {
+            "this_deployment": DEFAULT_DEPLOYMENT_MODE,
+            "per_room_setting": "deployment_mode",
+            "modes": {row["id"]: row["schemes"] for row in DEPLOYMENT_MODES},
+            "private_addresses": {row["id"]: row["private_addresses"] for row in DEPLOYMENT_MODES},
+        },
+        "change_it": (
+            "Set deployment_mode on the room to 'saas' to turn the policy on. "
+            "dsr/scheduling_meetings/fanout.py:validate_url."
         ),
-        "otherwise": (
-            "A vendor that adds a fifteenth event would silently stop being reported, and "
-            "a sender holding the secret would be able to write arbitrary text into the "
-            "event log."
-        ),
-        "changeable_by": "vocabulary.EVENTS.",
     },
     {
-        "id": "duplicate-events-are-not-refusals",
-        "question": "Is a retried webhook an error?",
-        "research_says": "Process idempotently - Webhooks may be retried, so handle duplicate events.",
-        "reading": (
-            "It is answered 200 and reported as a duplicate. The event is recorded once "
-            "with a count of the attempts, and the second delivery changes no milestone "
-            "and writes no second notice. A retry is not the vendor doing anything wrong."
+        "id": "subscription-identity-is-url-plus-event-type",
+        "topic": "what makes two subscriptions the same subscription",
+        "basis": (
+            "The research states the fan-out is unbounded in both directions: 'You are not "
+            "limited by the number of webhooks you have', and 'multiple webhook types may "
+            "have the same webhook URL, and multiple webhook URLs for the same type'. So "
+            "one URL may carry several event types and one event type may have several "
+            "URLs. Neither half identifies a subscription on its own, so the pair does. A "
+            "second row for the same pair would deliver the same event twice to the same "
+            "address, and a subscriber counting meetings would count them wrong."
         ),
-        "otherwise": (
-            "Answering an error would make the vendor retry harder for a delivery that "
-            "succeeded, and treating it as new would flip an approved plan back to "
-            "awaiting signature."
+        "value": {
+            "identity": ["url", "event_type"],
+            "fan_out": "unbounded",
+            "duplicate_pair": "refused",
+            "not_a_column_on_the_meeting": (
+                "a many-to-many is the only shape that expresses both directions"
+            ),
+        },
+        "change_it": (
+            "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.subscribe. The lookup is "
+            "a find() on two JSON paths, so adding a third dimension needs no migration."
         ),
-        "changeable_by": "events.event_fingerprint.",
     },
     {
-        "id": "an-unauthenticated-event-writes-nothing",
-        "question": "What does a failed secret check leave behind?",
-        "research_says": "Verify the signature - Check the X-Documenso-Secret header matches your configured secret.",
-        "reading": (
-            "Nothing at all. Not the event, not the recipient's status, not the "
-            "milestone. An event that failed authentication is the one input to this "
-            "product that has not been shown to be entitled to anything, and the row it "
-            "would leave is indistinguishable from a real one to everyone reading later."
+        "id": "the-room-signs-because-no-screen-sets-a-secret",
+        "topic": "where the HMAC secret comes from",
+        "basis": (
+            "Quoted: 'Optionally emails support to obtain the tenant's HMAC signing secret "
+            "(not shown in the UI).' No vendor screen in the researched flow sets a secret, "
+            "which is a reason the room has to carry one rather than a reason to refuse to "
+            "sign. The create route accepts a secret when the admin has one, and the room "
+            "supplies one when they do not."
         ),
-        "otherwise": (
-            "Any unauthenticated caller could mark a buyer's plan approved, and the "
-            "audit log would show a plausible event rather than a forged one."
-        ),
-        "changeable_by": "Not a judgement call. It is the meaning of 'verify'.",
+        "value": {
+            "source": "support, per tenant",
+            "shown_in_the_vendor_ui": False,
+            "room_supplies_one": True,
+            "per_room": True,
+            "rotation": "a write to the key collection, audited",
+        },
+        "change_it": "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.set_secret.",
     },
     {
-        "id": "a-plan-with-no-secret-can-never-authenticate",
-        "question": "What if a plan was created without a webhook secret?",
-        "research_says": "The research requires the header check but does not say a secret is optional.",
-        "reading": (
-            "Refused, with a message naming the missing key. An unconfigured plan has no "
-            "way to know who may move its milestone, and accepting any secret for it would "
-            "be exactly the hole the check exists to close."
+        "id": "one-attempt-and-a-person-redelivers",
+        "topic": "whether the sender retries on its own",
+        "basis": (
+            "The three sources name no timeout, no retry count and no backoff ladder. A "
+            "sibling feature in this repository has all three, and copying them here would "
+            "be this build inventing a policy the evidence does not state. One attempt is "
+            "what the evidence supports."
         ),
-        "otherwise": (
-            "A plan created from a template that forgot its secret would accept the first "
-            "event anybody sent it."
+        "value": {
+            "attempts_per_event": 1,
+            "timeout_seconds": DEFAULT_TIMEOUT_SECONDS,
+            "redelivery": "a route a person calls",
+            "retryable_flag": "advice for the person reading the log, never a schedule",
+        },
+        "change_it": (
+            "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.emit. A ladder needs a "
+            "policy the research does not state, so it would need its own evidence."
         ),
-        "changeable_by": "webhook_secret on the plan.",
     },
     {
-        "id": "events-before-distribution-are-noted-not-applied",
-        "question": "Can a plan be approved before it was sent?",
-        "research_says": (
-            "The research's own order: create, then distribute (status DRAFT to PENDING), "
-            'then "Buyer opens".'
+        "id": "the-delivered-count-is-per-subscription-not-per-event",
+        "topic": "what one fan-out produces",
+        "basis": (
+            "The fan-out is unbounded, so one event can produce no rows at all (every "
+            "matching row disabled) or many. Counting deliveries rather than events is "
+            "what lets a reader tell those apart, and the research's own summary asks for "
+            "'the states that are not all successes'."
         ),
-        "reading": (
-            "An event about somebody acting on a plan that has not been distributed is "
-            "recorded and applied to nobody. Believing it would approve a plan no buyer "
-            "was ever sent, which is the failure this product exists to prevent."
-        ),
-        "otherwise": (
-            "A spoofed or misrouted event would approve an unsent plan, and the milestone "
-            "would claim a buyer approved something they never saw."
-        ),
-        "changeable_by": "events.apply_event checks plan.distributed_at.",
+        "value": {
+            "event_row": "one per serialised and signed event",
+            "delivery_rows": "one per enabled subscription it reached",
+            "skip_reasons": ["subscription_disabled", "no_enabled_subscriptions"],
+        },
+        "change_it": "dsr/scheduling_meetings/fanout.py:MeetingWebhookFanout.emit.",
     },
     {
-        "id": "signers-blocked-is-a-conflict-not-a-refusal",
-        "question": "What does a signer see while the approver has not approved?",
-        "research_says": "APPROVER | Must approve before signers can sign",
-        "reading": (
-            "409 with the approvers still blocking named in the body. The caller's "
-            "credentials are not in question - the plan simply is not ready - so 403 would "
-            "be lying about whose problem it is."
+        "id": "not-built",
+        "topic": "what this workflow deliberately does not do",
+        "topic_note": "a boundary, not a judgement call",
+        "basis": (
+            "A feature whose page does not show its own edges overstates itself. Each item "
+            "below is in the research and out of this build, and saying so here is cheaper "
+            "than a reviewer discovering it."
         ),
-        "otherwise": (
-            "A signer told they are forbidden would look for a permission they do not have, "
-            "rather than for the one person who has to act first."
-        ),
-        "changeable_by": "envelopes.signing_unlocked.",
-    },
-    {
-        "id": "a-template-event-changes-no-plan",
-        "question": "What do TEMPLATE_CREATED, UPDATED, DELETED and USED do?",
-        "research_says": "The research lists the four template events alongside the document events.",
-        "reading": (
-            "Recorded and reported, and applied to nothing. They describe the vendor's "
-            "template library, and this workflow tracks one plan's milestone. Treating a "
-            "template update as a plan event would move a milestone on the strength of a "
-            "document edit."
-        ),
-        "otherwise": (
-            "Editing a template would appear to approve or reopen a plan, and a page "
-            "would show a milestone that changed for no reason a seller could explain."
-        ),
-        "changeable_by": "events.apply_event.",
-    },
-    {
-        "id": "reminders-are-noted-not-applied",
-        "question": "Does DOCUMENT_REMINDER_SENT change a recipient's state?",
-        "research_says": (
-            "DOCUMENT_REMINDER_SENT is listed among the events, and the research notes "
-            '"Signing Reminders: Automatically email recipients who have not yet signed on a '
-            'configurable schedule."'
-        ),
-        "reading": (
-            "Recorded, counted on the recipient, and it moves no milestone. A reminder is "
-            "the vendor chasing somebody; it is not that somebody did anything."
-        ),
-        "otherwise": (
-            "A plan could show progress from reminders alone, and 'how many people have "
-            "signed' would stop meaning what it says."
-        ),
-        "changeable_by": "events.apply_event.",
-    },
-    {
-        "id": "cc-and-viewer-never-hold-a-plan-open",
-        "question": "Do non-signing recipients block completion?",
-        "research_says": (
-            "The research names CC and VIEWER as roles and separates them from the "
-            "signing roles by saying a signer's status becomes SIGNED, and that "
-            '"Retrieve the signed PDF until all recipients have completed signing" is not '
-            "possible before then."
-        ),
-        "reading": (
-            "Only SIGNER and APPROVER are counted towards completion. A CC who never opens "
-            "the document cannot hold a mutual action plan open forever, and the research "
-            "never says they are asked to act."
-        ),
-        "otherwise": (
-            "One copied colleague who never clicked the link would leave a plan pending "
-            "indefinitely, and the seller could see no way to finish it."
-        ),
-        "changeable_by": "vocabulary.SIGNING_ROLES.",
-    },
-    {
-        "id": "the-signed-pdf-is-not-retrievable-before-completion",
-        "question": "Does the room fetch the signed PDF?",
-        "research_says": (
-            'The API cannot "Retrieve the signed PDF until all recipients have completed signing."'
-        ),
-        "reading": (
-            "This build stores no document bytes and offers no download. There is nothing "
-            "to fetch before completion and nothing to store after it, because the room "
-            "tracks the milestone and the audit trail rather than the file."
-        ),
-        "otherwise": (
-            "A room that stored a PDF would hold buyer personal data this workflow has no "
-            "stated basis to retain, and would have to answer what happens to it on a "
-            "withdrawn plan."
-        ),
-        "changeable_by": "Not built. Recorded so its absence is a decision.",
-    },
-    {
-        "id": "white-labelling-is-not-used",
-        "question": "Does this product white-label the signing surface?",
-        "research_says": '"CSS variables for white-labelling the signing surface".',
-        "reading": (
-            "Not by this build. The vendor can do it, and the evidence names it as an "
-            "available feature rather than as a requirement, and no other workflow in this "
-            "product passes CSS variables across a boundary. A page records the option "
-            "exists so a reviewer can see it was considered."
-        ),
-        "otherwise": (
-            "Injecting brand tokens into a third-party iframe is a platform-level concern "
-            "that belongs to WF-017, which already owns white-labelling. Two features doing "
-            "it would be the collision the feature host exists to prevent."
-        ),
-        "changeable_by": "A decision for WF-017, not for this workflow.",
+        "value": {
+            "cal_meeting_started_and_ended": (
+                "not sent. The research describes them as Cal-side events with a flat "
+                "payload, and this build fires the three Chili Piper subscription types."
+            ),
+            "recording_ready": (
+                "not sent. The research names it as an automation surface, not as one of "
+                "the three webhook types an admin picks when creating a subscription."
+            ),
+            "retry_ladder": "not built. No evidence.",
+            "replay_window_enforcement": "not built. The research assigns it to the consumer.",
+            "dead_letter_queue": "not built. No evidence.",
+            "custom_payload_templates": (
+                "not built. The research names them for the Cal UI, and a template engine "
+                "would put arbitrary text into a signed body."
+            ),
+            "cloud_metadata_endpoint_blocking": (
+                "not built. The research names it for Cal SaaS. This deployment defaults "
+                "to self-hosted, where private addresses are allowed by the quoted rule."
+            ),
+        },
+        "change_it": "Any of these needs its own ticket and its own evidence.",
     },
 )
 
 
-def inferences() -> dict[str, Any]:
-    """The whole register, served as data.
+def by_id(entry_id: str) -> dict[str, Any] | None:
+    """One entry, by name, or None."""
+    for entry in INFERENCES:
+        if entry["id"] == entry_id:
+            return entry
+    return None
 
-    The page renders this on its last tab, so a reviewer reads the list rather
-    than reconstructing it from a diff, and the sourced half sits beside the
-    inferred half - because the point of the register is to see where the line
-    between the research and this build falls.
-    """
+
+def describe() -> dict[str, Any]:
+    """The whole register, as one served document."""
     return {
-        "ticket": "WF-067",
-        "count": len(REGISTER),
-        "decisions": [dict(entry) for entry in REGISTER],
-        "note": (
-            "Each decision names what the research fixed, what it left open, the reading "
-            "this build took, and what would go wrong otherwise. A decision with no "
-            "research_says is one the evidence does not cover."
-        ),
+        "count": len(INFERENCES),
+        "sourced_quote": SOURCED_QUOTE,
+        "inferences": [dict(entry) for entry in INFERENCES],
+        "collections": dict(COLLECTIONS),
     }
