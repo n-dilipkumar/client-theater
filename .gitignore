@@ -47,3 +47,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# pytest writes a SQLite coverage database at backend/.coverage. The coverage/
+# rule above carries a trailing slash and so matches only the directory, which
+# left the file itself untracked-but-visible. An agent that staged by path could
+# still sweep it in by accident.
+.coverage
+.coverage.*
