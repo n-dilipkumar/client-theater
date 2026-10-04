@@ -52,6 +52,7 @@ from typing import Any, Mapping, Sequence
 
 from dsr.partial_failures.errors import InvalidPayload
 from dsr.partial_failures.vocabulary import FIELD_SOURCE, require_connector
+from dsr.throttle import classify as throttle_classify
 
 # --------------------------------------------------------------------------- #
 # The room error model
@@ -195,6 +196,22 @@ class ClassificationEntry:
 #: Read top to bottom. The first five entries cite the source set; the rest are
 #: the reading that goes from "rate limit and locked are the retryable classes"
 #: to an actual code, and each one says in its ``basis`` that it is doing that.
+#:
+#: **The two rate-limit rows are not written here.** Which vendor answers are a
+#: throttle is :mod:`dsr.throttle.classify`'s question, and it is answered in one
+#: table that WF-046's own queue and ``dsr.integ_monitor``'s dashboard read as
+#: well. The ``status`` and ``code`` below are therefore read from that table
+#: rather than typed in: a second copy of "429 is a throttle" is a second answer
+#: to the same question, and the ids, the ``retryable`` values and the ordering are
+#: unchanged, so this table classifies exactly what it classified before.
+_REQUEST_LIMIT = throttle_classify.signal_for(
+    "salesforce",
+    throttle_classify.REQUEST_LIMIT_HTTP_STATUS,
+    throttle_classify.REQUEST_LIMIT_EXCEEDED,
+)
+_THROTTLED = next(signal for signal in throttle_classify.SIGNALS if signal.id == "throttled")
+assert _REQUEST_LIMIT is not None, "the request-limit row must exist for this table to be complete"
+
 CLASSIFICATION: tuple[ClassificationEntry, ...] = (
     ClassificationEntry(
         id="salesforce-request-limit-exceeded",
@@ -204,9 +221,9 @@ CLASSIFICATION: tuple[ClassificationEntry, ...] = (
             'request limits in your org." An exceeded request limit is the rate-limit class the '
             "researched automation names, and it clears on its own."
         ),
-        connector="salesforce",
-        code="REQUEST_LIMIT_EXCEEDED",
-        http_status=403,
+        connector=_REQUEST_LIMIT.vendor,
+        code=_REQUEST_LIMIT.code,
+        http_status=_REQUEST_LIMIT.status,
     ),
     ClassificationEntry(
         id="dataverse-validation",
@@ -265,7 +282,7 @@ CLASSIFICATION: tuple[ClassificationEntry, ...] = (
             "vendors use for it, and putting a throttled row in a human's queue would defeat the "
             "automation the research describes."
         ),
-        http_status=429,
+        http_status=_THROTTLED.status,
     ),
     ClassificationEntry(
         id="bad-request",
