@@ -120,7 +120,11 @@ export default function NdaGate() {
 
           <AgreementEditor roomId={roomId} onSaved={board.refetch} />
 
-          <GateBoard gates={board.data.gates} onChanged={board.refetch} />
+          <GateBoard
+            gates={board.data.gates}
+            agreements={board.data.agreements}
+            onChanged={board.refetch}
+          />
 
           <AcceptanceLog acceptances={board.data.acceptances} agreements={board.data.agreements} />
         </>
@@ -220,7 +224,18 @@ function AgreementEditor({ roomId, onSaved }) {
   )
 }
 
-function GateBoard({ gates, onChanged }) {
+/**
+ * The gate list.
+ *
+ * `agreements` is passed in rather than fetched per row. The board already loads
+ * the room's agreements in the same batch as the gates, so a row that fetched its
+ * own copy would issue one request per link for data already in hand, and would
+ * render its picker empty until that second request came back. That empty window is
+ * not cosmetic: a `<select>` with nothing in it is a control that appears broken,
+ * and it is a race a caller cannot see through. One list, loaded once, rendered
+ * populated on the first paint.
+ */
+function GateBoard({ gates, agreements, onChanged }) {
   const [busyId, setBusyId] = useState(null)
   const [failure, setFailure] = useState(null)
 
@@ -285,6 +300,7 @@ function GateBoard({ gates, onChanged }) {
           <GateRow
             key={`${gate.id}:${gate.gate?.agreement_id || ''}`}
             gate={gate}
+            agreements={agreements}
             onToggle={toggle}
             busy={busyId === gate.id}
           />
@@ -294,11 +310,8 @@ function GateBoard({ gates, onChanged }) {
   )
 }
 
-function GateRow({ gate, onToggle, busy }) {
+function GateRow({ gate, agreements, onToggle, busy }) {
   const gateData = gate.gate || {}
-  // The list a rep picks from. An agreement that is failing a link closed is still
-  // offered, because the fix is usually to point the link at it.
-  const choices = useAgreements(gate.room_id)
   const [selected, setSelected] = useState(gateData.agreement_id || '')
 
   const enriched = { ...gate, agreementChoice: selected }
@@ -340,8 +353,13 @@ function GateRow({ gate, onToggle, busy }) {
             value={selected}
             onChange={(event) => setSelected(event.target.value)}
           >
-            <option value="">Choose an agreement</option>
-            {choices.map((agreement) => (
+            {/* An agreement that is failing a link closed is still offered, because
+                the fix is usually to point the link at it. The placeholder covers the
+                one genuine empty case: a room with no agreements written yet. */}
+            <option value="">
+              {agreements.length ? 'Choose an agreement' : 'No agreements written yet'}
+            </option>
+            {agreements.map((agreement) => (
               <option key={agreement.id} value={agreement.id}>
                 {agreement.title} (v{agreement.version})
               </option>
@@ -358,11 +376,6 @@ function GateRow({ gate, onToggle, busy }) {
       </div>
     </Card>
   )
-}
-
-function useAgreements(roomId) {
-  const { data } = useAsync(() => ndaApi.agreements(roomId), [roomId])
-  return data?.agreements || []
 }
 
 function AcceptanceLog({ acceptances, agreements }) {

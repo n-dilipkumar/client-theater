@@ -240,7 +240,62 @@ describe('the seller board', () => {
     expect(screen.getByText(/superseded/)).toBeTruthy()
   })
 
-  it('sends one request that both enables the gate and sets the agreement', async () => {
+  it('loads the agreement list once, not once per link', async () => {
+    // The cause of a red CI run. Each row used to fetch its own copy of the room's
+    // agreements, which meant one request per link for data the board already had,
+    // and meant the picker rendered empty until that second request came back. A
+    // `<select>` with nothing in it is a control that looks broken, and it is a race
+    // a caller cannot see through. Three rows, one request.
+    const second = { ...gateRow(), id: 'wf069_link_second', title: 'Second deal link' }
+    const third = { ...gateRow(), id: 'wf069_link_third', title: 'Third deal link' }
+    const calls = stubApi(
+      boardRoutes({
+        [`${BASE}/rooms/${ROOM}/gates`]: { room_id: ROOM, gates: [gateRow(), second, third] },
+        [`${BASE}/links/${LINK}/agreement`]: { id: LINK, gate: GATES.gates[0].gate },
+        [`${BASE}/links/${second.id}/agreement`]: { id: second.id, gate: GATES.gates[0].gate },
+        [`${BASE}/links/${third.id}/agreement`]: { id: third.id, gate: GATES.gates[0].gate },
+      }),
+    )
+    render(<NdaGate />)
+
+    await screen.findByText('Third deal link')
+    const agreementReads = calls.filter((call) => call.path === `${BASE}/agreements`)
+    expect(agreementReads).toHaveLength(1)
+  })
+
+it('renders the picker already populated, with no empty window', async () => {
+    // The regression this pins. The page has a loading phase for the room list, so the
+    // assertion is not about the first render. It is about the instant the row appears:
+    // if the row is on screen, its options are too. Before the fix the row rendered
+    // with a select containing only its placeholder and the options arrived on a second
+    // request, so this exact query threw on a slow machine and passed on a fast one.
+    stubApi(
+      boardRoutes({
+        [`${BASE}/rooms/${ROOM}/gates`]: {
+          room_id: ROOM,
+          gates: [
+            gateRow({
+              gate: {
+                enabled: false,
+                agreement_id: null,
+                agreement_title: null,
+                agreement_ok: true,
+                fields: ['enable_agreement', 'agreement_id'],
+              },
+            }),
+          ],
+        },
+      }),
+    )
+    render(<NdaGate />)
+
+    await screen.findByText('Northwind deal link')
+    // No await between the row arriving and this query. That is the whole assertion.
+    const option = screen.getByRole('option', { name: /Northwind mutual NDA/ })
+    expect(option.getAttribute('value')).toBe(AGREEMENT)
+  })
+
+it('sends one request that both enables the gate and sets the agreement', async () => {
     // The link starts ungated, so the picker is the only thing a rep has to set.
     const ungated = {
       room_id: ROOM,
@@ -266,6 +321,12 @@ describe('the seller board', () => {
     render(<NdaGate />)
 
     await screen.findByText('Northwind deal link')
+    // Wait for the option itself, not for the board. The agreement list is a second
+    // request, so `findByText` on the link title resolves before the `<select>` has
+    // anything in it. Selecting against an empty list passes on a fast machine and
+    // fails on a slow one, which is the worst kind of test: green locally, red in CI,
+    // and it says nothing about the product either way.
+    await screen.findByRole('option', { name: /Northwind mutual NDA/ })
     await user.selectOptions(screen.getByLabelText('Agreement'), AGREEMENT)
     await user.click(screen.getByRole('button', { name: /apply to this link/i }))
 
