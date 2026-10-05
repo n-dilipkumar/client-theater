@@ -71,6 +71,26 @@ what a party may still do:
     The writes: send a request with an expiry, move or clear the deadline, run the
     reminder ledger, let one signer sign, and sweep the due requests. It deletes
     nothing, because expiry closes the mutation path and keeps the document.
+
+WF-083 ships in the same package, because the specification puts it in the same domain -
+security, access and governance - and because consent is a question about what may be
+recorded at all:
+
+``session_consent``
+    Every researched term WF-083 enforces against: the two consent axes, the three masking
+    modes, the IPv4-only blocklist, the two retention windows, the five-label cap, the two
+    link kinds, and the four limits that are sourced and must fail loudly.
+``session_consent_rules``
+    The pure rules: reading the two-axis consent call, the identity a denial forces, the
+    mask applied before the write, the ingest-time blocklist check, the label cap, the two
+    link kinds, both retention windows, and the refusal a per-recording delete earns. It
+    reads and writes nothing.
+``session_consent_inferences``
+    Every judgement call WF-083 made, each recorded with the alternative it rejected.
+``session_consent_engine``
+    The reads and the writes: the project and its consent gate, the blocklist, the ingest
+    path, the recordings and their labels, the share links, the retention sweep, and the
+    project purge that is the only delete the evidence supports.
 """
 
 from dsr.security_governance import (  # noqa: F401
@@ -85,6 +105,10 @@ from dsr.security_governance import (  # noqa: F401
     expiry_vocabulary,
     inferences,
     rules,
+    session_consent,
+    session_consent_engine,
+    session_consent_inferences,
+    session_consent_rules,
     vocabulary,
 )
 
@@ -100,5 +124,9 @@ __all__ = [
     "expiry_vocabulary",
     "inferences",
     "rules",
+    "session_consent",
+    "session_consent_engine",
+    "session_consent_inferences",
+    "session_consent_rules",
     "vocabulary",
 ]

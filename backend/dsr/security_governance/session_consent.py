@@ -226,6 +226,15 @@ SCRUBBED = "scrubbed"
 PER_PAGE_VIEW = "per_page_view"
 FRAGMENTED = "fragmented"
 
+#: The granted counterpart of :data:`PER_PAGE_VIEW`, named from the evidence: a grant means
+#: "first- and third-party cookies set and cross-session tracking enabled", which is an
+#: identity that survives the session. The specification names the denied kinds and does
+#: not name the granted one, so this value is a plain name and not a quote.
+PERSISTENT = "persistent"
+
+#: Both names the evidence gives an identity under each condition, for the page to render.
+IDENTITY_KINDS = (PERSISTENT, PER_PAGE_VIEW, FRAGMENTED)
+
 RECORDING_STATES = (RECORDED, BLOCKED, SCRUBBED)
 
 # --------------------------------------------------------------------------- #
@@ -236,7 +245,16 @@ RECORDING_STATES = (RECORDED, BLOCKED, SCRUBBED)
 
 GUEST = "guest"
 TEAM = "team"
+
+#: Guest first, because :func:`~dsr.security_governance.session_consent_rules.link_kind`
+#: defaults an unlabelled link to the kind that expires, and an unlabelled share link is a
+#: link somebody will send to a buyer.
 LINK_KINDS = (GUEST, TEAM)
+
+#: How long a guest link lives when the caller names no window. The evidence says guest
+#: links expire and does not give the number, so this is an inference recorded as one in
+#: :mod:`dsr.security_governance.session_consent_inferences`.
+DEFAULT_GUEST_LINK_DAYS = 7
 
 #: Evidence: "You need to delete the entire project to delete user's data."
 PROJECT_GRANULARITY = "project"
