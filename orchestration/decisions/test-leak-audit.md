@@ -107,19 +107,25 @@ Counted by script over every `.js`/`.jsx` under `frontend/src`, not by eye.
 | Mechanism | Files | Restorable? |
 |---|---|---|
 | `global.fetch = ` / `globalThis.fetch = ` | **19** | **No.** Nothing can undo a plain assignment. |
-| `vi.stubGlobal('fetch', …)` | 8 | Yes, *if* the file calls `vi.unstubAllGlobals()` |
+| `vi.stubGlobal('fetch', …)` | 7 | Yes, *if* the file calls `vi.unstubAllGlobals()` |
 
-Of the 8 that use the restorable mechanism:
+26 files install `fetch` at all, and the two rows are disjoint. Of the 7 that use
+the restorable mechanism:
 
 - 5 pair it correctly (`CrmReadPanel`, `GapReconcile`, `ConfidentialView`,
   `RecipientVerification`, `QuoteAuthor`).
 - **2 never unstub**: `EvaultDownload.test.jsx` (`stubGlobal` at 260, 745, 754;
   no `unstubAllGlobals` anywhere) and `wf014-access-controls.test.jsx`
   (`stubGlobal` at 111, 332; no `unstubAllGlobals` anywhere).
-- **1 has an unstub that cannot cover its own assignments**:
-  `InboundVerification.test.jsx` calls `vi.unstubAllGlobals()` at 273, but
-  installs its fetches by plain assignment at 259 and 591. The safety net is
-  present, does not apply, and reads as though it does.
+
+And one file that belongs in neither row cleanly:
+
+- **`InboundVerification.test.jsx` calls `vi.unstubAllGlobals()` at 273 but
+  never calls `vi.stubGlobal` at all** — it installs its fetches by plain
+  assignment at 259 and 591. So it is counted in the 19 above, and its safety
+  net is present, does not apply to its own assignments, and reads as though it
+  does. This is the single most misleading file in the suite: a reader scanning
+  for `unstubAllGlobals` concludes it is clean.
 
 ### The 19 files that cannot be undone
 
@@ -407,6 +413,51 @@ date was introduced: the window is measured from the file's existing `NOW`
 constant, which is the clock these tests now run on.
 
 `345 passed` in `test_wf056.py`. Ruff clean (with `--config backend/pyproject.toml`).
+
+### One thing I did not expect, found by running the suite three times
+
+| Run | Code | Result |
+|---|---|---|
+| 1 | before the change | 17856 passed, **3 skipped**, 1 xfailed |
+| 2 | after the change | 17857 passed, **3 skipped**, 1 xfailed |
+| 3 | after the change, identical | 17859 passed, **1 skipped**, 1 xfailed |
+
+17860 collected every time. **Two tests moved from skipped to passed between run
+2 and run 3, on byte-identical code.** A conditional skip is a decision made from
+something outside the test's own body — the platform, the clock, an import
+ordering, a network probe. Two of them are not, today, a correctness problem.
+They are a fourth kind of "depends on the world being exactly as it was when the
+file was written", and nobody has looked at them, because a skip is green. I did
+not identify which tests they are; that needs a `pytest -rs` run and a bisect
+over the three runs, and it is a follow-up, not a finding of this audit.
+
+---
+
+## 6b. Gate and CI
+
+| Check | Result |
+|---|---|
+| `tools/check_feature_diff.py --base origin/main` | `OK: 3 changed file(s), none shared` |
+| `… --platform-change` | `OK: 3 changed file(s), none shared` |
+| `ruff check backend tools orchestration --config backend/pyproject.toml` | `All checks passed!` |
+| `ruff format --check` (same paths) | `886 files already formatted` |
+| Jev release bar, first gate | **uncertain** — merge at 0.50, threshold 0.75 |
+| Jev release bar, second gate | **pass** — merge at 0.94, `jev-20261005T130438-28500-78349` |
+
+The first gate is worth keeping. It did not say the work was unsound; it said two
+measurements were missing. One was `check_feature_diff.py`, which cannot run
+against an uncommitted diff, so it could not have been run before committing.
+The other was the post-change whole-suite re-run. With both supplied the gate
+cleared at 0.94. Both records are in `test-leak-jev-audit.jsonl`, in sequence,
+because the sequence is the honest record.
+
+One honest caveat on the second gate: the sub-question scores stayed low
+(`claims_backed_by_measurement` 0.32, `coverage_of_the_change` 0.43,
+`design_floor` 0.08) even as the verdict went to 0.94. I read `design_floor` 0.08
+as the model registering that the question does not apply to a diff with no
+frontend source in it, which is what I declared — but I cannot verify that
+reading, and a low score on "claims are backed by measurement" is worth a second
+pair of eyes on the evidence half of this report rather than a shrug.
 
 ---
 
