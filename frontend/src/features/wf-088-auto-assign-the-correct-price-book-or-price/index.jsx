@@ -376,6 +376,11 @@ function DealPanel({ deal, vocabulary, roomId, actor, onChanged }) {
   if (conditions.error) return <ErrorNote error={conditions.error} onRetry={conditions.refetch} />
 
   const panel = conditions.data || {}
+  // What an override would remove right now, read from the conditions panel rather than
+  // counted here, so the number on screen before the button is the number the backend
+  // will act on. A line that names a different price book survives the override, so this
+  // is deliberately not `panel.line_items.length`.
+  const removable = panel.line_items_removed_on_change || []
   const state = card.data?.state || panel.state || 'unassigned'
   const candidates = candidateBooks(panel.candidates)
   const triggers = vocabulary?.triggers || []
@@ -486,6 +491,13 @@ function DealPanel({ deal, vocabulary, roomId, actor, onChanged }) {
         <DestructiveWarning removed={removing} quote={vocabulary?.price_book?.line_items_removed_quote} />
       )}
 
+      {choosing && removable.length > 0 && (
+        <DestructiveWarning
+          removed={removable}
+          quote={vocabulary?.price_book?.line_items_removed_quote}
+        />
+      )}
+
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label htmlFor={`wf088-trigger-${deal.id}`} className="text-[13px] font-medium text-foreground">
@@ -527,8 +539,10 @@ function DealPanel({ deal, vocabulary, roomId, actor, onChanged }) {
             ))}
             {candidates.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No rule matched this deal, so there is no book to choose from. The price book
-                is set by a rule, or by an override with a book of your own.
+                No rule matched this deal, so there are no price books to choose from here.
+                The researched dropdown lists the workspace's price books, and WF-087's
+                catalogue — which is what would supply that list — has not shipped. Until it
+                does, the books this page can name are the ones a rule already names.
               </p>
             )}
           </div>
@@ -658,8 +672,8 @@ export function PriceBookRulesPage() {
   const inferences = useAsync(() => priceBookApi.inferences(), [])
   const summary = useAsync(() => priceBookApi.summary(roomId), [roomId])
   const rules = useAsync(() => priceBookApi.rules(roomId), [roomId])
-  const deals = useAsync(() => listDeals(), [])
-  const quotes = useAsync(() => listQuotes(), [])
+  const deals = useAsync(() => listDeals(roomId), [roomId])
+  const quotes = useAsync(() => listQuotes(roomId), [roomId])
   const log = useAsync(() => priceBookApi.assignments({ roomId, outcome }), [roomId, outcome])
 
   if (vocabulary.loading || rooms.loading) return <Spinner label="Loading price book rules" />
@@ -701,6 +715,33 @@ export function PriceBookRulesPage() {
         }}
         title="Changing the price book"
       />
+      {/* The research has two vendors in it and this build implements one of them. Saying
+          so on the page, rather than only in a module docstring, is the difference between a
+          divergence a reader can find and one they have to discover. */}
+      <Notice tone="neutral" title="What is built, and what is only named">
+        <p className="mb-2">
+          The rule engine above is the HubSpot half: filters on deal and company properties,
+          assigned on create, overridable by hand.
+        </p>
+        <p className="mb-2">
+          The Dynamics half is <strong>served as vocabulary, not built</strong>. This build
+          publishes{' '}
+          <span className="font-mono">
+            {vocabulary.data?.dynamics?.message || 'GetDefaultPriceLevelRequest'}
+          </span>{' '}
+          and{' '}
+          <span className="font-mono">
+            {vocabulary.data?.dynamics?.connection_role || 'Territory Default Pricelist'}
+          </span>
+          , because the research names them, but it does not implement the plug-in, does not
+          fire on quote, order or invoice rows as{' '}
+          <span className="font-mono">GetDefaultPriceLevel</span> does upstream, and models
+          territory as an ordinary deal property rather than as a{' '}
+          <span className="font-mono">systemuser</span> assignment. The reasoning and the
+          rejected alternatives are recorded on{' '}
+          <span className="font-mono">GET /inferences</span>.
+        </p>
+      </Notice>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

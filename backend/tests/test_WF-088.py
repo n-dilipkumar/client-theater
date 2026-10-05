@@ -1174,6 +1174,99 @@ class TestTheQuoteInherits:
         assert answer["authority"] == vocab.INHERITANCE_AUTHORITY_NONE
         assert answer["price_book"] is None
         assert answer["settable_here"] is False
+        assert answer["reason"] == vocab.INHERITANCE_REASON_NO_DEAL
+        assert answer["deal_id"] is None
+
+    def test_a_deal_that_carrys_no_book_is_not_reported_as_a_missing_deal(
+        self, engine: PriceBookEngine
+    ):
+        """Two different facts must not arrive as one sentence.
+
+        Found by review. A quote whose deal exists and carries no price book leaves
+        ``price_book`` empty for the same reason a quote with no deal does, so both were
+        reporting "This quote has no associated deal". That sends a seller to repair a
+        relationship which is already correct, instead of to read the deal's own card
+        where the rule evaluation says what did and did not match. Both cases are worth
+        stating separately, and this asserts they are stated separately.
+        """
+        deal(engine, segment="enterprise")  # a deal that exists, and is unpriced
+        engine.store.create(
+            vocab.SOURCE_QUOTES,
+            {"name": "Quote on an unpriced deal", "deal": "d1"},
+            record_id="q1",
+            room_id="room_a",
+            actor="dana",
+            source="fixture",
+        )
+
+        answer = engine.quote_price_book("q1")
+
+        assert answer["deal_id"] == "d1", "the deal is present, so the answer must name it"
+        assert answer["price_book"] is None
+        assert answer["authority"] == vocab.INHERITANCE_AUTHORITY_NONE
+        assert answer["reason"] == vocab.INHERITANCE_REASON_DEAL_HAS_NO_BOOK
+        assert answer["reason"] != vocab.INHERITANCE_REASON_NO_DEAL
+        # It must not name a deal it cannot find, which is the other half of the same lie.
+        assert "no associated deal" not in answer["reason"]
+
+    def test_a_priced_deal_reports_the_inheritance_sentence(self, engine: PriceBookEngine):
+        """The third of the three reasons, so the branch is covered on both sides."""
+        deal(engine, segment="enterprise")
+        segment_rule(engine)
+        assign(engine)
+        engine.store.create(
+            vocab.SOURCE_QUOTES,
+            {"name": "Quote on a priced deal", "deal": "d1"},
+            record_id="q1",
+            room_id="room_a",
+            actor="dana",
+            source="fixture",
+        )
+
+        answer = engine.quote_price_book("q1")
+
+        assert answer["reason"] == vocab.INHERITANCE_REASON_FROM_DEAL
+        assert answer["authority"] == vocab.INHERITANCE_AUTHORITY_DEAL
+
+    def test_all_three_inheritance_reasons_are_distinct(self):
+        """A vocabulary of sentences that collapsed into one another is not a vocabulary."""
+        assert (
+            len(
+                {
+                    vocab.INHERITANCE_REASON_FROM_DEAL,
+                    vocab.INHERITANCE_REASON_DEAL_HAS_NO_BOOK,
+                    vocab.INHERITANCE_REASON_NO_DEAL,
+                    vocab.INHERITANCE_REASON_DEAL_MISSING,
+                }
+            )
+            == 4
+        )
+
+    def test_a_quote_naming_a_deal_that_is_not_there_says_so(self, engine: PriceBookEngine):
+        """A dangling reference is a broken thing, not an unpriced deal.
+
+        Found by review, which found the sibling defect: a quote whose named deal could
+        not be resolved was reported as having no associated deal at all. That hid a
+        dangling id behind a sentence about a perfectly normal situation.
+        """
+        engine.store.create(
+            vocab.SOURCE_QUOTES,
+            {"name": "Dangling quote", "deal": "d_vanished"},
+            record_id="q1",
+            room_id="room_a",
+            actor="dana",
+            source="fixture",
+        )
+
+        answer = engine.quote_price_book("q1")
+
+        assert answer["reason"] == vocab.INHERITANCE_REASON_DEAL_MISSING
+        assert answer["price_book"] is None
+        # It must not claim the quote names nothing, which is what it used to say.
+        assert answer["reason"] != vocab.INHERITANCE_REASON_NO_DEAL
+        # The read stays total: a broken reference is answered, not raised, so one such
+        # quote does not take the rest of the panel down.
+        assert answer["settable_here"] is False
 
     def test_a_quote_whose_deal_is_missing_reports_none(self, engine: PriceBookEngine):
         engine.store.create(
@@ -1299,6 +1392,30 @@ class TestEveryRefusalIsPublished:
         for code, (status, detail) in vocab.ERROR_CODES.items():
             assert 400 <= status < 600, code
             assert detail, code
+
+    def test_every_error_code_can_actually_be_raised(self):
+        """A published code nothing raises is a code a client can never see.
+
+        Found by review: `quote_has_no_deal` was in ERROR_CODES and therefore published on
+        `/vocabulary`, but the read that would have used it reports an answer instead of
+        raising, so nothing could ever produce it. Rather than delete it and lose the
+        warning, this asserts the general property over the whole package and the feature
+        module, so the next code added to the table has to be reachable or this fails.
+        """
+        package = Path(rules.__file__).parent
+        sources = sorted(package.glob("price_book_*.py"))
+        feature = importlib.import_module(FEATURE_MODULE)
+        sources.append(Path(feature.__file__))
+
+        read = "\n".join(path.read_text(encoding="utf-8") for path in sources)
+        # Strip quotes so a code written as a literal in either quoting style is found.
+        flattened = read.replace('"', "").replace("'", "")
+
+        unreachable = [code for code in vocab.ERROR_CODES if code not in flattened]
+        assert not unreachable, (
+            f"these codes are published on /vocabulary but appear in no module source, so no "
+            f"refusal can raise them: {unreachable}"
+        )
 
     def test_the_refusals_carry_the_researched_sentence(self):
         refusal = PriceBookRefusal("quote_price_book_is_set_on_the_deal")
@@ -2071,13 +2188,116 @@ class TestTheSeedString:
         summary.encode("cp1252")
 
     def test_every_demo_rule_prices_only_its_own_deal(self):
-        """Two rules in one room must not price each other's deals."""
-        _, _, deals = self._seed([("room_a", "Northwind")])
+        """A rule must price the deal its filter matched and no other deal.
+
+        The earlier version of this test discarded the assignments and asserted only that
+        the deal ids were distinct, so it would have passed if every rule priced every
+        deal. It is written against the assignment rows instead, because that is where the
+        pairing actually lives: each row names both the deal it was evaluated for and the
+        rule that wrote the book.
+        """
+        _, assignments, deals = self._seed([("room_a", "Northwind")])
 
         assert deals
         # Six plans and six deals in one room, each priced by its own rule only. A demo
         # where every rule prices every deal shows the wrong states.
         assert len({row["id"] for row in deals}) == len(deals)
+
+        pairs: list[tuple[str, str | None]] = [
+            (row["data"]["deal_id"], row["data"].get("rule_label")) for row in assignments
+        ]
+        # Some rows legitimately name no rule: an override, or a deal no rule matched.
+        priced = [(deal_id, rule) for deal_id, rule in pairs if rule]
+        assert priced, "the demo priced nothing, so nothing is being cross-checked"
+
+        # One rule, one deal. If any rule appears against two deals, or any deal against
+        # two rules, the filters are not discriminating.
+        by_rule: dict[str, set[str]] = {}
+        by_deal: dict[str, set[str]] = {}
+        for deal_id, rule in priced:
+            by_rule.setdefault(rule, set()).add(deal_id)
+            by_deal.setdefault(deal_id, set()).add(rule)
+        for rule, deal_ids in by_rule.items():
+            assert len(deal_ids) == 1, f"{rule} priced more than one deal: {sorted(deal_ids)}"
+        for deal_id, rule_names in by_deal.items():
+            assert len(rule_names) == 1, (
+                f"{deal_id} was priced by more than one rule: {sorted(rule_names)}"
+            )
+
+        # And the books each rule wrote must be its own: a rule that wrote another rule's
+        # book would pass the checks above and still price the deal wrongly.
+        books: dict[str, set[str]] = {}
+        for row in assignments:
+            rule = row["data"].get("rule_label")
+            book = (row["data"].get("price_book") or {}).get("name")
+            if rule and book:
+                books.setdefault(rule, set()).add(book)
+        for rule, names in books.items():
+            assert len(names) == 1, f"{rule} wrote more than one price book: {sorted(names)}"
+
+    def test_a_rule_never_prices_a_deal_in_another_room(self):
+        """Rules and deals are both scoped to a room, so the two must agree.
+
+        Found by review, not by the demo: rule evaluation read every room's rules because
+        the room was never passed down, so a rule saved in room A would price a deal in
+        room B and the assignment row would attribute a room A rule to a room B deal.
+        """
+        from dsr.db.audited import AuditedDatabase
+
+        db = AuditedDatabase(":memory:", actor="cross-room-test")
+        try:
+            store = RecordStore(db)
+            store.create("room", {"name": "A"}, record_id="room_a", actor="dana")
+            store.create("room", {"name": "B"}, record_id="room_b", actor="dana")
+            deal_a = store.create(
+                vocab.SOURCE_DEALS,
+                {"name": "In A", "segment": "cross-room"},
+                room_id="room_a",
+                actor="dana",
+            )
+            deal_b = store.create(
+                vocab.SOURCE_DEALS,
+                {"name": "In B", "segment": "cross-room"},
+                room_id="room_b",
+                actor="dana",
+            )
+            engine = PriceBookEngine(store)
+
+            # A rule in room A that would match a deal in either room.
+            engine.create_rule(
+                {
+                    "key": "cross-room",
+                    "label": "Cross room",
+                    "price_book": {"id": "pb-a", "name": "Book A"},
+                    "filters": [
+                        {
+                            "object": "deal",
+                            "property": "segment",
+                            "operator": "is",
+                            "value": "cross-room",
+                        }
+                    ],
+                },
+                actor="dana",
+                source="test",
+                room_id="room_a",
+            )
+
+            matched_a = engine.matching_rules(deal_a["id"])
+            matched_b = engine.matching_rules(deal_b["id"])
+            assert matched_a, "the room A rule should match the room A deal"
+            assert not matched_b, (
+                "a rule scoped to room A must not match a deal in room B, or it will write "
+                f"its price book onto it: {matched_b}"
+            )
+
+            # And the workspace mode a deal is shown must come from its own room's rules.
+            panel_b = engine.conditions(deal_b["id"])
+            assert panel_b["rules"] == [], (
+                f"the conditions panel for a room B deal listed room A's rules: {panel_b['rules']}"
+            )
+        finally:
+            db.close()
 
     def test_the_seeded_removal_is_really_recorded(self):
         """The destructive override is a count in the demo, not just a sentence."""
