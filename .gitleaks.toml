@@ -106,3 +106,27 @@ paths = [
   '''^frontend/src/features/wf-082-verify-and-ip-allowlist-inbound-provider-webhooks/InboundVerification\.test\.jsx$''',
 ]
 regexes = ['''key_fingerprint:\s*['"]abc123def456['"]''']
+
+# ---------------------------------------------------------------------------
+# 5. The WF-106 test fixture visitor_key values.
+#
+# Measured matches (0 in the tree, 11 in history):
+#   backend/dsr/features/wf106_trigger_outreach_on_high_intent_page_visits.py:
+#     618, 630, 641, 655, 669, 680  (commits 759b061, c35eab5)
+#   frontend/src/features/wf-106-trigger-outreach-on-high-intent-page-visits/
+#     PageOutreach.test.jsx:
+#     80, 92, 104, 148, 160, 180  (commit 6a26796)
+#
+# All eleven are the same fixture format, "visitor-<word>-<hex>", used as sample
+# visitor identifiers in demo payloads for the page-outreach workflow. They are
+# test data, not credentials: the generic-api-key rule trips on the entropy of
+# the three-character hex suffix. Scoped by path to the two test files that carry
+# them, so the same pattern beside other keys is still reported.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "WF-106 test fixture visitor_key values, scoped to the two test files"
+paths = [
+  '''^backend/dsr/features/wf106_trigger_outreach_on_high_intent_page_visits\.py$''',
+  '''^frontend/src/features/wf-106-trigger-outreach-on-high-intent-page-visits/PageOutreach\.test\.jsx$''',
+]
+regexes = ['''visitor-[a-z]+-[0-9a-f]{3}''']
