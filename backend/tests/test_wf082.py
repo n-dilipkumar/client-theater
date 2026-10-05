@@ -341,20 +341,21 @@ def test_an_address_outside_every_published_range_is_refused():
 
 
 def test_an_ipv4_address_is_never_inside_an_ipv6_range_and_the_reverse():
-    """Comparing the integer values alone would let a small IPv6 address match an IPv4 /8.
+    """Comparing the integer values alone would let a small IPv6 address match an IPv4 range.
 
-    ``::1`` is the integer 1, and an IPv4 range whose first address is 0 also contains 1 as a
-    raw integer. Comparing the family widths first is what makes the two families disjoint.
+    ``::1`` is the integer 1, and an IPv4 range whose first address is 0 also contains the
+    integer 1 as a raw number. Comparing the family widths first is what keeps the two
+    families disjoint, and this test fails if that comparison is removed.
     """
     rows = rules.classify_ranges(["0.0.0.0/8", "::1/128"])
-    assert rules.evaluate_source_ip("203.0.113.9", rows, snapshot_at=None, now=NOW)["allowed"]
-    assert rules.evaluate_source_ip("::1", rows, snapshot_at=None, now=NOW)["allowed"]
-    # The integer 1 is inside 0.0.0.0/8, but the address ::1 is not inside an IPv4 range.
-    assert not rules.evaluate_source_ip("::1", rows, snapshot_at=None, now=NOW)["allowed_range"] == (
+    assert rules.evaluate_source_ip("0.1.2.3", rows, snapshot_at=None, now=NOW)["allowed_range"] == (
         "0.0.0.0/8"
     )
+    assert rules.evaluate_source_ip("::1", rows, snapshot_at=None, now=NOW)["allowed_range"] == (
+        "::1/128"
+    )
     assert not rules.evaluate_source_ip("::2", rows, snapshot_at=None, now=NOW)["allowed"]
-    assert not rules.evaluate_source_ip("198.18.0.1", rows, snapshot_at=None, now=NOW)["allowed"]
+    assert not rules.evaluate_source_ip("11.0.0.1", rows, snapshot_at=None, now=NOW)["allowed"]
 
 
 def test_a_narrow_range_does_not_admit_the_rest_of_its_own_network():
@@ -996,8 +997,21 @@ def test_no_honesty_key_collides_with_a_field_a_projection_carries():
     payload = engine_vocabulary()
     for key in HONESTY:
         assert key not in ("checks", "state", "error_name", "http_status"), key
-    assert isinstance(payload["checks"], list)
-    assert payload["checks"] == list(vocab.CHECK_ORDER)
+    assert [row["check"] for row in payload["checks"]] == list(vocab.CHECK_ORDER)
+
+
+def test_all_three_checks_answer_the_same_question_under_the_same_key():
+    """``passed`` on all three, so a consumer can test one field across the list."""
+    rows = rules.classify_ranges(DEMO_RANGES)
+    ip_verdict = rules.evaluate_source_ip("203.0.113.1", rows, snapshot_at=None, now=NOW)
+    raw, header = encoded_payload(canonical_payload())
+    for check in (
+        ip_verdict,
+        signing.verify_content_sha256(API_KEY, raw, header),
+        signing.verify_event_hash(API_KEY, canonical_payload()["event"]),
+    ):
+        assert "passed" in check, check["check"]
+        assert check["passed"] is True, check["check"]
 
 
 def test_a_delivery_response_carries_the_three_checks_and_not_a_sentence(engine):
@@ -1006,6 +1020,7 @@ def test_a_delivery_response_carries_the_three_checks_and_not_a_sentence(engine)
     report = deliver(engine)
     assert isinstance(report["checks"], list)
     assert [check["check"] for check in report["checks"]] == list(vocab.CHECK_ORDER)
+    assert all(check["passed"] is True for check in report["checks"])
 
 
 def test_the_vocabulary_names_the_proxy_wiring_risk_outright():
