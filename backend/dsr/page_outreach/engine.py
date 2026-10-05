@@ -688,7 +688,13 @@ class PageOutreach:
 
         if state != "live":
             self._write_view(
-                view, workflow, room, matched=False, actor=actor, source=source, now=reference
+                view,
+                workflow,
+                room,
+                matched=self._matches_rules(data, view),
+                actor=actor,
+                source=source,
+                now=reference,
             )
             return {
                 "workflow_id": view.workflow_id,
@@ -763,13 +769,7 @@ class PageOutreach:
         window_days = int(data.get("repeat_window_days") or REPEAT_WINDOW_DAYS)
         required = int(data.get("repeat_visits") or REPEAT_VISITS)
 
-        matched_now = rules_module.rules_matched(
-            rules_module.match_rules(
-                list(data.get("rules") or []),
-                view,
-                dwell_seconds=int(data.get("dwell_seconds") or DWELL_SECONDS),
-            )
-        )
+        matched_now = self._matches_rules(data, view)
         # The window arithmetic lives in the pure module, so it can be tested on its
         # own. This view is added to the count because a seller reading the decision
         # needs to see the visit that triggered it in the total.
@@ -969,6 +969,25 @@ class PageOutreach:
             if kind and kind not in kinds:
                 kinds.append(kind)
         return kinds
+
+    @staticmethod
+    def _matches_rules(data: dict[str, Any], view: rules_module.PageView) -> bool:
+        """Whether this page view satisfies the workflow's targeting rules.
+
+        Read on every recorded view, including one recorded against a draft. The
+        draft gate does not evaluate the four gates, but the rules are a property of
+        the workflow and the buyer's browsing is a fact about the buyer: recording a
+        view against a draft as unmatched would drop the evidence the moment the seller
+        sets the workflow live, and the prospect would have to browse again to be seen
+        once.
+        """
+        return rules_module.rules_matched(
+            rules_module.match_rules(
+                list(data.get("rules") or []),
+                view,
+                dwell_seconds=int(data.get("dwell_seconds") or DWELL_SECONDS),
+            )
+        )
 
     @staticmethod
     def _audience_reason(data: dict[str, Any], view: rules_module.PageView) -> str:
