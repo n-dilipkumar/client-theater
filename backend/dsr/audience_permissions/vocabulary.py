@@ -210,6 +210,18 @@ MEMBERSHIP_NONE = "not_a_member"
 
 MEMBERSHIP_STEPS = (MEMBERSHIP_BY_EMAIL, MEMBERSHIP_BY_DOMAIN, MEMBERSHIP_ALLOW_ALL)
 
+#: The membership answer is a step rather than a boolean, so a page can say which rule
+#: admitted the viewer. These are the keys the resolved membership carries.
+MEMBERSHIP_STEP_FIELD = "membership_step"
+MEMBER_OF_FIELD = "is_member"
+MATCHED_DOMAIN_FIELD = "matched_domain"
+MEMBER_ID_FIELD = "member_id"
+
+#: The key an email is stored under, in a member row and in a resolved membership. Named
+#: once because both the write and the read must agree, and a page that reads it does not
+#: guess.
+EMAIL_FIELD = "email"
+
 MEMBERSHIP_LABELS = {
     MEMBERSHIP_BY_EMAIL: "An explicit member email.",
     MEMBERSHIP_BY_DOMAIN: "An email domain on the group.",
@@ -229,6 +241,10 @@ ALLOW_ALL = "allow_all"
 #: ``@acme.com``. Duplicates are removed."
 DOMAINS_FIELD = "domains"
 DOMAIN_PREFIX = "@"
+
+#: The key a link points at its group with. On the link row, so the engine can find every
+#: link a group owns by one indexed lookup.
+GROUP_ID_FIELD = "group_id"
 DOMAIN_RULE_TEXT = (
     "Give a domain bare as acme.com or with a leading @ as @acme.com. Both are lowercased "
     "and stored as @acme.com, and duplicates are removed."
@@ -301,6 +317,12 @@ VISIBILITY_STATES = (
     LINK_OVERRIDE_WITHHELD,
 )
 
+#: The second denial state, kept apart from :data:`HIDDEN_NO_PERMISSION` because the row
+#: exists and says ``can_view: false``. "Nobody granted it" and "somebody revoked it" are
+#: different facts for a rep looking at a grid, and only one of them is this workflow's
+#: shipped default.
+HIDDEN_CAN_VIEW_FALSE = "hidden_can_view_false"
+
 #: Why an item is hidden, so a page can say which of the two rules hid it. Both rules are
 #: refusals, and the specification requires both to be refusals rather than a precedence
 #: order: an item without a row is hidden, and a link that belongs to a group cannot be
@@ -309,6 +331,24 @@ DENY_NO_PERMISSION_ROW = "no_permission_row"
 DENY_CAN_VIEW_FALSE = "can_view_is_false"
 
 DENY_REASONS = (DENY_NO_PERMISSION_ROW, DENY_CAN_VIEW_FALSE)
+
+#: The keys a per-item decision carries. ``state`` is one of the names above; the two
+#: flags are the row's own booleans; ``row_present`` answers whether a grant existed at
+#: all, which is what separates the two denials.
+DENY_REASON_FIELD = "deny_reason"
+ROW_PRESENT_FIELD = "row_present"
+
+#: Set on a folder row this workflow wrote to keep the tree navigable. Kept so the grid
+#: can say which folders were opened for an item rather than which the rep chose.
+AUTO_OPENED_FIELD = "auto_opened"
+
+#: What a write did, per scope. ``touched`` is the entries that actually changed, not the
+#: entries that were sent: a delta call that re-sends an identical row changed nothing.
+#: ``untouched`` is what a delta left alone, and ``dropped`` is what a full replace
+#: removed. Each writer returns only the one that applies to its own semantics.
+TOUCHED_KEY = "touched"
+UNTOUCHED_KEY = "untouched"
+DROPPED_KEY = "dropped"
 
 
 # --------------------------------------------------------------------------- #
@@ -322,6 +362,10 @@ DENY_REASONS = (DENY_NO_PERMISSION_ROW, DENY_CAN_VIEW_FALSE)
 MEMBER_COUNT_FIELD = "member_count"
 LINK_COUNT_FIELD = "link_count"
 PERMISSION_COUNT_FIELD = "permission_count"
+
+#: The audience type key on a link row. Read by :func:`rules.require_link_scope` to
+#: decide whether a link override is allowed at all.
+AUDIENCE_TYPE_FIELD = "audience_type"
 
 
 # --------------------------------------------------------------------------- #
@@ -427,7 +471,7 @@ def vocabulary_payload() -> dict[str, Any]:
             "rule": SCOPE_CONFLICT_REJECTED,
             "message": SCOPE_CONFLICT_MESSAGE,
         },
-        "visibility_states": list(VISIBILITY_STATES),
+        "visibility_states": list(VISIBILITY_STATES) + [HIDDEN_CAN_VIEW_FALSE],
         "deny_reasons": list(DENY_REASONS),
         "collections": list(ALL_COLLECTIONS),
         "item_collections": list(ITEM_COLLECTIONS),
