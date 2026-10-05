@@ -22,7 +22,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from dsr.conversation_chase import rules, vocabulary as vocab
 from dsr.conversation_chase.rules import ChaseRefusal
 
@@ -78,7 +77,7 @@ def system_at(minutes: float, body: str = "just checking") -> dict[str, object]:
 
 
 class TestDurationBounds:
-    """"The duration must be longer than 30 seconds and shorter than 14 days."
+    """The sentence under test: "longer than 30 seconds and shorter than 14 days."
 
     Both bounds are exclusive, so exactly 30 and exactly 14 days are both refused. That is
     the sentence read literally: "longer than" and "shorter than" are both strict.
@@ -138,7 +137,7 @@ class TestDurationBounds:
         assert rules.require_duration(value) == value
 
     def test_the_researched_example_of_ten_minutes_is_legal(self):
-        """"Set trigger timer to 10 minutes" is the shipped default, so it must validate."""
+        """The shipped default of ten minutes is inside both bounds, so it must validate."""
 
         assert vocab.DEFAULT_TRIGGER_SECONDS == TEN_MINUTES
         assert rules.require_duration(vocab.DEFAULT_TRIGGER_SECONDS) == TEN_MINUTES
@@ -365,7 +364,7 @@ class TestInactivity:
 
 
 class TestOncePerCustomerMessage:
-    """"can only trigger once per customer message", as arithmetic.
+    """Once per customer message, stated as arithmetic.
 
     The token is the instant of the newest customer message. A second message mints a new
     token and re-arms the trigger exactly once; re-evaluating against a spent token does
@@ -457,7 +456,7 @@ class TestOncePerCustomerMessage:
 
 
 class TestEligibility:
-    """"This workflow won't trigger for conversations created via our REST API."
+    """A conversation created via the REST API is exempt. The research says:"
 
     Reported as a skip with the published code rather than raised, because a conversation
     created through the API is exempt whatever its state, and "this one is exempt" is an
@@ -492,7 +491,9 @@ class TestEligibility:
         assert result["reason"] is None
 
     def test_a_snoozed_conversation_is_skipped_for_being_snoozed(self):
-        result = rules.trigger_eligible({"origin": vocab.ORIGIN_INBOX, "state": vocab.STATE_SNOOZED})
+        result = rules.trigger_eligible(
+            {"origin": vocab.ORIGIN_INBOX, "state": vocab.STATE_SNOOZED}
+        )
         assert result["eligible"] is False
         assert result["reason"] == vocab.SKIP_SNOOZED
 
@@ -502,13 +503,15 @@ class TestEligibility:
 
     def test_the_three_reasons_are_distinct(self):
         reasons = {
-            rules.trigger_eligible({"origin": vocab.ORIGIN_API, "state": vocab.STATE_OPEN})["reason"],
-            rules.trigger_eligible(
-                {"origin": vocab.ORIGIN_INBOX, "state": vocab.STATE_SNOOZED}
-            )["reason"],
-            rules.trigger_eligible(
-                {"origin": vocab.ORIGIN_INBOX, "state": vocab.STATE_CLOSED}
-            )["reason"],
+            rules.trigger_eligible({"origin": vocab.ORIGIN_API, "state": vocab.STATE_OPEN})[
+                "reason"
+            ],
+            rules.trigger_eligible({"origin": vocab.ORIGIN_INBOX, "state": vocab.STATE_SNOOZED})[
+                "reason"
+            ],
+            rules.trigger_eligible({"origin": vocab.ORIGIN_INBOX, "state": vocab.STATE_CLOSED})[
+                "reason"
+            ],
         }
         assert len(reasons) == 3
 
@@ -545,7 +548,7 @@ class TestEligibility:
 
 
 class TestClosePrecedence:
-    """"Any workflow containing a Wait or Snooze action will take precedence".
+    """Wait and Snooze outrank the global setting. The research says so in words:
 
     Read off the step list rather than stored as a flag, so a trigger cannot claim
     precedence it does not have.
@@ -635,19 +638,27 @@ class TestInterruption:
         )
 
     def test_only_the_two_researched_events_exist(self):
-        assert vocab.INTERRUPTION_EVENTS == (vocab.INTERRUPTION_CUSTOMER_MESSAGE,
-                                             vocab.INTERRUPTION_TEAMMATE_MESSAGE)
+        assert vocab.INTERRUPTION_EVENTS == (
+            vocab.INTERRUPTION_CUSTOMER_MESSAGE,
+            vocab.INTERRUPTION_TEAMMATE_MESSAGE,
+        )
 
     def test_a_step_with_no_configured_event_is_cancelled_by_nothing(self):
         step = {"kind": vocab.STEP_WAIT, "interruption_events": []}
         assert rules.interruption_cancels(step, {"author_kind": vocab.AUTHOR_CUSTOMER}) is False
 
     def test_a_listed_customer_event_cancels_on_a_customer_message(self):
-        step = {"kind": vocab.STEP_WAIT, "interruption_events": [vocab.INTERRUPTION_CUSTOMER_MESSAGE]}
+        step = {
+            "kind": vocab.STEP_WAIT,
+            "interruption_events": [vocab.INTERRUPTION_CUSTOMER_MESSAGE],
+        }
         assert rules.interruption_cancels(step, {"author_kind": vocab.AUTHOR_CUSTOMER}) is True
 
     def test_a_customer_event_does_not_cancel_on_a_teammate_message(self):
-        step = {"kind": vocab.STEP_WAIT, "interruption_events": [vocab.INTERRUPTION_CUSTOMER_MESSAGE]}
+        step = {
+            "kind": vocab.STEP_WAIT,
+            "interruption_events": [vocab.INTERRUPTION_CUSTOMER_MESSAGE],
+        }
         assert rules.interruption_cancels(step, {"author_kind": vocab.AUTHOR_TEAMMATE}) is False
 
     def test_both_events_listed_cancels_on_either(self):
@@ -662,7 +673,10 @@ class TestInterruption:
         assert rules.interruption_cancels(step, {"author_kind": vocab.AUTHOR_SYSTEM}) is False
 
     def test_a_missing_event_list_is_treated_as_none(self):
-        assert rules.interruption_cancels({"kind": vocab.STEP_WAIT}, {"author_kind": "customer"}) is False
+        assert (
+            rules.interruption_cancels({"kind": vocab.STEP_WAIT}, {"author_kind": "customer"})
+            is False
+        )
 
     def test_an_unknown_event_is_refused_on_the_step(self):
         with pytest.raises(ChaseRefusal) as caught:
@@ -976,9 +990,11 @@ class TestOfficeHours:
     # -- the walk ------------------------------------------------------------ #
 
     def test_the_worked_example_a_weekday_evening_plus_a_quarter_hour(self):
-        """"a message received at 5:50pm will have an expected response time of 9:05am
-        on the next working day". Ten of the fifteen minutes pass before the close and the
-        remaining five land at 09:05."""
+        """The corpus's worked example: "a message received at 5:50pm will have an expected
+        response time of 9:05am on the next working day".
+
+        Ten of the fifteen minutes pass before the close and the remaining five land at
+        09:05."""
 
         anchor = _monday_at(17, 50)
         due = rules.expected_reply_time(anchor, QUARTER_HOUR, rules.default_office_hours())
@@ -1018,7 +1034,9 @@ class TestOfficeHours:
     def test_a_schedule_with_no_open_day_returns_the_plain_sum(self):
         """There is no instant inside such a schedule, so the arithmetic is the answer."""
 
-        closed = {day: {vocab.OFFICE_OPEN: None, vocab.OFFICE_CLOSE: None} for day in vocab.WEEKDAYS}
+        closed = {
+            day: {vocab.OFFICE_OPEN: None, vocab.OFFICE_CLOSE: None} for day in vocab.WEEKDAYS
+        }
         anchor = _monday_at(17, 50)
         due = rules.expected_reply_time(anchor, QUARTER_HOUR, closed)
         assert due == anchor + timedelta(seconds=QUARTER_HOUR)
@@ -1039,7 +1057,9 @@ class TestOfficeHours:
         """Bounded by the researched maximum duration in days, plus a margin."""
 
         assert vocab.MAX_WALK_DAYS > 14
-        closed = {day: {vocab.OFFICE_OPEN: None, vocab.OFFICE_CLOSE: None} for day in vocab.WEEKDAYS}
+        closed = {
+            day: {vocab.OFFICE_OPEN: None, vocab.OFFICE_CLOSE: None} for day in vocab.WEEKDAYS
+        }
         anchor = _monday_at(9, 0)
         assert rules.expected_reply_time(anchor, 13 * 24 * 3600, closed) is not None
 
@@ -1056,12 +1076,16 @@ class TestOfficeMinutes:
 
     def test_inside_the_window_the_two_numbers_agree(self):
         anchor = _monday_at(9, 0)
-        assert rules.office_minutes_between(anchor, QUARTER_HOUR, rules.default_office_hours()) == 15
+        assert (
+            rules.office_minutes_between(anchor, QUARTER_HOUR, rules.default_office_hours()) == 15
+        )
 
     def test_a_saturday_span_contains_no_office_minutes(self):
         saturday = _monday_at(10, 0) + timedelta(days=5)
         assert vocab.WEEKDAYS[saturday.weekday()] == "saturday"
-        assert rules.office_minutes_between(saturday, QUARTER_HOUR, rules.default_office_hours()) == 0
+        assert (
+            rules.office_minutes_between(saturday, QUARTER_HOUR, rules.default_office_hours()) == 0
+        )
 
     def test_a_sunday_span_that_ends_before_monday_opening_contains_nothing(self):
         """Sunday 10:00 for exactly a day ends at Monday 10:00, so Monday's first hour is
@@ -1075,26 +1099,38 @@ class TestOfficeMinutes:
 
         sunday_midnight = _monday_at(0, 0) + timedelta(days=6)
         assert vocab.WEEKDAYS[sunday_midnight.weekday()] == "sunday"
-        assert rules.office_minutes_between(sunday_midnight, 86400, rules.default_office_hours()) == 0
+        assert (
+            rules.office_minutes_between(sunday_midnight, 86400, rules.default_office_hours()) == 0
+        )
 
     def test_a_span_that_starts_before_opening_counts_only_what_is_open(self):
         """08:00 to 09:00 is entirely shut, so the answer is zero, not sixty."""
 
-        assert rules.office_minutes_between(_monday_at(8, 0), 3600, rules.default_office_hours()) == 0
+        assert (
+            rules.office_minutes_between(_monday_at(8, 0), 3600, rules.default_office_hours()) == 0
+        )
 
     def test_a_span_that_ends_after_closing_counts_only_what_was_open(self):
         """17:50 to 18:50 is ten minutes open and fifty closed."""
 
-        assert rules.office_minutes_between(_monday_at(17, 50), 3600, rules.default_office_hours()) == 10
+        assert (
+            rules.office_minutes_between(_monday_at(17, 50), 3600, rules.default_office_hours())
+            == 10
+        )
 
     def test_a_full_working_day_is_nine_hours(self):
-        assert rules.office_minutes_between(_monday_at(0, 0), 86400, rules.default_office_hours()) == 540
+        assert (
+            rules.office_minutes_between(_monday_at(0, 0), 86400, rules.default_office_hours())
+            == 540
+        )
 
     def test_a_full_week_is_thirty_three_hours(self):
         """Five nine-hour days, and the weekend contributes none."""
 
         anchor = _monday_at(0, 0)
-        assert rules.office_minutes_between(anchor, 7 * 86400, rules.default_office_hours()) == 5 * 540
+        assert (
+            rules.office_minutes_between(anchor, 7 * 86400, rules.default_office_hours()) == 5 * 540
+        )
 
     def test_a_multi_day_span_counts_much_less_than_elapsed(self):
         anchor = _monday_at(17, 50)
@@ -1115,7 +1151,9 @@ class TestOfficeMinutes:
             assert 0 <= counted <= minutes
 
     def test_a_closed_all_day_schedule_counts_nothing(self):
-        closed = {day: {vocab.OFFICE_OPEN: None, vocab.OFFICE_CLOSE: None} for day in vocab.WEEKDAYS}
+        closed = {
+            day: {vocab.OFFICE_OPEN: None, vocab.OFFICE_CLOSE: None} for day in vocab.WEEKDAYS
+        }
         assert rules.office_minutes_between(CLOCK, 3600, closed) == 0
 
     def test_a_zero_span_counts_nothing(self):
@@ -1132,14 +1170,18 @@ class TestOfficeMinutes:
         """
 
         saturday = _monday_at(10, 0) + timedelta(days=5)
-        assert rules.office_minutes_between(saturday, QUARTER_HOUR, rules.default_office_hours()) == 0
+        assert (
+            rules.office_minutes_between(saturday, QUARTER_HOUR, rules.default_office_hours()) == 0
+        )
         due = rules.expected_reply_time(saturday, QUARTER_HOUR, rules.default_office_hours())
         assert due.weekday() == 0
         assert (due.hour, due.minute) == (9, 15)
 
     def test_a_longer_span_that_covers_two_working_days(self):
         anchor = _monday_at(9, 0)
-        assert rules.office_minutes_between(anchor, 2 * 86400, rules.default_office_hours()) == 2 * 540
+        assert (
+            rules.office_minutes_between(anchor, 2 * 86400, rules.default_office_hours()) == 2 * 540
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -1323,9 +1365,7 @@ class TestVocabulary:
         """The spec says it "Defaults to false if not provided", stated not inherited."""
 
         assert vocab.CREATE_WITHOUT_CONTACT_REPLY_DEFAULT is False
-        assert (
-            published["defaults"]["create_conversation_without_contact_reply"] is False
-        )
+        assert published["defaults"]["create_conversation_without_contact_reply"] is False
 
     def test_the_flag_name_is_the_vendor_spelling(self):
         assert vocab.CREATE_WITHOUT_CONTACT_REPLY == "create_conversation_without_contact_reply"

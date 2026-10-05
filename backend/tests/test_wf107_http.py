@@ -22,14 +22,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
-from fastapi.routing import APIRoute
-
 from dsr.conversation_chase import rules, vocabulary as vocab
 from dsr.conversation_chase.engine import ConversationChaseEngine
 from dsr.conversation_chase.rules import ChaseRefusal
 from dsr.db.audited import AuditedDatabase
 from dsr.features import wf107_chase_unresponsive_buyers_and_reroute_ as feature
 from dsr.store import RecordStore
+from fastapi.routing import APIRoute
 
 PREFIX = feature.router.prefix
 TEN_MINUTES = 10 * 60
@@ -65,7 +64,9 @@ def engine(store: RecordStore):
 
 @pytest.fixture
 def room_id(store: RecordStore) -> str:
-    return store.create("room", {"name": "Northwind Traders", "account": "Northwind"}, actor="dana")["id"]
+    return store.create(
+        "room", {"name": "Northwind Traders", "account": "Northwind"}, actor="dana"
+    )["id"]
 
 
 def at_engine(store: RecordStore, minutes: float) -> ConversationChaseEngine:
@@ -326,7 +327,9 @@ class TestReroute:
             source=feature.REROUTE_SOURCE,
             known_inboxes=feature.KNOWN_INBOXES,
         )
-        events = [row for row in engine.activity(room_id, conversation["id"]) if row["code"] == "rerouted"]
+        events = [
+            row for row in engine.activity(room_id, conversation["id"]) if row["code"] == "rerouted"
+        ]
         assert len(events) == 1
         assert events[0]["detail"]["from"] == "sales"
         assert events[0]["detail"]["to"] == "escalations"
@@ -562,9 +565,7 @@ class TestSweep:
         go_live(engine, trigger["id"])
 
         later = at_engine(engine.store, 20)
-        sweep = later.evaluate(
-            room_id, {"conversation_id": first["id"]}, source=SOURCE
-        )
+        sweep = later.evaluate(room_id, {"conversation_id": first["id"]}, source=SOURCE)
         assert sweep["conversations_considered"] == 1
         assert sweep["fired"][0]["conversation_id"] == first["id"]
 
@@ -760,11 +761,11 @@ class TestChaseRun:
         """The wait starts at the sweep instant, so CLOCK + 20 has barely started it."""
 
         engine.advance(fired["run"]["id"], {}, source=feature.ADVANCE_SOURCE)
-        at_engine(engine.store, 20).advance(
-            fired["run"]["id"], {}, source=feature.ADVANCE_SOURCE
-        )
+        at_engine(engine.store, 20).advance(fired["run"]["id"], {}, source=feature.ADVANCE_SOURCE)
         with pytest.raises(ChaseRefusal) as caught:
-            at_engine(engine.store, 25).resolve(fired["run"]["id"], {}, source=feature.RESOLVE_SOURCE)
+            at_engine(engine.store, 25).resolve(
+                fired["run"]["id"], {}, source=feature.RESOLVE_SOURCE
+            )
         assert caught.value.code == "run_not_waiting"
 
     def test_a_wait_that_runs_out_resolves(self, engine, fired):
@@ -1001,9 +1002,7 @@ class TestRerouteRun:
         assert events[0]["detail"]["expected_reply_time"]
 
     def test_the_expected_reply_time_uses_the_rooms_office_hours(self, engine, fired, room_id):
-        engine.save_office_hours(
-            room_id, {}, source=feature.OFFICE_HOURS_SOURCE, actor="dana"
-        )
+        engine.save_office_hours(room_id, {}, source=feature.OFFICE_HOURS_SOURCE, actor="dana")
         computed = engine.expected_reply_time(room_id, CLOCK - timedelta(minutes=30), QUARTER_HOUR)
         assert computed["expected_reply_time"]
         assert computed["schedule"]["monday"] == {"open": 540, "close": 1080}
@@ -1115,9 +1114,7 @@ class TestOfficeHoursThroughTheEngine:
         assert engine.office_hours(room_id)["stored"] is False
 
     def test_the_expected_reply_time_reports_the_office_minutes(self, engine, room_id):
-        result = engine.expected_reply_time(
-            room_id, _monday_at(17, 50), QUARTER_HOUR
-        )
+        result = engine.expected_reply_time(room_id, _monday_at(17, 50), QUARTER_HOUR)
         assert result["expected_reply_time"].endswith("T09:05:00.000+00:00")
 
     def test_the_anchor_is_echoed_back(self, engine, room_id):
@@ -1268,8 +1265,11 @@ class TestTriggerRoutes:
         room_id = store.create("room", {"name": "R"}, actor="dana")["id"]
         response = client.post(
             f"{PREFIX}/rooms/{room_id}/triggers",
-            json={"kind": vocab.CUSTOMER_IDLE, "duration_seconds": TEN_MINUTES,
-                  "steps": CHASE_STEPS},
+            json={
+                "kind": vocab.CUSTOMER_IDLE,
+                "duration_seconds": TEN_MINUTES,
+                "steps": CHASE_STEPS,
+            },
         )
         assert response.status_code == 201
         assert response.json()["live"] is False
@@ -1305,8 +1305,11 @@ class TestTriggerRoutes:
             json={
                 "kind": vocab.CUSTOMER_IDLE,
                 "steps": [
-                    {"kind": vocab.STEP_WAIT, "duration_seconds": 900,
-                     "interruption_events": ["earthquake"]}
+                    {
+                        "kind": vocab.STEP_WAIT,
+                        "duration_seconds": 900,
+                        "interruption_events": ["earthquake"],
+                    }
                 ],
             },
         )
@@ -1470,12 +1473,18 @@ class TestConversationRoutes:
         second = client.post(
             f"{PREFIX}/rooms/{room_id}/conversations", json={"inbox": "sales"}
         ).json()
-        assert client.post(
-            f"{PREFIX}/rooms/{room_id}/conversations/{first['id']}/close", json={}
-        ).status_code == 200
-        assert client.post(
-            f"{PREFIX}/rooms/{room_id}/conversations/{second['id']}/snooze", json={}
-        ).status_code == 200
+        assert (
+            client.post(
+                f"{PREFIX}/rooms/{room_id}/conversations/{first['id']}/close", json={}
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                f"{PREFIX}/rooms/{room_id}/conversations/{second['id']}/snooze", json={}
+            ).status_code
+            == 200
+        )
 
     def test_rerouting(self, client, db):
         store = RecordStore(db)
@@ -1533,9 +1542,7 @@ class TestConversationRoutes:
             f"{PREFIX}/rooms/{room_id}/conversations/{conversation_id}/messages",
             json={"author_kind": vocab.AUTHOR_CUSTOMER, "body": "hello"},
         )
-        client.post(
-            f"{PREFIX}/rooms/{room_id}/conversations/{conversation_id}/close", json={}
-        )
+        client.post(f"{PREFIX}/rooms/{room_id}/conversations/{conversation_id}/close", json={})
         body = client.get(
             f"{PREFIX}/rooms/{room_id}/conversations/{conversation_id}/activity"
         ).json()
@@ -1621,8 +1628,11 @@ class TestRunRoutes:
         )
         trigger = client.post(
             f"{PREFIX}/rooms/{room_id}/triggers",
-            json={"kind": vocab.CUSTOMER_IDLE, "duration_seconds": TEN_MINUTES,
-                  "steps": CHASE_STEPS},
+            json={
+                "kind": vocab.CUSTOMER_IDLE,
+                "duration_seconds": TEN_MINUTES,
+                "steps": CHASE_STEPS,
+            },
         ).json()
         client.post(f"{PREFIX}/rooms/{room_id}/triggers/{trigger['id']}/go-live")
 
@@ -1740,7 +1750,11 @@ class TestAuditSources:
         which is exactly how a broken audit source survives a green suite.
         """
 
-        rows = target.db.audit(limit=5000) if isinstance(target, RecordStore) else target.audit(limit=5000)
+        rows = (
+            target.db.audit(limit=5000)
+            if isinstance(target, RecordStore)
+            else target.audit(limit=5000)
+        )
         return [str(row.get("source")) for row in rows if row.get("source")]
 
     def test_every_write_records_a_source(self, engine, room_id, store: RecordStore):
@@ -1777,8 +1791,12 @@ class TestAuditSources:
         )
         store.create(
             vocab.PARTS,
-            {vocab.ROOM_REF: room_id, "conversation_id": conversation["id"],
-             "author_kind": vocab.AUTHOR_CUSTOMER, "at": rules.stamp(CLOCK)},
+            {
+                vocab.ROOM_REF: room_id,
+                "conversation_id": conversation["id"],
+                "author_kind": vocab.AUTHOR_CUSTOMER,
+                "at": rules.stamp(CLOCK),
+            },
             room_id=room_id,
             actor="buyer",
             source=MESSAGE_SOURCE,
@@ -1794,9 +1812,9 @@ class TestAuditSources:
         for source in self._audit_sources(db):
             method, _, path = source.partition(" ")
             wanted = placeholder.sub("[^/]+", path)
-            assert any(
-                m == method and re.fullmatch(wanted, p) for m, p in mounted
-            ), f"{source} names no mounted route"
+            assert any(m == method and re.fullmatch(wanted, p) for m, p in mounted), (
+                f"{source} names no mounted route"
+            )
 
     def test_every_seed_source_names_a_mounted_route(self):
         """Checked without a database, so it cannot pass because the seed did nothing."""
@@ -1811,9 +1829,9 @@ class TestAuditSources:
         for source in feature.SEED_SOURCES:
             method, _, path = source.partition(" ")
             wanted = placeholder.sub("[^/]+", path)
-            assert any(
-                m == method and re.fullmatch(wanted, p) for m, p in mounted
-            ), f"{source} names no mounted route"
+            assert any(m == method and re.fullmatch(wanted, p) for m, p in mounted), (
+                f"{source} names no mounted route"
+            )
 
     def test_every_source_constant_is_built_from_the_router_prefix(self):
         for source in feature.SEED_SOURCES:
@@ -1964,11 +1982,13 @@ class TestSeed:
                 continue
             method, _, path = source.partition(" ")
             wanted = placeholder.sub("[^/]+", path)
-            assert any(
-                m == method and re.fullmatch(wanted, p) for m, p in mounted
-            ), f"{source} names no mounted route"
+            assert any(m == method and re.fullmatch(wanted, p) for m, p in mounted), (
+                f"{source} names no mounted route"
+            )
 
     #: An ISO 8601 instant, matched so a payload key can be tested without knowing its format.
+
+
 INSTANT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 #: Every payload key this workflow writes an instant into. Named rather than searched for
