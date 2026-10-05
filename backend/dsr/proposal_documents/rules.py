@@ -210,7 +210,9 @@ def build_pricing_table(
         row.setdefault("reference_id", None)
         rows.append({"data": row, "options": {}})
 
-    subtotal = sum(_number(row["data"].get("price")) * _number(row["data"].get("qty")) for row in rows)
+    subtotal = sum(
+        _number(row["data"].get("price")) * _number(row["data"].get("qty")) for row in rows
+    )
     overall_discount = _number(discount, 0.0)
     grand_total = subtotal * (1.0 - overall_discount / 100.0)
 
@@ -375,9 +377,7 @@ def require_sendable(
     A refusal carries the status the research names rather than the default 422, so
     "sending too early returns 409" is a 409 in this room too.
     """
-    outcome = evaluate_send(
-        state, gate=gate, has_approval_workflow=has_approval_workflow
-    )
+    outcome = evaluate_send(state, gate=gate, has_approval_workflow=has_approval_workflow)
     if not outcome["sendable"]:
         raise ProposalRefusal(str(outcome["code"]), str(outcome["reason"]))
     return outcome
@@ -481,7 +481,11 @@ def quote_update_effect(current: Any, incoming: Any) -> dict[str, Any]:
         )
         if original is None:
             continue
-        kept_skus = {_text(item.get("sku")) for item in section.get("items") or [] if isinstance(item, Mapping)}
+        kept_skus = {
+            _text(item.get("sku"))
+            for item in section.get("items") or []
+            if isinstance(item, Mapping)
+        }
         for item in original.get("items") or []:
             if not isinstance(item, Mapping):
                 continue
@@ -587,9 +591,7 @@ def verify_signature(
     """
     if not shared_key or not signature:
         return False
-    expected = hmac.new(
-        str(shared_key).encode(encoding), _canonical(body), sha256
-    ).hexdigest()
+    expected = hmac.new(str(shared_key).encode(encoding), _canonical(body), sha256).hexdigest()
     return hmac.compare_digest(expected, str(signature).strip().lower())
 
 
@@ -722,7 +724,9 @@ def sync_from_document(document: Mapping[str, Any], stage: Any = None) -> dict[s
     return {
         "deal_id": _text(document.get("deal_id")),
         "stage": resolved,
-        "close_date": True if resolved in (vocab.CRM_STAGE_CLOSED_WON, vocab.CRM_STAGE_CLOSED_LOST) else None,
+        "close_date": True
+        if resolved in (vocab.CRM_STAGE_CLOSED_WON, vocab.CRM_STAGE_CLOSED_LOST)
+        else None,
         "note": note,
         vocab.LINKED_OBJECT_KEY: [
             {

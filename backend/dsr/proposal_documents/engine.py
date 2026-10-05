@@ -152,7 +152,9 @@ class ProposalEngine:
             actor=actor,
             source=source,
         )
-        return _payload(self.store.update(document_id, {"state": state}, actor=actor, source=source))
+        return _payload(
+            self.store.update(document_id, {"state": state}, actor=actor, source=source)
+        )
 
     # ----------------------------------------------------------------- #
     # Creating a proposal
@@ -182,7 +184,11 @@ class ProposalEngine:
         """
         deal = self.find_deal(deal_id) or {}
         items = deal.get("line_items")
-        return [dict(one) for one in items if isinstance(one, Mapping)] if isinstance(items, list) else []
+        return (
+            [dict(one) for one in items if isinstance(one, Mapping)]
+            if isinstance(items, list)
+            else []
+        )
 
     def create_document(
         self,
@@ -386,7 +392,11 @@ class ProposalEngine:
             vocab.ACTIVITY_GATE_APPROVED
             if verdict == vocab.APPROVAL_DECISION_APPROVE
             else vocab.ACTIVITY_GATE_REJECTED,
-            str(recorded.get(vocab.APPROVAL_REASON_KEY) or recorded.get(vocab.APPROVAL_NOTE_KEY) or ""),
+            str(
+                recorded.get(vocab.APPROVAL_REASON_KEY)
+                or recorded.get(vocab.APPROVAL_NOTE_KEY)
+                or ""
+            ),
             source=source,
             room_id=room_id,
             actor=actor,
@@ -407,7 +417,9 @@ class ProposalEngine:
             "approvals": self.approvals_for(document_id),
         }
 
-    def send(self, document_id: str, *, source: str, actor: str = ACTOR, room_id: str | None = None) -> dict[str, Any]:
+    def send(
+        self, document_id: str, *, source: str, actor: str = ACTOR, room_id: str | None = None
+    ) -> dict[str, Any]:
         """Send, or hold at the internal gate.
 
         Two refusals, never merged. A document still in ``uploaded`` is a 409 quoting
@@ -502,7 +514,11 @@ class ProposalEngine:
         )
         self.store.update(
             self.store.find(PRICING_TABLES, {"document_id": document_id})[0]["id"],
-            {"sections": sections, "subtotal": rebuilt["subtotal"], "grand_total": rebuilt["grand_total"]},
+            {
+                "sections": sections,
+                "subtotal": rebuilt["subtotal"],
+                "grand_total": rebuilt["grand_total"],
+            },
             actor=actor,
             source=source,
         )

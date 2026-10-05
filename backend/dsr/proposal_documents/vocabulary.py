@@ -197,8 +197,7 @@ APPROVAL_GATE_QUOTE = (
     "document to document.waiting_approval instead of document.sent."
 )
 SEND_AGAIN_QUOTE = (
-    "Once approved, you need to call the Send endpoint again to move it to "
-    "document.sent."
+    "Once approved, you need to call the Send endpoint again to move it to document.sent."
 )
 
 
@@ -333,9 +332,7 @@ SHARED_LINK_FALLBACK_NOTE = (
 # a destructive default. It is named in the request type rather than left as a
 # surprise, and the engine refuses an update that does not say it means it.
 
-QUOTE_UPDATE_DELETES_OMISSIONS = (
-    "Any section or item omitted from the payload will be deleted."
-)
+QUOTE_UPDATE_DELETES_OMISSIONS = "Any section or item omitted from the payload will be deleted."
 
 #: The key a caller sets on a quote update to acknowledge the destructive default.
 #: Named as a constant because a string written once per call site is how two call
@@ -723,6 +720,7 @@ def describe() -> dict[str, Any]:
             {"activity": name, "sourced": name in SOURCED_ACTIVITY_TYPES} for name in ACTIVITY_TYPES
         ],
         "error_codes": {
-            name: {"status": status, "detail": detail} for name, (status, detail) in ERROR_CODES.items()
+            name: {"status": status, "detail": detail}
+            for name, (status, detail) in ERROR_CODES.items()
         },
     }
