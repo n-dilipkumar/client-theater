@@ -1700,6 +1700,260 @@ def test_every_write_names_the_route_that_served_it(db: AuditedDatabase):
     assert all(str(entry["source"]).startswith("POST /api/wf-106") for entry in db.audit(limit=50))
 
 
+# --------------------------------------------------------------------------- #
+# The guards a direct engine caller can reach and an HTTP caller cannot
+# --------------------------------------------------------------------------- #
+
+
+#: FastAPI hands every body in as an object, so these refusals are only reachable by a
+#: caller that built the engine itself. They are real, so they are tested rather than
+#: left as the unreachable-looking lines coverage reports.
+def test_a_workflow_that_is_not_an_object_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        engine.create_workflow(["not", "an", "object"], room_id=ROOM, actor="test", source="test")
+    assert "must be an object" in str(caught.value)
+
+
+@pytest.mark.parametrize("field", ["repeat_visits", "repeat_window_days", "dwell_seconds"])
+def test_a_workflow_number_that_is_text_is_refused(engine, field):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, **{field: "three"})
+    assert "whole number" in str(caught.value)
+
+
+def test_a_workflow_number_with_a_fraction_is_refused(engine):
+    with pytest.raises(InvalidWorkflow):
+        make_workflow(engine, repeat_visits=2.5)
+
+
+def test_a_dwell_rule_value_longer_than_a_day_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, rules=[{"kind": "dwell", "value": "90000"}])
+    assert "between 1 and 86400" in str(caught.value)
+
+
+def test_a_rules_field_that_is_a_string_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, rules="/upgrade")
+    assert "must be a list" in str(caught.value)
+
+
+def test_a_rule_that_is_not_an_object_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, rules=["/upgrade"])
+    assert "must be an object" in str(caught.value)
+
+
+def test_an_audience_that_is_not_an_object_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, audience=["northwind"])
+    assert "company_keys, tags and segments" in str(caught.value)
+
+
+def test_an_audience_entry_that_is_blank_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, audience={"company_keys": ["northwind", "  "]})
+    assert "blank entry" in str(caught.value)
+
+
+def test_a_scheduling_pane_that_is_not_an_object_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, scheduling="live")
+    assert "must be an object" in str(caught.value)
+
+
+def test_a_blocks_field_that_is_a_string_is_refused(engine):
+    with pytest.raises(InvalidWorkflow):
+        make_workflow(engine, blocks="hello")
+
+
+def test_a_block_that_is_not_an_object_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, blocks=["hello"])
+    assert "must be an object" in str(caught.value)
+
+
+def test_a_blocks_apps_field_that_is_a_string_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, blocks=[{"kind": "message", "text": "hi", "apps": "video"}])
+    assert "apps must be a list" in str(caught.value)
+
+
+def test_an_app_that_is_not_an_object_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, blocks=[{"kind": "message", "text": "hi", "apps": ["a video"]}])
+    assert "an app must be an object" in str(caught.value)
+
+
+def test_an_app_with_no_title_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, blocks=[{"kind": "message", "text": "hi", "apps": [{"url": "x"}]}])
+    assert "needs a title" in str(caught.value)
+
+
+def test_a_paths_field_that_is_a_string_is_refused(engine):
+    with pytest.raises(InvalidWorkflow):
+        make_workflow(engine, paths="yes")
+
+
+def test_a_path_that_is_not_an_object_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, paths=["yes"])
+    assert "must be an object" in str(caught.value)
+
+
+def test_a_path_with_no_key_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, paths=[{"label": "Yes"}])
+    assert "needs a key" in str(caught.value)
+
+
+def test_every_pane_may_be_omitted_entirely_and_the_workflow_still_saves(engine):
+    """A seller who names only a name has said the least, and it is refused nowhere."""
+    workflow = engine.create_workflow(
+        {"name": "Bare"}, room_id=ROOM, actor="test", source="test", now=NOW
+    )
+    assert workflow["rules"] == []
+    assert workflow["audience"] == {"company_keys": [], "tags": [], "segments": []}
+    assert workflow["blocks"] == []
+    assert workflow["paths"] == []
+    assert workflow["frequency"] == "seen"
+    assert workflow["state"] == "draft"
+    assert workflow["repeat_visits"] == REPEAT_VISITS
+    assert workflow["repeat_window_days"] == REPEAT_WINDOW_DAYS
+    assert workflow["dwell_seconds"] == DWELL_SECONDS
+    assert workflow["channel"] == "in_app"
+
+
+# --------------------------------------------------------------------------- #
+# The guards inside the page-view reader
+# --------------------------------------------------------------------------- #
+
+
+def test_a_page_view_field_that_is_not_text_is_refused():
+    with pytest.raises(InvalidPageView) as caught:
+        parse_page_view(view_for("wf-1", path=17), now=NOW)
+    assert "must be text" in str(caught.value)
+
+
+def test_a_dwell_reading_that_is_a_boolean_is_refused():
+    """True is an int in Python, so a bool has to be refused before it reads as 1 second."""
+    with pytest.raises(InvalidPageView):
+        parse_page_view(view_for("wf-1", dwell_seconds=True), now=NOW)
+
+
+def test_a_visited_at_given_as_a_datetime_is_accepted_and_normalised():
+    view = parse_page_view(view_for("wf-1", visited_at=NOW), now=NOW)
+    assert view.visited_at == NOW
+    naive = datetime(2026, 10, 5, 9, 0)
+    with pytest.raises(InvalidPageView):
+        parse_page_view(view_for("wf-1", visited_at=naive), now=NOW)
+
+
+def test_a_utc_campaign_rule_is_matched_like_a_source_rule():
+    decision = decide(
+        gate_view(utm_campaign="q3-enterprise"),
+        rules=[{"kind": "utm_campaign", "value": "q3-*"}],
+        matching_visits=1,
+        visits_required=1,
+        now=NOW,
+    )
+    assert decision.show is True
+    entry = decision.rule_matches[0]
+    assert entry.kind == "utm_campaign"
+    assert entry.observed == "q3-enterprise"
+
+
+def test_a_rule_on_a_kind_the_parser_does_not_implement_never_matches():
+    """The save path refuses one, so this is the belt to that braces: a stored record
+    from an older build still cannot fire on a kind nothing implements."""
+    decision = decide(
+        gate_view(),
+        rules=[{"kind": "referrer_host", "mode": "equals", "value": "x"}],
+        matching_visits=5,
+        visits_required=1,
+        now=NOW,
+    )
+    assert decision.show is False
+    assert decision.rule_matches[0].kind == "referrer_host"
+    assert decision.rule_matches[0].met is False
+
+
+def test_a_history_row_carrying_a_datetime_object_is_counted():
+    history = [{"visited_at": NOW - timedelta(days=1), "matched": True}]
+    assert count_matching_visits(history, now=NOW, window_days=7) == 1
+
+
+def test_a_history_row_carrying_an_unzoned_datetime_object_is_skipped():
+    history = [{"visited_at": datetime(2026, 10, 4, 9, 0), "matched": True}]
+    assert count_matching_visits(history, now=NOW, window_days=7) == 0
+
+
+def test_a_history_row_carrying_an_unparseable_moment_is_skipped():
+    history = [{"visited_at": "last tuesday", "matched": True}]
+    assert count_matching_visits(history, now=NOW, window_days=7) == 0
+
+
+def test_a_mode_this_package_cannot_implement_is_refused(monkeypatch):
+    """The defensive branch. Reached by a rule stop that is neither show, interaction
+    nor path_selected, which no published mode uses today."""
+    from dsr.page_outreach import rules
+
+    monkeypatch.setitem(rules._FREQUENCY_RULES, "always", "whenever")
+    allowed, reason = rules.frequency_decision("always", shown=0, interacted=0, engaged=0)
+    assert allowed is False
+    assert "does not implement" in reason
+
+
+def test_the_two_published_rule_kind_helpers_agree():
+    from dsr.page_outreach import rules
+
+    assert rules.supported_rule_kinds() == ("url", "dwell", "utm_source", "utm_campaign")
+    assert rules.known_rule_kinds() == rules.supported_rule_kinds()
+
+
+def test_a_scheduling_state_outside_the_two_published_ones_is_refused(engine):
+    with pytest.raises(InvalidWorkflow) as caught:
+        make_workflow(engine, scheduling={"state": "published"})
+    assert "scheduling.state must be one of" in str(caught.value)
+
+
+def test_the_scheduling_pane_keeps_its_own_start_and_end_moments_as_written(engine):
+    """They are display values the workflow never compares against, so they are not parsed."""
+    workflow = make_workflow(
+        engine, scheduling={"state": "live", "starts_at": "2026-11-01", "ends_at": "2026-12-01"}
+    )
+    assert workflow["scheduling"] == {
+        "state": "live",
+        "starts_at": "2026-11-01",
+        "ends_at": "2026-12-01",
+    }
+
+
+def test_deliveries_can_be_filtered_by_visitor_and_workflow_over_the_engine(engine):
+    first = shown_delivery(engine)
+    shown_delivery(engine, name="Second workflow")
+    assert len(engine.deliveries(room_id=ROOM)) == 2
+    assert len(engine.deliveries(room_id=ROOM, visitor_key="visitor-1")) == 2
+    assert len(engine.deliveries(room_id=ROOM, workflow_id=first["workflow_id"])) == 1
+    assert len(engine.deliveries(room_id=ROOM, visitor_key="nobody")) == 0
+
+
+def test_receipts_can_be_filtered_by_visitor_and_workflow_over_the_engine(engine):
+    first = shown_delivery(engine)
+    second = shown_delivery(engine, name="Second workflow")
+    engine.record_interaction(
+        first["id"], {"kind": "clicked"}, actor="test", source="test", now=NOW
+    )
+    engine.record_interaction(
+        second["id"], {"kind": "clicked"}, actor="test", source="test", now=NOW
+    )
+    workflow_id = first["workflow_id"]
+    assert len(engine.receipts(room_id=ROOM, visitor_key="visitor-1")) == 2
+    assert len(engine.receipts(room_id=ROOM, workflow_id=workflow_id)) == 1
+    assert engine.receipts(room_id="room-2") == []
+
+
 def test_the_domain_package_imports_neither_the_app_nor_sqlite():
     """An enforced test greps the feature modules; this pins it for the package itself."""
     import pathlib

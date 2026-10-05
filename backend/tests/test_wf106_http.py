@@ -915,6 +915,7 @@ def test_the_demo_seed_produces_states_that_are_not_all_successes(db):
     assert "engaged" in summary
     assert "dismissed" in summary
     assert "hidden for session" in summary
+    assert "shown and nothing done" in summary
     assert "not qualified" in summary
 
     again = module.seed(db, {"room_ids": [(room_id, "Northwind Traders")], "now": NOW})
@@ -991,6 +992,38 @@ def test_the_seed_returns_an_empty_string_when_there_is_no_room():
     """No room, nothing to attach rows to, and an empty string rather than a crash."""
     module = load_feature(MODULE)
     assert module.seed(None, {"room_ids": [], "now": NOW}) == ""
+
+
+def test_every_demo_prospect_names_a_workflow_the_seed_creates():
+    """The invariant that makes the seed's unknown-workflow guard unreachable.
+
+    A demo row naming a workflow that was not saved would be skipped silently, so the
+    seed would print fewer prospects than it declares. This asserts the naming instead
+    of leaving the guard to hide a mistake.
+    """
+    module = load_feature(MODULE)
+    saved = {str(entry["name"]) for entry in module._SEED_WORKFLOWS}
+    named = {str(entry["workflow"]) for entry in module._SEED_PROSPECTS}
+    assert named <= saved, sorted(named - saved)
+
+
+def test_the_demo_seed_shows_the_block_to_a_buyer_who_does_nothing(db):
+    """The commonest real case, and the only state no other demo row shows."""
+    from dsr.page_outreach import PageOutreach
+    from dsr.store import RecordStore
+
+    module = load_feature(MODULE)
+    db.create("room", {"name": "Northwind Traders"}, actor="seed", source="seed")
+    room_id = db.list("room")[0]["id"]
+    module.seed(db, {"room_ids": [(room_id, "Northwind Traders")], "now": NOW})
+
+    outreach = PageOutreach(RecordStore(db))
+    silent = [
+        row
+        for row in outreach.prospects(room_id=room_id, now=NOW)["prospects"]
+        if row["deliveries"] and not row["engaged"] and not row["hidden_for_session"]
+    ]
+    assert silent, "the demo seeded no prospect who was shown the block and did nothing"
 
 
 def test_the_demo_visit_times_are_inside_the_repeat_window(db):
