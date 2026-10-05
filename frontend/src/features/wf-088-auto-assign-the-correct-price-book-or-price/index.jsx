@@ -50,6 +50,7 @@ import {
   listQuotes,
   listRooms,
   modeLabel,
+  modeName,
   priceBookApi,
 } from './api'
 import {
@@ -587,6 +588,9 @@ function ReviewedPanel({ deal, vocabulary }) {
 
   return (
     <div className="flex flex-col gap-1">
+      {/* The full sourced wording, in prose, where it belongs. The stat card above carries
+          the short name for the same reason: a sentence in a card-sized value wraps to nine
+          lines and reads as a fault. */}
       <p className="text-sm text-muted-foreground">
         Workspace mode: {modeLabel(panel.mode, vocabulary)}
       </p>
@@ -750,6 +754,11 @@ export function PriceBookRulesPage() {
           icon="audit"
           hint="Deals matching more than one rule"
         />
+        {/* The mode card carries the mode's *name*, not its explanation. A StatCard's value
+            is meant to be read at a glance from across a desk, and a sentence set in the
+            display face at that size wraps to nine lines and reads as a mistake. The full
+            sourced wording is already on the page once, next to the reading it comes from;
+            repeating it in the card bought nothing and cost legibility. */}
         <StatCard
           label="Price books assigned"
           value={summary.data?.written ?? 0}
@@ -764,7 +773,7 @@ export function PriceBookRulesPage() {
         />
         <StatCard
           label="Mode"
-          value={modeLabel(summary.data?.mode, vocabulary.data)}
+          value={modeName(summary.data?.mode)}
           icon="audit"
           hint="Read from the rules' own switches"
         />

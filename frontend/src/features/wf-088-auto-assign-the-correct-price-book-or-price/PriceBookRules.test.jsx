@@ -23,7 +23,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import descriptor from './index'
 import { PriceBookRulesPage } from './index'
-import { priceBookApi, listDeals, listQuotes, listRooms } from './api'
+import { priceBookApi, listDeals, listQuotes, listRooms, modeName } from './api'
 import { BookStateBadge, ReasonBadge } from './primitives'
 
 // The three core-collection reads are module-level named exports, not methods on the
@@ -450,13 +450,51 @@ describe('the page', () => {
     expect(screen.getByText('Deals matching more than one rule')).toBeTruthy()
   })
 
-  it('shows the mode the server reports rather than one it invents', async () => {
+  it('names the mode the server reports rather than one it invents', async () => {
     stubApi()
     render(<PriceBookRulesPage />)
 
-    await waitFor(() =>
-      expect(screen.getAllByText(/With auto-assignment/).length).toBeGreaterThan(0),
-    )
+    // The card carries the mode's short name. Found by looking at the rendered page: the
+    // card had been given the server's full sentence, "*Assignment rules with
+    // auto-assignment*. Exactly one matching rule writes its price book onto the deal.",
+    // which set in the display face at card size wrapped to nine lines and read as a layout
+    // fault. So the assertion is on the name, and the sentence is checked to still be on the
+    // page from the reading panel, which is where it belongs.
+    const card = await screen.findByText('Mode')
+    expect(within(card.parentElement).getByText('Auto-assignment')).toBeTruthy()
+
+    // The sentence is still on the page, from the reviewed-rules panel that reports this
+    // deal's own mode. The fixture's label is short ("With auto-assignment.") where the
+    // server's is the full researched wording, so the assertion is on what the fixture
+    // carries rather than on the server's longer sentence.
+    const sentences = await screen.findAllByText(/With auto-assignment/)
+    expect(sentences.length).toBeGreaterThan(0)
+  })
+
+  it('shortens the mode name to the clause that distinguishes the three modes', () => {
+    // The leading clause is dropped, not the trailing one. Keeping it produced the string
+    // "Assignment rules", which is the same text as the rule builder's own heading — so two
+    // differently-meaning elements on one page read identically, and a test querying that
+    // heading found two candidates and could not say which it meant.
+    expect(modeName('assignment_rules_with_auto_assignment')).toBe('Auto-assignment')
+    expect(modeName('assignment_rules_without_auto_assignment')).toBe('Without auto-assignment')
+    expect(modeName('no_assignment_rules')).toBe('No assignment rules')
+    // A mode code with no recognised clause still reads, rather than rendering an empty card.
+    expect(modeName('some_future_mode')).toBe('Some future mode')
+    expect(modeName(undefined)).toBe('Unknown')
+  })
+
+  it('does not reuse the rule builder heading as the mode card value', async () => {
+    stubApi()
+    render(<PriceBookRulesPage />)
+
+    // Distinct strings, so a reader scanning the page can tell the mode from the section
+    // that configures it, and so a query for either one is unambiguous.
+    const card = await screen.findByText('Mode')
+    const value = within(card.parentElement).getByText('Auto-assignment')
+    expect(value).toBeTruthy()
+    // The heading is still findable on its own, which is what makes them distinguishable.
+    expect(screen.getByRole('heading', { name: 'Assignment rules' })).toBeTruthy()
   })
 
   it('says when no catalogue was found rather than implying one exists', async () => {

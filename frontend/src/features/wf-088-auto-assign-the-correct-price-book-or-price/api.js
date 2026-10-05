@@ -188,6 +188,40 @@ export function modeLabel(mode, vocabulary) {
   return entry?.label || mode || 'Unknown'
 }
 
+/**
+ * The mode's short name, for a stat card.
+ *
+ * The server's `label` is the whole sourced sentence — "*Assignment rules with
+ * auto-assignment*. Exactly one matching rule writes its price book onto the deal." — which
+ * is right in prose and wrong in a card whose value is read at a glance: set in the display
+ * face at that size it wraps to nine lines and reads as a layout fault rather than as a
+ * mode. So the name is the leading clause, which is the part that names the mode, and the
+ * sentence is left where it belongs, in the reading panel above.
+ *
+ * Falls back to the mode code, so an unmapped mode is still readable.
+ */
+export function modeName(mode) {
+  if (!mode) return 'Unknown'
+  // The trailing clause is what distinguishes the three researched modes, so it is kept and
+  // the leading one dropped: "Assignment rules" alone is both nine characters too long for a
+  // stat card to read at a glance and the same string as the rule builder's own heading,
+  // which makes it ambiguous to a reader *and* to a query.
+  //
+  // The `_` between `auto` and `assignment` is joined with a hyphen rather than a space, so
+  // the card reads "Auto-assignment", which is the word the researched sentence itself uses.
+  const code = String(mode)
+  // `without` is kept where it appears, so the two "assignment rules" modes stay distinct.
+  // Splitting on `_with_` and `_without_` alike and taking the tail collapsed them onto the
+  // same card value, which is the opposite of what a summary is for: two deals in different
+  // modes would read identically.
+  const parts = code.split('_with_')
+  if (parts.length > 1) return 'Auto-assignment'
+  const tail = code.split('_without_')
+  if (tail.length > 1) return 'Without auto-assignment'
+  const words = code.replace(/auto_(?=\w)/g, 'auto-').replace(/_/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
 /** The words for one deal state, read from the server's vocabulary. */
 export function stateLabel(state, vocabulary) {
   const entry = (vocabulary?.book_states || []).find((row) => row.state === state)
