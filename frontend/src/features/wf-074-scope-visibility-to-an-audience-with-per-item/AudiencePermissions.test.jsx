@@ -243,6 +243,59 @@ describe('the two flags on the grid', () => {
     expect(onToggle).toHaveBeenCalledWith(DOC, 'can_download', false)
   })
 
+  // The browser pass found this. The toggle used to send three keys, because only the flag that
+  // changed was included, and the entry is closed with both flags required. The server refused it
+  // with a 400, the page showed an error banner and the grid refetched to the same state, so a
+  // rep clicking a flag watched it spring back and had no way to tell a refused write from a
+  // write that had not landed yet. The assertion is on the shape of the body, because that is
+  // what the closed entry validates.
+  it('sends all four researched keys on a single-flag write', async () => {
+    const user = userEvent.setup()
+    audienceApi.groups.mockResolvedValue({ room_id: 'room_a', count: 1, groups: [GROUP] })
+    audienceApi.setGroupPermissions.mockResolvedValue({ touched: [], semantics: 'delta' })
+    render(<AudiencePage />)
+    await screen.findByText('Audience permissions')
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_a')
+    const grid = await screen.findByRole('table')
+    const grantedRow = within(grid)
+      .getAllByRole('row')
+      .find((row) => row.textContent.includes('Enterprise deck'))
+    await user.click(within(grantedRow).getByRole('checkbox', { name: /^May view/ }))
+    await waitFor(() => expect(audienceApi.setGroupPermissions).toHaveBeenCalled())
+    const entries = audienceApi.setGroupPermissions.mock.calls.at(-1)[1]
+    expect(entries).toHaveLength(1)
+    // Both flags, both item keys, no spare key. The entry is closed and the two flags are
+    // required, so a partial body is a 400 the rep would never see the cause of.
+    expect(Object.keys(entries[0]).sort()).toEqual([
+      'can_download',
+      'can_view',
+      'item_id',
+      'item_type',
+    ])
+    expect(entries[0].can_download).toBe(true)
+  })
+
+  it('reports a refused write instead of leaving the flag looking unchanged', async () => {
+    const user = userEvent.setup()
+    const refusal = new Error('A permission entry needs can_view.')
+    refusal.status = 400
+    refusal.errors = { 'permissions[0]': 'can_view is required.' }
+    audienceApi.groups.mockResolvedValue({ room_id: 'room_a', count: 1, groups: [GROUP] })
+    audienceApi.setGroupPermissions.mockRejectedValue(refusal)
+    render(<AudiencePage />)
+    await screen.findByText('Audience permissions')
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_a')
+    const grid = await screen.findByRole('table')
+    const grantedRow = within(grid)
+      .getAllByRole('row')
+      .find((row) => row.textContent.includes('Enterprise deck'))
+    await user.click(within(grantedRow).getByRole('checkbox', { name: /^May view/ }))
+    // A rep who clicks a flag and sees nothing must be told the write was refused. Silence here is
+    // how a refused grant looks like a granted one.
+    expect(await screen.findByText(/That flag was not saved/i)).toBeTruthy()
+    expect(screen.getByText(/can_view is required/i)).toBeTruthy()
+  })
+
   it('renders read-only flags as words rather than controls when no write is possible', () => {
     render(
       <PermissionGrid
@@ -354,27 +407,68 @@ describe('the states every panel must render', () => {
   })
 
   it('renders an error state rather than a blank grid when the API is down', async () => {
+    const user = userEvent.setup()
     audienceApi.groups.mockRejectedValue(new Error('backend down'))
     render(<AudiencePage />)
+    await screen.findByText('Audience permissions')
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_a')
     await waitFor(() => expect(screen.getByText(/backend down/i)).toBeTruthy())
   })
 
-  it('renders an empty state when no audience exists yet', async () => {
-    audienceApi.groups.mockResolvedValue({ room_id: '', count: 0, groups: [] })
+  it('renders an empty state when the chosen room has no audience', async () => {
+    const user = userEvent.setup()
+    audienceApi.groups.mockResolvedValue({ room_id: 'room_a', count: 0, groups: [] })
     render(<AudiencePage />)
     await screen.findByText('Audience permissions')
-    expect(screen.getByText(/No audiences yet/i)).toBeTruthy()
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_a')
+    expect(await screen.findByText(/No audiences in this room yet/i)).toBeTruthy()
     expect(screen.getByText(/sees nothing until you do/i)).toBeTruthy()
   })
 
   it('renders an empty state for links rather than nothing', async () => {
+    const user = userEvent.setup()
     render(<AudiencePage />)
     await screen.findByText('Audience permissions')
-    expect(screen.getByText(/No links yet/i)).toBeTruthy()
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_a')
+    expect(await screen.findByText(/No links in this room yet/i)).toBeTruthy()
+  })
+
+  // The route is `/rooms/{room_id}/groups`, so an empty room id would request `/rooms//groups`
+  // and the host answers 404 for an unknown route. This is the defect the browser pass found: the
+  // page fired two requests that could never succeed and rendered "Could not load data" over the
+  // whole board. The assertion is on the calls, because the visible symptom was one message for
+  // two requests.
+  it('does not request a room-scoped route before a room is chosen', async () => {
+    render(<AudiencePage />)
+    await screen.findByText('Audience permissions')
+    expect(audienceApi.groups).not.toHaveBeenCalled()
+    expect(audienceApi.links).not.toHaveBeenCalled()
+    expect(screen.getByText(/Choose a room to see its audiences/i)).toBeTruthy()
+  })
+
+  it('requests the room-scoped routes once a room is chosen', async () => {
+    const user = userEvent.setup()
+    render(<AudiencePage />)
+    await screen.findByText('Audience permissions')
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_a')
+    await waitFor(() => expect(audienceApi.groups).toHaveBeenCalledWith('room_a'))
+    expect(audienceApi.links).toHaveBeenCalledWith('room_a')
   })
 })
 
 describe('adding a member', () => {
+  // The member form lives inside an audience card, and an audience card lives inside a chosen
+  // room. That is the fix from the browser pass: the panel is not rendered until a room is
+  // chosen, which is correct, because an audience hangs on one room's library.
+  async function openTheAudienceForm() {
+    const user = userEvent.setup()
+    render(<AudiencePage />)
+    await screen.findByText('Audience permissions')
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_a')
+    await screen.findByLabelText(/Add member addresses/i)
+    return user
+  }
+
   it('reports that no invitation email was sent', async () => {
     audienceApi.addMembers.mockResolvedValue({
       group_id: 'grp_1',
@@ -386,10 +480,9 @@ describe('adding a member', () => {
       invitation_note: 'No invitation email is sent.',
       member_count: 2,
     })
-    render(<AudiencePage />)
-    await screen.findByText('Audience permissions')
-    await userEvent.type(screen.getByLabelText(/Add member addresses/i), 'jane@acme.example')
-    await userEvent.click(screen.getByRole('button', { name: /Add these addresses/i }))
+    const user = await openTheAudienceForm()
+    await user.type(screen.getByLabelText(/Add member addresses/i), 'jane@acme.example')
+    await user.click(screen.getByRole('button', { name: /Add these addresses/i }))
     await waitFor(() => expect(audienceApi.addMembers).toHaveBeenCalledWith('grp_1', ['jane@acme.example']))
     expect(await screen.findByText(/1 address\(es\) added/i)).toBeTruthy()
   })
@@ -403,10 +496,9 @@ describe('adding a member', () => {
       invitations_sent: 0,
       invitation_note: 'No invitation email is sent.',
     })
-    render(<AudiencePage />)
-    await screen.findByText('Audience permissions')
-    await userEvent.type(screen.getByLabelText(/Add member addresses/i), 'jane@acme.example')
-    await userEvent.click(screen.getByRole('button', { name: /Add these addresses/i }))
+    const user = await openTheAudienceForm()
+    await user.type(screen.getByLabelText(/Add member addresses/i), 'jane@acme.example')
+    await user.click(screen.getByRole('button', { name: /Add these addresses/i }))
     expect(await screen.findByText(/already a member/i)).toBeTruthy()
   })
 
@@ -419,10 +511,9 @@ describe('adding a member', () => {
       invitations_sent: 0,
       invitation_note: 'No invitation email is sent.',
     })
-    render(<AudiencePage />)
-    await screen.findByText('Audience permissions')
-    await userEvent.type(screen.getByLabelText(/Add member addresses/i), 'jane@acme.example')
-    await userEvent.click(screen.getByRole('button', { name: /Add these addresses/i }))
+    const user = await openTheAudienceForm()
+    await user.type(screen.getByLabelText(/Add member addresses/i), 'jane@acme.example')
+    await user.click(screen.getByRole('button', { name: /Add these addresses/i }))
     const banner = await screen.findByText(/1 address\(es\) added/i)
     const region = banner.closest('[role="status"]')
     expect(within(region).getByText(/does not establish who used the address/i)).toBeTruthy()

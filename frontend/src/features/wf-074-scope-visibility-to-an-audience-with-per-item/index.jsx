@@ -70,6 +70,12 @@ import { FlagToggle, Notice, PermissionGrid, ScopeState, Select } from './primit
  * that must never be possible on this screen.
  */
 
+//: The two flag keys, named rather than written inline. They are the wire names the server
+//: validates against, so a page that spelled one of them differently would be sending an entry the
+//: closed shape refuses, and the symptom would be a flag that silently does not move.
+const vocabCanView = 'can_view'
+const vocabCanDownload = 'can_download'
+
 /** The one flag write, shared by the grid and the link panel. */
 function useGridToggle() {
   const [busy, setBusy] = useState(false)
@@ -79,7 +85,19 @@ function useGridToggle() {
     setBusy(true)
     setError(null)
     try {
-      await write([{ item_id: row.item_id, item_type: row.item_type, [flag]: value }])
+      // All four researched keys go on every write, not just the one that changed. The entry is
+      // closed and both flags are required, so a body carrying three keys is refused with a 400
+      // and the flag silently does not move. Sending the row's other flag as it already stands is
+      // what makes a single-flag toggle a valid upsert rather than a partial one.
+      await write([
+        {
+          item_id: row.item_id,
+          item_type: row.item_type,
+          [vocabCanView]: row.can_view === true,
+          [vocabCanDownload]: row.can_download === true,
+          [flag]: value,
+        },
+      ])
       return { ok: true }
     } catch (caught) {
       setError(caught)
@@ -92,26 +110,29 @@ function useGridToggle() {
   return { busy, error, toggle, clearError: useCallback(() => setError(null), []) }
 }
 
-/** The field-keyed messages a 400 carries, so each lands beside the input that caused it. */
-function FieldErrors({ error }) {
+/**
+ * The field-keyed messages a 400 carries, so each lands beside the input that caused it.
+ *
+ * The map is the reason the write path reads the body rather than throwing the body away: a
+ * server that refuses an entry says which key it refused, and a rep who sees "can_view is
+ * required" beside the flag can act on it, where "that flag was not saved" tells them nothing they
+ * did not already know. When the failure carries no map, the message is shown alone rather than
+ * hidden, because a silent failure is the worse of the two.
+ */
+function FieldErrors({ error, className = 'mt-3' }) {
   if (!error) return null
-  const errors = error.errors || { _: error.message }
+  const errors = error.errors
+  if (!errors || Object.keys(errors).length === 0) {
+    return <p className="text-sm">{error.message}</p>
+  }
   return (
-    <div className="mt-3">
-      <Notice
-        tone="destructive"
-        title="That change was not saved"
-        action={<Button onClick={() => window.location.reload()}>Reload</Button>}
-      >
-        <ul className="list-disc space-y-0.5 pl-4">
-          {Object.entries(errors).map(([field, message]) => (
-            <li key={field}>
-              <span className="font-mono">{field}</span>: {message}
-            </li>
-          ))}
-        </ul>
-      </Notice>
-    </div>
+    <ul className={`list-disc space-y-0.5 pl-4 text-sm ${className}`}>
+      {Object.entries(errors).map(([field, message]) => (
+        <li key={field}>
+          <span className="font-mono">{field}</span>: {message}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -196,7 +217,13 @@ function MemberPanel({ group, onChanged }) {
         </Button>
       </div>
 
-      <FieldErrors error={error} />
+      {error && (
+        <div className="mt-3">
+          <Notice tone="destructive" title="Those addresses were not added">
+            <FieldErrors error={error} className="list-disc space-y-0.5 pl-4 text-sm" />
+          </Notice>
+        </div>
+      )}
 
       {result && (
         <div className="mt-3">
@@ -321,7 +348,13 @@ function DomainsPanel({ group, onChanged }) {
         </Button>
       </div>
 
-      <FieldErrors error={error} />
+      {error && (
+        <div className="mt-3">
+          <Notice tone="destructive" title="Those domains were not saved">
+            <FieldErrors error={error} className="list-disc space-y-0.5 pl-4 text-sm" />
+          </Notice>
+        </div>
+      )}
     </div>
   )
 }
@@ -386,7 +419,7 @@ function GroupPanel({ group, onChanged }) {
             title="That flag was not saved"
             action={<Button onClick={clearError}>Dismiss</Button>}
           >
-            {error.message}
+            <FieldErrors error={error} />
           </Notice>
         </div>
       )}
@@ -499,7 +532,9 @@ function LinkPanel({ link, onChanged }) {
             title="That permission was not saved"
             action={<Button onClick={clearError}>Dismiss</Button>}
           >
-            {error.wayOut || error.message}
+            {/* A 422 from a group link carries the way out rather than a field map, so the named
+                way out wins when it is there and the field map is shown when it is not. */}
+            {error.wayOut ? <p>{error.wayOut}</p> : <FieldErrors error={error} />}
           </Notice>
         </div>
       )}
@@ -719,7 +754,13 @@ function NewAudienceForm({ roomId, onCreated }) {
           {busy ? 'Creating' : 'Create the audience'}
         </Button>
       </div>
-      <FieldErrors error={error} />
+      {error && (
+        <div className="mt-3">
+          <Notice tone="destructive" title="That audience was not created">
+            <FieldErrors error={error} className="list-disc space-y-0.5 pl-4 text-sm" />
+          </Notice>
+        </div>
+      )}
     </Card>
   )
 }
@@ -851,8 +892,19 @@ export function AudiencePage() {
   const rooms = useAsync(() => listRooms(), [])
   const vocabulary = useAsync(() => audienceApi.vocabulary(), [])
   const board = useAsync(() => audienceApi.summary(roomId), [roomId])
-  const groups = useAsync(() => audienceApi.groups(roomId), [roomId])
-  const links = useAsync(() => audienceApi.links(roomId), [roomId])
+  // The two room-scoped lists are only called once a room is chosen. The routes are
+  // `/rooms/{room_id}/groups` and `/rooms/{room_id}/links`, so an empty room id would request
+  // `/rooms//groups`, which the host answers with a 404 for an unknown route. An audience hangs
+  // on one room's library, so listing them without naming a room has no meaning here, and the
+  // picker says so rather than firing a request that cannot succeed.
+  const groups = useAsync(
+    () => (roomId ? audienceApi.groups(roomId) : Promise.resolve({ count: 0, groups: [] })),
+    [roomId],
+  )
+  const links = useAsync(
+    () => (roomId ? audienceApi.links(roomId) : Promise.resolve({ count: 0, links: [] })),
+    [roomId],
+  )
   const decisions = useAsync(() => audienceApi.decisions(), [])
 
   const onChanged = useCallback(() => {
@@ -929,9 +981,13 @@ export function AudiencePage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Room" id="wf074-room" hint="Leave empty to see every audience.">
+        <Field
+          label="Room"
+          id="wf074-room"
+          hint="An audience hangs on one room's documents and folders, so choose the room whose items you are scoping."
+        >
           <Select id="wf074-room" value={roomId} onChange={setRoomId}>
-            <option value="">Every room</option>
+            <option value="">Choose a room</option>
             {(rooms.data?.records || rooms.data || []).map((room) => (
               <option key={room.id} value={room.id}>
                 {room.data?.name || room.id}
@@ -941,17 +997,24 @@ export function AudiencePage() {
         </Field>
       </div>
 
+      {!roomId && (
+        <Notice tone="info" title="Choose a room to see its audiences">
+          An audience grants access to the documents and folders of one room, so its permissions,
+          its members and its links are read per room. The numbers above cover every room.
+        </Notice>
+      )}
+
       {roomId && <NewAudienceForm roomId={roomId} onCreated={onChanged} />}
 
       <section className="space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Audiences</h2>
-        {groups.loading ? (
+        {!roomId ? null : groups.loading ? (
           <Spinner label="Loading audiences" />
         ) : groupRows.length === 0 ? (
           <EmptyState
-            title="No audiences yet"
+            title="No audiences in this room yet"
             description="Create a named audience, add its members or its email domains, then grant it access item by item. It sees nothing until you do."
-            action={roomId ? <Button onClick={() => document.getElementById('wf074-new-name')?.focus()}>Name the first one</Button> : undefined}
+            action={<Button onClick={() => document.getElementById('wf074-new-name')?.focus()}>Name the first one</Button>}
           />
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -964,11 +1027,11 @@ export function AudiencePage() {
 
       <section className="space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Links</h2>
-        {links.loading ? (
+        {!roomId ? null : links.loading ? (
           <Spinner label="Loading links" />
         ) : linkRows.length === 0 ? (
           <EmptyState
-            title="No links yet"
+            title="No links in this room yet"
             description="A group link takes its visibility from its group. A general link carries its own per-item permissions, or shows the whole room when it was never scoped."
           />
         ) : (
