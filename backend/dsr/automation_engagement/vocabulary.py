@@ -269,9 +269,7 @@ COPY_TOGGLE_LABEL = "Send a copy of this push notification to the notification i
 COPY_IS_UNCONDITIONAL = True
 
 #: Why the inbox copy is a *duplicate* rather than the original. Quoted, for the record.
-DUPLICATE_QUOTE = (
-    "You can also send a copy of a push notification as an inbox message."
-)
+DUPLICATE_QUOTE = "You can also send a copy of a push notification as an inbox message."
 
 # --------------------------------------------------------------------------- #
 # Metrics: recorded against the person

@@ -75,6 +75,7 @@ from dsr.automation_engagement.errors import InboxStateRefused, ReminderRefused
 # Instants: every time this workflow handles is derived, never a literal
 # --------------------------------------------------------------------------- #
 
+
 #: The ISO form this build writes and reads, with a ``Z`` rather than ``+00:00``. One function
 #: owns it so no call site hand-rolls the suffix and a round-trip cannot change shape.
 def to_iso(moment: datetime) -> str:
@@ -459,7 +460,9 @@ def inbox_payload(
     return body
 
 
-def engagement_row(event: str, person_id: str, *, reminder_id: str | None, now: datetime) -> dict[str, Any]:
+def engagement_row(
+    event: str, person_id: str, *, reminder_id: str | None, now: datetime
+) -> dict[str, Any]:
     """One open or click, recorded against the person.
 
     The data flow ends with "open/click metrics recorded against the person", so the row's
