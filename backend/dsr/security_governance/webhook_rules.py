@@ -54,6 +54,7 @@ from dsr.security_governance import webhook_vocabulary as vocab
 
 __all__ = [
     "DEFAULT_STALE_AFTER_SECONDS",
+    "RANGE_KEYS",
     "IpRangeError",
     "classify_ranges",
     "describe_range",
@@ -176,20 +177,28 @@ def classify_ranges(payload: Any) -> list[dict[str, Any]]:
     return rows
 
 
+#: The keys a range object may carry its address under. Read in this order, and the one
+#: that matched is recorded, so a file using a sixth name produces a refusal rather than an
+#: empty allowlist. The refusal below names every key in this tuple.
+RANGE_KEYS = ("ip", "cidr", "range", "prefix", "network")
+
+
 def _entry_text(entry: Mapping[str, Any]) -> str:
     """The address out of a range object, whichever key the publisher used.
 
-    The evidence quotes a file this workflow does not have, so the key name inside it
-    is not known from the specification. Four plausible names are read and the key
-    that matched is recorded, so a file that uses a fifth name produces a refusal
-    rather than an empty allowlist.
+    The evidence quotes a file this workflow does not have, so the key name inside it is not
+    known from the specification. Five plausible names are read and the key that matched is
+    recorded. A file that uses a sixth name produces a refusal, because the alternative is an
+    allowlist that silently holds no ranges at all.
     """
-    for key in ("ip", "cidr", "range", "prefix", "network"):
+    for key in RANGE_KEYS:
         value = entry.get(key)
         if value:
             return str(value).strip()
     raise IpRangeError(
-        "a range object carries none of the keys " + ", ".join(("ip", "cidr", "range", "prefix")) + f"; it carries {sorted(str(k) for k in entry)}"
+        "a range object carries none of the keys "
+        + ", ".join(RANGE_KEYS)
+        + f"; it carries {sorted(str(k) for k in entry)}"
     )
 
 
@@ -237,11 +246,21 @@ def evaluate_source_ip(
 
     Refusals name a range rather than a row, because a person debugging needs the
     address they should add and not the internal id of the row it was not in.
+
+    ``error_name`` and ``reason`` are kept apart on purpose, because they answer two
+    different questions and a consumer has to be able to tell which is which.
+    ``error_name`` is ``None`` on the happy path and otherwise a key this build publishes in
+    :data:`~dsr.security_governance.webhook_vocabulary.ERROR_CODES`, so a client can look the
+    answer up. ``reason`` is a sentence to display, and it is a sentence on **every** path
+    including the successful one. Returning a slug in ``reason`` on one path and prose on
+    another is what makes a field unusable: the reader has to know which path ran before they
+    can decide whether to display it or index it.
     """
     if not str(source_ip or "").strip():
         return {
             "allowed": False,
             "check": vocab.IP_ALLOWLIST,
+            "error_name": "no_source_ip",
             "allowed_range": None,
             "range_count": len(rows),
             "snapshot_at": snapshot_at,
@@ -274,6 +293,7 @@ def evaluate_source_ip(
     return {
         "allowed": allowed,
         "check": vocab.IP_ALLOWLIST,
+        "error_name": None if allowed else "source_ip_not_allowed",
         "allowed_range": matched,
         "range_count": len(rows),
         "snapshot_at": snapshot_at,
