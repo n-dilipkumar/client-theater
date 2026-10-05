@@ -603,13 +603,13 @@ describe('every state the page can be in', () => {
   it('says no delivery has arrived rather than drawing an empty log', async () => {
     stubApi({ [`/wf082/rooms/${ROOM_ID}/deliveries`]: deliveries([]) })
     render(<InboundVerificationPage />)
-    // Scoped to the log section and awaited with `findBy`, because a bare `getByText` races
-    // the room-scoped request: it passes alone on a fast machine and fails in a full run when
-    // 34 files share the workers. The element is looked up inside the section it belongs to
-    // so the assertion cannot match a different copy of the same words.
+    // Awaited with `findBy` rather than read once, because the empty-log sentence arrives with
+    // the room-scoped request and a single read races it on a loaded machine. The heading is
+    // inside the card that also holds the rows, so the assertion is scoped to that card and
+    // cannot match a different copy of the same words elsewhere on the page.
     const log = await screen.findByRole('heading', { name: /Delivery log/ })
-    const section = log.closest('div')
-    await waitFor(() => expect(section).toHaveTextContent(/No delivery yet/))
+    const card = log.closest('div.rounded-sm')
+    await waitFor(() => expect(card).toHaveTextContent(/No delivery yet/))
   })
 
   it('says the derivation register has not loaded rather than drawing nothing', async () => {
@@ -643,7 +643,9 @@ describe('the board', () => {
       [`/wf082/summary?room_id=${ROOM_ID}`]: { ...SUMMARY, rejected: 0, by_error_name: {} },
     })
     render(<InboundVerificationPage />)
-    expect(await screen.findByText('no refusals yet')).toBeInTheDocument()
+    // Awaited inside `waitFor` rather than read once: the board's hint arrives with the
+    // summary request, and a single read races it on a loaded machine.
+    await waitFor(() => expect(screen.getByText('no refusals yet')).toBeInTheDocument())
   })
 
   it('names the room it is looking at', async () => {
