@@ -114,13 +114,13 @@ class ApprovalChainEngine:
         approval workflow is single and cannot be duplicated, so the id is fixed here
         rather than trusted from a payload.
         """
-        existing = self.store.find(WORKFLOW, {"workflow_id": vocab.SINGLE_WORKFLOW_ID})
-        if existing:
-            return _payload(existing[0])
         if workflow_id != vocab.SINGLE_WORKFLOW_ID:
             raise DuplicateWorkflow(
                 "the quote approval workflow is single, so a second workflow cannot be created"
             )
+        existing = self.store.find(WORKFLOW, {"workflow_id": vocab.SINGLE_WORKFLOW_ID})
+        if existing:
+            return _payload(existing[0])
         if self.store.count_where(WORKFLOW, {}) > 0:
             raise DuplicateWorkflow(
                 "the quote approval workflow is single, so a second workflow cannot be created"
@@ -423,8 +423,21 @@ class ApprovalChainEngine:
     # ----------------------------------------------------------------- #
 
     def steps_for(self, enrolment_id: str) -> list[dict[str, Any]]:
-        """The approval step rows belonging to one enrolment."""
-        return _payloads(self.store.find(APPROVAL_STEPS, {"enrolment_id": enrolment_id}))
+        """The approval step rows belonging to one enrolment.
+
+        Sorted by priority and then by approver. The store returns rows in insertion
+        order, which is not a contract, so a chain whose two approvers sit at the same
+        priority would otherwise notify them in whatever order the database happened to
+        answer. Sorting here is what makes the sequence a sequence.
+        """
+        rows = _payloads(self.store.find(APPROVAL_STEPS, {"enrolment_id": enrolment_id}))
+        return sorted(
+            rows,
+            key=lambda step: (
+                int(step.get(vocab.PRIORITY_KEY) or 0),
+                str(step.get(vocab.APPROVER_KEY) or ""),
+            ),
+        )
 
     def levels_for(self, enrolment_id: str) -> list[dict[str, Any]]:
         """The stored step rows grouped into priority levels, lowest priority first."""
