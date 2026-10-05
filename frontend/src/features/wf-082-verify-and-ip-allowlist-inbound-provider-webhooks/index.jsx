@@ -189,7 +189,10 @@ function RegistrationSection({ roomId, summary, vocabulary, onChanged }) {
   const [callbackUrl, setCallbackUrl] = useState('https://hooks.example/wf082')
   const [apiKey, setApiKey] = useState('demo-inbound-api-key')
 
-  const existing = useAsync(() => webhookApi.callbacks(roomId), [roomId])
+  const existing = useAsync(
+    () => (roomId ? webhookApi.callbacks(roomId) : Promise.resolve(null)),
+    [roomId],
+  )
   const registrations = asList(existing.data?.callbacks)
   const keyWarning = vocabulary?.key_warning || ''
 
@@ -307,7 +310,10 @@ function RangeSection({ roomId, vocabulary, onChanged }) {
     if (done.ok) onChanged()
   }, [onChanged, ranges, refresh, roomId])
 
-  const stored = useAsync(() => webhookApi.ranges(roomId), [roomId])
+  const stored = useAsync(
+    () => (roomId ? webhookApi.ranges(roomId) : Promise.resolve(null)),
+    [roomId],
+  )
 
   return (
     <Card>
@@ -650,8 +656,18 @@ function InboundVerificationPage() {
   const vocabulary = useAsync(() => webhookApi.vocabulary(), [])
   const retryPolicy = useAsync(() => webhookApi.retryPolicy(), [])
   const decisions = useAsync(() => webhookApi.decisions(), [])
-  const summary = useAsync(() => webhookApi.summary(room.selected), [room.selected])
-  const deliveries = useAsync(() => webhookApi.deliveries(room.selected), [room.selected])
+  // Every room-scoped request below is keyed on the selected room. On the first render the
+  // rooms have not resolved and the selection is the empty string, so a request made then
+  // would be for `/rooms//deliveries`: a malformed path that answers 404 and shows an error
+  // the operator did not cause. This asks for nothing rather than a name with a gap in it.
+  const summary = useAsync(
+    () => (room.selected ? webhookApi.summary(room.selected) : Promise.resolve(null)),
+    [room.selected],
+  )
+  const deliveries = useAsync(
+    () => (room.selected ? webhookApi.deliveries(room.selected) : Promise.resolve(null)),
+    [room.selected],
+  )
 
   const refreshAll = useCallback(() => {
     summary.refetch()
@@ -672,6 +688,13 @@ function InboundVerificationPage() {
       />
     )
   }
+
+  // Every room-scoped request below is keyed on the selected room. On the first render the
+  // rooms have not resolved and the selection is the empty string, so a request made then
+  // would be for `/rooms//deliveries`: a malformed path that answers 404 and shows an error
+  // the operator did not cause. Asking for nothing until a room is named is the honest
+  // alternative, and it costs one frame.
+  if (!room.selected) return <Spinner label="Loading rooms" />
 
   return (
     <div className="space-y-6">
