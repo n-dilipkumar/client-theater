@@ -65,6 +65,7 @@ __all__ = [
     "constant_time_equals",
     "content_sha256",
     "decode_digest",
+    "digest_over",
     "event_hash",
     "verify_content_sha256",
     "verify_event_hash",
@@ -117,6 +118,22 @@ def content_sha256(api_key: str, payload: bytes) -> str:
 def _digest(api_key: str, payload: str | bytes) -> bytes:
     material = payload.encode("utf-8") if isinstance(payload, str) else payload
     return hmac.new(str(api_key or "").encode("utf-8"), material, hashlib.sha256).digest()
+
+
+def digest_over(api_key: str, material: str | bytes) -> str:
+    """The hex ``HMAC-SHA256`` this key produces over exactly these bytes.
+
+    Public, and deliberately general, because one legitimate caller needs a digest over a
+    string that is **not** the canonical event string: a test, a demo, or an operator checking
+    a sender's output. The canonical path is :func:`event_hash` and nothing should reach for
+    this to build one, because the point of :func:`canonical_event_string` is that the HMAC
+    input is exactly two fields with no separator.
+
+    It exists so a caller can say "this is what you get if you join the fields with a
+    separator" without re-implementing HMAC in a feature module, which is how the mistake this
+    workflow exists to prevent gets shipped twice.
+    """
+    return _digest(api_key, material).hex()
 
 
 def decode_digest(value: str, encoding: str) -> bytes | None:
@@ -197,15 +214,20 @@ def verify_event_hash(
 ) -> dict[str, Any]:
     """Check the payload's ``event_hash`` against the two fields it covers.
 
-    A missing ``event_hash`` and a missing ``event_type`` are refused separately,
-    because the two mean different things to whoever has to fix the sender: one says
-    the payload is not this provider's, the other says it is a provider payload whose
-    filter key is missing.
+    Three refusals and they are three different mistakes: a payload missing one of the two
+    fields the digest covers, a payload carrying no ``event_hash``, and a digest that does not
+    match. Each gets its own ``error_name`` because each has a different remedy for whoever
+    has to fix the sender.
 
-    The HMAC input is built from ``event_time`` and ``event_type`` **only**. Every
-    other field of the payload is covered by the other check, so widening the input
-    here would be inventing a scheme the provider does not use and would reject every
-    real delivery.
+    A missing ``event_time`` is refused here rather than being concatenated as the literal text
+    ``None``. :func:`canonical_event_string` accepts a non-string value on purpose, because a
+    provider that sent a numeric ``event_time`` is still a provider. An **absent** field is a
+    different matter: it cannot be concatenated at all, and stringifying it would produce a
+    plausible-looking digest over the text ``None`` and report the honest cause as a mismatch.
+
+    The HMAC input is built from ``event_time`` and ``event_type`` **only**. Every other field
+    of the payload is covered by the other check, so widening the input here would be inventing
+    a scheme the provider does not use and would reject every real delivery.
     """
     result: dict[str, Any] = {
         "check": vocab.EVENT_HASH,
@@ -219,6 +241,9 @@ def verify_event_hash(
     event_type = event.get(vocab.EVENT_TYPE_FIELD)
     if event_type in (None, ""):
         result["reason"] = "event_type_missing"
+        return result
+    if event_time in (None, ""):
+        result["reason"] = "event_time_missing"
         return result
 
     canonical = canonical_event_string(event_time, event_type)

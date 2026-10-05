@@ -10,9 +10,12 @@ one this build took, and - the part that matters - what the rejected options wou
 have cost. A derivation with no rejected alternative recorded is a guess wearing a
 derivation's clothes, and a reviewer cannot tell the two apart.
 
-The HTTP layer serves this table at ``GET /api/wf082/decisions`` so the record is
-readable by whoever reviews the feature, rather than buried in a docstring that
-nobody opens. ``GET /api/wf082/decisions/{id}`` returns one.
+The HTTP layer serves this table at ``GET /decisions`` under
+:data:`~dsr.security_governance.webhook_vocabulary.ROUTER_PREFIX`, so the record is
+readable by whoever reviews the feature rather than buried in a docstring that
+nobody opens. ``GET /decisions/{id}`` returns one. The prefix is named as a constant
+rather than written into the sentence above, because a docstring that cites a URL the
+app does not serve is the same defect the contract forbids in an audit ``source``.
 
 The three decisions that shaped the workflow
 --------------------------------------------

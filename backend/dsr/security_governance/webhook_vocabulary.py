@@ -48,14 +48,26 @@ timeout after **30 seconds**" and gives six retry intervals and a self-disable
 threshold. A handler that answers slowly does not merely lose an event: after
 :data:`CONSECUTIVE_FAILURE_LIMIT` consecutive failures the provider "will
 automatically" clear the callback URL, which is a silent data loss with no error
-anywhere. The ladder is therefore served as data at ``GET /api/wf082/retry-policy``
-rather than described in prose, because the stated reason is retry logic built
-"instead of scraping the human-readable page".
+anywhere. The ladder is therefore served as data at ``GET /retry-policy`` under this
+feature's own prefix, rather than described in prose, because the stated reason is
+retry logic built "instead of scraping the human-readable page".
+
+The prefix is :data:`ROUTER_PREFIX` below rather than a string repeated in prose,
+because a docstring that names a URL the app does not serve is the same defect the
+contract forbids in an audit ``source``. The feature router builds every audit source
+from that constant, and a test asserts each one matches a mounted route.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+#: The prefix the WF-082 feature router mounts, and the only prefix this workflow serves.
+#:
+#: Duplicated from the feature module's ``router.prefix`` so this domain package does not
+#: have to import a FastAPI router to know where it is published. The feature module asserts
+#: at import time that the two agree, so a change to one cannot leave the other stale.
+ROUTER_PREFIX = "/api/wf082"
 
 # --------------------------------------------------------------------------- #
 # The callback registration
@@ -347,10 +359,34 @@ ERROR_CODES: dict[str, dict[str, Any]] = {
         "backoff": "the retry ladder",
         "retry_after_seconds": None,
     },
+    "no_source_ip": {
+        "http_status": 403,
+        "cause": "The request carried no source address to check against the allowlist.",
+        "remediation": (
+            "This handler reads the socket peer address. A deployment behind a proxy that "
+            "removes the peer address has turned the IP check off, and a callback URL that "
+            "receives no events is the symptom."
+        ),
+        "retryable": False,
+        "backoff": None,
+        "retry_after_seconds": None,
+    },
     "content_sha256_missing": {
         "http_status": 401,
         "cause": "The Content-Sha256 header was absent.",
         "remediation": "Send the Content-Sha256 header on every callback.",
+        "retryable": False,
+        "backoff": None,
+        "retry_after_seconds": None,
+    },
+    "content_sha256_malformed": {
+        "http_status": 401,
+        "cause": "The Content-Sha256 header was not base64.",
+        "remediation": (
+            "The header is a base64 digest of the JSON payload, as "
+            "'echo -n $json | openssl dgst -sha256 -hmac $apiKey' produces. Send base64, "
+            "not hex: the event_hash check is the one that uses hex."
+        ),
         "retryable": False,
         "backoff": None,
         "retry_after_seconds": None,
@@ -389,6 +425,18 @@ ERROR_CODES: dict[str, dict[str, Any]] = {
         "http_status": 400,
         "cause": "The payload carried no event_type, so the filter key is absent.",
         "remediation": "Every provider event carries an event_type. Send the provider's payload.",
+        "retryable": False,
+        "backoff": None,
+        "retry_after_seconds": None,
+    },
+    "event_time_missing": {
+        "http_status": 400,
+        "cause": "The payload carried no event_time, so the HMAC input is not the two values.",
+        "remediation": (
+            "Every provider event carries an event_time. The event_hash covers event_time "
+            "concatenated with event_type, so a payload missing one of the two cannot be "
+            "verified at all."
+        ),
         "retryable": False,
         "backoff": None,
         "retry_after_seconds": None,
