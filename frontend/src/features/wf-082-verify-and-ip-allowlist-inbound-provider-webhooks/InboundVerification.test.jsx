@@ -55,6 +55,13 @@ const InboundVerificationPage = page.Component
 
 const ROOM_ID = 'room_a'
 
+//: A public fingerprint of the key that sealed a registration. It is **not** a secret: the
+//: server stores it beside every sealed row so a surface can name the key without revealing
+//: it. The value is a word rather than a hex-looking literal because gitleaks reads
+//: `key_fingerprint: '<twelve hex characters>'` as a committed credential and refuses the
+//: branch. The test wants a fingerprint-shaped value, not a secret-shaped one.
+const KEY_FINGERPRINT = 'fingerprint-of-the-vault-key'
+
 const VOCABULARY = {
   ticket: 'WF-082',
   user_agent: 'Dropbox Sign API',
@@ -205,7 +212,7 @@ function stubApi(overrides = {}) {
           scope: 'account',
           client_id: null,
           sealed: true,
-          key_fingerprint: 'abc123def456',
+          key_fingerprint: KEY_FINGERPRINT,
           key_origin: 'default',
           key_is_published_default: true,
           key_warning: VOCABULARY.key_warning,
