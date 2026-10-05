@@ -675,6 +675,20 @@ _SEED_PROSPECTS: tuple[dict[str, Any], ...] = (
         "interactions": (),
         "reads": "Two matching visits against a draft workflow. Never fires.",
     },
+    {
+        "workflow": "Pricing page, once only",
+        "visitor_key": "visitor-kestral-2e6",
+        "company_key": "kestral-analytics",
+        "visits": (
+            {"hours": 30, "dwell": 58},
+            {"hours": 4, "dwell": 77, "session": "sess-kestral-1"},
+        ),
+        "interactions": (),
+        "reads": (
+            "Shown the block and nothing recorded against it. This is the commonest real "
+            "case and the only state no other demo row shows."
+        ),
+    },
 )
 
 
@@ -772,7 +786,8 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
         f"1 draft), {summary['views']} page views, {summary['deliveries']} blocks shown, "
         f"{summary['receipts']} receipts ({summary['engaged_receipts']} engaged); "
         f"prospects: {states['engaged']} engaged, {states['dismissed']} dismissed, "
-        f"{states['hidden']} hidden for session, {states['pending']} not qualified"
+        f"{states['hidden']} hidden for session, {states['shown']} shown and nothing done, "
+        f"{states['pending']} not qualified"
     )
 
 

@@ -815,17 +815,10 @@ class PageOutreach:
                 },
                 stopped_by=decision.stopped_by,
             )
-        return {
-            "workflow_id": view.workflow_id,
-            "show": decision.show,
-            "stopped_by": decision.stopped_by,
-            "reason": decision.reason,
-            "matching_visits": decision.matching_visits,
-            "visits_required": decision.visits_required,
-            "window_days": decision.window_days,
-            "session_id": decision.session_id,
-            "rule_matches": [entry.as_dict() for entry in decision.rule_matches],
-        }
+        # The decision builds its own dict, so the shape a client sees lives in the pure
+        # module rather than being retyped here. The engine adds only the workflow id,
+        # which is a property of the call rather than of the decision.
+        return {**decision.to_dict(), "workflow_id": view.workflow_id}
 
     def _write_view(
         self,
@@ -1387,19 +1380,6 @@ class PageOutreach:
             "as_of": _iso(reference),
             "prospects": prospects,
         }
-
-
-def _moment(value: Any) -> datetime | None:
-    """Read a stored ISO 8601 moment, or None when it is missing or unzoned."""
-    if isinstance(value, datetime):
-        return value.astimezone(timezone.utc) if value.tzinfo else None
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        moment = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    return moment.astimezone(timezone.utc) if moment.tzinfo else None
 
 
 __all__ = ["INTERACTION_KINDS", "MAX_WINDOW_DAYS", "PageOutreach"]
