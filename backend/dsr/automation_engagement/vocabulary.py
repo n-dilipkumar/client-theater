@@ -196,6 +196,15 @@ PUSH_OUTCOMES: tuple[str, ...] = ("delivered", "unreachable", "recorded")
 PUSH_SENT_KEY = "push_sent"
 PUSH_SENT_VALUE = False
 
+#: The note attached to a data-flow step that is *recorded as* a push but did not
+#: call a provider. The research's push goes through "Customer.io push provider send";
+#: this build calls no provider, so the row carries the stand-in truth.
+PUSH_STAND_IN_NOTE = (
+    "No push provider is called. The send is recorded as a stand-in for a real"
+    " OS-level delivery, exactly as PUSH_SENT_VALUE says the attempt is decided by"
+    " this build rather than APNs or FCM."
+)
+
 #: The key naming *which* send is a stand-in, so a page can say it rather than infer it.
 PUSH_STAND_IN_KEY = "push_send_is_recorded"
 PUSH_STAND_IN_VALUE = True
