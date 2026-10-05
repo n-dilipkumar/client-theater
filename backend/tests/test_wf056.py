@@ -2074,6 +2074,94 @@ def test_discover_refuses_a_window_that_has_already_passed(engine, room):
     assert caught.value.reason == "interval_starts_at_in_past"
 
 
+def test_an_interval_whose_start_has_passed_is_still_answered(store):
+    """The window is the unit, not its first instant.
+
+    A caller's interval is a look-ahead, and a look-ahead that begins before the
+    moment of the call is the ordinary case - "give me today" asked at 10:00 names
+    a midnight start. Only a window with nothing left in it has nothing to offer.
+
+    This is the regression that kept `main` red: the guard compared
+    `window_start` alone, so every interval reaching into the past was refused
+    with a reason whose own published summary ("no slot could be offered") was
+    false for it, because slots after the start remained.
+    """
+    partway = NOW.replace(hour=10)
+    engine = HeadlessBooking(store, clock=lambda: partway)
+    asset = concierge_asset(engine, store.create("room", {"name": "Northwind"})["id"])
+    room_id = asset["room_id"]
+
+    session = engine.discover(
+        room_id,
+        {
+            "section": "concierge",
+            "asset_id": asset["id"],
+            # Started four hours ago, runs for twelve: eight hours remain.
+            "interval": {
+                "startsAt": format_slot(partway - timedelta(hours=4)),
+                "duration": 12 * 60,
+            },
+            "guest": {"guestEmail": "a@b.example"},
+        },
+        source=SOURCE,
+    )
+    assert session["slot_count"] > 0
+    # Nothing offered may already have started: the elapsed part of the window
+    # is dropped rather than handed back as a bookable time in the past.
+    assert all(
+        parse_instant(value, field="startTime") > partway
+        for value in session["schedulingData"][0]["startTimes"]
+    )
+
+
+def test_a_window_that_ends_at_the_current_moment_is_refused(store):
+    """The boundary: an interval that ends *now* has nothing left in it.
+
+    `<=` rather than `<`, for the same reason `Session.is_expired` uses it. An
+    interval ending exactly at the caller's own instant has no slot after it,
+    and refusing it is the answer rather than a session with an empty list.
+    """
+    room_id = store.create("room", {"name": "Northwind"})["id"]
+    engine = HeadlessBooking(store, clock=lambda: NOW)
+    asset = concierge_asset(engine, room_id)
+    with pytest.raises(Refusal) as caught:
+        engine.discover(
+            room_id,
+            {
+                "section": "concierge",
+                "asset_id": asset["id"],
+                "interval": {"startsAt": format_slot(NOW - timedelta(hours=1)), "duration": 60},
+                "guest": {"guestEmail": "a@b.example"},
+            },
+            source=SOURCE,
+        )
+    assert caught.value.reason == "interval_starts_at_in_past"
+
+
+def test_a_window_that_has_passed_names_the_whole_interval_not_just_the_start(store):
+    """The refusal says what was wrong with the *window*.
+
+    A message naming only `interval.startsAt` sends the caller off to widen an
+    interval that is not the problem, which is the wrong repair for a window
+    that has already gone.
+    """
+    room_id = store.create("room", {"name": "Northwind"})["id"]
+    engine = HeadlessBooking(store, clock=lambda: NOW)
+    asset = concierge_asset(engine, room_id)
+    with pytest.raises(Refusal) as caught:
+        engine.discover(
+            room_id,
+            {
+                "section": "concierge",
+                "asset_id": asset["id"],
+                "interval": {"startsAt": "2020-01-01T00:00:00Z", "duration": 60},
+                "guest": {"guestEmail": "a@b.example"},
+            },
+            source=SOURCE,
+        )
+    assert "has already passed" in str(caught.value)
+
+
 def test_an_ownership_link_refuses_a_session_with_no_guest_email(engine, room):
     """ "For Ownership links, also pass guestEmail in the init call - it is
     required so Chili Piper can resolve the owner from your CRM." """
