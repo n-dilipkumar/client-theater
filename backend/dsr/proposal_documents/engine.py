@@ -416,7 +416,7 @@ class ProposalEngine:
         the *second* send, and that is what moves the document to ``sent``.
         """
         document = self.require_document(document_id)
-        verdict = rules.require_sendable(
+        rules.require_sendable(
             document.get("state"),
             gate=str(document.get("gate") or vocab.GATE_OPEN),
             has_approval_workflow=bool(document.get("has_approval_workflow", True)),
