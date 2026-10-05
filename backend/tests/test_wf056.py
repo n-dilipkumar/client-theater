@@ -62,6 +62,7 @@ import pytest
 from dsr.api import app
 from dsr.db.audited import AuditedDatabase
 from dsr.features import load_feature
+from dsr.features.wf056_book_a_meeting_with_no_scheduling_ui_h import get_headless
 from dsr.headless_booking import (
     CALLS,
     DEFAULT_MEETING_MINUTES,
@@ -151,6 +152,20 @@ FEATURE_ID = "wf-056-book-a-meeting-with-no-scheduling-ui-h"
 #: A fixed clock, so the TTL rules are testable without sleeping. A session-expiry
 #: test that depended on real time would either sleep or flake.
 NOW = datetime(2026, 9, 28, 9, 0, tzinfo=timezone.utc)
+
+#: The window the HTTP half asks a session for, measured from :data:`NOW` rather
+#: than written out as a calendar date.
+#:
+#: It is derived because the offer is only non-empty while the engine's clock is
+#: behind the window: :func:`dsr.headless_booking.availability.slots` returns
+#: ``[]`` once ``now + lead_minutes`` reaches the end of it. Seven days on from
+#: :data:`NOW` puts the start at 08:00 and a 12-hour window ends at 20:00, which
+#: straddles the published 09:00-17:00 working hours on a weekday - so the window
+#: overlaps them whatever weekday the suite happens to run on.
+SESSION_INTERVAL = {
+    "startsAt": format_slot(NOW + timedelta(days=7, hours=-1)),
+    "duration": 720,
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -310,16 +325,54 @@ def http(_shared_client):
     ``dependency_overrides`` is cleared on the way in and on the way out: the
     application is module-scoped, so an override one test installs would
     otherwise still be installed for the next one.
+
+    The engine is handed :data:`NOW` rather than the wall clock. The route builds
+    it with ``HeadlessBooking(store)``, which falls back to ``datetime.now``, and
+    the offer is computed against that clock - so a fixture window anchored to a
+    calendar date stops offering slots once real time passes it, and the tests
+    that read ``schedulingData[].startTimes`` fail for a reason that has nothing
+    to do with the change under test. Overriding the dependency is the seam the
+    rest of the suite uses for exactly this: ``test_wf016``, ``test_wf025``,
+    ``test_wf026``, ``test_wf032``, ``test_wf034``, ``test_wf037`` and
+    ``test_wf045`` all pin a clock across the HTTP boundary this way.
     """
     db = AuditedDatabase()
     _shared_client.app.state.db = db
     _shared_client.app.state.store = RecordStore(db)
     _shared_client.app.dependency_overrides.clear()
+    _shared_client.app.dependency_overrides[get_headless] = lambda: HeadlessBooking(
+        _shared_client.app.state.store, clock=lambda: NOW
+    )
     try:
         yield _shared_client
     finally:
         _shared_client.app.dependency_overrides.clear()
         db.close()
+
+
+def test_the_http_half_runs_on_the_pinned_clock_not_the_wall_clock(http):
+    """The fixture's own guarantee, asserted so that it cannot rot.
+
+    The offer is computed against the engine's clock. If that clock were the wall
+    clock then every test below reading ``schedulingData[].startTimes`` would
+    quietly change meaning as real time passed the window, and go red for a reason
+    that has nothing to do with the change under test. It did: the window was the
+    literal ``2026-10-05T08:00:00Z``, and ``availability.slots`` returned nothing
+    for it from 2026-10-05T16:00Z onwards - fourteen tests, on a green suite.
+
+    So the dependency is overridden in the ``http`` fixture, and this checks the
+    override is actually in force. A fixture that quietly stopped applying would
+    leave every test under it looking fine, and expiring again.
+    """
+    assert get_headless in http.app.dependency_overrides, (
+        "the http fixture no longer pins the engine clock, so the session window "
+        "is being compared against real time again"
+    )
+    assert http.app.dependency_overrides[get_headless]().now() == NOW
+    # And the window those tests ask for is ahead of that clock, which is the
+    # other half: a window behind the clock is refused outright with a 400.
+    offered_from = datetime.fromisoformat(SESSION_INTERVAL["startsAt"].replace("Z", "+00:00"))
+    assert offered_from > NOW
 
 
 def client_store(client):
@@ -3319,7 +3372,7 @@ def test_the_audit_source_names_the_route_that_served_the_write(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3375,7 +3428,7 @@ def test_every_source_this_feature_records_is_under_its_own_prefix(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3434,7 +3487,7 @@ def test_a_session_written_over_http_records_its_own_route(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     )
@@ -3619,7 +3672,7 @@ def test_the_two_calls_over_http_commit_a_meeting(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     )
@@ -3649,7 +3702,7 @@ def test_the_researched_retry_is_a_400_over_http_saying_so(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3699,7 +3752,7 @@ def test_every_refusal_over_http_carries_a_published_reason(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3720,7 +3773,7 @@ def test_a_start_time_that_was_never_offered_is_a_400_over_http(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3753,7 +3806,7 @@ def test_a_read_only_token_is_a_403_over_http(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
             "credential_id": token["id"],
         },
@@ -3778,7 +3831,7 @@ def test_reading_a_session_over_http_reports_whether_it_can_be_retried(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3796,7 +3849,7 @@ def test_sessions_are_listed_and_filtered_over_http(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     )
@@ -3821,7 +3874,7 @@ def test_a_meeting_is_read_with_its_invites_and_webhook_over_http(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3852,7 +3905,7 @@ def test_a_meeting_from_another_room_is_a_404_over_http(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3879,7 +3932,7 @@ def test_the_call_log_over_http_counts_outcomes(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     ).json()
@@ -3913,7 +3966,7 @@ def test_the_actor_query_parameter_reaches_the_audit_row_over_http(http):
         json={
             "section": "concierge",
             "asset_id": asset["id"],
-            "interval": {"startsAt": "2026-10-05T08:00:00Z", "duration": 720},
+            "interval": SESSION_INTERVAL,
             "guest": {"guestEmail": "buyer@example.com"},
         },
     )
