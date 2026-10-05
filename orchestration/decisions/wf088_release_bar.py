@@ -133,14 +133,13 @@ MEASUREMENTS = {
         "Two earlier runs of the same suite on this branch also passed. The known flakes in the "
         "suite belong to other workflows and are itemised below. CI is the authority."
     ),
-    "backend_coverage_total": "94.93% (gate is 90%)",
-    "backend_coverage_this_change": {
-        "dsr/quoting_proposals/price_book_vocabulary.py": "100%",
-        "dsr/quoting_proposals/price_book_rules.py": "98.98%",
-        "dsr/quoting_proposals/price_book_inferences.py": "100%",
-        "dsr/quoting_proposals/price_book_engine.py": "98.73%",
-        "dsr/features/WF-088_auto_assign_the_correct_price_book_or_price.py": "100%",
-    },
+    "backend_coverage_total": "94.95% (gate is 90%)",
+    "backend_coverage_this_change": (
+        "Read per file out of the coverage.json the gate's own run produced, rather than from "
+        "the aggregate: a hundred features can average out a brand-new file nothing exercises. "
+        "vocabulary.py 100% (98/98), rules.py 98.76% (319/323), inferences.py 100% (25/25), "
+        "engine.py 98.99% (196/198), the feature module 100% (119/119). The weakest is 98.76."
+    ),
     "frontend_suite": (
         "1244 passed across 44 files. One failure in another workflow's file, "
         "src/test/wf001-room-templates.test.jsx, a 5s vitest timeout under load; it passes "
