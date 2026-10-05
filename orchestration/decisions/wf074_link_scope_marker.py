@@ -73,7 +73,7 @@ OPTIONS = {
 CONTEXT = {
     "sourced_never_scoped_shows_the_full_dataroom": (
         'CLI links.mdx, section permissions: "Per-item file permissions on a dataroom link: '
-        'control which documents and folders this specific link shows, without creating a '
+        "control which documents and folders this specific link shows, without creating a "
         'group. With no overrides, viewers see the full dataroom."'
     ),
     "sourced_explicit_clear_hides_every_item": (
@@ -83,7 +83,7 @@ CONTEXT = {
     "sourced_group_scope_is_default_deny": (
         'The share-dataroom-with-group guide: "A new group sees nothing until you grant '
         'permissions." The default-deny sentence is scoped to a group and does not reach a '
-        'general link.'
+        "general link."
     ),
     "sourced_ancestor_auto_open_is_not_group_only": (
         'CLI links.mdx, same section: "Ancestor folders of visible items stay visible '

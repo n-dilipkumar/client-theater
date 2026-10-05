@@ -66,15 +66,15 @@ CONTEXT = {
     ),
     "sourced_full_replace_sentence": (
         'openapi.json UpdateLinkPermissionsRequest.permissions: "The complete desired '
-        'permission state for this link (full-replace semantics...) An empty array clears '
+        "permission state for this link (full-replace semantics...) An empty array clears "
         'all overrides, which hides every item on links relying on this permission set."'
     ),
     "sourced_scope_conflict_rule": (
         'A link override on a group link is "Rejected with 422 on links with audience_type: '
-        'group - their group determines visibility; switch the link to audience_type: '
+        "group - their group determines visibility; switch the link to audience_type: "
         'general first." So a rep who wants per-item scoping on a general link gets it by '
-        'switching the audience, which means the general path is the documented way to do '
-        'exactly this workflow.'
+        "switching the audience, which means the general path is the documented way to do "
+        "exactly this workflow."
     ),
     "item_types": ["dataroom_document", "dataroom_folder"],
     "flags_per_entry": ["can_view", "can_download"],
