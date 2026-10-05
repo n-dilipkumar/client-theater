@@ -58,7 +58,7 @@ bare array of addresses got a 422 from FastAPI's validator before the engine saw
 MEASUREMENTS = {
     "tests_added_backend_domain": 122,
     "tests_added_backend_http": 71,
-    "tests_added_frontend": 34,
+    "tests_added_frontend": 38,
     "own_files_domain_alone": "122 passed in 0.61s",
     "own_files_http_alone": "71 passed, 6 skipped in 3.53s (the 6 need frontend sources, which are present, so they run in the full suite)",
     "whole_backend_suite": "15390 passed, 1 xfailed in 416.54s under pytest-xdist",
@@ -73,10 +73,28 @@ MEASUREMENTS = {
         "dsr/audience_permissions/rules.py": "95%",
         "dsr/features/wf074_scope_visibility_to_an_audience_with_per_item.py": "99%",
     },
-    "frontend_suite": "785 passed across 29 files",
+    "frontend_suite": "789 passed across 29 files",
     "frontend_build": "vite build succeeded, 390 modules transformed",
     "frontend_lint": "0 errors, 12 warnings, none in this feature's own files",
     "frontend_format_check": "All matched files use Prettier code style",
+    "browser_pass": (
+        "Chrome 154 through bsk against uvicorn serving the built frontend on 127.0.0.1:8126 over a "
+        "freshly seeded database. The page renders: four stat cards, the default-deny notice above "
+        "the fold, an audience card whose grid shows Visible and downloadable beside View only "
+        "beside No grant yet, the member list, the size caps, the three membership steps in order, "
+        "both scopes side by side, the four link scope states, the ownership and assumption "
+        "notices, and the nine recorded derivations. A live write was confirmed against the server: "
+        "turning a download flag off moved the row to view_only and wrote one audit row whose "
+        "source was the route that served it. All 83 SVG paths on the page parse."
+    ),
+    "browser_pass_defects_found": (
+        "Two, and both are fixed. The page requested /rooms//groups and /rooms//links before a "
+        "room was chosen, so the host answered 404 and the board rendered 'Could not load data' "
+        "over itself. And the flag toggle sent three keys where the closed entry requires four, so "
+        "the server refused it with a 400 and a rep clicking a flag watched it spring back behind a "
+        "banner naming no key. Neither was visible to the test suite or the route sweep, which is "
+        "the reason the pass was run."
+    ),
     "ruff_check": "All checks passed, from the repository root with --config backend/pyproject.toml",
     "ruff_format_check": "772 files already formatted, 0 would be reformatted",
     "routes_called_live": (
@@ -119,11 +137,11 @@ MEASUREMENTS = {
 }
 
 UNVERIFIED = (
-    "No browser rendering pass was run, so the page has not been seen rendered. No screen-reader "
-    "pass, so the label wiring is asserted from the DOM rather than from how it is announced. One "
-    "browser engine only. Not verified at mobile widths or with prefers-reduced-motion set. The "
-    "frontend suite, the build and the design floor were checked on this machine under contention, "
-    "not on a clean runner."
+    "No screen-reader pass, so the label wiring is asserted from the DOM and from the aria "
+    "snapshot rather than from how a screen reader announces it. One browser engine only: Chrome "
+    "154. Not verified at mobile widths or with prefers-reduced-motion set. The frontend suite, the "
+    "build, the design floor and the whole backend suite were checked on this machine while three "
+    "other agents ran, not on a clean runner; CI is the authority."
 )
 
 
