@@ -323,12 +323,7 @@ def build_permission(entry: Any, *, field: str = "permission") -> dict[str, Any]
     if item_type not in vocab.ITEM_TYPES:
         raise AudienceRuleError(
             f"{item_type!r} is not an item type.",
-            {
-                field: (
-                    f"item_type must be {vocab.ITEM_TYPE_DOCUMENT} or "
-                    f"{vocab.ITEM_TYPE_FOLDER}."
-                )
-            },
+            {field: (f"item_type must be {vocab.ITEM_TYPE_DOCUMENT} or {vocab.ITEM_TYPE_FOLDER}.")},
         )
 
     flags: dict[str, bool] = {}
@@ -365,7 +360,10 @@ def build_permissions(entries: Any) -> list[dict[str, Any]]:
             "permissions must be a list of entries.",
             {"permissions": "Send a list, not a single object."},
         )
-    built = [build_permission(entry, field=f"permissions[{index}]") for index, entry in enumerate(entries)]
+    built = [
+        build_permission(entry, field=f"permissions[{index}]")
+        for index, entry in enumerate(entries)
+    ]
     if len(built) > vocab.MAX_PERMISSIONS_PER_CALL:
         raise AudienceRuleError(
             f"A call takes at most {vocab.MAX_PERMISSIONS_PER_CALL} permission entries.",
@@ -493,7 +491,9 @@ def require_link_scope(audience_type: Any) -> str:
             },
         )
     if kind == vocab.AUDIENCE_GROUP:
-        raise ScopeConflict(vocab.SCOPE_CONFLICT_MESSAGE, {"audience_type": vocab.SCOPE_CONFLICT_MESSAGE})
+        raise ScopeConflict(
+            vocab.SCOPE_CONFLICT_MESSAGE, {"audience_type": vocab.SCOPE_CONFLICT_MESSAGE}
+        )
     return kind
 
 
@@ -663,7 +663,9 @@ def ancestors_of(
             break
         seen.add(current)
         chain.append((current, vocab.ITEM_TYPE_FOLDER))
-        current = str((folders.get(current) or {}).get(vocab.PARENT_FOLDER_FIELD) or vocab.ROOT_FOLDER)
+        current = str(
+            (folders.get(current) or {}).get(vocab.PARENT_FOLDER_FIELD) or vocab.ROOT_FOLDER
+        )
     return chain
 
 

@@ -447,9 +447,7 @@ def vocabulary_payload() -> dict[str, Any]:
             {"id": audience, "label": AUDIENCE_LABELS[audience]} for audience in AUDIENCE_TYPES
         ],
         "membership": {
-            "steps": [
-                {"id": step, "label": MEMBERSHIP_LABELS[step]} for step in MEMBERSHIP_STEPS
-            ],
+            "steps": [{"id": step, "label": MEMBERSHIP_LABELS[step]} for step in MEMBERSHIP_STEPS],
             "allow_all_field": ALLOW_ALL,
             "allow_all": (
                 "When true, anyone who passes the link's other access gates is treated as a "

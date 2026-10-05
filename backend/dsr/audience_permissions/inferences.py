@@ -22,11 +22,11 @@ DECISIONS: dict[str, dict[str, Any]] = {
     "DERIVED_ITEM_IDS_ARE_THIS_ROOMS_LIBRARY_ROWS": {
         "question": "What rows do the permission entries point at?",
         "left_open_by": (
-            'The specification\'s data sources name "Papermark `DataroomGroup`, '
-            '`DataroomGroupMember`, `DataroomGroupPermission` (and the parallel '
-            '`LinkPermission` set); `DataroomDocument` join rows (`ddoc_...`) and data room '
-            'folder rows as the `item_id` targets". Those are a vendor\'s own internal join '
-            'rows, and no such collection is public API in the cited sources.'
+            "The specification's data sources name \"Papermark `DataroomGroup`, "
+            "`DataroomGroupMember`, `DataroomGroupPermission` (and the parallel "
+            "`LinkPermission` set); `DataroomDocument` join rows (`ddoc_...`) and data room "
+            "folder rows as the `item_id` targets\". Those are a vendor's own internal join "
+            "rows, and no such collection is public API in the cited sources."
         ),
         "options": {
             "this_rooms_library": (
@@ -100,8 +100,10 @@ DECISIONS: dict[str, dict[str, Any]] = {
                 "find() on group_id and item_id."
             ),
             "row_id_is_the_item": "Name the permission row itself with the item's id.",
-            "store_the_acl_as_one_field": "Keep the whole permission set in a single array on the group.",
-        ),
+            "store_the_acl_as_one_field": (
+                "Keep the whole permission set in a single array on the group."
+            ),
+        },
         "chosen": "query_by_group_and_key",
         "rejected_because": (
             "row_id_is_the_item breaks the moment a room has a document and a folder with "
@@ -152,7 +154,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
         "left_open_by": (
             'The source says "Ancestor folders of any item made visible are automatically '
             'set to `can_view: true` so the folder tree stays navigable." It names one flag '
-            "and does not say what happens to the other.'
+            "and does not say what happens to the other."
         ),
         "options": {
             "view_only": "Auto-opened ancestors get can_view true and can_download false.",
@@ -188,7 +190,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
             ),
             "reject_the_write": "Refuse a grant whose item has a broken parent chain.",
             "walk_forever": "Follow the chain without a guard.",
-        ),
+        },
         "chosen": "walk_with_a_guard",
         "rejected_because": (
             "Refusing the write couples this workflow's grant path to the integrity of a "
@@ -215,7 +217,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
             "refuse": "Two entries for one item in one call is a validation failure.",
             "last_wins": "The later entry overwrites the earlier one.",
             "first_wins": "The earlier entry is kept and the later one ignored.",
-        ),
+        },
         "chosen": "refuse",
         "rejected_because": (
             "Both 'wins' rules make the outcome depend on list order for a caller that "
@@ -258,7 +260,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
         "question": "Does adding a member record that they were invited?",
         "left_open_by": (
             'The source is emphatic: "Viewers are created for unknown addresses; '
-            'already-present members are skipped, so the call is idempotent. **No invitation '
+            "already-present members are skipped, so the call is idempotent. **No invitation "
             'emails are sent.**" The workflow otherwise invites people, through WF-004.'
         ),
         "options": {
