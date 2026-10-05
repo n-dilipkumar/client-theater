@@ -40,11 +40,12 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
+from dsr.quoting_proposals import (
+    quote_approval_inferences as inferences,
+    quote_approval_rules as rules,
+    quote_approval_vocabulary as vocab,
+)
 from dsr.store import RecordStore
-
-from dsr.quoting_proposals import quote_approval_inferences as inferences
-from dsr.quoting_proposals import quote_approval_rules as rules
-from dsr.quoting_proposals import quote_approval_vocabulary as vocab
 
 #: The line-item collection this workflow reads. Named rather than required: a quote
 #: written by a foreign workflow that stores its lines elsewhere is still approvable
@@ -73,7 +74,9 @@ class QuoteApprovalEngine:
 
     def rule(self, rule_id: str) -> dict[str, Any]:
         """One configured approval rule, by record id."""
-        return self._require(vocab.APPROVAL_RULES, rule_id, "unknown_approval_rule", "approval rule")
+        return self._require(
+            vocab.APPROVAL_RULES, rule_id, "unknown_approval_rule", "approval rule"
+        )
 
     def enrolment(self, enrolment_id: str) -> dict[str, Any]:
         """One enrolment, by record id."""
@@ -126,7 +129,12 @@ class QuoteApprovalEngine:
     # -- rules ------------------------------------------------------------- #
 
     def create_rule(
-        self, payload: Mapping[str, Any], *, actor: str | None, source: str, room_id: str | None = None
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor: str | None,
+        source: str,
+        room_id: str | None = None,
     ) -> dict[str, Any]:
         """Save a configured approval rule.
 
@@ -143,7 +151,11 @@ class QuoteApprovalEngine:
     def list_rules(self, *, room_id: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
         """The configured rules, oldest first, so the page shows them in order."""
         return self.store.list(
-            vocab.APPROVAL_RULES, room_id=room_id, limit=limit, order_by="created_at", descending=False
+            vocab.APPROVAL_RULES,
+            room_id=room_id,
+            limit=limit,
+            order_by="created_at",
+            descending=False,
         )
 
     def patch_rule(
@@ -200,7 +212,11 @@ class QuoteApprovalEngine:
             if enabled_only and not data.get("enabled", True):
                 continue
             report = rules.matches_filters(
-                data.get("filters") or [], quote, items, related, str(data.get("matchMode") or vocab.FILTER_MATCH_ALL)
+                data.get("filters") or [],
+                quote,
+                items,
+                related,
+                str(data.get("matchMode") or vocab.FILTER_MATCH_ALL),
             )
             if not report["matched"]:
                 continue
@@ -246,7 +262,14 @@ class QuoteApprovalEngine:
     def _creator(self, quote_id: str) -> str | None:
         """Who created a quote, by the field names a foreign writer may have used."""
         payload = self.quote_payload(quote_id)
-        for field in ("creator", "created_by", "createdBy", "owner", "hs_owner_id", "hubspot_owner_id"):
+        for field in (
+            "creator",
+            "created_by",
+            "createdBy",
+            "owner",
+            "hs_owner_id",
+            "hubspot_owner_id",
+        ):
             value = payload.get(field)
             if isinstance(value, Mapping):
                 value = value.get("id") or value.get("email")
@@ -296,16 +319,36 @@ class QuoteApprovalEngine:
         enabled = self.matching_rules(quote_id, enabled_only=True)
         every = self.matching_rules(quote_id, enabled_only=False)
         if not enabled:
-            return self._no_enrolment(quote_id, creator, trigger, every, moment, actor=actor, source=source)
+            return self._no_enrolment(
+                quote_id, creator, trigger, every, moment, actor=actor, source=source
+            )
 
         plan = self._plan(enabled, creator)
         required = [entry for entry in plan if not entry["exempt"]]
         if not required:
             return self._exempt_enrolment(
-                quote_id, quote, creator, trigger, plan, notes_to_approver, moment, actor=actor, source=source, room_id=room_id
+                quote_id,
+                quote,
+                creator,
+                trigger,
+                plan,
+                notes_to_approver,
+                moment,
+                actor=actor,
+                source=source,
+                room_id=room_id,
             )
         return self._enrol(
-            quote_id, quote, creator, trigger, required, notes_to_approver, moment, actor=actor, source=source, room_id=room_id
+            quote_id,
+            quote,
+            creator,
+            trigger,
+            required,
+            notes_to_approver,
+            moment,
+            actor=actor,
+            source=source,
+            room_id=room_id,
         )
 
     def _plan(
@@ -389,7 +432,10 @@ class QuoteApprovalEngine:
                     source=source,
                 )
             for identity in entry["resolved"]["approvers"]:
-                for channel in entry["rule"].get("channels") or [vocab.CHANNEL_IN_APP, vocab.CHANNEL_EMAIL]:
+                for channel in entry["rule"].get("channels") or [
+                    vocab.CHANNEL_IN_APP,
+                    vocab.CHANNEL_EMAIL,
+                ]:
                     self._notify(
                         created,
                         identity,
@@ -400,7 +446,19 @@ class QuoteApprovalEngine:
                         source=source,
                     )
         self._activity(created, vocab.ACTIVITY_REQUESTED, room_id=room_id, source=source)
-        return self.enrolment_view(self.enrolment(created["id"]))
+        return {
+            "enrolled": True,
+            "required": True,
+            "reason": None,
+            "explanation": None,
+            "quote_id": quote_id,
+            "creator": creator,
+            "trigger": trigger,
+            "evaluated_at": rules.stamp(moment),
+            "approvers": payload["approvers"],
+            "removed_approvers": payload["removed_approvers"],
+            "enrolment": self.enrolment_view(self.enrolment(created["id"])),
+        }
 
     def _exempt_enrolment(
         self,
@@ -448,7 +506,19 @@ class QuoteApprovalEngine:
             room_id=room_id,
             source=source,
         )
-        return self.enrolment_view(self.enrolment(created["id"]))
+        return {
+            "enrolled": True,
+            "required": False,
+            "reason": vocab.ENROLMENT_EXEMPT_SOLE_APPROVER,
+            "explanation": vocab.ENROLMENT_EXEMPTION_LABELS[vocab.ENROLMENT_EXEMPT_SOLE_APPROVER],
+            "quote_id": quote_id,
+            "creator": creator,
+            "trigger": trigger,
+            "evaluated_at": rules.stamp(moment),
+            "approvers": [],
+            "removed_approvers": payload["removed_approvers"],
+            "enrolment": self.enrolment_view(self.enrolment(created["id"])),
+        }
 
     def _no_enrolment(
         self,
@@ -526,9 +596,10 @@ class QuoteApprovalEngine:
         verdict = rules.normalise_decision(decision)
         identity = str(approver or actor or "").strip()
         if not identity:
-            raise rules.refuse("approver_is_not_on_this_request", **{
-                "approver": "Name the approver making this decision."
-            })
+            raise rules.refuse(
+                "approver_is_not_on_this_request",
+                **{"approver": "Name the approver making this decision."},
+            )
 
         if str(data.get("status") or "") != vocab.STATE_PENDING_APPROVAL:
             raise rules.refuse(
@@ -569,7 +640,11 @@ class QuoteApprovalEngine:
             str(data.get("requirement") or vocab.REQUIREMENT_ALL),
             approvers,
             [one["approver"] for one in decisions if one.get("decision") == vocab.DECISION_APPROVE],
-            [one["approver"] for one in decisions if one.get("decision") == vocab.DECISION_REQUEST_CHANGES],
+            [
+                one["approver"]
+                for one in decisions
+                if one.get("decision") == vocab.DECISION_REQUEST_CHANGES
+            ],
         )
         state = vocab.STATE_PENDING_APPROVAL
         outcome: str | None = None
@@ -603,8 +678,12 @@ class QuoteApprovalEngine:
 
         named = rules.activity_for(state, exempt=bool(data.get("exempt")))
         if outcome:
-            self._activity(updated, named["activity"], room_id=record.get("room_id") or room_id, source=source)
-            self._notify_creator(updated, named["activity"], room_id=record.get("room_id") or room_id, source=source)
+            self._activity(
+                updated, named["activity"], room_id=record.get("room_id") or room_id, source=source
+            )
+            self._notify_creator(
+                updated, named["activity"], room_id=record.get("room_id") or room_id, source=source
+            )
 
         return {
             "enrolment": self.enrolment_view(self.enrolment(updated["id"])),
@@ -654,7 +733,9 @@ class QuoteApprovalEngine:
             | {"_id": record["id"], "decision_id": record["id"], "_room_id": record.get("room_id")}
             for record in rows
         ]
-        payload.sort(key=lambda row: (str(row.get("decided_at") or ""), str(row.get("approver") or "")))
+        payload.sort(
+            key=lambda row: (str(row.get("decided_at") or ""), str(row.get("approver") or ""))
+        )
         return payload
 
     # -- sharing ----------------------------------------------------------- #
@@ -774,9 +855,12 @@ class QuoteApprovalEngine:
         )
         scoped = [row for row in rows if room_id is None or row.get("room_id") == room_id]
         if approver:
-            mine = {str(row.get("enrolment_id")) for row in self.store.find(
-                vocab.APPROVAL_DECISIONS, {"approver": str(approver)}, limit=500
-            )}
+            mine = {
+                str(row.get("enrolment_id"))
+                for row in self.store.find(
+                    vocab.APPROVAL_DECISIONS, {"approver": str(approver)}, limit=500
+                )
+            }
             scoped = [row for row in scoped if row["id"] in mine]
         return [self.enrolment_view(row, approver=approver) for row in scoped[:limit]]
 
@@ -795,10 +879,19 @@ class QuoteApprovalEngine:
             str(data.get("requirement") or vocab.REQUIREMENT_ALL),
             data.get("approvers") or [],
             [one["approver"] for one in decisions if one.get("decision") == vocab.DECISION_APPROVE],
-            [one["approver"] for one in decisions if one.get("decision") == vocab.DECISION_REQUEST_CHANGES],
+            [
+                one["approver"]
+                for one in decisions
+                if one.get("decision") == vocab.DECISION_REQUEST_CHANGES
+            ],
         )
         payload: dict[str, Any] = {
             **record,
+            # Whether this enrolment was created by a submission. The submission
+            # envelope carries `enrolled` too, and this flag is what makes a bare read
+            # of one enrolment self-describing.
+            "enrolled": True,
+            "required": not bool(data.get("exempt")),
             "status": data.get("status"),
             "exempt": bool(data.get("exempt")),
             "exemption_reason": data.get("exemption_reason"),
@@ -808,17 +901,22 @@ class QuoteApprovalEngine:
             "tally": tally,
             "conditions": rules.conditions_report(data),
             "shareable": rules.evaluate_share(str(data.get("status") or ""))["shareable"],
-            "locked": rules.evaluate_locked(str(data.get("status") or ""), data.get("locked"))["locked"],
+            "locked": rules.evaluate_locked(str(data.get("status") or ""), data.get("locked"))[
+                "locked"
+            ],
         }
         if approver:
             # Who may act, computed on the read rather than only refused on the
             # write, so a page can hide a button that would 403 and can label the
             # reason. Both are still enforced by ``decide``.
-            mine = next((one for one in decisions if str(one.get("approver")) == str(approver)), None)
+            mine = next(
+                (one for one in decisions if str(one.get("approver")) == str(approver)), None
+            )
             payload["for_you"] = {
                 "on_this_request": bool(mine),
                 "already_decided": bool(mine and mine.get("decision")),
-                "is_the_creator": bool(data.get("creator")) and str(data.get("creator")) == str(approver),
+                "is_the_creator": bool(data.get("creator"))
+                and str(data.get("creator")) == str(approver),
                 "can_decide": bool(mine and not mine.get("decision")),
             }
         return payload
@@ -828,10 +926,14 @@ class QuoteApprovalEngine:
         rows = self.store.find(vocab.ACTIVITIES, {"quote_id": quote_id}, limit=min(limit, 1000))
         return [dict(row.get("data") or {}) | {"id": row["id"]} for row in rows]
 
-    def notifications(self, *, quote_id: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    def notifications(
+        self, *, quote_id: str | None = None, limit: int = 200
+    ) -> list[dict[str, Any]]:
         """The recorded notifications, newest first."""
         rows = (
-            self.store.find(vocab.NOTIFICATIONS, {"quote_id": str(quote_id)}, limit=min(limit, 1000))
+            self.store.find(
+                vocab.NOTIFICATIONS, {"quote_id": str(quote_id)}, limit=min(limit, 1000)
+            )
             if quote_id
             else self.store.list(vocab.NOTIFICATIONS, limit=min(limit, 1000))
         )
@@ -839,8 +941,14 @@ class QuoteApprovalEngine:
 
     def summary(self, *, room_id: str | None = None) -> dict[str, Any]:
         """The board: how much is waiting, and on whom."""
-        enrolments = self.store.list(vocab.APPROVAL_REQUESTS, room_id=room_id, limit=1000)
-        board = rules.summary_counts(self.store.list(vocab.APPROVAL_RULES, room_id=room_id, limit=1000), enrolments)
+        rows = self.store.list(vocab.APPROVAL_REQUESTS, room_id=room_id, limit=1000)
+        # The record's own ``data``, not the envelope. The status lives in the
+        # payload, and reading it off the envelope would report every quote as
+        # DRAFT and hide the one a reviewer is waiting on.
+        enrolments = [dict(record.get("data") or {}) for record in rows]
+        board = rules.summary_counts(
+            self.store.list(vocab.APPROVAL_RULES, room_id=room_id, limit=1000), enrolments
+        )
         board["room_id"] = room_id
         board["approvers_waiting"] = {
             str(row.get("approver")): 0

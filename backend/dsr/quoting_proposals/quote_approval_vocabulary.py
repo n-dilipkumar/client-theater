@@ -233,8 +233,7 @@ APPROVER_REQUIREMENT_LABELS: dict[str, str] = {
 }
 
 APPROVER_REQUIREMENT_QUOTE = (
-    "Under Approver requirements choose All approvers required or At least one "
-    "approver required."
+    "Under Approver requirements choose All approvers required or At least one approver required."
 )
 
 
@@ -311,9 +310,7 @@ REFUSED_STATES = (STATE_REJECTED,)
 #: So a share of any other state is refused, and the refusal is a row.
 SHAREABLE_STATES = (STATE_APPROVED, STATE_SHARED, STATE_ACCEPTED)
 
-SHARE_ON_APPROVAL_QUOTE = (
-    "only on approval can the quote be Share-d and sent to the buyer"
-)
+SHARE_ON_APPROVAL_QUOTE = "only on approval can the quote be Share-d and sent to the buyer"
 
 
 # --------------------------------------------------------------------------- #
@@ -327,9 +324,7 @@ DECISIONS = (DECISION_APPROVE, DECISION_REQUEST_CHANGES)
 
 DECISION_LABELS: dict[str, str] = {
     DECISION_APPROVE: "Approved. The quote may be shared.",
-    DECISION_REQUEST_CHANGES: (
-        "Changes requested. The quote is REJECTED and the seller edits it."
-    ),
+    DECISION_REQUEST_CHANGES: ("Changes requested. The quote is REJECTED and the seller edits it."),
 }
 
 #: The wire spelling, matching the two buttons in the flow: "**Approve** (with an
@@ -551,16 +546,13 @@ TRIGGER_SHARE = "share"
 TRIGGERS = (TRIGGER_SUBMIT, TRIGGER_PUBLISH, TRIGGER_SHARE)
 
 TRIGGER_LABELS: dict[str, str] = {
-    TRIGGER_SUBMIT: (
-        "The seller clicked Request approval. The research's step four."
-    ),
+    TRIGGER_SUBMIT: ("The seller clicked Request approval. The research's step four."),
     TRIGGER_PUBLISH: (
         "The seller tried to publish or share. 'Approval enrolment and notification "
         "fire on the publish/share attempt.'"
     ),
     TRIGGER_SHARE: (
-        "The seller tried to share the quote. 'only on approval can the quote be "
-        "Share-d'."
+        "The seller tried to share the quote. 'only on approval can the quote be Share-d'."
     ),
 }
 
@@ -577,8 +569,7 @@ ERROR_CODES: dict[str, tuple[int, str]] = {
     "rule_needs_a_name": (422, "Give the rule a name so a page can list it."),
     "rule_needs_a_filter": (
         422,
-        "A rule needs at least one filter. A rule that matches everything approves "
-        "every quote.",
+        "A rule needs at least one filter. A rule that matches everything approves every quote.",
     ),
     "rule_needs_at_least_one_approver": (
         422,
@@ -586,8 +577,7 @@ ERROR_CODES: dict[str, tuple[int, str]] = {
     ),
     "too_many_approvers": (
         422,
-        "Assign up to 10 approvers to review quotes that match your configured "
-        "filters.",
+        "Assign up to 10 approvers to review quotes that match your configured filters.",
     ),
     "approver_repeated": (422, "The same approver is listed twice."),
     "unknown_filter_object": (
@@ -597,8 +587,7 @@ ERROR_CODES: dict[str, tuple[int, str]] = {
     ),
     "filter_needs_a_property": (
         422,
-        "Choose a property for the filter. The flow picks one from the object's "
-        "property list.",
+        "Choose a property for the filter. The flow picks one from the object's property list.",
     ),
     "unknown_operator": (
         422,
@@ -649,8 +638,7 @@ ERROR_CODES: dict[str, tuple[int, str]] = {
     ),
     "request_already_decided": (
         409,
-        "This approval request already has its outcome. Submit the quote again to "
-        "start a new one.",
+        "This approval request already has its outcome. Submit the quote again to start a new one.",
     ),
     "quote_not_approved_to_share": (
         409,
@@ -689,14 +677,14 @@ def catalogue() -> dict[str, Any]:
         },
         "filters": {
             "objects": [
-                {"object": name, "label": FILTER_OBJECT_LABELS[name]}
-                for name in FILTER_OBJECTS
+                {"object": name, "label": FILTER_OBJECT_LABELS[name]} for name in FILTER_OBJECTS
             ],
             "operators": [{"operator": name, "label": OPERATOR_LABELS[name]} for name in OPERATORS],
             "list_operators": list(LIST_OPERATORS),
             "numeric_operators": list(NUMERIC_OPERATORS),
             "match_modes": [
-                {"mode": name, "label": FILTER_MATCH_MODE_LABELS[name]} for name in FILTER_MATCH_MODES
+                {"mode": name, "label": FILTER_MATCH_MODE_LABELS[name]}
+                for name in FILTER_MATCH_MODES
             ],
             "default_match_mode": FILTER_MATCH_ALL,
             "operators_choice_note": FILTER_OPERATORS_CHOICE_NOTE,
@@ -719,7 +707,11 @@ def catalogue() -> dict[str, Any]:
             "self_approval_rule": SELF_APPROVAL_RULE_TEXT,
         },
         "quote_states": [
-            {"state": state, "label": QUOTE_STATE_LABELS[state], "shareable": state in SHAREABLE_STATES}
+            {
+                "state": state,
+                "label": QUOTE_STATE_LABELS[state],
+                "shareable": state in SHAREABLE_STATES,
+            }
             for state in QUOTE_STATES
         ],
         "unlock_target_states": list(UNLOCK_TARGET_STATES),
@@ -759,5 +751,8 @@ def catalogue() -> dict[str, Any]:
             "status": HS_STATUS,
             "locked": HS_LOCKED,
         },
-        "error_codes": {name: {"status": status, "detail": detail} for name, (status, detail) in ERROR_CODES.items()},
+        "error_codes": {
+            name: {"status": status, "detail": detail}
+            for name, (status, detail) in ERROR_CODES.items()
+        },
     }

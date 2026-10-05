@@ -235,10 +235,22 @@ _DECISIONS: tuple[dict[str, Any], ...] = (
         "jev_audit_id": None,
         "jev_confidence": None,
         "exposed_transitions": [
-            {"from": vocab.STATE_DRAFT, "to": vocab.STATE_PENDING_APPROVAL, "via": "submit_approval"},
+            {
+                "from": vocab.STATE_DRAFT,
+                "to": vocab.STATE_PENDING_APPROVAL,
+                "via": "submit_approval",
+            },
             {"from": vocab.STATE_PENDING_APPROVAL, "to": vocab.STATE_APPROVED, "via": "approve"},
-            {"from": vocab.STATE_PENDING_APPROVAL, "to": vocab.STATE_REJECTED, "via": "request_changes"},
-            {"from": vocab.STATE_REJECTED, "to": vocab.STATE_PENDING_APPROVAL, "via": "submit_approval"},
+            {
+                "from": vocab.STATE_PENDING_APPROVAL,
+                "to": vocab.STATE_REJECTED,
+                "via": "request_changes",
+            },
+            {
+                "from": vocab.STATE_REJECTED,
+                "to": vocab.STATE_PENDING_APPROVAL,
+                "via": "submit_approval",
+            },
             {"from": vocab.STATE_APPROVED, "to": vocab.STATE_SHARED, "via": "share"},
         ],
     },
@@ -246,8 +258,7 @@ _DECISIONS: tuple[dict[str, Any], ...] = (
         "id": "DERIVED_TWO_SIMPLIFICATIONS_NOT_OFFERED",
         "question": "The research names two simplifications and does not pick between them. Are they built?",
         "sourced": [
-            "You can turn off the Create custom line items permission to force standard "
-            "pricing.",
+            "You can turn off the Create custom line items permission to force standard pricing.",
             "Legacy quotes offer a simplified all quotes approved by one user mode.",
         ],
         "options": {

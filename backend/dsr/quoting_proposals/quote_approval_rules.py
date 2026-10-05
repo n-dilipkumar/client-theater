@@ -74,7 +74,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -97,7 +97,9 @@ class ApprovalRefusal(ValueError):
     one combined sentence.
     """
 
-    def __init__(self, code: str, message: str | None = None, errors: Mapping[str, str] | None = None):
+    def __init__(
+        self, code: str, message: str | None = None, errors: Mapping[str, str] | None = None
+    ):
         status, detail = vocab.ERROR_CODES.get(code, (422, code))
         super().__init__(message or detail)
         self.code = code
@@ -173,7 +175,9 @@ def normalise_key(value: Any, field: str = "name") -> str:
         raise refuse(
             "rule_needs_a_name",
             f"{text!r} is not a usable rule name.",
-            **{field: "A rule name uses lower-case letters, digits, a hyphen or an underscore, and is between 2 and 64 characters."},
+            **{
+                field: "A rule name uses lower-case letters, digits, a hyphen or an underscore, and is between 2 and 64 characters."
+            },
         )
     return text
 
@@ -189,7 +193,9 @@ def normalise_object(value: Any) -> str:
     """
     text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
     if not text:
-        raise refuse("unknown_filter_object", **{"object": vocab.ERROR_CODES["unknown_filter_object"][1]})
+        raise refuse(
+            "unknown_filter_object", **{"object": vocab.ERROR_CODES["unknown_filter_object"][1]}
+        )
     return text
 
 
@@ -209,7 +215,9 @@ def normalise_requirement(value: Any) -> str:
     elif text in ("at_least_one_approver_required", "at_least_one", "any"):
         text = vocab.REQUIREMENT_ANY
     if text not in vocab.APPROVER_REQUIREMENTS:
-        raise refuse("unknown_requirement", **{"requirement": vocab.ERROR_CODES["unknown_requirement"][1]})
+        raise refuse(
+            "unknown_requirement", **{"requirement": vocab.ERROR_CODES["unknown_requirement"][1]}
+        )
     return text
 
 
@@ -343,7 +351,9 @@ def validate_filter(payload: Any, index: int = 0) -> dict[str, Any]:
     if not prop:
         raise refuse(
             "filter_needs_a_property",
-            **{"property": f"{where} needs a property. Choose one from the object's property list."},
+            **{
+                "property": f"{where} needs a property. Choose one from the object's property list."
+            },
         )
 
     operator = normalise_operator(payload.get("operator") or vocab.OPERATOR_IS)
@@ -391,7 +401,12 @@ def validate_filter(payload: Any, index: int = 0) -> dict[str, Any]:
     }
 
 
-def filter_matches(one: Mapping[str, Any], quote: Mapping[str, Any], line_items: Sequence[Mapping[str, Any]] = (), deal: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def filter_matches(
+    one: Mapping[str, Any],
+    quote: Mapping[str, Any],
+    line_items: Sequence[Mapping[str, Any]] = (),
+    deal: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Whether one filter holds for a quote, and what it read.
 
     The object the filter names decides the payload it reads: a line-item filter is
@@ -429,9 +444,7 @@ def filter_matches(one: Mapping[str, Any], quote: Mapping[str, Any], line_items:
             "reason": f"This quote has no {target.replace('_', ' ')} to read {prop} from.",
         }
 
-    results = [
-        _compare(operator, read_path(payload, prop), expected) for payload in payloads
-    ]
+    results = [_compare(operator, read_path(payload, prop), expected) for payload in payloads]
     # Any, not all: one line item over the threshold is enough to require approval.
     matched = any(result["matched"] for result in results)
     chosen = next((result for result in results if result["matched"]), results[0])
@@ -464,19 +477,43 @@ def _compare(operator: str, actual: Any, expected: Any) -> dict[str, Any]:
         return {"matched": matched, "actual": actual, "present": present}
 
     if operator == vocab.OPERATOR_IS:
-        return {"matched": present and _as_text(actual) == _as_text(expected), "actual": actual, "present": present}
+        return {
+            "matched": present and _as_text(actual) == _as_text(expected),
+            "actual": actual,
+            "present": present,
+        }
     if operator == vocab.OPERATOR_IS_NOT:
-        return {"matched": not present or _as_text(actual) != _as_text(expected), "actual": actual, "present": present}
+        return {
+            "matched": not present or _as_text(actual) != _as_text(expected),
+            "actual": actual,
+            "present": present,
+        }
     if operator == vocab.OPERATOR_CONTAINS:
-        return {"matched": present and _as_text(expected) in _as_text(actual), "actual": actual, "present": present}
+        return {
+            "matched": present and _as_text(expected) in _as_text(actual),
+            "actual": actual,
+            "present": present,
+        }
     if operator == vocab.OPERATOR_DOES_NOT_CONTAIN:
-        return {"matched": not present or _as_text(expected) not in _as_text(actual), "actual": actual, "present": present}
+        return {
+            "matched": not present or _as_text(expected) not in _as_text(actual),
+            "actual": actual,
+            "present": present,
+        }
     if operator == vocab.OPERATOR_IN:
         wanted = {_as_text(entry) for entry in (expected or [])}
-        return {"matched": present and _as_text(actual) in wanted, "actual": actual, "present": present}
+        return {
+            "matched": present and _as_text(actual) in wanted,
+            "actual": actual,
+            "present": present,
+        }
     if operator == vocab.OPERATOR_NOT_IN:
         unwanted = {_as_text(entry) for entry in (expected or [])}
-        return {"matched": not present or _as_text(actual) not in unwanted, "actual": actual, "present": present}
+        return {
+            "matched": not present or _as_text(actual) not in unwanted,
+            "actual": actual,
+            "present": present,
+        }
     # The vocabulary is closed and validate_filter rejects anything else.
     return {"matched": False, "actual": actual, "present": present}  # pragma: no cover
 
@@ -531,7 +568,9 @@ def validate_rule(payload: Any) -> dict[str, Any]:
 
     raw_filters = payload.get("filters")
     if not isinstance(raw_filters, (list, tuple)) or not raw_filters:
-        raise refuse("rule_needs_a_filter", **{"filters": vocab.ERROR_CODES["rule_needs_a_filter"][1]})
+        raise refuse(
+            "rule_needs_a_filter", **{"filters": vocab.ERROR_CODES["rule_needs_a_filter"][1]}
+        )
     filters = [validate_filter(one, index) for index, one in enumerate(raw_filters)]
 
     approvers = validate_approvers(payload.get("approvers") or payload.get("approverIds"))
@@ -552,7 +591,9 @@ def validate_rule(payload: Any) -> dict[str, Any]:
         "requirement": requirement,
         vocab.APPROVAL_NOTE: note,
         "channels": validate_channels(payload.get("channels")),
-        "quote_object": str(payload.get("quoteObject") or payload.get("quote_object") or vocab.SOURCE_QUOTES),
+        "quote_object": str(
+            payload.get("quoteObject") or payload.get("quote_object") or vocab.SOURCE_QUOTES
+        ),
     }
 
 
@@ -564,7 +605,10 @@ def validate_approvers(raw: Any) -> list[str]:
     under an "All approvers required" rule.
     """
     if not isinstance(raw, (list, tuple)):
-        raise refuse("rule_needs_at_least_one_approver", **{"approvers": vocab.ERROR_CODES["rule_needs_at_least_one_approver"][1]})
+        raise refuse(
+            "rule_needs_at_least_one_approver",
+            **{"approvers": vocab.ERROR_CODES["rule_needs_at_least_one_approver"][1]},
+        )
     seen: list[str] = []
     for entry in raw:
         # A user record or a bare id, because the flow's dropdown picks users.
@@ -582,7 +626,10 @@ def validate_approvers(raw: Any) -> list[str]:
             )
         seen.append(identity)
     if not seen:
-        raise refuse("rule_needs_at_least_one_approver", **{"approvers": vocab.ERROR_CODES["rule_needs_at_least_one_approver"][1]})
+        raise refuse(
+            "rule_needs_at_least_one_approver",
+            **{"approvers": vocab.ERROR_CODES["rule_needs_at_least_one_approver"][1]},
+        )
     if len(seen) > vocab.MAX_APPROVERS:
         raise refuse(
             "too_many_approvers",
@@ -796,7 +843,11 @@ def evaluate_locked(state: Any, locked: Any) -> dict[str, Any]:
     :data:`~dsr.quoting_proposals.quote_approval_vocabulary.UNLOCK_TARGET_QUOTE`.
     """
     text = str(state or vocab.STATE_DRAFT).strip().upper().replace("-", "_")
-    is_locked = bool(locked) or text in (vocab.STATE_APPROVED, vocab.STATE_SHARED, vocab.STATE_ACCEPTED)
+    is_locked = bool(locked) or text in (
+        vocab.STATE_APPROVED,
+        vocab.STATE_SHARED,
+        vocab.STATE_ACCEPTED,
+    )
     return {
         "state": text,
         "locked": is_locked,
@@ -825,7 +876,9 @@ def require_editable(state: Any, locked: Any) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def activity_for(outcome: str, *, exempt: bool = False, share_refused: bool = False) -> dict[str, Any]:
+def activity_for(
+    outcome: str, *, exempt: bool = False, share_refused: bool = False
+) -> dict[str, Any]:
     """The activity row name for one outcome.
 
     Three of the five are the research's own strings. Two are this build's, and are
@@ -876,7 +929,9 @@ def conditions_report(enrolment: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def summary_counts(rules: Sequence[Mapping[str, Any]], enrolments: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def summary_counts(
+    rules: Sequence[Mapping[str, Any]], enrolments: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
     """The board a reviewer reads first: how much is waiting, and on whom."""
     by_state: dict[str, int] = {state: 0 for state in vocab.QUOTE_STATES}
     waiting = 0
