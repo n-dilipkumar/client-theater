@@ -26,8 +26,7 @@ from pathlib import Path
 
 import pytest
 from dsr.features import wf082_verify_and_ip_allowlist_inbound_provider as module
-from dsr.security_governance import webhook_signing as signing
-from dsr.security_governance import webhook_vocabulary as vocab
+from dsr.security_governance import webhook_signing as signing, webhook_vocabulary as vocab
 from dsr.store import RecordStore
 
 PREFIX = module.router.prefix
@@ -97,22 +96,30 @@ def multipart_body(part: bytes) -> bytes:
     """
     boundary = "----dsrwf082boundary"
     return (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="{vocab.JSON_PART}"\r\n'
-        "Content-Type: application/json\r\n"
-        "\r\n"
-    ).encode("utf-8") + part + f"\r\n--{boundary}--\r\n".encode("utf-8")
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{vocab.JSON_PART}"\r\n'
+            "Content-Type: application/json\r\n"
+            "\r\n"
+        ).encode("utf-8")
+        + part
+        + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    )
 
 
 def named_part_body(name: str, part: bytes) -> bytes:
     """The same body with the part under a different name."""
     boundary = "----dsrwf082boundary"
     return (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="{name}"\r\n'
-        "Content-Type: application/json\r\n"
-        "\r\n"
-    ).encode("utf-8") + part + f"\r\n--{boundary}--\r\n".encode("utf-8")
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n'
+            "Content-Type: application/json\r\n"
+            "\r\n"
+        ).encode("utf-8")
+        + part
+        + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    )
 
 
 def post_event(client, room_id: str, payload: dict, *, api_key: str = API_KEY, **params):
@@ -120,7 +127,9 @@ def post_event(client, room_id: str, payload: dict, *, api_key: str = API_KEY, *
     _part, digest = signed_part(payload)
     if api_key != API_KEY:
         digest = signing.content_sha256(api_key, json.dumps(payload).encode("utf-8"))
-    return post_raw(client, room_id, multipart_body(json.dumps(payload).encode()), header=digest, **params)
+    return post_raw(
+        client, room_id, multipart_body(json.dumps(payload).encode()), header=digest, **params
+    )
 
 
 def post_raw(
@@ -548,9 +557,7 @@ def test_a_multipart_delivery_with_the_part_named_something_else_is_refused(clie
         f"{body}\r\n"
         f"--{boundary}--\r\n"
     ).encode("utf-8")
-    response = post_raw(
-        client, "room_http", raw, header=signing.content_sha256(API_KEY, raw)
-    )
+    response = post_raw(client, "room_http", raw, header=signing.content_sha256(API_KEY, raw))
     assert response.status_code == 400
     assert response.json()["error"] == "payload_part_missing"
 
@@ -565,9 +572,7 @@ def test_a_json_part_that_does_not_parse_is_refused_with_its_own_name(client):
         "{not json at all\r\n"
         f"--{boundary}--\r\n"
     ).encode("utf-8")
-    response = post_raw(
-        client, "room_http", raw, header=signing.content_sha256(API_KEY, raw)
-    )
+    response = post_raw(client, "room_http", raw, header=signing.content_sha256(API_KEY, raw))
     assert response.status_code == 400
     assert response.json()["error"] == "payload_not_json"
 
@@ -583,9 +588,7 @@ def test_a_json_part_that_parses_to_an_array_is_refused_with_the_same_name(clien
         "[1, 2, 3]\r\n"
         f"--{boundary}--\r\n"
     ).encode("utf-8")
-    response = post_raw(
-        client, "room_http", raw, header=signing.content_sha256(API_KEY, raw)
-    )
+    response = post_raw(client, "room_http", raw, header=signing.content_sha256(API_KEY, raw))
     assert response.status_code == 400
     assert response.json()["error"] == "payload_not_json"
 
@@ -603,7 +606,10 @@ def test_a_delivery_whose_payload_was_re_encoded_is_refused_at_the_second_check(
     ready_room(client)
     part, _digest = signed_part(event_payload())
     response = post_raw(
-        client, "room_http", multipart_body(part), header=signing.content_sha256(API_KEY, part + b" ")
+        client,
+        "room_http",
+        multipart_body(part),
+        header=signing.content_sha256(API_KEY, part + b" "),
     )
     assert response.status_code == 401
     assert response.json()["error_name"] == "content_sha256_mismatch"
@@ -722,9 +728,7 @@ def test_a_delivery_from_an_address_outside_the_allowlist_is_refused_at_the_firs
     """A different socket peer, a different verdict, and the same three checks."""
     ready_room(client)
     part, digest = signed_part(event_payload())
-    response = post_raw(
-        client, "room_http", multipart_body(part), header=digest, peer="198.18.0.9"
-    )
+    response = post_raw(client, "room_http", multipart_body(part), header=digest, peer="198.18.0.9")
     assert response.status_code == 403
     assert response.json()["error_name"] == "source_ip_not_allowed"
     assert response.json()["failed_check"] == vocab.IP_ALLOWLIST
@@ -871,9 +875,7 @@ def test_the_callback_write_names_the_post_events_route(client, db):
 def test_the_registration_write_names_the_post_callbacks_route(client, db):
     ready_room(client)
     registration_writes = [
-        row
-        for row in db.audit()
-        if row["source"] == f"POST {PREFIX}/rooms/{{room_id}}/callbacks"
+        row for row in db.audit() if row["source"] == f"POST {PREFIX}/rooms/{{room_id}}/callbacks"
     ]
     assert registration_writes
     assert registration_writes[0]["collection"] == vocab.COLLECTION_CALLBACKS
@@ -905,7 +907,9 @@ def test_the_sealed_api_key_is_written_only_to_a_sealed_field(client, db):
 def test_the_seed_runs_and_reports_states_that_are_not_all_successes(db):
     from datetime import datetime, timezone
 
-    summary = module.seed(db, {"room_ids": [], "now": datetime(2026, 3, 4, 12, tzinfo=timezone.utc)})
+    summary = module.seed(
+        db, {"room_ids": [], "now": datetime(2026, 3, 4, 12, tzinfo=timezone.utc)}
+    )
     assert summary
     assert "duplicate" in summary
     assert "source_ip_not_allowed" in summary
@@ -919,7 +923,9 @@ def test_every_character_of_the_seed_return_string_encodes_as_cp1252(db):
     """A U+2192 in one recovered feature broke the entire seeder on a Windows console."""
     from datetime import datetime, timezone
 
-    summary = module.seed(db, {"room_ids": [], "now": datetime(2026, 3, 4, 12, tzinfo=timezone.utc)})
+    summary = module.seed(
+        db, {"room_ids": [], "now": datetime(2026, 3, 4, 12, tzinfo=timezone.utc)}
+    )
     summary.encode("cp1252")
 
 

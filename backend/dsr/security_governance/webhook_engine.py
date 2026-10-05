@@ -31,11 +31,14 @@ Where the API key lives
 -----------------------
 
 The specification names the account's API key as the HMAC secret and says nothing about
-storing it, which ``INFERRED_INBOUND_KEY_VAULT`` records. The secret is sealed with the vault
-this product already ships for CRM credentials rather than kept in the clear: a registration
-is readable through the core records API, and a secret an operator can re-read is not being
-used as a secret. Hashing it was rejected because HMAC needs the key itself - there is no
-re-hash here, the product has to *produce* a digest on every delivery.
+storing it, which ``INFERRED_INBOUND_KEY_VAULT`` records. The secret is sealed at rest rather
+than kept in the clear: a registration is readable through the core records API, and a secret an
+operator can re-read is not being used as a secret. Hashing it was rejected because HMAC needs the
+key itself - there is no re-hash here, the product has to *produce* a digest on every delivery.
+
+The sealing lives in :mod:`dsr.security_governance.webhook_sealing`, which is a module of its own
+because an enforced test forbids this package from importing another workflow's. That module's
+docstring gives the construction and states the cost of not reusing the CRM vault.
 
 The key that sealed a row is named beside it as a public fingerprint, so a surface can say
 which key a registration needs without revealing the key, and a row sealed under another
@@ -53,19 +56,12 @@ that stored its room there would be unfilterable.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from dsr.crm_oauth.vault import (
-    DEMO_KEY as VAULT_DEMO_KEY,
-    VaultKey,
-    open_sealed,
-    resolve_key as resolve_vault_key,
-    seal,
-)
 from dsr.security_governance import (
     webhook_rules as rules,
+    webhook_sealing as sealing,
     webhook_signing as signing,
     webhook_vocabulary as vocab,
 )
@@ -150,11 +146,11 @@ class WebhookVerifier:
         store: RecordStore,
         *,
         now: Any = None,
-        vault_key: VaultKey | None = None,
+        vault_key: sealing.VaultKey | None = None,
     ) -> None:
         self.store = store
         self.now = now or _now
-        self.vault_key = vault_key or resolve_vault_key()
+        self.vault_key = vault_key or sealing.resolve_key()
 
     # -- clock --------------------------------------------------------------- #
 
@@ -190,7 +186,7 @@ class WebhookVerifier:
         )
 
     def _seal_api_key(self, api_key: str) -> str:
-        return seal({"api_key": api_key}, self.vault_key.material)
+        return sealing.seal({"api_key": api_key}, self.vault_key.material)
 
     def _open_api_key(self, row: Mapping[str, Any]) -> str:
         """The API key behind a registration, or a refusal naming what to do.
@@ -199,7 +195,9 @@ class WebhookVerifier:
         string, because an empty key would make every digest wrong and the refusal would
         name a signature rather than a configuration fault.
         """
-        opened = open_sealed(str(row.get(vocab.SEALED_API_KEY) or ""), self.vault_key.material)
+        opened = sealing.open_sealed(
+            str(row.get(vocab.SEALED_API_KEY) or ""), self.vault_key.material
+        )
         value = opened.get("api_key")
         if not isinstance(value, str) or not value:
             raise WebhookRegistrationInvalid(
@@ -245,14 +243,11 @@ class WebhookVerifier:
 
         scope = str(payload.get("scope") or "").strip()
         if scope and scope not in vocab.CALLBACK_SCOPES:
-            errors["scope"] = (
-                f"scope must be one of {', '.join(vocab.CALLBACK_SCOPES)}."
-            )
+            errors["scope"] = f"scope must be one of {', '.join(vocab.CALLBACK_SCOPES)}."
 
         if errors:
             raise WebhookRegistrationInvalid(
-                "This registration cannot be accepted. Each message names the field it "
-                "belongs to.",
+                "This registration cannot be accepted. Each message names the field it belongs to.",
                 errors,
             )
 
@@ -675,9 +670,7 @@ class WebhookVerifier:
         )
         body["state"] = vocab.DUPLICATE if seen else vocab.VERIFIED
         body["dedupe_key"] = dedupe_key
-        record = self.store.create(
-            vocab.COLLECTION_DELIVERIES, body, actor=actor, source=source
-        )
+        record = self.store.create(vocab.COLLECTION_DELIVERIES, body, actor=actor, source=source)
 
         if not seen:
             self.store.create(

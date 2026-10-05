@@ -25,6 +25,7 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from dsr.security_governance import (
@@ -132,7 +133,10 @@ def deliver(
     """One delivery, signed correctly unless the test says otherwise."""
     if raw is None:
         body = payload if payload is not None else canonical_payload()
-        raw, computed = json.dumps(body).encode("utf-8"), signing.content_sha256(API_KEY, json.dumps(body))
+        raw, computed = (
+            json.dumps(body).encode("utf-8"),
+            signing.content_sha256(API_KEY, json.dumps(body)),
+        )
         header = computed if header is None else header
     body = json.loads(raw.decode("utf-8"))
     return engine.inspect(
@@ -225,7 +229,9 @@ def test_a_missing_event_type_is_refused_by_its_own_name():
 
 
 def test_a_missing_event_hash_is_refused_by_its_own_name():
-    verdict = signing.verify_event_hash(API_KEY, {"event_time": EVENT_TIME, "event_type": EVENT_TYPE})
+    verdict = signing.verify_event_hash(
+        API_KEY, {"event_time": EVENT_TIME, "event_type": EVENT_TYPE}
+    )
     assert verdict["reason"] == "event_hash_missing"
 
 
@@ -314,7 +320,7 @@ def test_both_comparisons_are_constant_time():
     assert signing.constant_time_equals(b"abc", b"abc") is True
     assert signing.constant_time_equals(b"abc", b"abd") is False
     assert signing.constant_time_equals(b"abc", b"abcd") is False
-    source = (signing.__file__ or "")
+    source = signing.__file__ or ""
     with open(source, encoding="utf-8") as handle:
         text = handle.read()
     assert "compare_digest" in text
@@ -348,9 +354,9 @@ def test_an_ipv4_address_is_never_inside_an_ipv6_range_and_the_reverse():
     families disjoint, and this test fails if that comparison is removed.
     """
     rows = rules.classify_ranges(["0.0.0.0/8", "::1/128"])
-    assert rules.evaluate_source_ip("0.1.2.3", rows, snapshot_at=None, now=NOW)["allowed_range"] == (
-        "0.0.0.0/8"
-    )
+    assert rules.evaluate_source_ip("0.1.2.3", rows, snapshot_at=None, now=NOW)[
+        "allowed_range"
+    ] == ("0.0.0.0/8")
     assert rules.evaluate_source_ip("::1", rows, snapshot_at=None, now=NOW)["allowed_range"] == (
         "::1/128"
     )
@@ -417,6 +423,126 @@ def test_a_range_file_with_an_unknown_key_is_refused_rather_than_silently_empty(
     assert "address" in str(raised.value)
 
 
+def test_an_empty_range_is_refused():
+    with pytest.raises(rules.IpRangeError) as raised:
+        rules.normalise("")
+    assert "empty" in str(raised.value)
+
+
+def test_a_value_that_is_not_an_address_is_refused_with_the_value_it_found():
+    with pytest.raises(rules.IpRangeError) as raised:
+        rules.normalise("not-an-address")
+    assert "not-an-address" in str(raised.value)
+
+
+def test_a_bare_address_is_treated_as_a_network_of_the_familys_full_width():
+    """So a caller can mix a bare address and a CIDR in one list."""
+    assert rules.normalise("203.0.113.7") == rules.normalise("203.0.113.7/32")
+    assert rules.normalise("::1") == rules.normalise("::1/128")
+
+
+def test_a_prefix_longer_than_the_family_is_refused_rather_than_clamped():
+    """Clamping would silently widen an allowlist, the one direction this must not fail in."""
+    with pytest.raises(rules.IpRangeError):
+        rules.normalise("203.0.113.0/40")
+
+
+def test_a_text_range_list_is_accepted_because_a_person_types_one():
+    rows = rules.classify_ranges('["203.0.113.0/24", "198.51.100.0/24"]')
+    assert [row["range"] for row in rows] == ["203.0.113.0/24", "198.51.100.0/24"]
+
+
+def test_a_text_range_list_split_on_newlines_is_accepted():
+    assert len(rules.classify_ranges("203.0.113.0/24\n198.51.100.0/24")) == 2
+
+
+def test_a_range_file_that_is_a_scalar_is_refused_by_type_name():
+    with pytest.raises(rules.IpRangeError) as raised:
+        rules.classify_ranges(42)
+    assert "int" in str(raised.value)
+
+
+def test_a_range_object_whose_entry_is_a_scalar_is_refused_by_type_name():
+    with pytest.raises(rules.IpRangeError) as raised:
+        rules.classify_ranges([42])
+    assert "int" in str(raised.value)
+
+
+def test_a_range_file_with_no_list_at_all_is_refused_and_names_its_keys():
+    with pytest.raises(rules.IpRangeError) as raised:
+        rules.classify_ranges({"generated": "yesterday"})
+    assert "generated" in str(raised.value)
+
+
+def test_an_empty_entry_is_skipped_rather_than_refusing_the_whole_file():
+    """One blank line in a hand-edited file must not take down a whole allowlist."""
+    assert len(rules.classify_ranges(["203.0.113.0/24", "", "   "])) == 1
+
+
+def test_a_stored_row_with_no_range_text_is_refused_rather_than_skipped():
+    """A span is three integers and reading it back is cheap; a hand-edited row is a fault."""
+    with pytest.raises(rules.IpRangeError) as raised:
+        rules.parse_ranges([{"description": "no range here"}])
+    assert "range text" in str(raised.value)
+
+
+def test_a_source_address_that_is_not_an_address_is_refused_rather_than_matching():
+    with pytest.raises(rules.IpRangeError):
+        rules.evaluate_source_ip(
+            "not-an-address", rules.classify_ranges(DEMO_RANGES), snapshot_at=None, now=NOW
+        )
+
+
+def test_a_timestamp_that_does_not_parse_reads_as_unknown_rather_than_raising():
+    """An unreadable age is exactly when a person needs to be told."""
+    note = rules.staleness_note("the day before yesterday", now=NOW)
+    assert note["stale"] is True
+    assert "no timestamp" in note["note"]
+
+
+def test_a_snapshot_with_no_timestamp_goes_stale_after_the_window():
+    """The moment an unparseable timestamp is assumed to go stale, for a scheduler."""
+    moment = rules.next_stale_moment("not a timestamp", now=NOW, stale_after_seconds=3600)
+    assert moment == NOW + timedelta(seconds=3600)
+
+
+def test_a_snapshot_with_a_timestamp_goes_stale_a_window_after_it():
+    stamp = (NOW - timedelta(minutes=5)).isoformat()
+    moment = rules.next_stale_moment(stamp, now=NOW, stale_after_seconds=3600)
+    assert moment == datetime.fromisoformat(stamp) + timedelta(seconds=3600)
+
+
+def test_a_refresh_that_fetches_a_file_with_no_ranges_is_refused():
+    """Storing an empty allowlist would refuse every delivery while reporting success."""
+    with pytest.raises(rules.IpRangeError) as raised:
+        rules.refresh_ranges(
+            source_url="https://example.invalid/ip-ranges.json",
+            fetcher=lambda _url: [],
+            now=NOW,
+        )
+    assert "no ranges" in str(raised.value)
+
+
+def test_describe_range_reports_the_span_and_the_address_count():
+    described = rules.describe_range("203.0.113.0/24")
+    assert described["family"] == "ipv4"
+    assert described["family_width"] == 32
+    assert described["first_address"] == "203.0.113.0"
+    assert described["last_address"] == "203.0.113.255"
+    assert described["address_count"] == 256
+
+
+def test_the_span_width_is_the_family_width_and_not_the_ranges_own_prefix():
+    """A field called ``prefix_length`` that is always 32 for IPv4 is a field that lies."""
+    assert "prefix_length" not in rules.describe_range("203.0.113.0/24")
+    assert rules.describe_range("203.0.113.0/24")["address_count"] == 256
+
+
+def test_freshness_and_staleness_note_are_the_same_function():
+    """One name, so a reader does not have to remember which of the two to call."""
+    assert rules.freshness is rules.staleness_note
+
+
 def test_the_refusal_names_every_key_the_reader_accepts():
     """The repaired defect. `network` was read but not named."""
     with pytest.raises(rules.IpRangeError) as raised:
@@ -446,7 +572,9 @@ def test_a_refresh_that_fetches_nothing_leaves_the_previous_allowlist_in_place(e
         raise OSError("the vendor had a bad minute")
 
     with pytest.raises(OSError):
-        engine.refresh_ranges("room_a", fetcher=failing, source="POST /api/wf082/rooms/{room_id}/ranges")
+        engine.refresh_ranges(
+            "room_a", fetcher=failing, source="POST /api/wf082/rooms/{room_id}/ranges"
+        )
     assert len(engine.ranges("room_a")["ranges"]) == before
 
 
@@ -679,7 +807,7 @@ def test_a_row_sealed_under_another_key_is_recognisable_rather_than_corrupt(stor
     rather than "this row was altered". Returning an empty key instead would make every
     digest wrong and the refusal would blame a signature.
     """
-    from dsr.crm_oauth.vault import VaultKey
+    from dsr.security_governance import webhook_sealing as sealing
 
     first = WebhookVerifier(store, now=lambda: NOW)
     first.register_callback(
@@ -689,14 +817,20 @@ def test_a_row_sealed_under_another_key_is_recognisable_rather_than_corrupt(stor
         source="POST /api/wf082/rooms/{room_id}/callbacks",
     )
     stored = store.find(vocab.COLLECTION_CALLBACKS, {vocab.ROOM_REF: "room_a"})[0]["data"]
+    other_material = b"a different key"
     other = WebhookVerifier(
         store,
         now=lambda: NOW,
-        vault_key=VaultKey(material=b"a different key", origin="env", key_id="aaaa"),
+        vault_key=sealing.VaultKey(
+            material=other_material,
+            origin="env",
+            key_id=sealing.key_id(other_material),
+        ),
     )
-    with pytest.raises(Exception) as raised:
+    with pytest.raises(sealing.SealedKeyError) as raised:
         other._open_api_key(stored)
     assert "key" in str(raised.value).lower()
+    assert sealing.key_id(other_material)[:6] in str(raised.value)
 
 
 def test_a_registration_cannot_be_patched_with_a_new_key(engine):
@@ -883,7 +1017,9 @@ def test_both_event_types_verify_through_the_same_scheme(engine):
 def test_the_event_type_is_the_filter_key_and_the_recorded_one_is_the_delivered_one(engine):
     register(engine)
     refresh(engine)
-    report = deliver(engine, payload=canonical_payload(event_type=vocab.SIGNATURE_REQUEST_DOWNLOADABLE))
+    report = deliver(
+        engine, payload=canonical_payload(event_type=vocab.SIGNATURE_REQUEST_DOWNLOADABLE)
+    )
     assert report["event_type"] == vocab.SIGNATURE_REQUEST_DOWNLOADABLE
     assert engine.deliveries("room_a")[0]["event_type"] == vocab.SIGNATURE_REQUEST_DOWNLOADABLE
 
@@ -905,6 +1041,115 @@ def test_the_signature_request_reference_is_recorded_from_whichever_key_the_payl
     ):
         report = deliver(engine, payload=payload)
         assert report["delivery"]["signature_request_ref"] == expected
+
+
+def test_a_sealed_value_round_trips_under_the_same_key():
+    """The property the whole sealing module exists to provide."""
+    from dsr.security_governance import webhook_sealing as sealing
+
+    key = sealing.resolve_key().material
+    sealed = sealing.seal({"api_key": API_KEY}, key)
+    assert API_KEY not in sealed
+    assert sealing.open_sealed(sealed, key) == {"api_key": API_KEY}
+
+
+def test_a_sealed_value_does_not_open_under_another_key():
+    from dsr.security_governance import webhook_sealing as sealing
+
+    sealed = sealing.seal({"api_key": API_KEY}, sealing.resolve_key().material)
+    with pytest.raises(sealing.SealedKeyError):
+        sealing.open_sealed(sealed, b"a different key")
+
+
+def test_an_altered_sealed_value_is_refused_before_it_is_decrypted():
+    """Encrypt-then-MAC: the tag is checked before a byte of ciphertext is used."""
+    from dsr.security_governance import webhook_sealing as sealing
+
+    key = sealing.resolve_key().material
+    sealed = sealing.seal({"api_key": API_KEY}, key)
+    version, nonce, ciphertext, tag = sealed.split(".")
+    flipped = ciphertext[:-2] + ("A" if ciphertext[-2] != "A" else "B") + ciphertext[-1]
+    with pytest.raises(sealing.SealedKeyError):
+        sealing.open_sealed(".".join([version, nonce, flipped, tag]), key)
+
+
+def test_a_sealed_value_from_another_version_is_refused_rather_than_misread():
+    from dsr.security_governance import webhook_sealing as sealing
+
+    key = sealing.resolve_key().material
+    with pytest.raises(sealing.SealedKeyError) as raised:
+        sealing.open_sealed("v9.abc.def.ghi", key)
+    assert "version" in str(raised.value).lower() or "envelope" in str(raised.value).lower()
+
+
+def test_the_key_id_is_a_fingerprint_and_does_not_reveal_the_key():
+    from dsr.security_governance import webhook_sealing as sealing
+
+    material = b"a key nobody should be able to read from the fingerprint"
+    fingerprint = sealing.key_id(material)
+    assert len(fingerprint) == 12
+    assert fingerprint not in material.decode()
+
+
+def test_the_key_origin_names_where_the_key_came_from(monkeypatch):
+    """A fresh checkout runs on the published demo key and has to say so."""
+    from dsr.security_governance import webhook_sealing as sealing
+
+    monkeypatch.delenv(vocab.KEY_ENV, raising=False)
+    assert sealing.resolve_key().is_default is True
+    assert sealing.resolve_key().origin == "default"
+
+    monkeypatch.setenv(vocab.KEY_ENV, "a real secret")
+    resolved = sealing.resolve_key()
+    assert resolved.is_default is False
+    assert resolved.origin == "env"
+
+
+def test_a_registration_carries_the_fingerprint_of_the_key_that_sealed_it(engine):
+    register(engine)
+    row = engine.callbacks("room_a")[0]
+    assert row[vocab.KEY_ORIGIN] == engine.vault_key.origin
+    assert row[vocab.KEY_FINGERPRINT] == engine.vault_key.key_id
+
+
+def test_the_key_warning_is_empty_when_the_operator_supplied_a_key(monkeypatch, store):
+    """So a correctly configured deployment is not warned about."""
+    from dsr.security_governance import webhook_sealing as sealing
+
+    monkeypatch.setenv(vocab.KEY_ENV, "a real secret")
+    assert WebhookVerifier(store, now=lambda: NOW).key_warning() == ""
+    monkeypatch.delenv(vocab.KEY_ENV, raising=False)
+    assert "demo key" in WebhookVerifier(store, now=lambda: NOW).key_warning()
+    assert sealing.DEMO_KEY
+
+
+def test_the_domain_package_imports_nothing_but_the_store():
+    """The enforced rule, applied to this package's own modules.
+
+    ``tests/test_wf073.py`` asserts the same thing about the package as a whole. It is restated
+    here because the sealing module is the reason it could have been broken: reusing the CRM
+    vault was the first implementation, and that import is exactly what this rule forbids.
+    """
+    import ast
+
+    package = Path(__file__).resolve().parents[1] / "dsr" / "security_governance"
+    allowed = {"dsr.store", "dsr.security_governance"}
+    for name in (
+        "webhook_engine.py",
+        "webhook_sealing.py",
+        "webhook_signing.py",
+        "webhook_rules.py",
+    ):
+        text = (package / name).read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(text)):
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            for imported in names:
+                if imported.startswith("dsr"):
+                    assert imported in allowed, f"{name} imports {imported}"
 
 
 # --------------------------------------------------------------------------- #

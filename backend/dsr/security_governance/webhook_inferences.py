@@ -49,8 +49,8 @@ DECISIONS: dict[str, dict[str, Any]] = {
         ),
         "left_open_by": (
             "The specification names the key twice and says nothing about storing it: the "
-            "data sources line lists \"the account's API key (HMAC secret)\", and the data "
-            "flow says to recompute \"HMAC-SHA256(api_key, event_time + event_type)\". No "
+            'data sources line lists "the account\'s API key (HMAC secret)", and the data '
+            'flow says to recompute "HMAC-SHA256(api_key, event_time + event_type)". No '
             "sentence describes key storage, key rotation or key scope."
         ),
         "options": {
@@ -72,16 +72,21 @@ DECISIONS: dict[str, dict[str, Any]] = {
             "operator can re-read is not being used as a secret. Hashing was rejected "
             "because HMAC-SHA256 needs the key itself: a digest verifies a bearer token "
             "by re-hashing what the caller presents, and there is no re-hash here, the "
-            "product has to *produce* a digest from the key on every delivery. "
-            "Reusing the CRM vault's seal and open, rather than writing a second sealed "
-            "format, is what keeps this from being a fourth crypto implementation in a "
-            "product that already has one."
+            "product has to *produce* a digest from the key on every delivery."
         ),
         "cost_of_the_choice": (
-            "The vault falls back to a published demo key when no environment variable is "
-            "set, so a fresh checkout verifies against a key that is in the source. Every "
-            "surface that reads a registration says which key sealed it, and the fallback "
-            "is published as :data:`~dsr.security_governance.webhook_vocabulary.DEMO_API_KEY` "
+            "The sealing is a module of its own rather than a reuse of the CRM vault, "
+            "because an enforced test forbids this package from importing another "
+            "workflow's: tests/test_wf073.py requires every dsr import in "
+            "dsr/security_governance to be dsr.store or this package. Reusing the CRM "
+            "vault was the first implementation and it failed that rule, so the same "
+            "construction is written again in webhook_sealing. That is a fourth crypto "
+            "implementation in a product that already has one, and hoisting the vault to "
+            "a neutral package both workflows may import is platform work, because it "
+            "touches a module another workflow owns. Separately, the vault falls back to "
+            "a published demo key when no environment variable is set, so a fresh "
+            "checkout verifies against a key that is in the source. Every surface that "
+            "reads a registration says which key sealed it, and the fallback is published "
             "rather than being a quiet default."
         ),
     },
@@ -93,7 +98,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
         "left_open_by": (
             'The specification says only "We recommend checking this list periodically to '
             'ensure your callback handler is secure" and that the file is "automatically '
-            "updated if the IP addresses change\". It names no refresh interval, no fetch "
+            'updated if the IP addresses change". It names no refresh interval, no fetch '
             "and no relationship between the handler and the file."
         ),
         "options": {
@@ -127,7 +132,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
             "snapshot's age and marks it stale past "
             ":data:`~dsr.security_governance.webhook_rules.DEFAULT_STALE_AFTER_SECONDS` s, "
             "and the frontend shows the age. The staleness window is itself an inference: "
-            "the specification says \"periodically\" and gives no number."
+            'the specification says "periodically" and gives no number.'
         ),
     },
     "INFERRED_DUPLICATE_IS_ACKNOWLEDGED": {
@@ -153,12 +158,12 @@ DECISIONS: dict[str, dict[str, Any]] = {
         "chosen": "acknowledge_as_duplicate",
         "rejected_because": (
             "Refusing was rejected because the provider's stated model is that anything "
-            "other than 200 plus the magic string \"will be sent again later\" - up to six "
+            'other than 200 plus the magic string "will be sent again later" - up to six '
             "times on a ladder that reaches twenty hours and fifteen minutes. A duplicate "
             "is a normal delivery under that model, not a fault, so refusing one spends "
             "the whole ladder on an event this handler has already accepted. It also fails "
             "sharply at the limit: after ten consecutive failures the provider "
-            "\"automatically\" clears the callback URL, which is silent data loss with no "
+            '"automatically" clears the callback URL, which is silent data loss with no '
             "error on either side. So the duplicate is acknowledged, and what it is is "
             "recorded so a person reading the log can still tell a re-delivery from a "
             "first delivery."
@@ -182,9 +187,9 @@ DECISIONS: dict[str, dict[str, Any]] = {
             "Which callback registration verifies a delivery when more than one could match?"
         ),
         "left_open_by": (
-            "The specification names two registration scopes, \"at the account level "
+            'The specification names two registration scopes, "at the account level '
             "(`callback_url` on `/account`) or per API app (`callback_url` on "
-            "`/api_app/{client_id}`)\", and a room in this product may hold several. It "
+            '`/api_app/{client_id}`)", and a room in this product may hold several. It '
             "gives no header, no path segment and no other means of choosing between them."
         ),
         "options": {
@@ -192,9 +197,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
                 "The caller names the registration in a header, and the handler refuses a "
                 "delivery that names none when more than one is bound to the room."
             ),
-            "most_recent_wins": (
-                "The newest matching registration verifies every delivery."
-            ),
+            "most_recent_wins": ("The newest matching registration verifies every delivery."),
             "all_matching_registrations_verify": (
                 "Every registration for the room is tried, and the delivery is accepted if "
                 "any one of them verifies."
@@ -202,9 +205,9 @@ DECISIONS: dict[str, dict[str, Any]] = {
         },
         "chosen": "named_header",
         "rejected_because": (
-            "\"Most recent wins\" was rejected because it silently changes which secret a "
+            '"Most recent wins" was rejected because it silently changes which secret a '
             "delivery must be signed with, and the symptom is a total outage that looks "
-            "like a provider fault. \"Try every registration\" was rejected for the same "
+            'like a provider fault. "Try every registration" was rejected for the same '
             "reason in reverse: it turns the room's secret count into a verification oracle, "
             "because a delivery is then accepted if **any** of N keys verifies, so an "
             "attacker is told something by how many keys a room holds. Naming the "
@@ -232,8 +235,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
                 "IP that is not allowlisted, and 401 for a digest that does not verify."
             ),
             "one_code": (
-                "One status for every refusal, so nothing is revealed about which check "
-                "ran."
+                "One status for every refusal, so nothing is revealed about which check ran."
             ),
         },
         "chosen": "distinct_codes",
@@ -268,9 +270,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
             "socket_peer_only": (
                 "Read the socket peer address and ignore anything the request declares."
             ),
-            "forwarded_header_only": (
-                "Trust the forwarded header whenever it is present."
-            ),
+            "forwarded_header_only": ("Trust the forwarded header whenever it is present."),
         },
         "chosen": "client_host_plus_declared_override",
         "rejected_because": (
@@ -301,9 +301,7 @@ def count() -> int:
 
 def describe() -> list[dict[str, Any]]:
     """Every decision, in a stable order, as the HTTP layer serves it."""
-    return [
-        {"id": decision_id, **decision} for decision_id, decision in sorted(DECISIONS.items())
-    ]
+    return [{"id": decision_id, **decision} for decision_id, decision in sorted(DECISIONS.items())]
 
 
 def describe_one(decision_id: str) -> dict[str, Any] | None:
