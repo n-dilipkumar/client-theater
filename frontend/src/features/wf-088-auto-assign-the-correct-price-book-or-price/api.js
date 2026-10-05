@@ -135,19 +135,23 @@ export const listRooms = () => apiRequest('/records/room?limit=100')
  * that mirrors them as `crm_opportunity` instead passes that name; the server
  * resolves the rest, and the rules bind to properties rather than to a collection,
  * so the rules themselves need no change.
+ *
+ * `roomId` is honoured because rules and assignments already scope to a room. Without
+ * it, picking a room changed the stat cards and the rule list while the deals below
+ * them stayed on every room's, so the board contradicted itself.
  */
-export function listDeals(collection = 'crm_deal') {
-  return apiRequest(`/records/${encode(collection)}?limit=200`)
+export function listDeals(roomId, collection = 'crm_deal') {
+  return apiRequest(`/records/${encode(collection)}${query({ room_id: roomId, limit: 200 })}`)
 }
 
 /**
  * Every quote this workflow can price, so the panel can show what a quote inherits.
  *
  * The quotes belong to WF-086, read rather than created here, for the same reason
- * as the deals.
+ * as the deals, and scoped to the room for the same reason.
  */
-export function listQuotes(collection = 'wf086_quote') {
-  return apiRequest(`/records/${encode(collection)}?limit=200`)
+export function listQuotes(roomId, collection = 'wf086_quote') {
+  return apiRequest(`/records/${encode(collection)}${query({ room_id: roomId, limit: 200 })}`)
 }
 
 /**

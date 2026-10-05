@@ -17,7 +17,6 @@ so a reviewer can re-run it rather than trust the figure. Where a measurement wa
 other agents on the same machine, that is declared rather than left for the reader to guess.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -67,15 +66,67 @@ database connection directly, or adds a migration or typed column; payloads are 
 records.data and the only fixed vocabulary is the envelope.
 """
 
+REVIEW_FINDINGS = """
+The reviewer bot scored this 8.5/10 against a threshold of 8, with no blocking issues. It also
+found two real defects and several places where the page overstated what it does. Both
+defects are fixed, and the fixes are named here so a reader can check them rather than take
+the claim on trust.
+
+1. A quote whose deal exists and carries no price book was answered "This quote has no
+   associated deal". The branch tested whether a book was found rather than whether a deal
+   existed, so a present-but-unpriced deal and an absent deal produced one sentence, and it
+   sent a seller to repair a relationship that was already correct. Now three, then four,
+   distinct reasons: the deal carries the book; the deal exists and carries none; the quote
+   names no deal; and the quote names a deal that does not exist, which is a broken
+   reference rather than a normal state and had been folded into the first. All four are
+   named in the vocabulary, served on /vocabulary, and asserted distinct.
+
+2. Rule evaluation did not scope by room, so a rule saved in room A priced a deal in room B
+   and the assignment row attributed a room A rule to a room B deal. Found by probe, not by
+   the demo. `engine.rule_reports` now passes the deal's room down, and `conditions` derives
+   its workspace mode from the same room. A deal with no room recorded still sees every
+   room's rules, which is the previous behaviour and is safer than silently pricing a deal
+   from no rules at all.
+
+Also fixed, because each was the page claiming something untrue:
+
+- The destructive override's *count* was only rendered after the override had run, while
+  three docstrings claimed it was on screen before the button. `conditions` now returns the
+  exact set the override would remove, computed by the same `lines_for_book` the override
+  calls, so the number shown before is the number that will happen. It is deliberately not
+  `line_items.length`: a line naming a different price book survives the override and must
+  not be counted.
+- The override copy promised "an override with a book of your own" while the page offered no
+  such control, because the researched dropdown lists the workspace's price books and
+  WF-087's catalogue, which would supply that list, has not shipped. The copy now says that.
+- The page described only the HubSpot half of the research. It now states plainly that the
+  Dynamics half is served as vocabulary and not built, and names what that means: no
+  plug-in, no firing on quote, order or invoice rows, and territory modelled as a deal
+  property rather than a systemuser assignment.
+- The Room picker scoped the stat cards and the rule list but not the deals or the quotes,
+  so the board contradicted itself. Both lists now take the room.
+- `quote_has_no_deal` was published on /vocabulary and raised by nothing. It is removed, and
+  a new test asserts the general property that every published code appears in some module's
+  source, so the next unreachable code fails the suite.
+- `test_every_demo_rule_prices_only_its_own_deal` discarded its assignments and asserted only
+  that deal ids were distinct, so it would have passed if every rule priced every deal. It now
+  asserts one rule per deal, one deal per rule, and one price book per rule, from the
+  assignment rows.
+
+The two console errors the browser logged are not this branch's. They are WF-027's
+SIGNAL_ICON, whose `a4 4 0 000-8-8z` passes eight numbers to a seven-parameter arc. That is
+another workflow's file and was reported rather than edited.
+"""
+
 MEASUREMENTS = {
-    "tests_added_backend_domain": 221,
-    "tests_added_backend_http": 71,
-    "tests_added_frontend": 34,
+    "tests_added_backend_domain": 226,
+    "tests_added_backend_http": 73,
+    "tests_added_frontend": 39,
     "own_files_domain_alone": "221 passed in 120.50s",
     "own_files_http_alone": "71 passed in 28.46s",
     "whole_backend_suite": (
-        "18466 passed, 1 skipped, 1 xfailed, 53 warnings in 766.75s under pytest-xdist, exit 0, "
-        "run on the rebased tree"
+        "18473 passed, 1 skipped, 1 xfailed, 52 warnings in 650.06s under pytest-xdist, exit 0, "
+        "re-run after the review fixes"
     ),
     "whole_backend_suite_caveat": (
         "Measured on this box with around thirty concurrent python processes from other agents. "
@@ -90,9 +141,17 @@ MEASUREMENTS = {
         "dsr/quoting_proposals/price_book_engine.py": "98.73%",
         "dsr/features/WF-088_auto_assign_the_correct_price_book_or_price.py": "100%",
     },
-    "frontend_suite": "1240 passed across 44 files",
+    "frontend_suite": (
+        "1244 passed across 44 files. One failure in another workflow's file, "
+        "src/test/wf001-room-templates.test.jsx, a 5s vitest timeout under load; it passes "
+        "23 of 23 in isolation and this feature's 39 pass in both runs."
+    ),
     "frontend_build": "vite build succeeded, 449 modules transformed",
     "frontend_lint": "0 errors, 12 warnings, all pre-existing and none in this feature's files",
+    "reviewer_bot": (
+        "Scored 8.5 of 10 against a threshold of 8, no blocking issues. Its two defects and "
+        "its six overstatements are fixed; see the findings above."
+    ),
     "frontend_format_check": "All matched files use Prettier code style",
     "contract_guard": (
         "tools/check_feature_diff.py reports OK: 12 changed file(s), none shared. Every changed "
@@ -212,7 +271,7 @@ def main() -> int:
     client = Jev()
     record = client.release_bar(
         ticket="WF-088",
-        change_summary=CHANGE_SUMMARY + "\n\n" + JEV_DESIGN_GATE,
+        change_summary=CHANGE_SUMMARY + "\n\n" + JEV_DESIGN_GATE + "\n\n" + REVIEW_FINDINGS,
         measurements=MEASUREMENTS,
         unverified=(UNVERIFIED,),
     )

@@ -195,7 +195,13 @@ const CONDITION_ASSIGNED = {
   ],
   inactive_rules: [],
   test_first_rules: [],
-  line_items: [],
+  line_items: [{ _id: 'li1', sku: 'SEAT-STD', quantity: 2 }],
+  // What an override would remove right now. A deal that already carries a price book
+  // and has a line on it has something to lose, so the realistic fixture is not an empty
+  // list. `line_items_removed_on_change` is the server's own answer, computed by the same
+  // `lines_for_book` the override calls, which is why it is not derived from `line_items`
+  // here: a line naming a different book survives and must not be counted.
+  line_items_removed_on_change: [{ _id: 'li1', sku: 'SEAT-STD', quantity: 2 }],
 }
 
 const CONDITION_CHOICE = {
@@ -784,6 +790,122 @@ describe('the deal panel', () => {
 
     await waitFor(() => expect(spies.changePriceBook).toHaveBeenCalled())
     expect(await screen.findByText('This change removes line items')).toBeTruthy()
+  })
+
+  // The three below were added after review found the destructive count was only on
+  // screen *after* the override had already run. The sentence was shown first; the
+  // number was not, and three docstrings claimed it was.
+
+  it('shows the destructive count before the override, not only after it', async () => {
+    const user = userEvent.setup()
+    const spies = stubApi()
+    render(<PriceBookRulesPage />)
+
+    await waitFor(() => expect(screen.getByText('Change price book')).toBeTruthy())
+
+    // Nothing has been overridden yet: `changePriceBook` has not been called.
+    expect(spies.changePriceBook).not.toHaveBeenCalled()
+    await user.click(screen.getByText('Change price book'))
+
+    // The count is on screen now, while the buttons that would delete are still ahead.
+    const warning = await screen.findByText('This change removes line items')
+    // Asserted on the notice's own text, not with a regex matcher: the count sits in its
+    // own span, so "will be removed" is split across two elements and a text matcher
+    // cannot see it.
+    expect(warning.parentElement.textContent).toMatch(/will be removed/)
+    expect(spies.changePriceBook).not.toHaveBeenCalled()
+  })
+
+  it('counts only the line items the override would really remove', async () => {
+    // The deal has three lines; one names a different price book and survives the
+    // override. Announcing three would frighten a seller about a line that stays, which
+    // is the same class of defect as announcing the wrong reason for an unpriced quote.
+    const user = userEvent.setup()
+    stubApi({
+      conditions: vi.fn().mockResolvedValue({
+        ...CONDITION_ASSIGNED,
+        line_items: [
+          { _id: 'li1', sku: 'SEAT-STD' },
+          { _id: 'li2', sku: 'SEAT-PREMIUM' },
+          { _id: 'li3', sku: 'OTHER-BOOK', price_book: { id: 'pb-other', name: 'Other' } },
+        ],
+        line_items_removed_on_change: [
+          { _id: 'li1', sku: 'SEAT-STD' },
+          { _id: 'li2', sku: 'SEAT-PREMIUM' },
+        ],
+      }),
+    })
+    render(<PriceBookRulesPage />)
+
+    await waitFor(() => expect(screen.getByText('Change price book')).toBeTruthy())
+    await user.click(screen.getByText('Change price book'))
+
+    const warning = await screen.findByText('This change removes line items')
+    // The notice renders `2 line items will be removed.` from the server's own list.
+    expect(warning.parentElement.textContent).toContain('2 line items will be removed')
+    expect(warning.parentElement.textContent).not.toContain('3 line items')
+  })
+
+  it('does not promise an override with a book of your own', async () => {
+    // Review found the copy said "the price book is set by a rule, or by an override
+    // with a book of your own" while the page offered no such control: the researched
+    // dropdown lists the workspace's price books, and WF-087's catalogue, which would
+    // supply that list, has not shipped. The copy described a capability not present.
+    const user = userEvent.setup()
+    stubApi({
+      conditions: vi.fn().mockResolvedValue({ ...CONDITION_ASSIGNED, candidates: [] }),
+      priceBook: vi.fn().mockResolvedValue(CARD_UNASSIGNED),
+    })
+    render(<PriceBookRulesPage />)
+
+    await waitFor(() => expect(screen.getByText('Set price book')).toBeTruthy())
+    await user.click(screen.getByText('Set price book'))
+
+    expect(await screen.findByText(/No rule matched this deal/)).toBeTruthy()
+    expect(screen.queryByText(/a book of your own/)).toBeNull()
+    // And it says why the list is empty rather than leaving the seller guessing.
+    expect(screen.getByText(/has not shipped/)).toBeTruthy()
+  })
+
+  it('says the Dynamics half is served as vocabulary rather than built', async () => {
+    // The ticket's step 5 is Dynamics and it is not implemented. The page used to
+    // describe only the HubSpot half, so the divergence was findable only in a module
+    // docstring. It is stated on the page now.
+    stubApi()
+    render(<PriceBookRulesPage />)
+
+    expect(await screen.findByText('What is built, and what is only named')).toBeTruthy()
+    expect(screen.getByText('GetDefaultPriceLevelRequest')).toBeTruthy()
+    expect(screen.getByText('Territory Default Pricelist')).toBeTruthy()
+    expect(screen.getByText(/served as vocabulary, not built/)).toBeTruthy()
+  })
+
+  it('scopes the deals and the quotes to the selected room', async () => {
+    // Review found the room picker changed the stat cards and the rule list while the
+    // deals and quotes below stayed on every room's, so the board contradicted itself.
+    const user = userEvent.setup()
+    stubApi({
+      rooms: {
+        records: [
+          { id: 'room_a', data: { name: 'Northwind' } },
+          { id: 'room_b', data: { name: 'Halcyon' } },
+        ],
+      },
+    })
+    render(<PriceBookRulesPage />)
+
+    // "All rooms" is the default, so the lists are legitimately unscoped at first.
+    await waitFor(() => expect(listDeals).toHaveBeenCalled())
+    expect(listDeals.mock.calls.at(-1)[0]).toBe('')
+
+    await waitFor(() => expect(screen.getByLabelText('Room')).toBeTruthy())
+    await user.selectOptions(screen.getByLabelText('Room'), 'room_b')
+
+    // Now both lists, and every other room-scoped read, are asked for the same room.
+    await waitFor(() => expect(listDeals.mock.calls.at(-1)[0]).toBe('room_b'))
+    expect(listQuotes.mock.calls.at(-1)[0]).toBe('room_b')
+    expect(priceBookApi.rules).toHaveBeenCalledWith('room_b')
+    expect(priceBookApi.summary).toHaveBeenCalledWith('room_b')
   })
 
   it('offers the update trigger and does not present it as an error', async () => {

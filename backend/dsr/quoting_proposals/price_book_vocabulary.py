@@ -360,6 +360,37 @@ QUOTE_INHERITS_QUOTE = (
 INHERITANCE_AUTHORITY_DEAL = "deal"
 INHERITANCE_AUTHORITY_NONE = "none"
 
+#: The three answers a seller can read on a quote, named separately because they are
+#: three different facts and two of them used to arrive as the same sentence.
+#:
+#: A quote with no deal has nothing to inherit. A quote whose deal carries no book
+#: inherits none, because the rule that would have written one did not fire. A quote
+#: whose deal carries a book inherits exactly that one. The second case is the one that
+#: is easy to get wrong: saying "this quote has no associated deal" about a quote whose
+#: deal is present and merely unpriced sends a seller to fix a relationship that is
+#: already correct, instead of to look at the deal's own card, where the rule evaluation
+#: already explains what did and did not match.
+INHERITANCE_REASON_FROM_DEAL = (
+    "The price book is on the associated deal, and this quote inherits it."
+)
+INHERITANCE_REASON_DEAL_HAS_NO_BOOK = (
+    "The associated deal has no price book, so this quote inherits none. The deal's own "
+    "card says why."
+)
+INHERITANCE_REASON_NO_DEAL = (
+    "This quote has no associated deal, so there is no price book to inherit."
+)
+
+#: The fourth case, and the reason there is a fourth. A quote that *names* a deal which
+#: is not there is a broken reference, not an unpriced deal, and saying either of the two
+#: sentences above about it hides a data problem that somebody has to fix. It is a
+#: sentence rather than a refusal on purpose: this read is total by design, so one quote
+#: with a dangling reference does not take a page of them down.
+INHERITANCE_REASON_DEAL_MISSING = (
+    "This quote names a deal that does not exist, so there is no price book to inherit. "
+    "The reference on the quote needs fixing."
+)
+
 
 # --------------------------------------------------------------------------- #
 # The decisions
@@ -580,10 +611,6 @@ ERROR_CODES: dict[str, tuple[int, str]] = {
         409,
         "Users can't select a price book when creating a quote; they must select it on the deal.",
     ),
-    "quote_has_no_deal": (
-        409,
-        "This quote has no associated deal, and the quote inherits the price book from the deal.",
-    ),
     "unknown_assignment_rule": (404, "No such assignment rule."),
     "unknown_assignment": (404, "No such price book assignment."),
     "unknown_deal": (404, "No such deal."),
@@ -652,6 +679,12 @@ def catalogue() -> dict[str, Any]:
         "quote_inheritance": {
             "quote": QUOTE_INHERITS_QUOTE,
             "authorities": [INHERITANCE_AUTHORITY_DEAL, INHERITANCE_AUTHORITY_NONE],
+            "reasons": [
+                INHERITANCE_REASON_FROM_DEAL,
+                INHERITANCE_REASON_DEAL_HAS_NO_BOOK,
+                INHERITANCE_REASON_NO_DEAL,
+                INHERITANCE_REASON_DEAL_MISSING,
+            ],
         },
         "assignments": [
             {
