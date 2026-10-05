@@ -32,6 +32,7 @@ from dsr.page_outreach.errors import (
     InvalidInteraction,
     InvalidWorkflow,
     UnknownDelivery,
+    UnknownPageView,
     UnknownPath,
     UnknownWorkflow,
 )
@@ -808,6 +809,55 @@ class PageOutreach:
             actor=actor,
             source=source,
         )
+
+    def views(
+        self,
+        *,
+        room_id: str | None = None,
+        workflow_id: str = "",
+        visitor_key: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """The recorded page views, newest first.
+
+        Every view is here whether or not it qualified, because that is the point of
+        the record: a seller who wants to know why a buyer has not qualified needs the
+        visits that did not qualify to be readable.
+        """
+        where: dict[str, Any] = {}
+        if workflow_id:
+            where["workflow_id"] = workflow_id
+        if visitor_key:
+            where["visitor_key"] = visitor_key
+        rows = self._scoped(COLLECTIONS["views"], room_id=room_id, where=where, limit=limit)
+        rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+        return [
+            {
+                **_data(row),
+                "id": row["id"],
+                "room_id": row.get("room_id") or "",
+                "created_at": row.get("created_at"),
+            }
+            for row in rows
+        ]
+
+    def read_view(self, view_id: str) -> dict[str, Any]:
+        """One recorded page view, with the counts that were in force when it was seen.
+
+        ``counts`` is the snapshot the engine took at the moment of the decision, not a
+        recount from the views table. A recount would answer a different question: it
+        would report what is true now rather than what the decision was based on, and
+        those two are the reason this workflow is auditable at all.
+        """
+        record = self.store.get(_text(view_id))
+        if record is None or record.get("collection") != COLLECTIONS["views"]:
+            raise UnknownPageView(f"no page view with id {view_id!r}")
+        return {
+            **_data(record),
+            "id": record["id"],
+            "room_id": record.get("room_id") or "",
+            "created_at": record.get("created_at"),
+        }
 
     def _recorded_views(self, view: rules_module.PageView) -> list[dict[str, Any]]:
         """Every recorded view for this workflow and visitor, newest first.

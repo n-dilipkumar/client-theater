@@ -67,6 +67,13 @@ class UnknownWorkflow(PageOutreachError):
     status = 404
 
 
+class UnknownPageView(PageOutreachError):
+    """No page view exists under the id the caller named."""
+
+    code = "unknown_page_view"
+    status = 404
+
+
 # --------------------------------------------------------------------------- #
 # Page views
 # --------------------------------------------------------------------------- #
@@ -144,6 +151,7 @@ __all__ = [
     "InvalidWorkflow",
     "PageOutreachError",
     "UnknownDelivery",
+    "UnknownPageView",
     "UnknownPageViewField",
     "UnknownPath",
     "UnknownWorkflow",
