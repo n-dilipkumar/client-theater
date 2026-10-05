@@ -73,7 +73,9 @@ class ReminderRefused(Exception):
 class InboxStateRefused(Exception):
     """A well-formed request that conflicts with the state of the inbox."""
 
-    def __init__(self, detail: str, *, reason: str, remedy: str | None = None, **extra: Any) -> None:
+    def __init__(
+        self, detail: str, *, reason: str, remedy: str | None = None, **extra: Any
+    ) -> None:
         super().__init__(detail)
         self.detail = detail
         self.reason = reason
