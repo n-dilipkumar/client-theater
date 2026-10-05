@@ -522,7 +522,9 @@ class ConversationChaseEngine:
         # A room with nothing stored gets the derived default rather than a schedule with
         # every day closed. Normalising ``None`` would produce exactly that, and an account
         # with no stored hours would read as permanently shut.
-        raw_schedule = stored.get("schedule") if stored.get("schedule") else rules.default_office_hours()
+        raw_schedule = (
+            stored.get("schedule") if stored.get("schedule") else rules.default_office_hours()
+        )
         schedule = rules.normalise_office_hours(raw_schedule)
         return {
             "room_id": room_id,
@@ -944,9 +946,7 @@ class ConversationChaseEngine:
             return 0
 
         due = 0
-        for row in self.store.find(
-            vocab.CONVERSATIONS, {vocab.ROOM_REF: room_id}, limit=500
-        ):
+        for row in self.store.find(vocab.CONVERSATIONS, {vocab.ROOM_REF: room_id}, limit=500):
             data = dict(row.get("data") or {})
             if not rules.trigger_eligible(data)["eligible"]:
                 continue
