@@ -64,6 +64,7 @@ request whose answer is no.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -369,7 +370,7 @@ def list_members(group_id: str, engine: AudiencePermissionsEngine = EngineDep) -
 @router.post("/groups/{group_id}/members", status_code=201)
 def add_members(
     group_id: str,
-    payload: dict[str, Any] = Body(default_factory=dict),
+    payload: Any = Body(default_factory=dict),
     actor: str | None = Query(None),
     engine: AudiencePermissionsEngine = EngineDep,
 ) -> dict[str, Any]:
@@ -383,13 +384,20 @@ def add_members(
     ``invitations_sent: 0`` on every call. A workflow that invites people elsewhere must not be
     able to read this as having invited anybody.
 
+    The body takes ``{"emails": [...]}``, which is the vendor's own request object, or a bare
+    array, which is the shape the CLI takes. The parameter is typed ``Any`` rather than
+    ``dict`` so the second shape is not refused by FastAPI's own validator before the engine
+    sees it: a caller holding a list of addresses is not doing anything this route disallows, and
+    answering its request with a 422 about the JSON shape would be a worse answer than a
+    validation message from the rules.
+
     A 201 rather than a 200, because the call does create members. A rep who added none because
     they were all present still gets a 201 with the counts, which is the idempotent answer rather
     than a refusal.
     """
 
-    body = dict(payload or {})
-    addresses = body.get("emails") if "emails" in body else body
+    body = dict(payload) if isinstance(payload, Mapping) else payload
+    addresses = body.get("emails") if isinstance(body, dict) and "emails" in body else body
     return engine.add_members(
         group_id, addresses, actor=actor, source=_source("POST", "/groups/{group_id}/members")
     )
