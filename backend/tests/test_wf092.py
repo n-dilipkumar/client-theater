@@ -29,8 +29,7 @@ from __future__ import annotations
 
 import pytest
 from dsr.db.audited import AuditedDatabase
-from dsr.quoting_proposals import approval_chain_rules as rules
-from dsr.quoting_proposals import approval_chain_vocabulary as vocab
+from dsr.quoting_proposals import approval_chain_rules as rules, approval_chain_vocabulary as vocab
 from dsr.quoting_proposals.approval_chain_engine import (
     ApprovalChainEngine,
     DuplicateWorkflow,
@@ -75,7 +74,7 @@ def test_quote_below_the_threshold_does_not_qualify():
 
 
 def test_greater_than_is_strict_at_the_boundary():
-    """"Set Branch 1 to greater than 5,000" is a strict comparison."""
+    """ "Set Branch 1 to greater than 5,000" is a strict comparison."""
     result = rules.evaluate_branch({"quote_amount": 5000}, BRANCH)
     assert result["outcome"] == vocab.OUTCOME_NOT_QUALIFIED
 
@@ -207,7 +206,7 @@ def test_the_first_priority_is_active_on_an_untouched_chain(three_levels):
 
 
 def test_a_lower_priority_approver_is_refused_before_their_turn(three_levels):
-    """"The sales director won't need to approve the quote until the sales manager has."""
+    """ "The sales director won't need to approve the quote until the sales manager has."""
     outcome = rules.advance({"decisions": {}}, three_levels, "sales_director", "approved")
     assert outcome["outcome"] == "not_yet_your_priority"
     assert outcome["your_priority"] == 2
@@ -216,7 +215,7 @@ def test_a_lower_priority_approver_is_refused_before_their_turn(three_levels):
 
 
 def test_the_chain_advances_only_after_every_approver_at_a_priority_decides():
-    """"Sequential approvals require approval by every approver at each priority step"."""
+    """ "Sequential approvals require approval by every approver at each priority step"."""
     levels = rules.group_by_priority(
         [
             {"priority": 1, "approver": "east_lead"},
@@ -333,7 +332,7 @@ def test_any_approvers_is_not_satisfied_by_an_abstention():
 
 
 def test_a_quote_with_no_step_is_auto_approved_not_blocked():
-    """"if a quote approval step hasn't been added above this action, quotes will be
+    """ "if a quote approval step hasn't been added above this action, quotes will be
     auto-approved"."""
     outcome = rules.advance({"decisions": {}}, [], "anyone", "approved")
     assert outcome["outcome"] == "auto_approved"
@@ -528,9 +527,7 @@ def test_the_engine_re_enrols_when_the_switch_is_on(engine):
     enrolment = engine.enrol(_quote(engine, 12000), source="test")["enrolment"]
     engine.decide(enrolment["id"], "sales_manager", "approved", source="test")
     workflow = engine.get_workflow()
-    engine.store.update(
-        workflow["id"], {vocab.RE_ENROL_KEY: True}, actor="test", source="test"
-    )
+    engine.store.update(workflow["id"], {vocab.RE_ENROL_KEY: True}, actor="test", source="test")
     reset = engine.re_enrol(enrolment["id"], source="test")
     assert reset["run"] == 2
     assert reset["enrolment"]["state"] == vocab.STATE_PENDING
@@ -564,9 +561,7 @@ def test_the_engine_pushes_a_step_for_each_qualifying_branch(engine):
         source="test",
     )["id"]
     result = engine.enrol(quote_id, source="test")
-    approvers = {
-        approver for level in result["levels"] for approver in level["approvers"]
-    }
+    approvers = {approver for level in result["levels"] for approver in level["approvers"]}
     assert approvers == {"sales_manager", "sales_director", "legal_representative", "finance"}
 
 
