@@ -36,8 +36,7 @@ SOURCED_QUOTES: tuple[str, ...] = (
     "approval workflow for any quotes above $5,000.",
     "Start quote approval flow: if a quote approval step hasn't been added above this "
     "action, quotes will be auto-approved.",
-    "You can't duplicate the workflow or create a new workflow to use for quote "
-    "approvals.",
+    "You can't duplicate the workflow or create a new workflow to use for quote approvals.",
 )
 
 INFERENCES: tuple[dict[str, Any], ...] = (

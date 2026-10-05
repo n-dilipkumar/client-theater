@@ -167,7 +167,9 @@ def evaluate_branch(quote: Mapping[str, Any], branch: Mapping[str, Any]) -> dict
     }
 
 
-def evaluate_branches(quote: Mapping[str, Any], branches: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def evaluate_branches(
+    quote: Mapping[str, Any], branches: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
     """Evaluate every branch against one quote.
 
     A quote qualifies when **at least one** branch matches. The user flow has a
@@ -181,9 +183,7 @@ def evaluate_branches(quote: Mapping[str, Any], branches: Sequence[Mapping[str, 
         "qualified": bool(qualified),
         "qualifying_branches": qualified,
         "results": results,
-        "reason": (
-            REASONS["matched"] if qualified else REASONS["not_matched"]
-        ),
+        "reason": (REASONS["matched"] if qualified else REASONS["not_matched"]),
     }
 
 
@@ -276,7 +276,9 @@ def group_by_priority(steps: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
     return sorted(levels.values(), key=lambda level: level[vocab.PRIORITY_KEY])
 
 
-def active_priority(enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, Any]]) -> int | None:
+def active_priority(
+    enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, Any]]
+) -> int | None:
     """The priority whose approvers may decide now, or ``None`` when the chain is done.
 
     The researched sequential rule is the whole of this function: a lower-priority
@@ -288,8 +290,12 @@ def active_priority(enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, 
         approvers = level["approvers"]
         decided = enrolment.get("decisions") or {}
         requirement = level.get("requirement") or vocab.REQUIREMENT_SEQUENTIAL
-        approvals = [approver for approver in approvers if decided.get(approver) == vocab.DECISION_APPROVED]
-        rejections = [approver for approver in approvers if decided.get(approver) == vocab.DECISION_REJECTED]
+        approvals = [
+            approver for approver in approvers if decided.get(approver) == vocab.DECISION_APPROVED
+        ]
+        rejections = [
+            approver for approver in approvers if decided.get(approver) == vocab.DECISION_REJECTED
+        ]
 
         if rejections:
             return None
@@ -304,14 +310,26 @@ def active_priority(enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, 
     return None
 
 
+def _priority_of(levels: Sequence[Mapping[str, Any]], approver: str) -> int | None:
+    """Which priority an approver sits at, or ``None`` when they sit at none."""
+    for level in levels:
+        if approver in level["approvers"]:
+            return level[vocab.PRIORITY_KEY]
+    return None
+
+
 def is_complete(enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, Any]]) -> bool:
     """Has every level been satisfied?"""
     decided = enrolment.get("decisions") or {}
     for level in levels:
         approvers = level["approvers"]
         requirement = level.get("requirement") or vocab.REQUIREMENT_SEQUENTIAL
-        approvals = [approver for approver in approvers if decided.get(approver) == vocab.DECISION_APPROVED]
-        rejections = [approver for approver in approvers if decided.get(approver) == vocab.DECISION_REJECTED]
+        approvals = [
+            approver for approver in approvers if decided.get(approver) == vocab.DECISION_APPROVED
+        ]
+        rejections = [
+            approver for approver in approvers if decided.get(approver) == vocab.DECISION_REJECTED
+        ]
         if rejections:
             return True
         if requirement == vocab.REQUIREMENT_ANY:
@@ -322,7 +340,9 @@ def is_complete(enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, Any]
     return True
 
 
-def final_state(enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def final_state(
+    enrolment: Mapping[str, Any], levels: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
     """The state the chain writes when it finishes.
 
     The evidence states two things at once: "the last decision writes
@@ -381,8 +401,7 @@ def advance(
         return {
             "outcome": "auto_approved",
             "reason": (
-                "No approval step sits above the start action, so this quote is "
-                "auto-approved."
+                "No approval step sits above the start action, so this quote is auto-approved."
             ),
             "decisions": dict(enrolment.get("decisions") or {}),
             "state": vocab.STATE_APPROVED,
@@ -408,6 +427,26 @@ def advance(
             "decisions": decisions,
             "next_priority": active_priority(enrolment, levels),
         }
+
+    active = active_priority(enrolment, levels)
+    if active is not None:
+        current = next((level for level in levels if level[vocab.PRIORITY_KEY] == active), None)
+        allowed = list(current["approvers"]) if current else []
+        if approver not in allowed:
+            return {
+                "outcome": "not_yet_your_priority",
+                "reason": (
+                    f"{approver} sits at priority "
+                    f"{_priority_of(levels, approver)}, and the chain waits at priority "
+                    f"{active}. A lower-priority approver is not notified until every "
+                    "approver at the current priority has decided."
+                ),
+                "active_priority": active,
+                "your_priority": _priority_of(levels, approver),
+                "approvers": allowed,
+                "decisions": decisions,
+                "next_priority": active,
+            }
 
     decisions[approver] = decision
     updated = {**enrolment, "decisions": decisions}
@@ -463,8 +502,7 @@ def auto_approve(quote_id: str, branch_results: Sequence[Mapping[str, Any]]) -> 
         "quote_id": quote_id,
         "outcome": vocab.OUTCOME_AUTO_APPROVED,
         "reason": (
-            "No approval step was added above the start action, so the quote is "
-            "auto-approved."
+            "No approval step was added above the start action, so the quote is auto-approved."
         ),
         "state": vocab.STATE_APPROVED,
         vocab.QUOTE_STATUS_KEY: vocab.DECISION_APPROVED,
