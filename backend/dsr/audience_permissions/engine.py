@@ -130,6 +130,11 @@ SCOPE_UNSCOPED = "unscoped"
 SCOPE_CLEARED = "cleared"
 SCOPE_SET = "scoped"
 
+#: A group link has no link scope of its own, so it reports the group's state instead. Kept
+#: beside the other three rather than folded into one, because "this link carries its own
+#: permissions" would be a false thing to say about a link whose permissions a group owns.
+SCOPE_FROM_GROUP = vocab.SCOPE_GROUP
+
 SCOPE_STATE_LABELS = {
     SCOPE_UNSCOPED: "This link was never scoped. Every item in the room is visible on it.",
     SCOPE_CLEARED: (
@@ -137,6 +142,10 @@ SCOPE_STATE_LABELS = {
         "is for."
     ),
     SCOPE_SET: "This link carries its own per-item permissions.",
+    SCOPE_FROM_GROUP: (
+        "This link belongs to a group, so the group's permissions decide what it shows. The "
+        "link's own overrides are refused."
+    ),
 }
 
 #: What a room with nothing ingested into looks like, said rather than rendered as an empty
@@ -515,21 +524,26 @@ class AudiencePermissionsEngine:
         rows.sort(key=lambda row: (row["item_type"], str(row["name"])))
         return rows
 
-    def _folder_map(self, room_id: str | None) -> dict[str, dict[str, Any]]:
-        """Folder id to the payload the ancestor walk reads.
+    def _parent_map(self, room_id: str | None) -> dict[str, dict[str, Any]]:
+        """Record id to the payload carrying its ``parentFolderId``, for both collections.
 
-        ``None`` for the room only when the caller has no room, which happens for a group whose
-        room reference is absent. An empty map is then correct: the walk finds no ancestors and
-        the grant still lands, which is the behaviour
-        :func:`~dsr.audience_permissions.rules.ancestors_of` already has for a missing parent.
+        Documents are in this map as well as folders, and that is not a widening:
+        :func:`~dsr.audience_permissions.rules.ancestors_of` reads the *item's* own parent from
+        the same map before it walks the folders above it. A map holding only folders resolves
+        every document to the room root, so no document would ever open a folder and the
+        ancestor rule would silently do nothing.
+
+        An empty room reference yields an empty map, which is the behaviour the walk already has
+        for a missing parent: no ancestors found, and the grant still lands.
         """
 
-        records = (
-            self.store.list(vocab.FOLDER_COLLECTION, room_id=room_id, limit=MAX_PAGE)
-            if room_id
-            else []
-        )
-        return {record["id"]: dict(record.get("data") or {}) for record in records}
+        if not room_id:
+            return {}
+        found: dict[str, dict[str, Any]] = {}
+        for collection in vocab.ITEM_COLLECTIONS:
+            for record in self.store.list(collection, room_id=room_id, limit=MAX_PAGE):
+                found[record["id"]] = dict(record.get("data") or {})
+        return found
 
     # ----------------------------------------------------------------- #
     # Group permissions: delta
@@ -784,7 +798,7 @@ class AudiencePermissionsEngine:
         """
 
         if kind == vocab.AUDIENCE_GROUP:
-            return vocab.SCOPE_GROUP
+            return SCOPE_FROM_GROUP
         if not marker:
             return SCOPE_UNSCOPED
         return SCOPE_CLEARED if live_rows == 0 else SCOPE_SET
@@ -988,7 +1002,14 @@ class AudiencePermissionsEngine:
             if not admitted:
                 denied = vocab.NOT_A_MEMBER
 
-        scope_state = self._scope_state(kind, bool(data.get(LINK_SCOPE_SET)), 0)
+        # The scope state is computed from the link's own live row count rather than a literal,
+        # because the cleared/scoped distinction is exactly that count. Reporting `cleared` for a
+        # link holding one grant would tell a rep their scope is empty while the room is open.
+        scope_state = self._scope_state(
+            kind,
+            bool(data.get(LINK_SCOPE_SET)),
+            len(self._link_permission_index(link_id)),
+        )
         if kind == vocab.AUDIENCE_GROUP:
             index = self._permission_index(str(group_record.get("id"))) if group_record else {}
             effective = {key: row["entry"] for key, row in index.items()}
@@ -1278,8 +1299,8 @@ class AudiencePermissionsEngine:
         closed are returned so the response can say so.
         """
 
-        folders = self._folder_map(room_id)
-        planned = rules.plan_ancestor_grants(list(merged.values()), merged, folders)
+        parents = self._parent_map(room_id)
+        planned = rules.plan_ancestor_grants(list(merged.values()), merged, parents)
         kept: list[dict[str, Any]] = []
         wanted: list[dict[str, Any]] = []
         for row in planned:
