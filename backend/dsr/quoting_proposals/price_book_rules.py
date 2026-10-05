@@ -881,6 +881,7 @@ def evaluate_inheritance(
     *,
     deal_field: str | None = None,
     deal_price_book: Any = None,
+    deal_missing: str | None = None,
 ) -> dict[str, Any]:
     """The price book a quote gets, and where that value came from.
 
@@ -893,8 +894,26 @@ def evaluate_inheritance(
     A quote with no associated deal reports ``authority: none`` rather than raising:
     a quote is allowed to exist before its deal does, and the honest answer is that
     there is nothing to inherit.
+
+    ``reason`` branches on whether the *deal* exists, not on whether a book was found
+    on it. Those are different facts and a reader cannot act on the wrong one: a quote
+    whose deal is absent, a quote whose deal is present but unpriced, and a quote whose
+    deal is named but does not exist all leave ``price_book`` empty, and reporting the
+    wrong one of those sends a seller to repair something that is already correct, or
+    hides a broken reference nobody would otherwise find. ``deal_missing`` carries the
+    id the quote named, and is what separates the third case from the first.
     """
-    inherited = deal_price_book if deal is not None else None
+    has_deal = isinstance(deal, Mapping)
+    inherited = deal_price_book if has_deal else None
+    if inherited is not None:
+        reason = vocab.INHERITANCE_REASON_FROM_DEAL
+    elif has_deal:
+        reason = vocab.INHERITANCE_REASON_DEAL_HAS_NO_BOOK
+    elif deal_missing:
+        reason = vocab.INHERITANCE_REASON_DEAL_MISSING
+    else:
+        reason = vocab.INHERITANCE_REASON_NO_DEAL
+
     return {
         "price_book": book_view(inherited),
         "price_book_label": book_label(inherited),
@@ -903,15 +922,11 @@ def evaluate_inheritance(
             if inherited is not None
             else vocab.INHERITANCE_AUTHORITY_NONE
         ),
-        "deal_id": deal.get("id") if isinstance(deal, Mapping) else None,
+        "deal_id": deal.get("id") if has_deal else None,
         "deal_field": deal_field,
         "settable_here": False,
         "evidence": vocab.QUOTE_INHERITS_QUOTE,
-        "reason": (
-            "The price book is on the associated deal, and this quote inherits it."
-            if inherited is not None
-            else "This quote has no associated deal, so there is no price book to inherit."
-        ),
+        "reason": reason,
     }
 
 

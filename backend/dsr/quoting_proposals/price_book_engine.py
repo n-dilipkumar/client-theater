@@ -124,6 +124,21 @@ class PriceBookEngine:
         record = self.deal(deal_id)
         return {**(record.get("data") or {}), "id": record["id"]}
 
+    def deal_room(self, deal_id: str) -> str | None:
+        """The room a deal belongs to, or ``None`` when it has none recorded.
+
+        Rules are scoped to a room and a deal is scoped to a room, so evaluating a
+        deal against rules from every room prices it with another room's price book.
+        That is not a display problem: the write lands on the deal and the assignment
+        row, so the audit trail would attribute a room A rule to a room B deal.
+
+        ``None`` is passed through rather than replaced, because ``store.list`` treats
+        ``room_id=None`` as "do not scope". A deal with no room therefore still sees every
+        room's rules, which is the pre-existing behaviour and is safer than silently
+        pricing a deal from no rules at all.
+        """
+        return self.deal(deal_id).get("room_id")
+
     def company(self, deal_id: str) -> dict[str, Any]:
         """The company a deal points at, or an empty mapping.
 
@@ -244,7 +259,7 @@ class PriceBookEngine:
         deal = self.deal_payload(deal_id)
         company = self.company(deal_id)
         evaluated: list[dict[str, Any]] = []
-        for record in self.list_rules(limit=limit):
+        for record in self.list_rules(room_id=self.deal_room(deal_id), limit=limit):
             data = record.get("data") or {}
             report = rules.matches_filters(
                 data.get("filters") or [],
@@ -330,10 +345,22 @@ class PriceBookEngine:
             ],
             "state": self._state(decision, current),
             "mode": rules.workspace_mode(
-                [row.get("data") or {} for row in self.list_rules(limit=1000)]
+                [
+                    row.get("data") or {}
+                    for row in self.list_rules(room_id=self.deal_room(deal_id), limit=1000)
+                ]
             ),
             "create_only_quote": vocab.CREATE_ONLY_QUOTE,
             "line_items": self.line_items(deal_id),
+            # The exact lines an override would remove, computed by the same
+            # `lines_for_book` the override itself calls. Sent here so the page can state
+            # the count *before* the button, which is the only moment the warning is
+            # useful. `line_items` alone would over-count, because a line naming a
+            # different price book survives the override and must not be included in a
+            # number the seller reads as "these will be deleted".
+            "line_items_removed_on_change": [
+                dict(row) for row in rules.lines_for_book(self.line_items(deal_id), current)
+            ],
             "company_found": bool(company),
         }
 
@@ -627,7 +654,10 @@ class PriceBookEngine:
         try:
             deal = self.deal_payload(str(related))
         except rules.PriceBookNotFound:
-            return rules.evaluate_inheritance(payload, None)
+            # The quote names a deal that is not there. Reported as its own answer rather
+            # than folded into "no associated deal", because a dangling reference is a
+            # broken thing somebody has to fix and an absent one is not.
+            return rules.evaluate_inheritance(payload, None, deal_missing=str(related))
         field, current = rules.read_book_field(deal)
         return rules.evaluate_inheritance(payload, deal, deal_field=field, deal_price_book=current)
 
