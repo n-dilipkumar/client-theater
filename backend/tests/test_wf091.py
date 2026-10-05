@@ -878,6 +878,38 @@ class TestTheWorkflowOverTheStore:
 
         assert engine.summary(room_id="room_a")["by_state"][vocab.STATE_PENDING_APPROVAL] == 1
 
+    def test_the_board_counts_enabled_rules_from_the_payload(self, engine: QuoteApprovalEngine):
+        """The same slip on the switch: an envelope carries no `enabled`, so the count read zero."""
+        quote(engine, "q1", amount=5000)
+        line(engine, "q1", discount=40)
+        discount_rule(engine)
+
+        board = engine.summary(room_id="room_a")
+
+        assert board["rules"] == 1
+        assert board["rules_enabled"] == 1
+
+    def test_a_turned_off_rule_is_not_counted_as_enabled(self, engine: QuoteApprovalEngine):
+        quote(engine, "q1", amount=5000)
+        line(engine, "q1", discount=40)
+        rule = discount_rule(engine)
+        engine.patch_rule(rule["id"], {"enabled": False}, actor="dana", source="fixture")
+
+        board = engine.summary(room_id="room_a")
+
+        assert board["rules"] == 1
+        assert board["rules_enabled"] == 0
+
+    def test_the_board_counts_either_shape(self):
+        """A caller may hold the row or its payload, and both must give the same answer."""
+        rules_as_rows = [{"data": {"enabled": True}}]
+        rules_as_payloads = [{"enabled": True}]
+
+        from_rows = rules.summary_counts(rules_as_rows, [])
+        from_payloads = rules.summary_counts(rules_as_payloads, [])
+
+        assert from_rows["rules_enabled"] == from_payloads["rules_enabled"] == 1
+
 
 # --------------------------------------------------------------------------- #
 # notifications and activities

@@ -932,6 +932,23 @@ def conditions_report(enrolment: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _payload(row: Any) -> dict[str, Any]:
+    """One store row's own payload, whether the caller passed the row or the payload.
+
+    The domain rules are pure and know nothing about the store's envelope, so a caller
+    may hand them either shape. Accepting both here is what keeps a caller from having
+    to remember which one it is holding, which is the mistake this module has already
+    made twice: a status read off an envelope is always absent and a switch read off one
+    is always absent too, so both counts silently read as zero.
+    """
+    if isinstance(row, Mapping):
+        data = row.get("data")
+        if isinstance(data, Mapping):
+            return dict(data)
+        return dict(row)
+    return {}
+
+
 def summary_counts(
     rules: Sequence[Mapping[str, Any]], enrolments: Sequence[Mapping[str, Any]]
 ) -> dict[str, Any]:
@@ -940,16 +957,20 @@ def summary_counts(
     waiting = 0
     exempt = 0
     for record in enrolments:
-        status = str(record.get("status") or "")
+        row = _payload(record)
+        status = str(row.get("status") or "")
         if status in by_state:
             by_state[status] += 1
         if status == vocab.STATE_PENDING_APPROVAL:
             waiting += 1
-        if record.get("exempt"):
+        if row.get("exempt"):
             exempt += 1
     return {
         "rules": len(rules),
-        "rules_enabled": len([rule for rule in rules if rule.get("enabled")]),
+        # Read from the payload, not the envelope. The switch lives in ``data``, so a
+        # count taken off the envelope reports every rule as off, and a panel built
+        # from it would tell a seller none of their rules are active.
+        "rules_enabled": len([rule for rule in rules if _payload(rule).get("enabled", True)]),
         "enrolments": len(enrolments),
         "by_state": by_state,
         "awaiting_an_approver": waiting,
