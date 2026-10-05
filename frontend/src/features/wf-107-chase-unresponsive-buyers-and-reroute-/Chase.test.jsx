@@ -455,9 +455,18 @@ beforeEach(() => {
   })
 })
 
-/** Render, pick a room, and wait for the board to settle. */
+/**
+ * Render, pick a room, and wait for the board to settle.
+ *
+ * `delay: null` rather than the default. With a delay, every keystroke waits a
+ * macrotask before the next, and this file types into the duration field; with
+ * `1209600` on the fourteen-day bound that alone cost 1.9s of a single test, and
+ * 56 tests of that is enough to push other files past vitest's 5000ms per-test
+ * timeout when the suite runs across workers. Nothing here asserts on timing, so
+ * the delay buys nothing that `await user.type` does not already give.
+ */
 async function renderBoard() {
-  const user = userEvent.setup()
+  const user = userEvent.setup({ delay: null })
   render(<Chase />)
   await screen.findByRole('heading', { name: 'Chase and reroute' })
   const picker = await screen.findByLabelText('Room')
@@ -520,7 +529,7 @@ describe('the two things the page must say out loud', () => {
 describe('the error state', () => {
   it('shows a retry when the board cannot be read, rather than an empty board', async () => {
     failures.add(`GET ${BASE}/rooms/${ROOM}/summary`)
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Chase />)
     await screen.findByRole('heading', { name: 'Chase and reroute' })
     await user.selectOptions(await screen.findByLabelText('Room'), ROOM)
