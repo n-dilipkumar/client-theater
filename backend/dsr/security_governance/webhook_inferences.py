@@ -271,7 +271,7 @@ DECISIONS: dict[str, dict[str, Any]] = {
             "forwarded_header_only": (
                 "Trust the forwarded header whenever it is present."
             ),
-        ),
+        },
         "chosen": "client_host_plus_declared_override",
         "rejected_because": (
             "Socket-only was rejected because behind a proxy the peer address is the "
