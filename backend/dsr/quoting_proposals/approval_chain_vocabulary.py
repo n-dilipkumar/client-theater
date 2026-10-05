@@ -86,7 +86,13 @@ DEFAULT_BRANCH_THRESHOLD = 5000.0
 #: The comparison the branch is written with. "greater than 5,000" is a strict
 #: comparison, so a quote of exactly 5000 does not qualify. The NetSuite example uses
 #: "greater than or equal to", so the operator is stored per branch rather than fixed.
-BRANCH_OPERATORS = ("greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal", "equals")
+BRANCH_OPERATORS = (
+    "greater_than",
+    "greater_than_or_equal",
+    "less_than",
+    "less_than_or_equal",
+    "equals",
+)
 
 #: The outcome of a branch that did not qualify. The user flow puts it explicitly:
 #: under the **None met** branch add **Start quote approval flow**, "so non-qualifying
@@ -124,9 +130,7 @@ APPROVER_REQUIREMENTS = (REQUIREMENT_ALL, REQUIREMENT_ANY, REQUIREMENT_SEQUENTIA
 #: This is the sentence :func:`~dsr.quoting_proposals.approval_chain_rules.advance`
 #: exists to enforce. A lower-priority approver is not notified until every approver
 #: at the current priority has decided.
-SEQUENTIAL_RULE = (
-    "Sequential approvals require approval by every approver at each priority step."
-)
+SEQUENTIAL_RULE = "Sequential approvals require approval by every approver at each priority step."
 
 #: The researched caps. "You can add up to five sequences, and ten approvers per
 #: sequence." Both are enforced in validation and tested at the boundary.
