@@ -778,7 +778,9 @@ class QuoteApprovalEngine:
                 actor=actor,
                 source=source,
             )
-            raise rules.ApprovalRefusal(vocab.SHARE_ON_APPROVAL_QUOTE, outcome["reason"])
+            # The share-gate code, not the quote code: the request is well formed and
+            # conflicts with the quote's state, so it is a 409 rather than a 422.
+            raise rules.ApprovalRefusal("quote_not_approved_to_share", outcome["reason"])
         return {
             "shared": True,
             "quote_id": quote_id,
@@ -855,11 +857,16 @@ class QuoteApprovalEngine:
         )
         scoped = [row for row in rows if room_id is None or row.get("room_id") == room_id]
         if approver:
+            # The approver and the enrolment id both live in the decision row's
+            # ``data``, not on its envelope. Reading them off the envelope yields
+            # None for every row, so the filter matches nothing and the queue answers
+            # "nothing is waiting on you" while it is full.
             mine = {
-                str(row.get("enrolment_id"))
+                str((row.get("data") or {}).get("enrolment_id"))
                 for row in self.store.find(
                     vocab.APPROVAL_DECISIONS, {"approver": str(approver)}, limit=500
                 )
+                if (row.get("data") or {}).get("enrolment_id")
             }
             scoped = [row for row in scoped if row["id"] in mine]
         return [self.enrolment_view(row, approver=approver) for row in scoped[:limit]]
@@ -897,6 +904,11 @@ class QuoteApprovalEngine:
             # a client asks which of the three researched moments created this row
             # without reaching into the envelope's own data blob.
             "trigger": data.get("trigger"),
+            # The two researched notes, lifted for the same reason: the rule's own
+            # approval note and the request's note to the approver are what a panel
+            # shows, and neither should need a dive into the envelope's data.
+            vocab.APPROVAL_NOTE: data.get(vocab.APPROVAL_NOTE),
+            vocab.NOTES_TO_APPROVER: data.get(vocab.NOTES_TO_APPROVER),
             "exempt": bool(data.get("exempt")),
             "exemption_reason": data.get("exemption_reason"),
             "approvers": list(data.get("approvers") or []),
@@ -954,12 +966,21 @@ class QuoteApprovalEngine:
             self.store.list(vocab.APPROVAL_RULES, room_id=room_id, limit=1000), enrolments
         )
         board["room_id"] = room_id
+        # Read from ``data`` for the same reason as the approver filter above.
         board["approvers_waiting"] = {
-            str(row.get("approver")): 0
-            for row in self.store.list(vocab.APPROVAL_DECISIONS, room_id=room_id, limit=1000)
-            if row.get("data", {}).get("outstanding")
+            str((row.get("data") or {}).get("approver")): 0
+            for row in self.store.list(vocab.APPROVAL_DECISIONS, limit=1000)
+            if (row.get("data") or {}).get("outstanding")
+            and (row.get("data") or {}).get("approver")
         }
         board["notified"] = len(self.store.list(vocab.NOTIFICATIONS, room_id=room_id, limit=1000))
+        board["collections"] = [
+            vocab.APPROVAL_RULES,
+            vocab.APPROVAL_REQUESTS,
+            vocab.APPROVAL_DECISIONS,
+            vocab.ACTIVITIES,
+            vocab.NOTIFICATIONS,
+        ]
         board["self_approval"] = inferences.self_approval()
         return board
 

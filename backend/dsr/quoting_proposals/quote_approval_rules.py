@@ -825,7 +825,10 @@ def require_shareable(state: Any) -> str:
     """Return the state, or refuse the share."""
     outcome = evaluate_share(state)
     if not outcome["shareable"]:
-        raise ApprovalRefusal(vocab.SHARE_ON_APPROVAL_QUOTE, outcome["reason"])
+        # 409 rather than the default 422. The request was well formed and it
+        # conflicts with the quote's current state, which is the same distinction the
+        # core app draws between a bad request and a conflict.
+        raise ApprovalRefusal("quote_not_approved_to_share", outcome["reason"])
     return str(outcome["state"])
 
 
