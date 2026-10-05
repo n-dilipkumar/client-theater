@@ -87,7 +87,12 @@ __all__ = [
 #: response rather than left to a reader's assumption.
 HONESTY: dict[str, str] = {
     "effect": "verified_then_recorded",
-    "checks": (
+    # Named ``verification_scope`` and not ``checks`` on purpose. ``checks`` is the list of
+    # the three check results in every delivery, summary and vocabulary payload, and a
+    # ``**HONESTY`` spread that carried the key ``checks`` overwrote that list with a
+    # sentence. The collision is silent: every response still had a ``checks`` field, and
+    # the field was the wrong shape. One word apart is exactly how that happens.
+    "verification_scope": (
         "A delivery is acted on only after the source IP, the Content-Sha256 payload digest "
         "and the event_hash HMAC have all passed. This handler checks the source address it "
         "was given and the two digests the request carried. It cannot prove the request was "
