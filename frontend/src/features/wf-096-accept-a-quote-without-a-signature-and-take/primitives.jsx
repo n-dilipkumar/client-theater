@@ -1,9 +1,9 @@
 /**
  * Primitives drawn from the shared components in `@/components/ui`.
  *
- * Nothing here redefines a control `components/ui.jsx` already provides. `Button`, `Card`,
- * `Badge`, `Field`, `inputClass`, `Icon` and `EmptyState` all come from the shared module, and
- * only the arrangements this page needs are built here:
+ * Nothing here redefines a control `components/ui.jsx` already provides. `Card`, `Badge`, `Field`,
+ * `inputClass` and `Icon` all come from the shared module, and only the arrangements this page
+ * needs are built here:
  *
  * * `Dialog`, because `components/ui.jsx` exports no modal on this branch. The feature contract
  *   says to build a primitive that genuinely does not exist inside the feature folder and say so
@@ -18,7 +18,9 @@
  *   of this workflow's own rows has.
  */
 
-import { Badge, Button, Card, Field, Icon, inputClass } from '@/components/ui'
+import { useEffect } from 'react'
+
+import { Badge, Card, Field, Icon, inputClass } from '@/components/ui'
 
 import {
   FACTS,
@@ -35,6 +37,19 @@ import {
  * `components/ui.jsx` does not export a modal on this branch, and this feature may not edit it.
  */
 export function Dialog({ open, title, description, onClose, children }) {
+  // Escape is listened for on the document rather than on the dialog element. A `onKeyDown` on
+  // the panel only fires while focus is already inside it, and the control that opened the dialog
+  // keeps focus, so Escape would do nothing for exactly the keyboard user who opened it by
+  // keyboard. The listener is removed when the dialog closes, so it cannot outlive the panel.
+  useEffect(() => {
+    if (!open) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, onClose])
+
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 p-4 sm:p-6">
@@ -49,9 +64,6 @@ export function Dialog({ open, title, description, onClose, children }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') onClose()
-        }}
         className="relative z-10 w-full max-w-lg rounded-sm border border-border-subtle bg-surface p-5"
       >
         <div className="flex items-start justify-between gap-3">
