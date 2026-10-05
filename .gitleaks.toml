@@ -83,3 +83,26 @@ regexes = [
 description = "S2S_TOKEN placeholder in the research corpus, scoped to docs/research"
 paths = ['''^docs/research/''']
 regexes = ['''Authorization: Bearer S2S_TOKEN''']
+
+# ---------------------------------------------------------------------------
+# 4. The WF-082 test fixture's key fingerprint.
+#
+# Measured matches (0 in the tree, 1 in history):
+#   frontend/src/features/wf-082-verify-and-ip-allowlist-inbound-provider-webhooks/
+#     InboundVerification.test.jsx:208  (commit 399b7e6)
+#
+# The fixture held `key_fingerprint: 'abc123def456'`. A fingerprint is a public label the
+# server stores beside every sealed row precisely so a surface can name the sealing key
+# without revealing it, and the fixture has since become a word rather than a hex-looking
+# literal. But the scan reads the whole history, so the earlier commit still trips it.
+#
+# The entry is anchored on the key name, the exact literal and the one file that carried
+# it, so the same word beside `key_fingerprint` anywhere else is still reported. This is a
+# fixture that was once hex-shaped; it is not a credential and never was.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "WF-082 test fixture key fingerprint, scoped to the one file that held it"
+paths = [
+  '''^frontend/src/features/wf-082-verify-and-ip-allowlist-inbound-provider-webhooks/InboundVerification\.test\.jsx$''',
+]
+regexes = ['''key_fingerprint:\s*['"]abc123def456['"]''']
