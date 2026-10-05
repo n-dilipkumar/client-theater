@@ -893,6 +893,10 @@ class QuoteApprovalEngine:
             "enrolled": True,
             "required": not bool(data.get("exempt")),
             "status": data.get("status"),
+            # Lifted to the top level for the same reason status and approvers are:
+            # a client asks which of the three researched moments created this row
+            # without reaching into the envelope's own data blob.
+            "trigger": data.get("trigger"),
             "exempt": bool(data.get("exempt")),
             "exemption_reason": data.get("exemption_reason"),
             "approvers": list(data.get("approvers") or []),
