@@ -225,7 +225,12 @@ class PageOutreach:
             raise DuplicateWorkflow(
                 f"a workflow named {data['name']!r} already exists in this room"
             )
-        return self.store.update(workflow_id, data, actor=actor, source=source)
+        self.store.update(workflow_id, data, actor=actor, source=source)
+        # Read back through the view helper rather than returning the store's record.
+        # `store.update` answers the envelope, so returning it would give the caller a
+        # different shape from `create_workflow` and from `read_workflow`, and the page
+        # would have to know which of the two it had.
+        return self.read_workflow(workflow_id)
 
     def set_state(
         self,
@@ -246,7 +251,8 @@ class PageOutreach:
                 f"state must be one of {', '.join(WORKFLOW_STATES)}, got {state!r}"
             )
         self._require_workflow(workflow_id)
-        return self.store.update(workflow_id, {"state": wanted}, actor=actor, source=source)
+        self.store.update(workflow_id, {"state": wanted}, actor=actor, source=source)
+        return self.read_workflow(workflow_id)
 
     def delete_workflow(
         self,
@@ -610,21 +616,48 @@ class PageOutreach:
                 "workflow_id": view.workflow_id,
                 "workflow_name": _text(data.get("name")),
                 "state": state,
-                "show": False,
-                "stopped_by": "not_live",
-                "reason": f"the workflow is {state}; only a live workflow shows a block",
-                "wrote": False,
-                "matching_visits": 0,
-                "visits_required": int(data.get("repeat_visits") or REPEAT_VISITS),
-                "window_days": int(data.get("repeat_window_days") or REPEAT_WINDOW_DAYS),
-                "session_id": view.session_id,
-                "rule_matches": [],
+                **self._not_live(data, view, wrote=False),
             }
         return {
             **self._decide(view, workflow, now=now, record_view=False),
             "workflow_name": _text(data.get("name")),
             "state": state,
             "wrote": False,
+        }
+
+    @staticmethod
+    def _not_live(
+        data: dict[str, Any], view: rules_module.PageView, *, wrote: bool
+    ) -> dict[str, Any]:
+        """The answer a draft workflow gives, whatever the page view says.
+
+        One helper for both routes, because the two answering differently is the defect
+        this exists to prevent: ``evaluate`` refused a draft while ``record_view`` ran
+        the whole four-gate decision on it, so a draft would have shown a block to
+        whoever posted through the committing route rather than the reporting one. The
+        researched flow ends with the seller setting the workflow live, so a draft that
+        fires is a workflow published by accident.
+
+        ``wrote`` is passed rather than assumed because the committing route still
+        records the view. A view against a draft is real evidence about the buyer's
+        browsing, and throwing it away would make the repeat count wrong the moment the
+        seller sets the workflow live.
+        """
+        state = (
+            _text((data.get("scheduling") or {}).get("state"))
+            or _text(data.get("state"))
+            or "draft"
+        )
+        return {
+            "show": False,
+            "stopped_by": "not_live",
+            "reason": f"the workflow is {state}; only a live workflow shows a block",
+            "wrote": wrote,
+            "matching_visits": 0,
+            "visits_required": int(data.get("repeat_visits") or REPEAT_VISITS),
+            "window_days": int(data.get("repeat_window_days") or REPEAT_WINDOW_DAYS),
+            "session_id": view.session_id,
+            "rule_matches": [],
         }
 
     def record_view(
@@ -649,23 +682,39 @@ class PageOutreach:
         reference = _now(now)
         view = rules_module.parse_page_view(payload, now=reference)
         workflow = self._require_workflow(view.workflow_id)
-        room = room_id or workflow.get("room_id") or _text(_data(workflow).get("room_id"))
+        data = _data(workflow)
+        room = room_id or workflow.get("room_id") or _text(data.get("room_id"))
+        state = self._state_of(data)
 
-        audience_reason = self._audience_reason(_data(workflow), view)
+        if state != "live":
+            self._write_view(
+                view, workflow, room, matched=False, actor=actor, source=source, now=reference
+            )
+            return {
+                "workflow_id": view.workflow_id,
+                "workflow_name": _text(data.get("name")),
+                "state": state,
+                **self._not_live(data, view, wrote=True),
+                "delivery": None,
+                "receipt": None,
+            }
+
+        audience_reason = self._audience_reason(data, view)
         if audience_reason:
             self._write_view(
                 view, workflow, room, matched=False, actor=actor, source=source, now=reference
             )
             return {
                 "workflow_id": view.workflow_id,
-                "state": self._state_of(_data(workflow)),
+                "workflow_name": _text(data.get("name")),
+                "state": state,
                 "show": False,
                 "stopped_by": "audience",
                 "reason": audience_reason,
                 "wrote": True,
                 "matching_visits": 0,
-                "visits_required": int(_data(workflow).get("repeat_visits") or REPEAT_VISITS),
-                "window_days": int(_data(workflow).get("repeat_window_days") or REPEAT_WINDOW_DAYS),
+                "visits_required": int(data.get("repeat_visits") or REPEAT_VISITS),
+                "window_days": int(data.get("repeat_window_days") or REPEAT_WINDOW_DAYS),
                 "session_id": view.session_id,
                 "rule_matches": [],
                 "delivery": None,
@@ -683,7 +732,8 @@ class PageOutreach:
         )
         result = {
             **decision,
-            "state": self._state_of(_data(workflow)),
+            "workflow_name": _text(data.get("name")),
+            "state": state,
             "wrote": True,
             "delivery": None,
             "receipt": None,
