@@ -126,14 +126,24 @@ function ConsentRecorder({ roomId, onOutcome }) {
         hint="The vendor's own call: window.clarity('consentv2', {ad_Storage, analytics_Storage})."
       />
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Ad storage" hint="granted or denied.">
-          <select className={inputClass} value={ad} onChange={(event) => setAd(event.target.value)}>
+        <Field label="Ad storage" hint="granted or denied." id="wf083-ad-storage">
+          <select
+            id="wf083-ad-storage"
+            className={inputClass}
+            value={ad}
+            onChange={(event) => setAd(event.target.value)}
+          >
             <option value="granted">granted</option>
             <option value="denied">denied</option>
           </select>
         </Field>
-        <Field label="Analytics storage" hint="The axes are independent of each other.">
+        <Field
+          label="Analytics storage"
+          hint="The axes are independent of each other."
+          id="wf083-analytics-storage"
+        >
           <select
+            id="wf083-analytics-storage"
             className={inputClass}
             value={analytics}
             onChange={(event) => setAnalytics(event.target.value)}
@@ -144,8 +154,13 @@ function ConsentRecorder({ roomId, onOutcome }) {
         </Field>
       </div>
       <div className="mt-3">
-        <Field label="Visitor" hint="A denial hard-deletes this visitor's stored sessions.">
+        <Field
+          label="Visitor"
+          hint="A denial hard-deletes this visitor's stored sessions."
+          id="wf083-visitor"
+        >
           <input
+            id="wf083-visitor"
             className={inputClass}
             value={visitor}
             onChange={(event) => setVisitor(event.target.value)}
@@ -418,8 +433,9 @@ function RecordingsPanel({ recordings, roomId, onOutcome, onChanged, cap }) {
             </div>
             {labelsFor === recording.id ? (
               <div className="mt-3">
-                <Field label="Labels" hint="Comma separated.">
+                <Field label="Labels" hint="Comma separated." id="wf083-labels">
                   <input
+                    id="wf083-labels"
                     className={inputClass}
                     value={labelText}
                     onChange={(event) => setLabelText(event.target.value)}
@@ -618,8 +634,8 @@ function ConsentGatePage() {
           </div>
         </dl>
         <p className="mt-3 text-xs text-muted-foreground">
-          Region comes from {vocabulary?.geography_source}. No route here reports that this room is
-          compliant with anything.
+          Region comes from {vocabulary?.geography_source}. No route here reports a compliance
+          status for this room.
         </p>
       </Card>
 

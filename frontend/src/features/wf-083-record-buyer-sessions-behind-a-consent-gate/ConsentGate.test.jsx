@@ -207,8 +207,11 @@ describe('the consent gate board', () => {
     expect(screen.getAllByText('Ad storage').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Analytics storage').length).toBeGreaterThan(0)
     // Each axis is its own select holding granted or denied, never a single flag.
-    const selects = screen.getAllByRole('combobox')
-    expect(selects.some((node) => node.value === 'granted')).toBe(true)
+    // Addressed by label rather than by position: an index into getAllByRole
+    // pins the assertion to the render order, so adding a third select above
+    // these would silently retarget it at the wrong axis.
+    expect(screen.getByLabelText('Ad storage').value).toBe('granted')
+    expect(screen.getByLabelText('Analytics storage').value).toBe('granted')
   })
 
   it('names the masking default as the default', async () => {
@@ -231,19 +234,30 @@ describe('the consent gate board', () => {
     expect(
       screen.getAllByText("Data from this session isn't being collected by Microsoft Clarity.").length,
     ).toBeGreaterThan(0)
-    expect(screen.getByText(/10\.0\.0\.0\/8/)).toBeTruthy()
+    // getAllBy: the range is named twice on purpose, once as the stored exclusion
+    // and once as the range a refused visit matched. The assertion is that both
+    // are legible, not that only one of them is.
+    expect(screen.getAllByText(/10\.0\.0\.0\/8/).length).toBeGreaterThan(0)
   })
 
   it('renders a partial grant as its own consequence', async () => {
+    const user = userEvent.setup()
     render(<Page.Component />)
     await waitFor(() => expect(screen.getByText('Record a consent call')).toBeTruthy())
+
+    // The partial grant is the case a single "consent granted" flag hides, so it
+    // has to be reached by denying one axis rather than by reading both as granted.
+    await user.selectOptions(screen.getByLabelText('Analytics storage'), 'denied')
+
     expect(screen.getByText(/a browser cookie cannot be scoped to one axis/i)).toBeTruthy()
   })
 
   it('renders the sourced limits as limits with their evidence', async () => {
     render(<Page.Component />)
     await waitFor(() => expect(screen.getByText('What this workflow refuses to do')).toBeTruthy())
-    expect(screen.getByText(/cannot be deleted or downloaded/i)).toBeTruthy()
+    // getAllBy: the limit is named in the heading and restated in the detail that
+    // says what the supported alternative is. Both sentences are wanted.
+    expect(screen.getAllByText(/cannot be deleted or downloaded/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/you can't delete or download specific recordings/)).toBeTruthy()
     expect(screen.getByText(/AAD instance/)).toBeTruthy()
   })
@@ -293,7 +307,7 @@ describe('the writes', () => {
     render(<Page.Component />)
     await waitFor(() => expect(screen.getByText('Record a consent call')).toBeTruthy())
 
-    await user.selectOptions(screen.getAllByRole('combobox')[1], 'denied')
+    await user.selectOptions(screen.getByLabelText('Analytics storage'), 'denied')
     await user.click(screen.getByRole('button', { name: /record the call/i }))
 
     await waitFor(() => expect(posts.some((entry) => entry.url.includes('/consent'))).toBe(true))
@@ -305,7 +319,7 @@ describe('the writes', () => {
   it('shows the refusal when a sixth label is refused', async () => {
     const user = userEvent.setup()
     render(<Page.Component />)
-    await waitFor(() => expect(screen.getByText('Add labels').length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText('Add labels').length).toBeGreaterThan(0))
 
     await user.click(screen.getAllByRole('button', { name: /add labels/i })[0])
     await user.type(screen.getByLabelText(/labels/i), 'a,b,c,d,e,f')
@@ -317,19 +331,24 @@ describe('the writes', () => {
   it('shows the sourced refusal when a single delete is attempted', async () => {
     const user = userEvent.setup()
     render(<Page.Component />)
-    await waitFor(() => expect(screen.getByText('Add labels').length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText('Add labels').length).toBeGreaterThan(0))
 
     await user.click(screen.getAllByRole('button', { name: /^delete$/i })[0])
 
+    // getAllBy: the refusal appears as the outcome title and again in the detail
+    // carried by the 409 body. The detail is what names the supported
+    // alternative, so the assertion wants both rather than the first match.
     await waitFor(() =>
-      expect(screen.getByText(/A single recording cannot be deleted or downloaded/)).toBeTruthy(),
+      expect(
+        screen.getAllByText(/A single recording cannot be deleted or downloaded/).length,
+      ).toBeGreaterThan(0),
     )
   })
 
   it('says the label budget before the sixth label is refused', async () => {
     const user = userEvent.setup()
     render(<Page.Component />)
-    await waitFor(() => expect(screen.getByText('Add labels').length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText('Add labels').length).toBeGreaterThan(0))
 
     await user.click(screen.getAllByRole('button', { name: /add labels/i })[0])
 
@@ -343,8 +362,12 @@ describe('the states the page can be in', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((url) => {
-        const body = String(url).includes('/project') ? {} : routeFor(String(url))
-        return Promise.resolve(json(body))
+        // The page decides to render the empty state from the summary's
+        // project_created flag, not from the project body, so a stub that only
+        // empties /project still leaves a created project on screen.
+        const path = String(url).replace(PREFIX, '').split('?')[0]
+        if (path === '/summary') return Promise.resolve(json({ ...SUMMARY, project_created: false }))
+        return Promise.resolve(json(path === '/project' ? {} : routeFor(String(url))))
       }),
     )
     render(<Page.Component />)
