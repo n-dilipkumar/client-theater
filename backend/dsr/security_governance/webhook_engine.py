@@ -577,6 +577,7 @@ class WebhookVerifier:
             # checking nothing. The alternative is an empty allowlist presented as a policy.
             verdict = {
                 "allowed": False,
+                "passed": False,
                 "check": vocab.IP_ALLOWLIST,
                 "error_name": "source_ip_not_allowed",
                 "allowed_range": None,
@@ -798,6 +799,26 @@ class WebhookVerifier:
                 ),
             },
             "check_order": list(vocab.CHECK_ORDER),
+            "checks": [
+                {
+                    "check": vocab.IP_ALLOWLIST,
+                    "covers": "the source address",
+                    "reads": "a stored snapshot of the published range file",
+                    "failure": "source_ip_not_allowed",
+                },
+                {
+                    "check": vocab.CONTENT_SHA256,
+                    "covers": "the whole JSON payload",
+                    "reads": f"the {vocab.CONTENT_SHA256_HEADER} header",
+                    "failure": "content_sha256_mismatch",
+                },
+                {
+                    "check": vocab.EVENT_HASH,
+                    "covers": "event_time concatenated with event_type",
+                    "reads": "the event_hash field in the payload",
+                    "failure": "event_hash_mismatch",
+                },
+            ],
             "delivery_states": list(vocab.DELIVERY_STATES),
             "event_hash": {
                 "field": vocab.EVENT_HASH_FIELD,

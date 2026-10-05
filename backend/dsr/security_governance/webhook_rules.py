@@ -259,6 +259,11 @@ def evaluate_source_ip(
     if not str(source_ip or "").strip():
         return {
             "allowed": False,
+            # ``passed`` is present alongside ``allowed`` so all three checks in
+            # CHECK_ORDER answer the same question under the same key. The two digest checks
+            # report ``passed``; without this the allowlist check was the odd one out, and a
+            # consumer reading the list could not test one field across all three.
+            "passed": False,
             "check": vocab.IP_ALLOWLIST,
             "error_name": "no_source_ip",
             "allowed_range": None,
@@ -292,6 +297,8 @@ def evaluate_source_ip(
     allowed = matched is not None
     return {
         "allowed": allowed,
+        # See the note on the empty-address path: ``passed`` and ``allowed`` always agree.
+        "passed": allowed,
         "check": vocab.IP_ALLOWLIST,
         "error_name": None if allowed else "source_ip_not_allowed",
         "allowed_range": matched,
