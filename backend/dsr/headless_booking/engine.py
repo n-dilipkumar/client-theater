@@ -474,11 +474,24 @@ class HeadlessBooking:
             )
 
         window_start, window = parse_interval(body.get("interval"))
-        if window_start < now:
+        # The refusal is about the *window*, not about its first instant. An
+        # interval is a range, and a range that starts at 08:00 and runs for
+        # twelve hours is still open at 10:00: the caller's search window is a
+        # look-ahead, not an appointment, and the part of it already elapsed is
+        # dropped by the availability walk rather than poisoning the rest.
+        # Comparing `window_start` alone refused every caller whose window began
+        # before the moment they asked - which is the normal case for a rolling
+        # look-ahead, and made the endpoint refuse a request it could answer.
+        # What genuinely cannot be answered is a window with nothing left in it,
+        # so that is what is refused, and it is refused as `no_availability`
+        # below once the slot walk has had its chance and found nothing.
+        window_end = window_start + window
+        if window_end <= now:
             raise refusal(
                 "interval_starts_at_in_past",
-                f"interval.startsAt {window_start.isoformat()} is in the past; a session over a "
-                "window that has already passed can only return slots that have already passed",
+                f"interval {sessions_mod.format_slot(window_start)} to "
+                f"{sessions_mod.format_slot(window_end)} has already passed; it ends at or before "
+                f"{sessions_mod.format_slot(now)}, so no slot inside it remains to be offered",
             )
 
         guest = dict(body.get("guest") or {})

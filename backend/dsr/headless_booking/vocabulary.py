@@ -278,7 +278,11 @@ INIT_FAILURES: dict[str, dict[str, str]] = {
         "retry_same_route_id": "n/a",
     },
     "interval_starts_at_in_past": {
-        "summary": "interval.startsAt is already in the past, so no slot could be offered.",
+        "summary": (
+            "The whole interval has already passed, so no slot inside it remains to be offered. "
+            "An interval whose start is in the past but which has not yet ended is not this "
+            "failure: the elapsed part is dropped and the rest is offered."
+        ),
         "retry_same_route_id": "n/a",
     },
     "interval_duration_missing": {
