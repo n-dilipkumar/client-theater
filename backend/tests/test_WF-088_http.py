@@ -846,6 +846,24 @@ class TestTheVocabularyOverHttp:
             dynamics["system_setting"] == "Organization.UseInbuiltRuleForDefaultPriceSelectionRule"
         )
 
+    def test_the_vocabulary_serves_all_four_inheritance_reasons(self, client: TestClient):
+        """A client that renders the sentence needs the whole set, not the one it hit.
+
+        Added after review found the deal-present-but-unpriced case and the
+        no-associated-deal case arriving as one sentence, and a quote naming a deal that
+        is not there reported as having no deal at all. Publishing only the sentences that
+        were reachable would have left a client unable to tell any of them apart.
+        """
+        served = client.get(f"{PREFIX}/vocabulary").json()["quote_inheritance"]["reasons"]
+
+        assert served == [
+            vocab.INHERITANCE_REASON_FROM_DEAL,
+            vocab.INHERITANCE_REASON_DEAL_HAS_NO_BOOK,
+            vocab.INHERITANCE_REASON_NO_DEAL,
+            vocab.INHERITANCE_REASON_DEAL_MISSING,
+        ]
+        assert len(set(served)) == 4
+
     def test_the_vocabulary_names_both_filter_objects(self, client: TestClient):
         filters = client.get(f"{PREFIX}/vocabulary").json()["filters"]
 
