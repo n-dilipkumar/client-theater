@@ -765,12 +765,6 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     )
 
     # 4. An audience that allows everyone, because that short-circuits the two narrow checks.
-    engine.create_group(
-        room_two,
-        {NAME_FIELD: "Open house", vocab.ALLOW_ALL: True},
-        actor="dana",
-        source="seed",
-    )
     opened = engine.create_group(
         room_two,
         {NAME_FIELD: "Open house", vocab.ALLOW_ALL: True},

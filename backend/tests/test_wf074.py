@@ -67,6 +67,7 @@ import pytest
 from dsr.audience_permissions import inferences, rules, vocabulary as vocab
 from dsr.audience_permissions.engine import (
     ALLOW_DOWNLOAD_FIELD,
+    ANCESTORS_WITHHELD,
     LINK_SCOPE_SET,
     NAME_FIELD,
     REVOKED_AT,
@@ -74,6 +75,7 @@ from dsr.audience_permissions.engine import (
     SCOPE_CLEARED,
     SCOPE_FROM_GROUP,
     SCOPE_SET,
+    SCOPE_STATE_LABELS,
     SCOPE_UNSCOPED,
     AudiencePermissionsEngine,
     RoomNotFound,
@@ -99,6 +101,9 @@ DOC_ID = "doc_deck"
 FOLDER_ID = "folder_decks"
 NESTED_ID = "folder_nested"
 DOC_TWO_ID = "doc_pricing"
+#: A second document at the room root, so a test has an item no grant's ancestor walk can reach.
+#: Every other item is either above a granted document or is the granted document.
+DOC_THREE_ID = "doc_security"
 
 
 class Clock:
@@ -123,11 +128,6 @@ class Clock:
 @pytest.fixture()
 def clock() -> Clock:
     return Clock()
-
-
-@pytest.fixture()
-def store(store: RecordStore) -> RecordStore:
-    return store
 
 
 @pytest.fixture()
@@ -169,6 +169,13 @@ def engine(clock: Clock, store: RecordStore) -> AudiencePermissionsEngine:
         room_id=ROOM_A,
         source="fixture",
     )
+    store.create(
+        vocab.DOCUMENT_COLLECTION,
+        {"name": "Security pack", vocab.PARENT_FOLDER_FIELD: vocab.ROOT_FOLDER},
+        record_id=DOC_THREE_ID,
+        room_id=ROOM_A,
+        source="fixture",
+    )
     return AudiencePermissionsEngine(store, now=clock)
 
 
@@ -183,9 +190,7 @@ def make_group(engine: AudiencePermissionsEngine, **payload) -> dict:
     )
 
 
-def grant(
-    engine: AudiencePermissionsEngine, group_id: str, *entries: dict, **kwargs
-) -> dict:
+def grant(engine: AudiencePermissionsEngine, group_id: str, *entries: dict, **kwargs) -> dict:
     """Grant a group the given entries. ``entry`` builds one from an id and the two flags."""
 
     return engine.set_group_permissions(
@@ -196,7 +201,9 @@ def grant(
     )
 
 
-def entry(item_id: str, *, view: bool = True, download: bool = False, kind: str | None = None) -> dict:
+def entry(
+    item_id: str, *, view: bool = True, download: bool = False, kind: str | None = None
+) -> dict:
     """One permission entry. The item type is derived from the fixture's naming unless given."""
 
     return {
@@ -221,9 +228,18 @@ def make_link(engine: AudiencePermissionsEngine, **payload) -> dict:
 
 
 class TestDefaultDeny:
-    def test_the_sentence_this_workflow_is_written_against(self):
-        assert "sees" in vocab.SCOPE_DESCRIPTIONS[vocab.SCOPE_GROUP] or True
+    def test_the_group_scope_carries_its_delta_rule(self):
         assert vocab.SCOPE_SEMANTICS[vocab.SCOPE_GROUP] == "delta"
+        assert "keep" in vocab.SCOPE_DESCRIPTIONS[vocab.SCOPE_GROUP]
+
+    def test_a_new_group_payload_states_the_default_deny_rule(self, engine):
+        """The rule is on the group itself, not only in a docstring, because the cheapest way to
+        keep a claim honest is to make it part of the data."""
+        group = make_group(engine)
+        assert group[vocab.PERMISSION_COUNT_FIELD] == 0
+        # The rule it carries is the delta rule: an item the rep does not grant keeps nothing, and
+        # an item the rep omits later keeps whatever it had. Neither grants anything.
+        assert group["sees_nothing_until_granted"] == vocab.SCOPE_DESCRIPTIONS[vocab.SCOPE_GROUP]
 
     def test_a_new_audience_holds_no_permissions_at_all(self, engine):
         """ "A new group sees **nothing** until you grant permissions." """
@@ -233,10 +249,10 @@ class TestDefaultDeny:
 
     def test_an_item_with_no_row_is_hidden(self, engine):
         group = make_group(engine)
-        grant(engine, group["id"], entry(DOC_TWO_ID))
+        grant(engine, group["id"], entry(DOC_TWO_ID, download=True))
         grid = engine.group_permissions(group["id"])
-        deck = next(row for row in grid["items"] if row["item_id"] == DOC_TWO_ID)
-        assert deck["state"] == vocab.VISIBLE
+        pricing = next(row for row in grid["items"] if row["item_id"] == DOC_TWO_ID)
+        assert pricing["state"] == vocab.VISIBLE
         # The deck was not granted. Absent, not wildcarded.
         for row in grid["items"]:
             if row["item_id"] == DOC_ID:
@@ -250,25 +266,32 @@ class TestDefaultDeny:
         assert "inherit" not in rules.decide_item.__code__.co_varnames
 
     def test_the_two_denials_are_different_facts(self, engine):
-        """ "Nobody granted it" and "somebody revoked it" are different states for a rep."""
+        """ "Nobody granted it" and "somebody revoked it" are different states for a rep.
+
+        The two items are at the room root on purpose. A granted document opens the folders above
+        it, so a folder is never left unmentioned once a document inside it was granted, and a
+        test using one would be asserting the ancestor rule instead of the denial rule.
+        """
         group = make_group(engine)
-        grant(engine, group["id"], entry(DOC_ID), entry(DOC_TWO_ID, view=False))
+        grant(engine, group["id"], entry(DOC_TWO_ID, view=False), entry(DOC_ID, view=True))
         rows = {row["item_id"]: row for row in engine.group_permissions(group["id"])["items"]}
         assert rows[DOC_TWO_ID][vocab.DENY_REASON_FIELD] == vocab.DENY_CAN_VIEW_FALSE
         assert rows[DOC_TWO_ID][vocab.ROW_PRESENT_FIELD] is True
-        # The folder was never mentioned at all.
-        assert rows[FOLDER_ID][vocab.DENY_REASON_FIELD] == vocab.DENY_NO_PERMISSION_ROW
-        assert rows[FOLDER_ID][vocab.ROW_PRESENT_FIELD] is False
+        # The security pack was never mentioned at all.
+        assert rows[DOC_THREE_ID][vocab.DENY_REASON_FIELD] == vocab.DENY_NO_PERMISSION_ROW
+        assert rows[DOC_THREE_ID][vocab.ROW_PRESENT_FIELD] is False
 
     def test_a_viewer_on_a_default_deny_group_sees_nothing(self, engine):
         group = make_group(engine)
         engine.add_members(group["id"], ["jane@sequoia.example"], source="fixture")
-        link = make_link(engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]})
+        link = make_link(
+            engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]}
+        )
         view = engine.view(link["id"], "jane@sequoia.example")
         assert view["admitted"] is True
         assert view["item_count"] == 0
-        assert view["hidden_count"] == 4
-        assert view["hidden_by_reason"] == {vocab.DENY_NO_PERMISSION_ROW: 4}
+        assert view["hidden_count"] == 5
+        assert view["hidden_by_reason"] == {vocab.DENY_NO_PERMISSION_ROW: 5}
 
 
 # --------------------------------------------------------------------------- #
@@ -358,9 +381,7 @@ class TestAncestorAutoOpen:
         """The recorded decision: the source names one flag, so only that flag is set."""
         group = make_group(engine)
         grant(engine, group["id"], entry(DOC_ID))
-        rows = {
-            row["item_id"]: row for row in engine.group_permissions(group["id"])["items"]
-        }
+        rows = {row["item_id"]: row for row in engine.group_permissions(group["id"])["items"]}
         assert rows[FOLDER_ID]["state"] == vocab.VIEW_ONLY
         assert rows[FOLDER_ID][vocab.AUTO_OPENED_FIELD] is True
         assert rows[FOLDER_ID][vocab.CAN_DOWNLOAD] is False
@@ -409,7 +430,7 @@ class TestAncestorAutoOpen:
         result = grant(
             engine, group["id"], entry(DOC_ID, download=True), entry(FOLDER_ID, view=False)
         )
-        withheld = result[engine.ANCESTORS_WITHHELD]
+        withheld = result[ANCESTORS_WITHHELD]
         assert [row["item_id"] for row in withheld] == [FOLDER_ID]
         rows = {r["item_id"]: r for r in engine.group_permissions(group["id"])["items"]}
         assert rows[FOLDER_ID][vocab.CAN_VIEW] is False
@@ -417,9 +438,7 @@ class TestAncestorAutoOpen:
 
     def test_a_broken_parent_chain_terminates_and_still_grants(self, engine):
         """A malformed tree must answer with the chain it can prove, not hang."""
-        engine.store.update(
-            FOLDER_ID, {vocab.PARENT_FOLDER_FIELD: FOLDER_ID}, source="fixture"
-        )
+        engine.store.update(FOLDER_ID, {vocab.PARENT_FOLDER_FIELD: FOLDER_ID}, source="fixture")
         group = make_group(engine)
         result = grant(engine, group["id"], entry(DOC_ID))
         assert f"{vocab.ITEM_TYPE_FOLDER}:{FOLDER_ID}" in result["auto_opened"]
@@ -497,10 +516,12 @@ class TestMembership:
         """ "Group links are always email-gated; a viewer must be a member to get in." """
         group, link = self._group_link(engine)
         assert link["email_gated"] is True
-        assert link[vocab.EMAIL_GATE_NOTE] if False else vocab.EMAIL_GATE_NOTE
-        # And there is no field on the row a caller could set to false.
+        assert link["email_gate_note"] == vocab.EMAIL_GATE_NOTE
+        # And there is no field on the row a caller could set to false. A stored flag could be
+        # turned off on a group link, which is the one thing the evidence says cannot happen.
         stored = engine.store.get(link["id"])["data"]
         assert not [key for key in stored if "email" in key and "protected" in key]
+        assert not [key for key in stored if "gate" in key]
 
     def test_the_membership_check_runs_on_every_view(self, engine):
         """ "Later changes to the group's permissions or members apply to the existing link
@@ -576,7 +597,9 @@ class TestMembers:
     def test_the_cap_is_enforced_where_the_list_is_built(self, engine):
         """The bound is the vendor's per-request bound, so the rules module checks it."""
         group = make_group(engine)
-        too_many = [f"person{index}@sequoia.example" for index in range(vocab.MAX_MEMBERS_PER_CALL + 1)]
+        too_many = [
+            f"person{index}@sequoia.example" for index in range(vocab.MAX_MEMBERS_PER_CALL + 1)
+        ]
         with pytest.raises(rules.AudienceRuleError) as caught:
             engine.add_members(group["id"], too_many, source="fixture")
         assert str(vocab.MAX_MEMBERS_PER_CALL) in caught.value.errors["emails"]
@@ -600,7 +623,12 @@ class TestDomains:
             ROOM_A,
             {
                 NAME_FIELD: "Co-investors",
-                vocab.DOMAINS_FIELD: ["zeta.example", "@acme.example", "zeta.example", "ACME.example"],
+                vocab.DOMAINS_FIELD: [
+                    "zeta.example",
+                    "@acme.example",
+                    "zeta.example",
+                    "ACME.example",
+                ],
             },
             source="fixture",
         )
@@ -634,12 +662,18 @@ class TestTwoScopes:
         assert vocab.SCOPE_SEMANTICS[vocab.SCOPE_LINK] == "full_replace"
 
     def test_a_delta_leaves_an_omitted_item_alone(self, engine):
-        """ "Items not listed keep their current state." """
+        """ "Items not listed keep their current state."
+
+        The assertion names the document the payload omitted rather than comparing the whole
+        untouched list. The folders above that document were auto-opened by the first grant, so
+        they are untouched too, and pinning the full list would make this test fail the next time
+        the ancestor rule gains a row.
+        """
         group = make_group(engine)
         grant(engine, group["id"], entry(DOC_ID, download=True), entry(DOC_TWO_ID))
         result = grant(engine, group["id"], entry(DOC_TWO_ID, download=True))
         assert result["touched"] == [f"{vocab.ITEM_TYPE_DOCUMENT}:{DOC_TWO_ID}"]
-        assert result["untouched"] == [f"{vocab.ITEM_TYPE_DOCUMENT}:{DOC_ID}"]
+        assert f"{vocab.ITEM_TYPE_DOCUMENT}:{DOC_ID}" in result["untouched"]
         rows = {r["item_id"]: r for r in engine.group_permissions(group["id"])["items"]}
         assert rows[DOC_ID][vocab.CAN_DOWNLOAD] is True
 
@@ -651,30 +685,49 @@ class TestTwoScopes:
 
     def test_a_full_replace_drops_an_item_the_payload_omits(self, engine):
         """ "Items not listed lose their override." """
+        # The items are documents at the room root, so no ancestor row joins the set and the
+        # dropped list is exactly what the payload omitted.
         link = make_link(engine)
         engine.set_link_permissions(
             link["id"],
-            {"permissions": [entry(DOC_ID, download=True), entry(DOC_TWO_ID)]},
+            {
+                "permissions": [
+                    entry(DOC_TWO_ID, download=True),
+                    entry(DOC_THREE_ID),
+                ]
+            },
             source="fixture",
         )
         result = engine.set_link_permissions(
-            link["id"], {"permissions": [entry(DOC_ID, download=True)]}, source="fixture"
+            link["id"], {"permissions": [entry(DOC_TWO_ID, download=True)]}, source="fixture"
         )
-        assert result["dropped"] == [f"{vocab.ITEM_TYPE_DOCUMENT}:{DOC_TWO_ID}"]
+        assert result["dropped"] == [f"{vocab.ITEM_TYPE_DOCUMENT}:{DOC_THREE_ID}"]
         grid = engine.link_permissions(link["id"])
         rows = {r["item_id"]: r for r in grid["items"]}
-        assert rows[DOC_TWO_ID][vocab.ROW_PRESENT_FIELD] is False
+        assert rows[DOC_THREE_ID][vocab.ROW_PRESENT_FIELD] is False
 
     def test_a_dropped_row_is_revoked_not_deleted(self, engine):
-        """The audit log has to be able to say the row was there and is not in force."""
+        """The audit log has to be able to say the row was there and is not in force.
+
+        :class:`AuditedWriter` has no delete and the single-record methods refuse to run inside a
+        transaction, so a revoke is a stamp. The rows stay in the table.
+        """
         link = make_link(engine)
         engine.set_link_permissions(
-            link["id"], {"permissions": [entry(DOC_ID), entry(DOC_TWO_ID)]}, source="fixture"
+            link["id"],
+            {"permissions": [entry(DOC_TWO_ID), entry(DOC_THREE_ID)]},
+            source="fixture",
         )
         engine.set_link_permissions(link["id"], {"permissions": []}, source="fixture")
         revoked = engine.link_permissions(link["id"])["revoked"]
-        assert len(revoked) == 2
+        assert {row["item_id"] for row in revoked} == {DOC_TWO_ID, DOC_THREE_ID}
         assert all(row["revoked_at"] for row in revoked)
+        # The rows are still there, marked rather than removed.
+        stored = engine.store.find(
+            vocab.LINK_PERMISSION_COLLECTION, {"link_id": link["id"]}, limit=50
+        )
+        assert len(stored) == 2
+        assert all(row["data"][REVOKED_AT] for row in stored)
 
     def test_an_empty_full_replace_hides_everything(self, engine):
         """ "An empty array clears all overrides, which hides every item on the link." """
@@ -685,7 +738,7 @@ class TestTwoScopes:
         engine.set_link_permissions(link["id"], {"permissions": []}, source="fixture")
         view = engine.view(link["id"])
         assert view["item_count"] == 0
-        assert view["hidden_count"] == 4
+        assert view["hidden_count"] == 5
 
     def test_the_two_writers_do_not_share_an_implementation(self, engine):
         """A flag beside one generic writer is one boolean away from the wrong semantics, and the
@@ -720,8 +773,16 @@ class TestTwoScopes:
         group = make_group(engine)
         before = len(engine.store.audit(collection=vocab.PERMISSION_COLLECTION))
         with pytest.raises(rules.AudienceRuleError):
-            grant(engine, group["id"], {"item_id": DOC_ID, "item_type": "dataroom_widget",
-                                        vocab.CAN_VIEW: True, vocab.CAN_DOWNLOAD: False})
+            grant(
+                engine,
+                group["id"],
+                {
+                    "item_id": DOC_ID,
+                    "item_type": "dataroom_widget",
+                    vocab.CAN_VIEW: True,
+                    vocab.CAN_DOWNLOAD: False,
+                },
+            )
         assert len(engine.store.audit(collection=vocab.PERMISSION_COLLECTION)) == before
 
 
@@ -744,7 +805,10 @@ class TestScopeConflict:
         with pytest.raises(rules.ScopeConflict) as caught:
             engine.set_link_permissions(link["id"], {"permissions": []}, source="fixture")
         assert "general" in str(caught.value)
-        assert vocab.SCOPE_CONFLICT_REJECTED in rules.ScopeConflict.__mro__[1].__name__ or True
+        # It raises rather than returning a state, and it is distinct from a plain payload
+        # refusal so the HTTP layer can answer 422 for this and 400 for a malformed entry.
+        assert rules.ScopeConflict is not rules.AudienceRuleError
+        assert issubclass(rules.ScopeConflict, rules.AudienceRuleError)
 
     def test_the_refusal_names_the_way_out(self, engine):
         group, link = self._group_link(engine)
@@ -761,9 +825,12 @@ class TestScopeConflict:
 
     def test_a_general_link_accepts_the_same_call(self, engine):
         link = make_link(engine)
-        assert engine.set_link_permissions(
-            link["id"], {"permissions": [entry(DOC_ID)]}, source="fixture"
-        )["semantics"] == "full_replace"
+        assert (
+            engine.set_link_permissions(
+                link["id"], {"permissions": [entry(DOC_ID)]}, source="fixture"
+            )["semantics"]
+            == "full_replace"
+        )
 
     def test_a_group_link_reports_the_group_as_its_scope(self, engine):
         group, link = self._group_link(engine)
@@ -777,7 +844,9 @@ class TestScopeConflict:
     def test_a_group_link_needs_a_group_that_is_in_the_room(self, engine):
         group = make_group(engine, room_id=ROOM_B)
         with pytest.raises(rules.GroupNotFound):
-            make_link(engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]})
+            make_link(
+                engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]}
+            )
 
 
 # --------------------------------------------------------------------------- #
@@ -796,7 +865,7 @@ class TestLinkScopeMarker:
         link = make_link(engine)
         view = engine.view(link["id"])
         assert view["scope_state"] == SCOPE_UNSCOPED
-        assert view["item_count"] == 4
+        assert view["item_count"] == 5
         assert view["hidden_count"] == 0
 
     def test_the_first_scope_write_flips_the_marker(self, engine):
@@ -811,9 +880,7 @@ class TestLinkScopeMarker:
         """ "Remove all overrides and hide every item." The two empty states mean opposite things
         and must not collapse into one."""
         link = make_link(engine)
-        engine.set_link_permissions(
-            link["id"], {"permissions": [entry(DOC_ID)]}, source="fixture"
-        )
+        engine.set_link_permissions(link["id"], {"permissions": [entry(DOC_ID)]}, source="fixture")
         engine.set_link_permissions(link["id"], {"permissions": []}, source="fixture")
         view = engine.view(link["id"])
         assert view["scope_state"] == SCOPE_CLEARED
@@ -822,18 +889,33 @@ class TestLinkScopeMarker:
 
     def test_the_marker_is_derived_and_not_accepted_from_a_caller(self, engine):
         """A caller that could set the marker could declare a link scoped without granting
-        anything."""
+        anything.
+
+        The payload is sent with the marker key beside ``permissions``. A key the engine does not
+        read is ignored rather than honoured, and the marker still flips because a write happened.
+        Asserted through the observable state rather than by poking the engine, so the test
+        survives a rename of the private seam.
+        """
         link = make_link(engine)
-        engine.update_link = None  # the engine has no such method, and that is the point
-        with pytest.raises(AttributeError):
-            engine.set_link_permissions(
-                link["id"], {"permissions": [entry(DOC_ID)], LINK_SCOPE_SET: False}, source="fixture"
-            )
+        assert engine.read_link(link["id"])[LINK_SCOPE_SET] is False
+        engine.set_link_permissions(
+            link["id"],
+            {"permissions": [entry(DOC_ID)], LINK_SCOPE_SET: False},
+            source="fixture",
+        )
+        # The caller asked for false. The write happened, so the marker is true.
+        assert engine.read_link(link["id"])[LINK_SCOPE_SET] is True
         assert engine.view(link["id"])["scope_state"] == SCOPE_SET
 
-    def test_every_scope_state_carries_a_sentence(self):
-        from dsr.audience_permissions.engine import SCOPE_STATE_LABELS
+    def test_an_empty_write_still_flips_the_marker(self, engine):
+        """A clearing call is a write, and it is the one that has to be distinguishable from
+        never having been scoped."""
+        link = make_link(engine)
+        engine.set_link_permissions(link["id"], {"permissions": []}, source="fixture")
+        assert engine.read_link(link["id"])[LINK_SCOPE_SET] is True
+        assert engine.view(link["id"])["scope_state"] == SCOPE_CLEARED
 
+    def test_every_scope_state_carries_a_sentence(self):
         for state in (SCOPE_UNSCOPED, SCOPE_CLEARED, SCOPE_SET, SCOPE_FROM_GROUP):
             assert SCOPE_STATE_LABELS[state].strip()
 
@@ -844,32 +926,44 @@ class TestLinkScopeMarker:
 
 
 class TestLinkDownloadSwitch:
-    def test_the_row_flag_and_the_effective_flag_are_both_reported(self, engine):
-        """ "Allow downloading (also needs ``--allow-download`` on the link)." """
-        group = make_group(engine)
-        grant(engine, group["id"], entry(DOC_ID, download=True))
-        link = make_link(
-            engine,
-            **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]},
-        )
-        view = engine.view(link["id"], "jane@sequoia.example")
-        row = view["items"][0]
-        assert row["can_download_row"] is True
-        assert row["can_download"] is False
-        assert row["download_blocked_by_link"] is True
+    def _group_link_with_a_downloadable_document(self, engine, **link_payload):
+        """A group link whose audience is granted one downloadable document.
 
-    def test_the_switch_on_lets_the_row_flag_through(self, engine):
+        Both halves are needed: without a member the membership check refuses before the
+        permissions are read, and without a row saying ``can_download`` there is nothing for the
+        link's switch to gate.
+        """
         group = make_group(engine)
-        grant(engine, group["id"], entry(DOC_ID, download=True))
+        engine.add_members(group["id"], ["jane@sequoia.example"], source="fixture")
+        grant(engine, group["id"], entry(DOC_TWO_ID, download=True))
         link = make_link(
             engine,
             **{
                 vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP,
                 "group_id": group["id"],
-                ALLOW_DOWNLOAD_FIELD: True,
+                **link_payload,
             },
         )
-        row = engine.view(link["id"], "jane@sequoia.example")["items"][0]
+        return group, link
+
+    def test_the_row_flag_and_the_effective_flag_are_both_reported(self, engine):
+        """ "Allow downloading (also needs ``--allow-download`` on the link)." """
+        group, link = self._group_link_with_a_downloadable_document(engine)
+        view = engine.view(link["id"], "jane@sequoia.example")
+        row = next(r for r in view["items"] if r["item_id"] == DOC_TWO_ID)
+        assert row["can_download_row"] is True
+        assert row["can_download"] is False
+        assert row["download_blocked_by_link"] is True
+
+    def test_the_switch_on_lets_the_row_flag_through(self, engine):
+        group, link = self._group_link_with_a_downloadable_document(
+            engine, **{ALLOW_DOWNLOAD_FIELD: True}
+        )
+        row = next(
+            r
+            for r in engine.view(link["id"], "jane@sequoia.example")["items"]
+            if r["item_id"] == DOC_TWO_ID
+        )
         assert row["can_download"] is True
         assert row["download_blocked_by_link"] is False
 
@@ -894,41 +988,46 @@ class TestLinkDownloadSwitch:
 
 
 class TestFilteredView:
+    def _group_link(self, engine):
+        """A group link with one member, because membership is checked before permissions."""
+        group = make_group(engine)
+        engine.add_members(group["id"], ["jane@sequoia.example"], source="fixture")
+        link = make_link(
+            engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]}
+        )
+        return group, link
+
     def test_the_hidden_items_are_counted_and_never_returned(self, engine):
         """ "the resolved permission set filters the dataroom tree server-side before any bytes
         are sent" """
-        group = make_group(engine)
-        grant(engine, group["id"], entry(DOC_ID))
-        link = make_link(
-            engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]}
-        )
+        group, link = self._group_link(engine)
+        grant(engine, group["id"], entry(DOC_TWO_ID, download=True))
         view = engine.view(link["id"], "jane@sequoia.example")
-        assert [row["item_id"] for row in view["items"]] == [DOC_ID]
-        assert view["hidden_count"] == 3
+        assert [row["item_id"] for row in view["items"]] == [DOC_TWO_ID]
+        assert view["hidden_count"] == 4
         assert view["filtered_server_side"] is True
 
     def test_the_two_hidden_reasons_are_tallied_separately(self, engine):
-        group = make_group(engine)
-        grant(engine, group["id"], entry(DOC_ID), entry(DOC_TWO_ID, view=False))
-        link = make_link(
-            engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]}
-        )
+        """One revoked item and one never-mentioned item hide for different reasons, and the tally
+        says which was which. The folders above the granted deck are auto-opened, so they are
+        visible and do not appear in either count."""
+        group, link = self._group_link(engine)
+        grant(engine, group["id"], entry(DOC_TWO_ID, view=False), entry(DOC_ID, view=True))
         view = engine.view(link["id"], "jane@sequoia.example")
         assert view["hidden_by_reason"] == {
             vocab.DENY_CAN_VIEW_FALSE: 1,
-            vocab.DENY_NO_PERMISSION_ROW: 2,
+            vocab.DENY_NO_PERMISSION_ROW: 1,
         }
+        assert view["hidden_count"] == 2
+        assert view["item_count"] == 3
 
     def test_a_revoked_flag_hides_the_item_on_the_next_request(self, engine):
         """ "Later changes to the group's permissions or members apply to the existing link
         immediately." """
-        group = make_group(engine)
-        grant(engine, group["id"], entry(DOC_ID, download=True))
-        link = make_link(
-            engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]}
-        )
+        group, link = self._group_link(engine)
+        grant(engine, group["id"], entry(DOC_TWO_ID, download=True))
         assert engine.view(link["id"], "jane@sequoia.example")["item_count"] == 1
-        grant(engine, group["id"], entry(DOC_ID, view=False, download=True))
+        grant(engine, group["id"], entry(DOC_TWO_ID, view=False, download=True))
         assert engine.view(link["id"], "jane@sequoia.example")["item_count"] == 0
 
     def test_the_view_reports_which_scope_decided_it(self, engine):
@@ -973,10 +1072,11 @@ class TestDanglingGrants:
         grant(engine, group["id"], entry("ddoc_missing"))
         dangling = engine.group_permissions(group["id"])["dangling"]
         assert [row["item_id"] for row in dangling] == ["ddoc_missing"]
-        assert "no such" in dangling[0]["why"].lower()
+        assert "no document or folder" in dangling[0]["why"].lower()
 
     def test_a_dangling_row_grants_nothing_to_a_viewer(self, engine):
         group = make_group(engine)
+        engine.add_members(group["id"], ["jane@sequoia.example"], source="fixture")
         grant(engine, group["id"], entry("ddoc_missing"))
         link = make_link(
             engine, **{vocab.AUDIENCE_TYPE_FIELD: vocab.AUDIENCE_GROUP, "group_id": group["id"]}
@@ -985,12 +1085,15 @@ class TestDanglingGrants:
         assert [row["item_id"] for row in view["items"]] == []
 
     def test_a_document_and_a_folder_may_share_an_id_string(self, engine):
-        """The recorded decision on the entry key: the item type is part of it, not decoration."""
+        """The recorded decision on the entry key: the item type is part of it, not decoration.
+
+        Two items with the same ``item_id`` string must not merge into one row. ``item_id`` is
+        opaque and the research does not promise the vendor's ids are prefixed the way this
+        repository's are, so keying on the id alone would silently collapse them.
+        """
         group = make_group(engine)
         shared = "same_id"
-        engine.store.create(
-            vocab.DOCUMENT_COLLECTION, {"name": "Doc"}, record_id=shared, room_id=ROOM_A, source="fixture"
-        )
+        # A folder record whose id string is exactly the document's. Both live in the same room.
         engine.store.create(
             vocab.FOLDER_COLLECTION,
             {"name": "Folder", vocab.PARENT_FOLDER_FIELD: vocab.ROOT_FOLDER},
@@ -998,15 +1101,46 @@ class TestDanglingGrants:
             room_id=ROOM_A,
             source="fixture",
         )
+        engine.store.update(
+            DOC_TWO_ID,
+            {"name": "Doc", vocab.PARENT_FOLDER_FIELD: vocab.ROOT_FOLDER},
+            source="fixture",
+        )
+        engine.store.update(DOC_TWO_ID, {"name": "Doc"}, source="fixture")
+        # Give the document the same id string by pointing a permission entry at a string that
+        # resolves to the folder, with the document's own type. The two rows must stay apart.
         grant(
             engine,
             group["id"],
-            {"item_id": shared, "item_type": vocab.ITEM_TYPE_DOCUMENT, vocab.CAN_VIEW: True, vocab.CAN_DOWNLOAD: False},
-            {"item_id": shared, "item_type": vocab.ITEM_TYPE_FOLDER, vocab.CAN_VIEW: True, vocab.CAN_DOWNLOAD: True},
+            {
+                "item_id": f"folder_{shared}",
+                "item_type": vocab.ITEM_TYPE_DOCUMENT,
+                vocab.CAN_VIEW: True,
+                vocab.CAN_DOWNLOAD: False,
+            },
+            {
+                "item_id": f"folder_{shared}",
+                "item_type": vocab.ITEM_TYPE_FOLDER,
+                vocab.CAN_VIEW: True,
+                vocab.CAN_DOWNLOAD: True,
+            },
         )
-        rows = {row["item_id"]: row for row in engine.group_permissions(group["id"])["items"]}
-        assert rows[shared][vocab.CAN_DOWNLOAD] is False
+        stored = engine.store.find(vocab.PERMISSION_COLLECTION, {"group_id": group["id"]})
+        assert len(stored) == 2
+        types = {row["data"]["item_type"] for row in stored}
+        assert types == {vocab.ITEM_TYPE_DOCUMENT, vocab.ITEM_TYPE_FOLDER}
+        # The document-typed row is dangling, because no document carries that id.
+        dangling = engine.group_permissions(group["id"])["dangling"]
+        assert [row["item_type"] for row in dangling] == [vocab.ITEM_TYPE_DOCUMENT]
+        # And the folder row is live, at view-only-plus-download as sent.
+        rows = {r["item_id"]: r for r in engine.group_permissions(group["id"])["items"]}
         assert rows[f"folder_{shared}"][vocab.CAN_DOWNLOAD] is True
+
+    def test_two_items_sharing_an_id_string_do_not_merge(self, engine):
+        """The same property at the level the engine resolves: one row per (type, id)."""
+        first = rules.entry_key(entry("shared", kind=vocab.ITEM_TYPE_DOCUMENT))
+        second = rules.entry_key(entry("shared", kind=vocab.ITEM_TYPE_FOLDER))
+        assert first != second
 
 
 # --------------------------------------------------------------------------- #
@@ -1054,7 +1188,6 @@ class TestSchemaFlexibility:
         grant(engine, group["id"], entry(DOC_ID))
         engine.store.update(group["id"], {"crm_account_id": "acc_77"}, source="fixture")
         grant(engine, group["id"], entry(DOC_TWO_ID))
-        assert engine.read_group(group["id"])["crm_account_id"] if False else True
         assert engine.store.get(group["id"])["data"]["crm_account_id"] == "acc_77"
 
     def test_a_team_can_find_a_group_by_a_field_it_added_itself(self, engine):
@@ -1165,6 +1298,24 @@ class TestHonesty:
 
 class TestSeed:
     def _seed(self, store: RecordStore) -> str:
+        """Run the seed against rooms and library rows the test created.
+
+        The seed refuses to fake a room: an audience hangs on a room's own library rows, and the
+        seeder's contract is that no route served the rows this writes. So the fixture creates
+        both rooms and a document in the first, which is what the core seeder provides in a real
+        run.
+        """
+        if store.get(ROOM_A) is None:
+            store.create(ROOM_COLLECTION, {"name": "Northwind"}, record_id=ROOM_A, source="fixture")
+            store.create(ROOM_COLLECTION, {"name": "Halcyon"}, record_id=ROOM_B, source="fixture")
+            for index in range(3):
+                store.create(
+                    vocab.DOCUMENT_COLLECTION,
+                    {"name": f"Document {index}", vocab.PARENT_FOLDER_FIELD: vocab.ROOT_FOLDER},
+                    record_id=f"doc_seed_{index}",
+                    room_id=ROOM_A,
+                    source="fixture",
+                )
         module = importlib.import_module(FEATURE_MODULE)
         return module.seed(
             store.db, {"room_ids": [(ROOM_A, "Northwind"), (ROOM_B, "Halcyon")], "now": NOW}
@@ -1221,6 +1372,13 @@ class TestSeed:
         ]
         assert len(dangling) == 1
 
+    def test_the_seed_refuses_to_run_without_a_room(self, store: RecordStore):
+        """An audience hanging on a room that does not exist would be a demo nobody can read."""
+        module = importlib.import_module(FEATURE_MODULE)
+        summary = module.seed(store.db, {"room_ids": [("room_absent", "Nowhere")], "now": NOW})
+        assert "not in the core dataset" in summary
+        assert store.list(vocab.GROUP_COLLECTION, limit=10) == []
+
     def test_the_seed_creates_an_audience_that_allows_anyone(self, store: RecordStore):
         self._seed(store)
         opened = [
@@ -1231,13 +1389,17 @@ class TestSeed:
         assert len(opened) == 1
 
     def test_the_seed_normalises_both_domain_spellings(self, store: RecordStore):
+        """Both spellings and the duplicate are collapsed onto one stored string each, so the
+        demo shows the normalisation rather than describing it."""
         self._seed(store)
         stored = [
             (row.get("data") or {}).get(vocab.DOMAINS_FIELD)
             for row in store.list(vocab.GROUP_COLLECTION, limit=100)
         ]
-        with_sequoia = [row for row in stored if row and "@sequoia.example" in row]
-        assert with_sequoia and len(with_sequoia[0]) == 1
+        # The seed sends "sequoia.example", "@HALCYON.example" and "sequoia.example" again.
+        with_domains = [row for row in stored if row and "@sequoia.example" in row]
+        assert len(with_domains) == 1
+        assert with_domains[0] == ["@sequoia.example", "@halcyon.example"]
 
     def test_the_seed_removes_a_member_it_added(self, store: RecordStore):
         self._seed(store)
@@ -1249,10 +1411,21 @@ class TestSeed:
         assert len(removed) == 1
 
     def test_the_seed_writes_no_audit_row_claiming_a_route_served_it(self, store: RecordStore):
-        """``source="seed"`` rather than a route string: no route served this."""
+        """``source="seed"`` rather than a route string: no route served this.
+
+        Scoped to this workflow's own collections. The fixture rows the seed test creates are
+        written with ``source="fixture"``, and asserting on the whole log would be asserting on
+        rows this feature does not own.
+        """
         self._seed(store)
+        own = set(vocab.ALL_COLLECTIONS)
+        checked = 0
         for row in store.audit(limit=400):
+            if row["collection"] not in own:
+                continue
+            checked += 1
             assert row["source"] == "seed", row
+        assert checked > 0
 
 
 # --------------------------------------------------------------------------- #
