@@ -184,7 +184,9 @@ IP_RANGES_URL = "https://dropbox-sign-api-config.s3.amazonaws.com/ip-ranges.json
 #: Evidence: "We have made a JSON file containing the full list of IP addresses that
 #: webhook events may come from available for download... We recommend checking this
 #: list periodically to ensure your callback handler is secure."
-IP_RANGES_RECHECK = "We recommend checking this list periodically to ensure your callback handler is secure."
+IP_RANGES_RECHECK = (
+    "We recommend checking this list periodically to ensure your callback handler is secure."
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -443,9 +445,7 @@ ERROR_CODES: dict[str, dict[str, Any]] = {
     },
     "event_id_missing": {
         "http_status": 400,
-        "cause": (
-            "The payload carried no event_id, so the delivery cannot be de-duplicated."
-        ),
+        "cause": ("The payload carried no event_id, so the delivery cannot be de-duplicated."),
         "remediation": (
             "Every provider event carries an event_id. Send the provider's payload. A "
             "delivery without one cannot be de-duplicated, so this handler refuses it "

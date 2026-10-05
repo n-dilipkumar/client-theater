@@ -548,7 +548,7 @@ async def _json_part(request: Request) -> tuple[bytes | None, str | None]:
     """
     try:
         form = await request.form()
-    except Exception as exc:  # noqa: BLE001 - any parse failure is one refusal
+    except Exception:  # noqa: BLE001 - any parse failure is one refusal
         return None, "payload_part_missing"
 
     part = form.get(vocab.JSON_PART)
@@ -820,7 +820,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     )
 
     # -- room two: refused at the third check ------------------------------- #
-    digest = register(digest_room, "https://hooks.contoso.example/wf082")
+    register(digest_room, "https://hooks.contoso.example/wf082")
     refresh(digest_room)
     bad_event_hash = deliver(
         digest_room,

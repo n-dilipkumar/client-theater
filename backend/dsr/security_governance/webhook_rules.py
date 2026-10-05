@@ -119,12 +119,19 @@ def _max_prefix(text: str) -> int:
 
 
 def describe_range(value: str) -> dict[str, Any]:
-    """One range as data: the text, the family, the span and the address count."""
+    """One range as data: the text, the family, the span and the address count.
+
+    ``family_width`` is the full prefix length of the family, 32 for IPv4 and 128 for IPv6, and
+    it is **not** the range's own prefix length. The field was called ``prefix_length``, which
+    read as ``/24`` for a ``/24`` and was 32 for every IPv4 range, so a page showing it would
+    tell a reader that a 256-address network was a single address. The range's own prefix is
+    already in ``range`` as written, so it is not repeated here under a name that lies.
+    """
     lo, hi, width = normalise(value)
     return {
         "range": str(value).strip(),
         "family": "ipv6" if width == 128 else "ipv4",
-        "prefix_length": width,
+        "family_width": width,
         "first_address": str(ipaddress.ip_address(lo)),
         "last_address": str(ipaddress.ip_address(hi)),
         "address_count": hi - lo + 1,
@@ -209,7 +216,11 @@ def _split_text(text: str) -> list[str]:
         body = body[1:]
     if body.endswith("]"):
         body = body[:-1]
-    return [part.strip().strip('"').strip("'") for part in body.replace("\n", ",").split(",") if part.strip()]
+    return [
+        part.strip().strip('"').strip("'")
+        for part in body.replace("\n", ",").split(",")
+        if part.strip()
+    ]
 
 
 def parse_ranges(rows: Iterable[Mapping[str, Any]]) -> list[tuple[int, int, int]]:
