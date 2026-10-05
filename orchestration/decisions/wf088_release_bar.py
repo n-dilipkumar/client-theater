@@ -36,7 +36,7 @@ and takes no database. inferences.py holds the eight recorded derivations with t
 each rejected. engine.py holds the only reads and writes. Feature module
 backend/dsr/features/WF-088_auto_assign_the_correct_price_book_or_price.py exports FEATURE, a
 router on /api/WF-088 with 15 routes, EXCEPTION_HANDLERS and seed(db, context). Tests
-backend/tests/test_WF-088.py (221 tests) and test_WF-088_http.py (71 tests). Frontend
+backend/tests/test_WF-088.py (227 tests) and test_WF-088_http.py (72 tests). Frontend
 frontend/src/features/wf-088-auto-assign-the-correct-price-book-or-price/ with index.jsx, api.js,
 primitives.jsx and 34 tests.
 
@@ -119,11 +119,12 @@ another workflow's file and was reported rather than edited.
 """
 
 MEASUREMENTS = {
-    "tests_added_backend_domain": 226,
-    "tests_added_backend_http": 73,
+    "tests_added_backend_domain": 227,
+    "tests_added_backend_http": 72,
     "tests_added_frontend": 39,
-    "own_files_domain_alone": "221 passed in 120.50s",
-    "own_files_http_alone": "71 passed in 28.46s",
+    "own_files_domain_alone": "227 passed in 12.00s",
+    "own_files_http_alone": "72 passed in 12.19s",
+    "own_files_together": "299 passed",
     "whole_backend_suite": (
         "18473 passed, 1 skipped, 1 xfailed, 52 warnings in 650.06s under pytest-xdist, exit 0, "
         "re-run after the review fixes"
