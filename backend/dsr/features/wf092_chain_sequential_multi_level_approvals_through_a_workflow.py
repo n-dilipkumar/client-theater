@@ -266,6 +266,8 @@ def enrol_quote(quote_id: str, engine: ApprovalChainEngine = EngineDep) -> dict[
     at the first priority. A quote that matched no step is auto-approved, which is the
     researched valve.
     """
+    if engine.find_quote(quote_id) is None:
+        raise HTTPException(status_code=404, detail=f"quote {quote_id} does not exist")
     result = engine.enrol(quote_id, source=_source("POST", f"/quotes/{quote_id}/enrol"))
     return result
 
