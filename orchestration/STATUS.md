@@ -8,20 +8,20 @@
 Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `482eb13 Regenerate STATUS.md and WORKFLOW-BOARD.md on current main (#115)` &middot; measured 2026-10-03T21:19:15+05:30
+`main` at `20ce38a Merge pull request #252 from n-dilipkumar/wf103-proposal` &middot; measured 2026-10-06T04:51:24+05:30
 
 Measured in `C:\Users\Dilip\Documents\dummy repo\client-theater`. This file is written by the generator and by nothing
 else; if a copy of it lives in another clone, that copy is not this run.
 
 ## Progress
 
-    workflows  [##############....................] 57/138
-    routes     1055
-    tests      12001 passed, 0 failed, 2 xfailed  (measured now)
+    workflows  [#######################...........] 97/138
+    routes     1405
+    tests      15177 passed, 14 failed, 1 xfailed  (measured now)
     features   0 failed to load
-    to go      81
+    to go      41
 
-138 researched workflows; **57 built**, **81 pending** (0 critical, 81 supplementary).
+138 researched workflows; **97 built**, **41 pending** (0 critical, 41 supplementary).
 
 ## How status is decided
 
@@ -31,7 +31,7 @@ branch is a claim to verify, not a feature.
 
 It does **not** come from the `## Build status` checkboxes in each
 `wf/WF-NNN.md` page. Only 27 of 138 pages
-tick `Implemented` while 57 workflows are built, so those
+tick `Implemented` while 97 workflows are built, so those
 checkboxes understate the programme; they are claims made when the page
 was generated, and the feature registry is the fact.
 
@@ -99,7 +99,9 @@ critical-first, so the queue reads in the order it should be worked.
 | `WF-026` | Write DSR events into the seller activity feed | Write DSR events into the seller activity feed | supplementary | Built — 24 routes, UI | |
 | `WF-027` | Emit buyer intent signals with indicators, urgency, and attribution | Emit buyer intent signals with indicators, urgency, and attribution | supplementary | Built — 13 routes, UI | |
 | `WF-028` | Turn a signal into an automatic seller action (Play registration) | Turn a signal into an automatic seller action | supplementary | Built — 19 routes, UI | |
+| `WF-029` | Score DSR activity as CRM lead-score criteria | Score DSR activity as CRM lead-score criteria | supplementary | Built — 20 routes, UI | |
 | `WF-030` | Fire CRM workflows off DSR activity | Fire CRM workflows off DSR activity | supplementary | Built — 18 routes, UI | |
+| `WF-031` | Identify anonymous web visitors as companies and filter by pages visited | Identify anonymous web visitors as companies and filter by pages visited | supplementary | Built — 18 routes, UI | |
 | `WF-032` | Stream identified company/contact intent to your own systems | Stream identified company/contact intent to your own systems | supplementary | Built — 36 routes, UI | |
 | `WF-033` | Auto-add and continuously track in-market companies from intent signals | Auto-add and continuously track in-market companies from intent signals | supplementary | Built — 41 routes, UI | |
 | `WF-034` | Connect a CRM org to the sales room (OAuth 2.0 authorization code) | Connect a CRM org to the sales room | supplementary | Built — 20 routes, UI | |
@@ -110,70 +112,70 @@ critical-first, so the queue reads in the order it should be worked.
 | `WF-039` | Write account + contact + opportunity as one atomic transaction | Commit a related record set atomically | supplementary | Built — 17 routes, UI | |
 | `WF-040` | Surface partial failures and reject invalid writes before commit | Surface partial failures and reject invalid writes | supplementary | Built — 14 routes, UI | |
 | `WF-041` | Detect and block duplicate records during sync | Detect and block duplicate records during sync | supplementary | Built — 20 routes, UI | |
+| `WF-042` | Pull CRM deal, account and contact data into the room for display | Pull CRM records into the room for display | supplementary | Built — 21 routes, UI, no test file | |
 | `WF-043` | Stream CRM record changes into the room in near real time | Stream CRM record changes into the room | supplementary | Built — 37 routes, UI | |
 | `WF-044` | Emit a webhook out of the CRM when a deal stage changes | Emit a webhook out of the CRM on a deal stage change | supplementary | Built — 20 routes, UI | |
 | `WF-045` | Backfill historical records on a schedule with a resumable cursor | Backfill history on a resumable cursor | supplementary | Built — 16 routes, UI | |
+| `WF-046` | Throttle and retry under vendor API rate limits | Throttle and retry under API rate limits | supplementary | Built — 20 routes, UI | |
+| `WF-048` | Validate the connector against a sandbox or test account | Validate the connector against a sandbox | supplementary | Built — 16 routes, UI | |
 | `WF-049` | Monitor integration health and remaining API quota | Monitor integration health and quota | supplementary | Built — 20 routes, UI | |
+| `WF-050` | Reconcile gaps and overflows after a dropped change stream | Reconcile gaps after a dropped change stream | supplementary | Built — 15 routes, UI | |
+| `WF-051` | Route and book a demo request inline from a web form | Route-and-book a web form request inline | supplementary | Built — 18 routes, UI | |
+| `WF-052` | Qualify a lead without offering any calendar | Qualify-and-assign without scheduling | supplementary | Built — 16 routes, UI | |
 | `WF-053` | Route a booking to the owner of the CRM record | Book with the CRM record owner | supplementary | Built — 21 routes, UI | |
+| `WF-054` | Spread bookings across a team by availability-weighted round robin | Distribute bookings across a team by round robin | supplementary | Built — 21 routes, UI | |
+| `WF-055` | Hand a lead off from an SDR scheduler to an AE | Handoff-schedule a lead from SDR to AE | supplementary | Built — 18 routes, UI | |
 | `WF-056` | Book a meeting with no scheduling UI (headless / AI agent) | Book headlessly via API or MCP | supplementary | Built — 22 routes, UI | |
 | `WF-057` | Find a time that works for a multi-person panel | Find a shared slot across several calendars | supplementary | Built — 21 routes, UI | |
 | `WF-058` | Embed a bookable calendar inside the sales room / app | Embed an in-room booking calendar | supplementary | Built — 36 routes, UI | |
 | `WF-059` | Provision a per-booking video-conference link (Meet / Zoom / Teams / Gong) | Generate and swap the video meeting link | supplementary | Built — 29 routes, UI | |
+| `WF-060` | Auto-join and record the meeting, gated by recording consent | Auto-join and record with consent | supplementary | Built — 28 routes, UI | |
 | `WF-061` | Send conditional pre- and post-meeting reminders and SMS nudges | Send conditional meeting reminders and nudges | supplementary | Built — 29 routes, UI | |
 | `WF-062` | Route a requested slot for host approval before confirming | Hold a meeting request pending host approval | supplementary | Built — 20 routes, UI | |
 | `WF-063` | Reassign a booked meeting to a different host | Reassign a booked meeting to another host | supplementary | Built — 23 routes, UI | |
 | `WF-064` | Reschedule or cancel a meeting and propagate the change | Reschedule or cancel a booked meeting | supplementary | Built — 31 routes, UI | |
 | `WF-065` | Write the booking back into the CRM | Write the meeting back to the CRM | supplementary | Built — 25 routes, UI | |
-| `WF-029` | Score DSR activity as CRM lead-score criteria | Score DSR activity as CRM lead-score criteria | supplementary | Pending | |
-| `WF-031` | Identify anonymous web visitors as companies and filter by pages visited | Identify anonymous web visitors as companies and filter by pages visited | supplementary | Pending | |
-| `WF-042` | Pull CRM deal, account and contact data into the room for display | Pull CRM records into the room for display | supplementary | Pending | |
-| `WF-046` | Throttle and retry under vendor API rate limits | Throttle and retry under API rate limits | supplementary | Pending | |
+| `WF-066` | Push meeting lifecycle events to downstream systems | Fan out meeting events via signed webhooks | supplementary | Built — 17 routes, UI | |
+| `WF-067` | Collect mutual-action-plan approval by e-signature and track it | Send a mutual action plan for e-signature approval | supplementary | Built — 17 routes, UI | |
+| `WF-070` | Require NDA acceptance before the buyer sees anything | Require NDA acceptance before viewing | supplementary | Built — 15 routes, UI | |
+| `WF-073` | Apply confidential view and block screenshot / screen-record shortcuts | Apply confidential view and block screenshot shortcuts | supplementary | Built — 16 routes, UI | |
+| `WF-074` | Scope visibility to an audience with per-item view and download permissions | Scope visibility to an audience with per-item permissions | supplementary | Built — 0 routes, UI | |
+| `WF-075` | Review engagement: verification state, per-page dwell, geo, device and downloads | Review who engaged, where and for how long | supplementary | Built — 13 routes, UI | |
+| `WF-078` | Require recipient identity verification before opening or signing | Require recipient identity verification before open or sign | supplementary | Built — 20 routes, UI | |
+| `WF-080` | Download the executed agreement from the e-vault, webhook-driven | Download the executed agreement from the e-vault | supplementary | Built — 0 routes, UI | |
+| `WF-081` | Expire an agreement and drive pre-expiry reminders | Expire an agreement and drive pre-expiry reminders | supplementary | Built — 0 routes, UI | |
+| `WF-082` | Verify and IP-allowlist inbound provider webhooks | Verify and IP-allowlist inbound provider webhooks | supplementary | Built — 0 routes, UI | |
+| `WF-083` | Record buyer sessions behind a consent gate, masked, IP-excluded and auto-purged | Record buyer sessions behind a consent gate | supplementary | Built — 0 routes, UI | |
+| `WF-084` | Federate staff SSO and auto-provision / deprovision via SCIM | Federate staff SSO and auto-provision via SCIM | supplementary | Built — 0 routes, UI | |
+| `WF-085` | Meet GDPR / CCPA: region residency, retention limits, DSAR and consent tooling | Meet GDPR / CCPA: residency, retention, DSAR | supplementary | Built — 0 routes, UI | |
+| `WF-086` | Author a quote from a deal or opportunity | Author a quote from a deal or opportunity | supplementary | Built — 0 routes, UI | |
+| `WF-088` | Auto-assign the correct price book or price list to a deal by rule | Auto-assign the correct price book or price list to a deal by rule | supplementary | Built — 0 routes, UI | |
+| `WF-089` | Quote in a transaction currency with FX conversion and same-currency constraints | Quote in a transaction currency with FX conversion | supplementary | Built — 0 routes, UI | |
+| `WF-090` | Enforce configuration and discount guardrails with quote rules before publish | Enforce configuration and discount guardrails with quote rules | supplementary | Built — 0 routes, UI | |
+| `WF-091` | Route a discounted quote for standard approval | Route a discounted quote for standard approval | supplementary | Built — 0 routes, UI | |
+| `WF-092` | Chain sequential multi-level approvals through a workflow | Chain sequential multi-level approvals through a workflow | supplementary | Built — 0 routes, UI | |
+| `WF-093` | Build a branded proposal from a template | Build a branded proposal from a template | supplementary | Built — 0 routes, UI | |
+| `WF-094` | Publish and share the quote as a hosted link or email | Publish and share the quote as a hosted link or email | supplementary | Built — 0 routes, UI | |
+| `WF-095` | Collect acceptance by e-signature, countersignature, signer reassignment and identity verification | Collect acceptance by e-signature, countersignature and identity verification | supplementary | Built — 0 routes, UI | |
+| `WF-096` | Accept a quote without a signature and take payment in the quote | Accept a quote without a signature and take payment in the quote | supplementary | Built — 0 routes, UI | |
+| `WF-098` | Expire a quote and auto-send buyer reminders | Expire a quote and auto-send buyer reminders | supplementary | Built — 0 routes, UI | |
+| `WF-100` | Create a renewal quote from a contract and auto-create the renewal deal | Create a renewal quote from a contract and auto-create the renewal deal | supplementary | Built — 0 routes, UI | |
+| `WF-106` | Trigger outreach when a prospect repeatedly browses a high-intent page | Trigger outreach on high-intent page visits | supplementary | Built — 0 routes, UI | |
+| `WF-107` | Chase unresponsive buyers and reroute conversations from unresponsive reps | Chase unresponsive buyers and reroute unattended conversations | supplementary | Built — 0 routes, UI | |
+| `WF-124` | Native Mutual Action Plan with owners, timelines and reminders | Native Mutual Action Plan execution | supplementary | Built — 19 routes, UI | |
+| `WF-133` | Intent signal → seller alert → CRM task (routing workflow) | Real-time buyer-intent alerting and routing | supplementary | Built — 22 routes, UI | |
 | `WF-047` | Mirror room documents into CRM files | Mirror room documents into CRM files | supplementary | Pending | |
-| `WF-048` | Validate the connector against a sandbox or test account | Validate the connector against a sandbox | supplementary | Pending | |
-| `WF-050` | Reconcile gaps and overflows after a dropped change stream | Reconcile gaps after a dropped change stream | supplementary | Pending | |
-| `WF-051` | Route and book a demo request inline from a web form | Route-and-book a web form request inline | supplementary | Pending | |
-| `WF-052` | Qualify a lead without offering any calendar | Qualify-and-assign without scheduling | supplementary | Pending | |
-| `WF-054` | Spread bookings across a team by availability-weighted round robin | Distribute bookings across a team by round robin | supplementary | Pending | |
-| `WF-055` | Hand a lead off from an SDR scheduler to an AE | Handoff-schedule a lead from SDR to AE | supplementary | Pending | |
-| `WF-060` | Auto-join and record the meeting, gated by recording consent | Auto-join and record with consent | supplementary | Pending | |
-| `WF-066` | Push meeting lifecycle events to downstream systems | Fan out meeting events via signed webhooks | supplementary | Pending | |
-| `WF-067` | Collect mutual-action-plan approval by e-signature and track it | Send a mutual action plan for e-signature approval | supplementary | Pending | |
 | `WF-068` | Prepare for the meeting, then run the post-meeting follow-up sequence | Prepare for and follow up on a meeting | supplementary | Pending | |
-| `WF-070` | Require NDA acceptance before the buyer sees anything | Require NDA acceptance before viewing | supplementary | Pending | |
 | `WF-071` | Stamp a dynamic, per-viewer watermark on every page | Stamp a dynamic per-viewer watermark | supplementary | Pending | |
 | `WF-072` | Enforce view-only access and block bulk download | Enforce view-only access and block bulk download | supplementary | Pending | |
-| `WF-073` | Apply confidential view and block screenshot / screen-record shortcuts | Apply confidential view and block screenshot shortcuts | supplementary | Pending | |
-| `WF-074` | Scope visibility to an audience with per-item view and download permissions | Scope visibility to an audience with per-item permissions | supplementary | Pending | |
-| `WF-075` | Review engagement: verification state, per-page dwell, geo, device and downloads | Review who engaged, where and for how long | supplementary | Pending | |
-| `WF-078` | Require recipient identity verification before opening or signing | Require recipient identity verification before open or sign | supplementary | Pending | |
-| `WF-080` | Download the executed agreement from the e-vault, webhook-driven | Download the executed agreement from the e-vault | supplementary | Pending | |
-| `WF-081` | Expire an agreement and drive pre-expiry reminders | Expire an agreement and drive pre-expiry reminders | supplementary | Pending | |
-| `WF-082` | Verify and IP-allowlist inbound provider webhooks | Verify and IP-allowlist inbound provider webhooks | supplementary | Pending | |
-| `WF-083` | Record buyer sessions behind a consent gate, masked, IP-excluded and auto-purged | Record buyer sessions behind a consent gate | supplementary | Pending | |
-| `WF-084` | Federate staff SSO and auto-provision / deprovision via SCIM | Federate staff SSO and auto-provision via SCIM | supplementary | Pending | |
-| `WF-085` | Meet GDPR / CCPA: region residency, retention limits, DSAR and consent tooling | Meet GDPR / CCPA: residency, retention, DSAR | supplementary | Pending | |
-| `WF-086` | Author a quote from a deal or opportunity | Author a quote from a deal or opportunity | supplementary | Pending | |
 | `WF-087` | Curate a product and price-book catalogue with tiered pricing | Curate a product and price-book catalogue with tiered pricing | supplementary | Pending | |
-| `WF-088` | Auto-assign the correct price book or price list to a deal by rule | Auto-assign the correct price book or price list to a deal by rule | supplementary | Pending | |
-| `WF-089` | Quote in a transaction currency with FX conversion and same-currency constraints | Quote in a transaction currency with FX conversion | supplementary | Pending | |
-| `WF-090` | Enforce configuration and discount guardrails with quote rules before publish | Enforce configuration and discount guardrails with quote rules | supplementary | Pending | |
-| `WF-091` | Route a discounted quote for standard approval | Route a discounted quote for standard approval | supplementary | Pending | |
-| `WF-092` | Chain sequential multi-level approvals through a workflow | Chain sequential multi-level approvals through a workflow | supplementary | Pending | |
-| `WF-093` | Build a branded proposal from a template | Build a branded proposal from a template | supplementary | Pending | |
-| `WF-094` | Publish and share the quote as a hosted link or email | Publish and share the quote as a hosted link or email | supplementary | Pending | |
-| `WF-095` | Collect acceptance by e-signature, countersignature, signer reassignment and identity verification | Collect acceptance by e-signature, countersignature and identity verification | supplementary | Pending | |
-| `WF-096` | Accept a quote without a signature and take payment in the quote | Accept a quote without a signature and take payment in the quote | supplementary | Pending | |
 | `WF-097` | Track buyer engagement on a shared quote and drive follow-up | Track buyer engagement on a shared quote and drive follow-up | supplementary | Pending | |
-| `WF-098` | Expire a quote and auto-send buyer reminders | Expire a quote and auto-send buyer reminders | supplementary | Pending | |
 | `WF-099` | Auto-create a contract from an accepted quote | Auto-create a contract from an accepted quote | supplementary | Pending | |
-| `WF-100` | Create a renewal quote from a contract and auto-create the renewal deal | Create a renewal quote from a contract and auto-create the renewal deal | supplementary | Pending | |
 | `WF-101` | Convert an accepted quote into an order and lock the price | Convert an accepted quote into an order and lock the price | supplementary | Pending | |
 | `WF-102` | Revise a quote to create a new revision instead of losing the deal | Revise a quote to create a new revision instead of losing the deal | supplementary | Pending | |
 | `WF-103` | Generate a proposal from CRM data via a document API, gate it on internal approval, and sync status back | Generate a proposal from CRM data via a document API, gate it on internal approval, sync status back | supplementary | Pending | |
 | `WF-104` | Drip a multi-channel nurture sequence with in-app → email fallback | Drip a multi-channel nurture sequence with channel fallback | supplementary | Pending | |
 | `WF-105` | Re-enter a recurring series and tag the contact on completion | Re-enter a recurring nurture series and tag on completion | supplementary | Pending | |
-| `WF-106` | Trigger outreach when a prospect repeatedly browses a high-intent page | Trigger outreach on high-intent page visits | supplementary | Pending | |
-| `WF-107` | Chase unresponsive buyers and reroute conversations from unresponsive reps | Chase unresponsive buyers and reroute unattended conversations | supplementary | Pending | |
 | `WF-108` | Run SLA response timers that respect office hours and pause rules | Run SLA response timers with office-hour awareness | supplementary | Pending | |
 | `WF-109` | Escalate just before / when an SLA target is breached | Escalate on SLA breach with a pre-warning head start | supplementary | Pending | |
 | `WF-110` | Escalate a conversation converted into a ticket to the owning team | Escalate a converted conversation into an owned ticket | supplementary | Pending | |
@@ -190,7 +192,6 @@ critical-first, so the queue reads in the order it should be worked.
 | `WF-121` | Tracked, per-recipient document link with page-level read analytics | Tracked deal-link distribution with per-page dwell | supplementary | Pending | |
 | `WF-122` | Structured data room with staged, tiered disclosure | Tiered data room — reveal sections as trust grows | supplementary | Pending | |
 | `WF-123` | In-room qualifying form / buyer data capture | In-room qualification capture | supplementary | Pending | |
-| `WF-124` | Native Mutual Action Plan with owners, timelines and reminders | Native Mutual Action Plan execution | supplementary | Pending | |
 | `WF-125` | Bi-directional CRM sync with room creation on CRM conditions | CRM-driven room lifecycle | supplementary | Pending | |
 | `WF-126` | Seller-recorded video intro and in-room video walkthrough | Asynchronous personalised video inside the room | supplementary | Pending | |
 | `WF-127` | Interactive product demo with activity heatmaps and organic stakeholder discovery | Interactive demo / sandbox analytics with stakeholder discovery | supplementary | Pending | |
@@ -199,7 +200,6 @@ critical-first, so the queue reads in the order it should be worked.
 | `WF-130` | Generated, personalised collateral from deal data (AI document generation) | Data-driven document/deck generation into the room | supplementary | Pending | |
 | `WF-131` | Content protection: watermarking, download control, NDA gating, audit log | Per-recipient content protection and auditability | supplementary | Pending | |
 | `WF-132` | In-room collaboration: comments, threads, tagging, and champion enablement | In-room conversation and champion self-service | supplementary | Pending | |
-| `WF-133` | Intent signal → seller alert → CRM task (routing workflow) | Real-time buyer-intent alerting and routing | supplementary | Pending | |
 | `WF-134` | Engagement-driven deal-health scoring, risk detection and coaching trigger | Deal-risk scoring and rep coaching from in-room behaviour | supplementary | Pending | |
 | `WF-135` | Conversation intelligence capture and CRM write-back | Auto-capture of the deal conversation into the CRM | supplementary | Pending | |
 | `WF-136` | Buyer self-serve booking of the next step | In-deal scheduling and next-step booking | supplementary | Pending | |
@@ -243,7 +243,9 @@ None — every critical workflow has a feature module on `main`.
 | `wf-026-write-dsr-events-into-the-seller-activ` | `/api/wf-026` | 24 |
 | `wf-027-emit-buyer-intent-signals-with-indicat` | `/api/wf-027` | 13 |
 | `wf-028-turn-a-signal-into-an-automatic-seller` | `/api/wf-028` | 19 |
+| `wf-029-score-dsr-activity-as-crm-lead-score` | `/api/wf-029` | 20 |
 | `wf-030-fire-crm-workflows-off-dsr-activity` | `/api/wf-030` | 18 |
+| `wf-031-identify-anonymous-web-visitors-as-com` | `/api/wf-031` | 18 |
 | `wf-032-stream-identified-company-contact-inte` | `/api/wf-032` | 36 |
 | `wf-033-auto-add-and-continuously-track-in-mar` | `/api/wf-033` | 41 |
 | `wf-034-connect-a-crm-org-to-the-sales-room-oa` | `/api/wf-034` | 20 |
@@ -254,24 +256,41 @@ None — every critical workflow has a feature module on `main`.
 | `wf-039-write-account-contact-opportunity-as-o` | `/api/wf-039` | 17 |
 | `wf-040-surface-partial-failures-and-reject-in` | `/api/wf-040` | 14 |
 | `wf-041-detect-and-block-duplicate-records-dur` | `/api/wf-041` | 20 |
+| `wf-042-pull-crm-deal-account-and-contact-data-into` | `/api/wf-042` | 21 |
 | `wf-043-stream-crm-record-changes-into-the-roo` | `/api/wf-043` | 37 |
 | `wf-044-emit-a-webhook-out-of-the-crm-when-a-d` | `/api/wf-044` | 20 |
 | `wf-045-backfill-historical-records-on-a-sched` | `/api/wf-045` | 16 |
+| `wf-046-throttle-and-retry-under-vendor-api-ra` | `/api/wf-046` | 20 |
+| `wf-048-validate-the-connector-against-a-sandb` | `/api/wf-048` | 16 |
 | `wf-049-monitor-integration-health-and-remaini` | `/api/wf-049` | 20 |
+| `wf-050-reconcile-gaps-after-a-dropped-change-st` | `/api/wf-050` | 15 |
+| `wf-051-route-and-book-a-demo-request-inline-f` | `/api/wf-051` | 18 |
+| `wf-052-qualify-a-lead-without-offering-any-calendar` | `/api/wf-052` | 16 |
 | `wf-053-route-a-booking-to-the-owner-of-the-cr` | `/api/wf-053` | 21 |
+| `wf-054-round-robin-booking` | `/api/wf054` | 21 |
+| `wf-055-handoff-schedule-a-lead-from-sdr-to-ae` | `/api/wf-055` | 18 |
 | `wf-056-book-a-meeting-with-no-scheduling-ui-h` | `/api/wf-056` | 22 |
 | `wf-057-find-a-time-that-works-for-a-multi-per` | `/api/wf-057` | 21 |
 | `wf-058-embed-a-bookable-calendar-inside-the-s` | `/api/wf-058` | 36 |
 | `wf-059-provision-a-per-booking-video-conferen` | `/api/wf-059` | 29 |
+| `wf-060-auto-join-and-record-with-consent` | `/api/wf-060` | 28 |
 | `wf-061-send-conditional-pre-and-post-meeting-` | `/api/wf-061` | 29 |
 | `wf-062-route-a-requested-slot-for-host-approv` | `/api/wf-062` | 20 |
 | `wf-063-reassign-a-booked-meeting-to-a-differe` | `/api/wf-063` | 23 |
 | `wf-064-reschedule-or-cancel-a-meeting-and-pro` | `/api/wf-064` | 31 |
 | `wf-065-write-the-booking-back-into-the-crm` | `/api/wf-065` | 25 |
+| `wf-066-fan-out-meeting-events-via-signed-webhooks` | `/api/wf-066` | 17 |
+| `wf-067-send-a-mutual-action-plan-for-e-signature` | `/api/wf-067` | 17 |
 | `wf-069-gate-each-buyer-link-with-a-password-a` | `/api/wf-069` | 17 |
+| `wf-070-require-nda-acceptance-before-viewing` | `/api/wf-070` | 15 |
+| `wf-073-apply-confidential-view-and-block-screenshot` | `/api/wf-073` | 16 |
+| `wf-075-review-who-engaged-where-and-for-how-long` | `/api/wf-075` | 13 |
 | `wf-076-revoke-access-early-and-keep-the-audit` | `/api/wf-076` | 24 |
 | `wf-077-manage-internal-workspace-roles-and-le` | `/api/wf-077` | 24 |
+| `wf-078-require-recipient-identity-verification` | `/api/wf-078` | 20 |
 | `wf-079-export-a-tamper-evident-audit-trail-wi` | `/api/wf-079` | 15 |
+| `wf-124-native-mutual-action-plan-execution` | `/api/wf-124` | 19 |
+| `wf-133-real-time-buyer-intent-alerting-and-routing` | `/api/wf-133` | 22 |
 
 ## Provenance
 
