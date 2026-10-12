@@ -8,7 +8,7 @@
 Regenerate with
 `.venv/Scripts/python orchestration/make_status.py`.
 
-`main` at `20ce38a Merge pull request #252 from n-dilipkumar/wf103-proposal` &middot; measured 2026-10-06T04:51:24+05:30
+`main` at `3c1585e Merge pull request #254 from n-dilipkumar/dashboard-status-update` &middot; measured 2026-10-06T05:42:11+05:30
 
 Measured in `C:\Users\Dilip\Documents\dummy repo\client-theater`. This file is written by the generator and by nothing
 else; if a copy of it lives in another clone, that copy is not this run.
@@ -16,8 +16,8 @@ else; if a copy of it lives in another clone, that copy is not this run.
 ## Progress
 
     workflows  [#######################...........] 97/138
-    routes     1405
-    tests      15177 passed, 14 failed, 1 xfailed  (measured now)
+    routes     1778
+    tests      19137 passed, 0 failed, 1 xfailed  (measured now)
     features   0 failed to load
     to go      41
 
@@ -30,7 +30,7 @@ the same test the plugin host applies. A module that exists only in a
 branch is a claim to verify, not a feature.
 
 It does **not** come from the `## Build status` checkboxes in each
-`wf/WF-NNN.md` page. Only 27 of 138 pages
+`wf/WF-NNN.md` page. Only 28 of 138 pages
 tick `Implemented` while 97 workflows are built, so those
 checkboxes understate the programme; they are claims made when the page
 was generated, and the feature registry is the fact.
@@ -139,29 +139,29 @@ critical-first, so the queue reads in the order it should be worked.
 | `WF-067` | Collect mutual-action-plan approval by e-signature and track it | Send a mutual action plan for e-signature approval | supplementary | Built — 17 routes, UI | |
 | `WF-070` | Require NDA acceptance before the buyer sees anything | Require NDA acceptance before viewing | supplementary | Built — 15 routes, UI | |
 | `WF-073` | Apply confidential view and block screenshot / screen-record shortcuts | Apply confidential view and block screenshot shortcuts | supplementary | Built — 16 routes, UI | |
-| `WF-074` | Scope visibility to an audience with per-item view and download permissions | Scope visibility to an audience with per-item permissions | supplementary | Built — 0 routes, UI | |
+| `WF-074` | Scope visibility to an audience with per-item view and download permissions | Scope visibility to an audience with per-item permissions | supplementary | Built — 20 routes, UI | |
 | `WF-075` | Review engagement: verification state, per-page dwell, geo, device and downloads | Review who engaged, where and for how long | supplementary | Built — 13 routes, UI | |
 | `WF-078` | Require recipient identity verification before opening or signing | Require recipient identity verification before open or sign | supplementary | Built — 20 routes, UI | |
-| `WF-080` | Download the executed agreement from the e-vault, webhook-driven | Download the executed agreement from the e-vault | supplementary | Built — 0 routes, UI | |
-| `WF-081` | Expire an agreement and drive pre-expiry reminders | Expire an agreement and drive pre-expiry reminders | supplementary | Built — 0 routes, UI | |
-| `WF-082` | Verify and IP-allowlist inbound provider webhooks | Verify and IP-allowlist inbound provider webhooks | supplementary | Built — 0 routes, UI | |
-| `WF-083` | Record buyer sessions behind a consent gate, masked, IP-excluded and auto-purged | Record buyer sessions behind a consent gate | supplementary | Built — 0 routes, UI | |
-| `WF-084` | Federate staff SSO and auto-provision / deprovision via SCIM | Federate staff SSO and auto-provision via SCIM | supplementary | Built — 0 routes, UI | |
-| `WF-085` | Meet GDPR / CCPA: region residency, retention limits, DSAR and consent tooling | Meet GDPR / CCPA: residency, retention, DSAR | supplementary | Built — 0 routes, UI | |
-| `WF-086` | Author a quote from a deal or opportunity | Author a quote from a deal or opportunity | supplementary | Built — 0 routes, UI | |
-| `WF-088` | Auto-assign the correct price book or price list to a deal by rule | Auto-assign the correct price book or price list to a deal by rule | supplementary | Built — 0 routes, UI | |
-| `WF-089` | Quote in a transaction currency with FX conversion and same-currency constraints | Quote in a transaction currency with FX conversion | supplementary | Built — 0 routes, UI | |
-| `WF-090` | Enforce configuration and discount guardrails with quote rules before publish | Enforce configuration and discount guardrails with quote rules | supplementary | Built — 0 routes, UI | |
-| `WF-091` | Route a discounted quote for standard approval | Route a discounted quote for standard approval | supplementary | Built — 0 routes, UI | |
-| `WF-092` | Chain sequential multi-level approvals through a workflow | Chain sequential multi-level approvals through a workflow | supplementary | Built — 0 routes, UI | |
-| `WF-093` | Build a branded proposal from a template | Build a branded proposal from a template | supplementary | Built — 0 routes, UI | |
-| `WF-094` | Publish and share the quote as a hosted link or email | Publish and share the quote as a hosted link or email | supplementary | Built — 0 routes, UI | |
-| `WF-095` | Collect acceptance by e-signature, countersignature, signer reassignment and identity verification | Collect acceptance by e-signature, countersignature and identity verification | supplementary | Built — 0 routes, UI | |
-| `WF-096` | Accept a quote without a signature and take payment in the quote | Accept a quote without a signature and take payment in the quote | supplementary | Built — 0 routes, UI | |
-| `WF-098` | Expire a quote and auto-send buyer reminders | Expire a quote and auto-send buyer reminders | supplementary | Built — 0 routes, UI | |
-| `WF-100` | Create a renewal quote from a contract and auto-create the renewal deal | Create a renewal quote from a contract and auto-create the renewal deal | supplementary | Built — 0 routes, UI | |
-| `WF-106` | Trigger outreach when a prospect repeatedly browses a high-intent page | Trigger outreach on high-intent page visits | supplementary | Built — 0 routes, UI | |
-| `WF-107` | Chase unresponsive buyers and reroute conversations from unresponsive reps | Chase unresponsive buyers and reroute unattended conversations | supplementary | Built — 0 routes, UI | |
+| `WF-080` | Download the executed agreement from the e-vault, webhook-driven | Download the executed agreement from the e-vault | supplementary | Built — 21 routes, UI | |
+| `WF-081` | Expire an agreement and drive pre-expiry reminders | Expire an agreement and drive pre-expiry reminders | supplementary | Built — 13 routes, UI | |
+| `WF-082` | Verify and IP-allowlist inbound provider webhooks | Verify and IP-allowlist inbound provider webhooks | supplementary | Built — 16 routes, UI | |
+| `WF-083` | Record buyer sessions behind a consent gate, masked, IP-excluded and auto-purged | Record buyer sessions behind a consent gate | supplementary | Built — 23 routes, UI | |
+| `WF-084` | Federate staff SSO and auto-provision / deprovision via SCIM | Federate staff SSO and auto-provision via SCIM | supplementary | Built — 24 routes, UI | |
+| `WF-085` | Meet GDPR / CCPA: region residency, retention limits, DSAR and consent tooling | Meet GDPR / CCPA: residency, retention, DSAR | supplementary | Built — 16 routes, UI | |
+| `WF-086` | Author a quote from a deal or opportunity | Author a quote from a deal or opportunity | supplementary | Built — 14 routes, UI | |
+| `WF-088` | Auto-assign the correct price book or price list to a deal by rule | Auto-assign the correct price book or price list to a deal by rule | supplementary | Built — 15 routes, UI | |
+| `WF-089` | Quote in a transaction currency with FX conversion and same-currency constraints | Quote in a transaction currency with FX conversion | supplementary | Built — 19 routes, UI | |
+| `WF-090` | Enforce configuration and discount guardrails with quote rules before publish | Enforce configuration and discount guardrails with quote rules | supplementary | Built — 13 routes, UI | |
+| `WF-091` | Route a discounted quote for standard approval | Route a discounted quote for standard approval | supplementary | Built — 17 routes, UI | |
+| `WF-092` | Chain sequential multi-level approvals through a workflow | Chain sequential multi-level approvals through a workflow | supplementary | Built — 14 routes, UI | |
+| `WF-093` | Build a branded proposal from a template | Build a branded proposal from a template | supplementary | Built — 16 routes, UI | |
+| `WF-094` | Publish and share the quote as a hosted link or email | Publish and share the quote as a hosted link or email | supplementary | Built — 11 routes, UI | |
+| `WF-095` | Collect acceptance by e-signature, countersignature, signer reassignment and identity verification | Collect acceptance by e-signature, countersignature and identity verification | supplementary | Built — 16 routes, UI | |
+| `WF-096` | Accept a quote without a signature and take payment in the quote | Accept a quote without a signature and take payment in the quote | supplementary | Built — 15 routes, UI | |
+| `WF-098` | Expire a quote and auto-send buyer reminders | Expire a quote and auto-send buyer reminders | supplementary | Built — 25 routes, UI | |
+| `WF-100` | Create a renewal quote from a contract and auto-create the renewal deal | Create a renewal quote from a contract and auto-create the renewal deal | supplementary | Built — 22 routes, UI | |
+| `WF-106` | Trigger outreach when a prospect repeatedly browses a high-intent page | Trigger outreach on high-intent page visits | supplementary | Built — 18 routes, UI | |
+| `WF-107` | Chase unresponsive buyers and reroute conversations from unresponsive reps | Chase unresponsive buyers and reroute unattended conversations | supplementary | Built — 25 routes, UI | |
 | `WF-124` | Native Mutual Action Plan with owners, timelines and reminders | Native Mutual Action Plan execution | supplementary | Built — 19 routes, UI | |
 | `WF-133` | Intent signal → seller alert → CRM task (routing workflow) | Real-time buyer-intent alerting and routing | supplementary | Built — 22 routes, UI | |
 | `WF-047` | Mirror room documents into CRM files | Mirror room documents into CRM files | supplementary | Pending | |
@@ -284,11 +284,32 @@ None — every critical workflow has a feature module on `main`.
 | `wf-069-gate-each-buyer-link-with-a-password-a` | `/api/wf-069` | 17 |
 | `wf-070-require-nda-acceptance-before-viewing` | `/api/wf-070` | 15 |
 | `wf-073-apply-confidential-view-and-block-screenshot` | `/api/wf-073` | 16 |
+| `wf-074-scope-visibility-to-an-audience-with-per-item` | `/api/wf-074` | 20 |
 | `wf-075-review-who-engaged-where-and-for-how-long` | `/api/wf-075` | 13 |
 | `wf-076-revoke-access-early-and-keep-the-audit` | `/api/wf-076` | 24 |
 | `wf-077-manage-internal-workspace-roles-and-le` | `/api/wf-077` | 24 |
 | `wf-078-require-recipient-identity-verification` | `/api/wf-078` | 20 |
 | `wf-079-export-a-tamper-evident-audit-trail-wi` | `/api/wf-079` | 15 |
+| `wf-080-download-the-executed-agreement-from-the-e-vault` | `/api/wf-080` | 21 |
+| `wf-081-expire-an-agreement-and-drive-pre-expiry` | `/api/wf-081` | 13 |
+| `wf-082-verify-and-ip-allowlist-inbound-provid` | `/api/wf082` | 16 |
+| `wf-083-record-buyer-sessions-behind-a-consent-gate` | `/api/wf-083` | 23 |
+| `wf-084-federate-staff-sso-and-auto-provision-via-scim` | `/api/wf-084` | 24 |
+| `wf-085-meet-gdpr-ccpa-residency-retention-dsar` | `/api/wf-085` | 16 |
+| `wf-086-author-a-quote-from-a-deal-or-opportunity` | `/api/wf-086` | 14 |
+| `wf-088-auto-assign-the-correct-price-book-or-price` | `/api/WF-088` | 15 |
+| `wf-089-quote-in-a-transaction-currency-with-fx-conversion` | `/api/wf-089` | 19 |
+| `wf-090-quote-guardrails` | `/api/wf-090` | 13 |
+| `wf-091-route-a-discounted-quote-for-standard-approval` | `/api/WF-091` | 17 |
+| `wf-092-chain-sequential-multi-level-approvals-through-a-workflow` | `/api/wf-092` | 14 |
+| `wf-093-build-a-branded-proposal-from-a-template` | `/api/wf-093` | 16 |
+| `wf-094-publish-quote` | `/api/WF-094` | 11 |
+| `wf-095-collect-acceptance-by-e-signature-countersignature` | `/api/wf-095` | 16 |
+| `wf-096-accept-a-quote-without-a-signature-and-take` | `/api/wf-096` | 15 |
+| `wf-098-expire-a-quote-and-auto-send-buyer-reminders` | `/api/wf-098` | 25 |
+| `wf-100-create-a-renewal-quote-from-a-contract-and-auto` | `/api/wf-100` | 22 |
+| `wf-106-trigger-outreach-on-high-intent-page-visits` | `/api/wf-106` | 18 |
+| `wf-107-chase-unresponsive-buyers-and-reroute-` | `/api/wf-107` | 25 |
 | `wf-124-native-mutual-action-plan-execution` | `/api/wf-124` | 19 |
 | `wf-133-real-time-buyer-intent-alerting-and-routing` | `/api/wf-133` | 22 |
 
