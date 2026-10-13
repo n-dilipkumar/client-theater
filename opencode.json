@@ -38,9 +38,10 @@
     },
 
     { "action": "shell", "resource": "*", "effect": "allow" },
-    { "action": "shell", "resource": "git push *", "effect": "ask" },
-    { "action": "shell", "resource": "gh pr merge *", "effect": "ask" },
-    { "action": "shell", "resource": "gh pr close *", "effect": "ask" }
+
+    { "action": "shell", "resource": "git push *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr merge *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr close *", "effect": "allow" }
   ],
   "instructions": ["AGENTS.md"]
 }
