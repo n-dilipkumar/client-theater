@@ -14,7 +14,6 @@ import {
   DEFAULT_MAPPINGS,
   DOCUMENTED_PAYLOAD,
   bindingLines,
-  canSendFromPage,
   invocationNote,
   invocationTone,
   invocationWord,
