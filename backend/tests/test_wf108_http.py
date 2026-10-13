@@ -22,6 +22,7 @@ from dsr.db.audited import AuditedDatabase
 from dsr.features import wf108_run_sla_response_timers_with_office_hours as feature
 from dsr.sla_timers import rules
 from dsr.store import RecordStore
+from fastapi.routing import APIRoute
 
 PREFIX = feature.router.prefix
 CHASE = "/api/wf-107"
@@ -454,6 +455,42 @@ class TestAuditSources:
         apply_http(client, room_id, conversation, policy["id"])
         client.post(f"{PREFIX}/rooms/{room_id}/timers/evaluate", json={"now": AT_14.isoformat()})
         assert feature.EVALUATE_SOURCE in self._audit_sources(db)
+
+
+class TestEveryRouteAnswers:
+    def test_no_advertised_route_returns_a_5xx(self, client, db: AuditedDatabase):
+        """Every route the host mounted has a working handler behind it.
+
+        A non-2xx is not a fault: a route reading a row that does not exist answers 404
+        and a write route with a stale id answers 409. A 5xx is the fault, because it
+        means a mounted route has no handler that survives its own first call.
+        """
+
+        room_id = make_room(db)
+        policy = make_policy_http(client, room_id)
+        conversation = open_conversation(client, room_id)
+        timer = apply_http(client, room_id, conversation, policy["id"])
+        substitutions = {
+            "room_id": room_id,
+            "policy_id": policy["id"],
+            "conversation_id": conversation,
+            "timer_id": timer["id"],
+            "decision_id": "fixed-rate",
+        }
+
+        checked = 0
+        for route in feature.router.routes:
+            if not isinstance(route, APIRoute):
+                continue
+            path = route.path
+            for key, value in substitutions.items():
+                path = path.replace("{" + key + "}", value)
+            for method in sorted(route.methods - {"HEAD", "OPTIONS"}):
+                body = {} if method in {"POST", "PUT", "PATCH"} else None
+                response = client.request(method, path, json=body)
+                assert response.status_code < 500, f"{method} {path} -> {response.status_code}"
+                checked += 1
+        assert checked >= 15, "the feature advertised fewer routes than this test expects"
 
 
 # --------------------------------------------------------------------------- #
