@@ -227,4 +227,7 @@ excuse to ship a broken feature — the failure is visible by design.
 - [ ] `frontend/src/features/<id>/index.jsx` with a default-export descriptor
 - [ ] `backend/tests/test_<ticket>.py` passing against a temp database
 - [ ] `git diff` touches **no** shared file listed above
+- [ ] The pull request body starts with `Closes #<issue>` on its own first line,
+      with the real issue number, so the issue closes automatically when the PR
+      merges. Without it the issue stays open and a person has to close it.
 - [ ] Jev gate returned `pass` before merge
