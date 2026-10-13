@@ -1121,7 +1121,7 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
     Every character below is encodable by cp1252. That is a hard requirement rather
     than a style preference: the seeder prints this string to a Windows console, and
     one RIGHTWARDS ARROW in a recovered feature's return string broke the entire
-    seeder. ``tests/test_wf068.py`` asserts it.
+    seeder. ``tests/test_wf068_http.py`` asserts it, character by character.
     """
     store = RecordStore(db)
     now: Any = context["now"]

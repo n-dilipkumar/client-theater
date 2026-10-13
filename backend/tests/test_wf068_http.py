@@ -40,6 +40,7 @@ from __future__ import annotations
 import ast
 import importlib
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 
 import dsr.features as host
@@ -1021,3 +1022,48 @@ class TestDailyScheduleOverHttp:
         body = client.get(f"{PREFIX}/automations/{created['id']}").json()
         assert body["awaiting_morning_run"] is True
         assert body["next_evaluation"] is not None
+
+
+# --------------------------------------------------------------------------- #
+# the seed
+# --------------------------------------------------------------------------- #
+
+
+class TestSeed:
+    """``seed(db, context)`` returns the line the shared seeder prints.
+
+    It lives here rather than in ``test_wf068.py`` because it needs a database,
+    and that file is deliberately fixture-free. The shared ``backend/seed.py``
+    calls every feature's ``seed`` and prints the result to a Windows console, so
+    a character cp1252 cannot encode takes the whole seeder down. ``test_seed.py``
+    would catch that, but only by breaking: this checks the string directly, at
+    the character level, and names the states it must mention.
+    """
+
+    ROOMS = [("room_a", "Northwind")]
+    NOW = datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)
+
+    def _seed(self, client: TestClient, room_ids: list) -> str:
+        module = importlib.import_module(FEATURE_MODULE)
+        return module.seed(
+            client.app.state.db,
+            {"room_ids": room_ids, "now": self.NOW, "rng": None},
+        )
+
+    def test_the_summary_is_cp1252_encodable(self, client: TestClient):
+        summary = self._seed(client, self.ROOMS)
+        assert isinstance(summary, str)
+        assert summary
+        assert summary.encode("cp1252").decode("cp1252") == summary
+
+    def test_the_summary_names_the_researched_states(self, client: TestClient):
+        summary = self._seed(client, self.ROOMS)
+        assert "prep page" in summary
+        assert "flow instances" in summary
+        for status in vocab.FLOW_INSTANCE_STATUSES:
+            assert status in summary
+        assert "no Engage licence" in summary
+        assert "no parent account" in summary
+
+    def test_no_rooms_seeds_nothing(self, client: TestClient):
+        assert self._seed(client, []) == ""
