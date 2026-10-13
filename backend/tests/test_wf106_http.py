@@ -42,7 +42,23 @@ FEATURE_ID = "wf-106-trigger-outreach-on-high-intent-page-visits"
 PREFIX = "/api/wf-106"
 ROOM = "room-1"
 
-NOW = datetime(2026, 10, 5, 9, 0, tzinfo=timezone.utc)
+# The HTTP routes under test read the wall clock themselves: they decide
+# whether a view falls inside the workflow's repeat window by comparing the
+# view's visited_at against the moment the request is served. The product
+# functions in this module take an injected "now" and are deterministic, but
+# the routes are not, so a frozen constant here is a time bomb: the fixture
+# only sits inside a 7-day window for 7 days after the constant was written.
+#
+# This was frozen at 2026-10-05 and the window closed at 2026-10-12T09:00:00Z,
+# at which point all 17 tests in this file began failing with
+# "TypeError: 'NoneType' object is not subscriptable" at line 768 - the view
+# was silently outside the window, so no block was shown, so
+# shown["delivery"] was the documented not-shown value None.
+#
+# Anchor to the present instead. The window is seven days wide, so the few
+# milliseconds between this import and the route reading its own clock are
+# irrelevant, and every assertion below is expressed relative to NOW.
+NOW = datetime.now(timezone.utc)
 
 WORKFLOW_BODY: dict[str, object] = {
     "name": "Upgrade page repeaters",

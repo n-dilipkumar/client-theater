@@ -122,7 +122,29 @@ FEATURE_ID = "wf-053-route-a-booking-to-the-owner-of-the-cr"
 #: A fixed moment, so "the next Monday" is a fact rather than a race with the wall
 #: clock. ``now`` is a Monday at 08:00 UTC, which leaves the whole working week in
 #: front of every slot assertion below.
-NOW = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
+#:
+#: This used to be hard-coded to 2026-10-05, which is a Monday at 08:00 - but a
+#: hard-coded Monday is still a time bomb. The HTTP routes decide slot validity
+#: against the real wall clock, so once the constant fell far enough into the
+#: past the routes started rejecting slots that the fixtures still called future,
+#: and the read-back routes returned nothing. It detonated on 2026-10-13 with
+#: "IndexError: list index out of range" and "assert []" across seven tests.
+#:
+#: Anchor to the most recent Monday at 08:00 instead. Both properties the
+#: assertions need are preserved: NOW is always a Monday at 08:00, and NOW is
+#: always in the past, so the whole working week in front of it stays ahead of
+#: the wall clock.
+def _most_recent_monday_0800() -> datetime:
+    now = datetime.now(timezone.utc)
+    monday = (now - timedelta(days=now.weekday())).replace(
+        hour=8, minute=0, second=0, microsecond=0
+    )
+    if monday > now:
+        monday -= timedelta(days=7)
+    return monday
+
+
+NOW = _most_recent_monday_0800()
 
 
 # --------------------------------------------------------------------------- #
