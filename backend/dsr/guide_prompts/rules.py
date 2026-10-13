@@ -475,8 +475,10 @@ def evaluate(
     if throttled and throttle.get("enabled"):
         app_dismissed = parse_time(session.get("last_dismissed_at"))
         if app_dismissed is not None:
+            unit = str(throttle.get("unit") or "day")
+            seconds = SECONDS_PER_UNIT.get(unit, SECONDS_PER_UNIT["day"])
             throttle_due = app_dismissed + timedelta(
-                seconds=throttle_interval_seconds(throttle["count"], throttle["unit"])
+                seconds=_as_int(throttle.get("count"), 1) * seconds
             )
 
     holds = [d for d in (repeat_due, throttle_due) if d is not None]
