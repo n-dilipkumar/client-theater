@@ -444,6 +444,56 @@ def test_the_quote_index_filters_on_a_json_path_the_team_added_itself(client):
     assert [row["id"] for row in payload["entries"]] == [mine["id"]]
 
 
+def test_the_advanced_filter_is_scoped_to_the_room_it_was_asked_about(client):
+    """A filter typed in one room must not widen the page into another room.
+
+    The store resolves ``where`` keys as paths inside the record's ``data``, and
+    ``room_id`` is an envelope column rather than a data field. A route that put
+    the room inside the ``where`` would match no record at all, which reads as
+    "no quotes" rather than as a bug, so the room is narrowed on the way out.
+    """
+    configure(client, high_activity_threshold=10)
+    mine = make_quote(client, my_own_field="renewal")
+    other = client.post(
+        "/api/records/quote",
+        json={
+            "title": "Other room",
+            "status": "PUBLISHED",
+            "my_own_field": "renewal",
+            "expires_at": now_iso(21),
+        },
+        params={"room_id": "room_2"},
+    )
+    assert other.status_code == 201, other.text
+
+    payload = client.get(
+        f"{PREFIX}/quotes",
+        params={"where": json_where({"my_own_field": "renewal"}), "room_id": "room_1"},
+    ).json()
+
+    assert [row["id"] for row in payload["entries"]] == [mine["id"]]
+
+
+def test_an_empty_advanced_filter_still_returns_only_the_room(client):
+    """The unfiltered page is the common case, so the room must still narrow it.
+
+    A page that has not been filtered yet sends ``where`` with nothing in it, or
+    sends no ``where`` at all. Both must return only this room's quotes.
+    """
+    configure(client, high_activity_threshold=10)
+    mine = make_quote(client)
+    other = client.post(
+        "/api/records/quote",
+        json={"title": "Other room", "status": "PUBLISHED", "expires_at": now_iso(21)},
+        params={"room_id": "room_2"},
+    )
+    assert other.status_code == 201, other.text
+
+    for params in ({}, {"where": "{}"}):
+        payload = client.get(f"{PREFIX}/quotes", params={**params, "room_id": "room_1"}).json()
+        assert [row["id"] for row in payload["entries"]] == [mine["id"]]
+
+
 def json_where(payload):
     """The compact or JSON form of the store's where parameter."""
     import json as _json
