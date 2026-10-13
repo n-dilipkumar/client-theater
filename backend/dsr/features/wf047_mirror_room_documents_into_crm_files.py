@@ -536,18 +536,12 @@ DEMO_CONNECTIONS: tuple[dict[str, Any], ...] = (
 #: ``stale``, ``withheld``, ``failed`` and ``pending`` without having to drive the
 #: page into each one.
 DEMO_ASSETS: tuple[dict[str, Any], ...] = (
-    # Mirrored, then mirrored again so the researched idempotency is a row.
+    # Pending until the reconciliation pushes it, then mirrored. Mirrored twice,
+    # so the researched idempotency is a row.
     {
         "filename": "northwind-rollout-deck.pdf",
         "mime_type": "application/pdf",
         "content_base64": "UERGIC0xMQSBXUi0wMDAx",
-        "push_to_crm": True,
-    },
-    # Mirrored, then its bytes are replaced, so the chip reads stale.
-    {
-        "filename": "fabrikam-pricing-2026.xlsx",
-        "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "content_base64": "UERGIC0xMQSBGICBMSQ==",
         "push_to_crm": True,
     },
     # Withheld: the toggle is off, so nothing is sent.
@@ -564,11 +558,12 @@ DEMO_ASSETS: tuple[dict[str, Any], ...] = (
         "content_base64": "UERGIC0xMQSBXUi0wMDA1",
         "push_to_crm": True,
     },
-    # Pending: registered, never pushed. The reconciliation pass finds it.
+    # Stale: pushed, then its bytes are replaced, so the chip reads stale and the
+    # CRM still holds the superseded file.
     {
-        "filename": "mutual-action-plan.pdf",
-        "mime_type": "application/pdf",
-        "content_base64": "UERGIC0xMQSBXUi0wMDA0",
+        "filename": "fabrikam-pricing-2026.xlsx",
+        "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content_base64": "UERGIC0xMQSBGICBMSQ==",
         "push_to_crm": True,
     },
 )
@@ -655,55 +650,56 @@ def seed(db: AuditedDatabase, context: dict[str, Any]) -> str:
             source=source,
         )
 
-    # Asset 0 goes through a HubSpot deal connection twice: once to mirror it and
-    # once to show the researched idempotency, where the second mirror sends
-    # nothing and creates nothing.
-    first = register(DEMO_ASSETS[0], "Fabrikam deal files")
-    record(first["asset"]["id"])
-    record(first["asset"]["id"])
+    # Asset 0 is registered and left for the reconciliation below to find, which is
+    # the researched rule as a row rather than as a claim.
+    register(DEMO_ASSETS[0], "Fabrikam deal files")
 
-    # Asset 1 mirrors, then its bytes are replaced. That is a revision, and it is
-    # left there: the chip reads stale, the CRM still holds the old file, and the
-    # reconciliation below is what pushes the new one. A demo that mirrored it a
-    # third time would hide the state the workflow exists to show.
-    second = register(DEMO_ASSETS[1], "Fabrikam contact files")
-    record(second["asset"]["id"])
+    # Asset 1 has the toggle off, so a mirror is withheld and the vendor is never
+    # asked. The researched toggle, as a row.
+    record(register(DEMO_ASSETS[1], "Fabrikam deal files")["asset"]["id"])
+
+    # Asset 2 sits on the Salesforce connection, whose file API the research could
+    # not source. The refusal is named on the mirror row rather than invented.
+    record(register(DEMO_ASSETS[2], "Northwind deal files")["asset"]["id"])
+
+    # One more asset on the connection whose owning record has not arrived. The
+    # mirror has nowhere to write the returned file id, and records that by name
+    # instead of refusing the document.
+    record(register(DEMO_ASSETS[0], "Contoso account files")["asset"]["id"])
+
+    # The reconciliation pass, so the page shows the researched rule firing on the
+    # asset whose event never arrived. It is forced because a seeded run is not a
+    # scheduled one: nothing in this package starts a thread, so a demo that waited
+    # for the floor would push nothing.
+    reconciled = engine.reconcile(room_id, actor=actor, source=source, now=stamp, force=True)
+
+    # The asset the reconciliation just pushed is mirrored once more by hand, so
+    # the researched idempotency is a row: the second mirror sends nothing and
+    # creates nothing.
+    first = next(
+        entry
+        for entry in engine.list_assets(room_id=room_id, limit=100)
+        if entry["filename"] == DEMO_ASSETS[0]["filename"] and entry["crm_file_id"]
+    )
+    record(first["id"])
+
+    # And a revision, left stale on purpose. Its bytes are replaced after the push,
+    # so the chip reads stale and the CRM still holds the superseded file. A demo
+    # that reconciled a second time would clear the state the workflow exists to
+    # show, so the revision is made last and nothing pushes it after that.
+    revision = register(DEMO_ASSETS[3], "Fabrikam contact files")
+    record(revision["asset"]["id"])
     engine.replace_content(
-        second["asset"]["id"],
+        revision["asset"]["id"],
         {
-            "filename": DEMO_ASSETS[1]["filename"],
-            "mime_type": DEMO_ASSETS[1]["mime_type"],
-            "content_base64": "UERGIC0xMQSBHICBNSQ1WUi0wMDAx",
+            "filename": DEMO_ASSETS[3]["filename"],
+            "mime_type": DEMO_ASSETS[3]["mime_type"],
+            "content_base64": "UERGIC0xMQSBGICBNSQ1WUi0wMDAx",
         },
         room_id=room_id,
         actor=actor,
         source=source,
     )
-
-    # Asset 2 has the toggle off, so a mirror is withheld and the vendor is never
-    # asked. The researched toggle, as a row.
-    third = register(DEMO_ASSETS[2], "Fabrikam deal files")
-    record(third["asset"]["id"])
-
-    # Asset 3 sits on the Salesforce connection, whose file API the research could
-    # not source. The refusal is named on the mirror row rather than invented.
-    fourth = register(DEMO_ASSETS[3], "Northwind deal files")
-    record(fourth["asset"]["id"])
-
-    # Asset 4 is registered and never pushed, so the chip reads pending and the
-    # reconciliation has something real to find.
-    register(DEMO_ASSETS[4], "Fabrikam deal files")
-
-    # One asset on the connection whose owning record has not arrived. The mirror
-    # has nowhere to write the returned file id, and records that by name instead
-    # of refusing the document.
-    record(register(DEMO_ASSETS[0], "Contoso account files")["asset"]["id"])
-
-    # One reconciliation run, so the page shows the researched rule firing on the
-    # assets whose event never arrived. It is forced because a seeded run is not a
-    # scheduled one: nothing in this package starts a thread, so a demo that waited
-    # for the floor would push nothing.
-    reconciled = engine.reconcile(room_id, actor=actor, source=source, now=stamp, force=True)
 
     # The final chip state of each asset, not the state after each mirror. An
     # asset mirrored twice counts once here and twice in the outcome list, and a
