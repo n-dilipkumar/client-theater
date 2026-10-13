@@ -1272,7 +1272,9 @@ def test_the_seed_counter_pass_tolerates_a_quote_that_is_gone(service):
     seeder down for a row this workflow no longer needs.
     """
     engine, db = service
-    from dsr.features import wf097_track_buyer_engagement_on_a_shared_quote as plugin  # noqa: PLC0415
+    from dsr.features import (
+        wf097_track_buyer_engagement_on_a_shared_quote as plugin,  # noqa: PLC0415
+    )
 
     quote = make_quote(engine, title="Written by another workflow")
 
