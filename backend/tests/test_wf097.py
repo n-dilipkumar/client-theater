@@ -1184,6 +1184,85 @@ def test_an_amount_that_is_not_a_number_contributes_nothing():
     assert out["total_value"] == 0.0
 
 
+def test_advanced_filters_are_scoped_to_the_room_they_were_asked_about(service):
+    """The generic filter query is room-scoped like every other read here.
+
+    Without this, a filter typed in one room would match a quote in another and
+    the page would show a row the workspace cannot see.
+    """
+    engine, _ = service
+    mine = make_quote(engine, my_own_field="renewal")
+    engine.store.create(
+        "quote",
+        {"title": "Other room", "status": "PUBLISHED", "my_own_field": "renewal"},
+        room_id="room_2",
+        source="seed",
+    )
+
+    found = engine.advanced({"my_own_field": "renewal"}, room_id="room_1")
+    assert [row["id"] for row in found] == [mine["id"]]
+
+
+def test_advanced_filters_are_not_narrowed_by_a_room_nobody_asked_about(service):
+    """The room filter is a narrowing, so omitting it must not narrow anything.
+
+    A caller that filters across every room is answering a different question
+    from the one the index page asks, and it is a question the dashboard does
+    ask. Scoping every read to one room would make that answer impossible.
+    """
+    engine, _ = service
+    mine = make_quote(engine, my_own_field="renewal")
+    theirs = engine.store.create(
+        "quote",
+        {"title": "Other room", "status": "PUBLISHED", "my_own_field": "renewal"},
+        room_id="room_2",
+        source="seed",
+    )
+
+    found = engine.advanced({"my_own_field": "renewal"})
+    assert sorted(row["id"] for row in found) == sorted([mine["id"], theirs["id"]])
+
+
+def test_advanced_filters_keep_a_page_full_in_a_room_that_holds_few_rows(service):
+    """The room filter is applied after the index answers, so it cannot truncate.
+
+    The store's JSON-path query cannot filter on the room column, so the page is
+    filled from the index first and narrowed second. If it were the other way
+    round, a workspace with two rooms and a small page would show fewer rows
+    than the page asks for, and the missing rows would look like missing data.
+    """
+    engine, _ = service
+    for index in range(4):
+        make_quote(engine, title=f"Room one {index}", my_own_field="renewal")
+    for index in range(9):
+        engine.store.create(
+            "quote",
+            {"title": f"Room two {index}", "status": "PUBLISHED", "my_own_field": "renewal"},
+            room_id="room_2",
+            source="seed",
+        )
+
+    found = engine.advanced({"my_own_field": "renewal"}, room_id="room_1", limit=4)
+    assert len(found) == 4
+    assert {row["room_id"] for row in found} == {"room_1"}
+
+
+def test_advanced_filters_with_no_conditions_return_only_the_room(service):
+    """An empty filter means every quote, and the room still narrows it.
+
+    A route that passes ``where`` through with nothing in it is the normal case
+    for a page that has not been filtered yet, so the room must still be the only
+    limit on what comes back.
+    """
+    engine, _ = service
+    mine = make_quote(engine)
+    engine.store.create(
+        "quote", {"title": "Other room", "status": "PUBLISHED"}, room_id="room_2", source="seed"
+    )
+
+    found = engine.advanced({}, room_id="room_1")
+    assert [row["id"] for row in found] == [mine["id"]]
+
 
 def test_the_seed_counter_pass_tolerates_a_quote_that_is_gone(service):
     """One id in, one counter block out; a missing quote is skipped, not fatal.

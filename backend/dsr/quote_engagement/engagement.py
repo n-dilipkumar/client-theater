@@ -329,11 +329,21 @@ class QuoteEngagementService:
         filter on a field it added itself without this workflow knowing that field
         exists. Rebuilding it here would be a second filter language that drifts
         from the first.
+
+        The room is applied to the rows the index answered for, not inside the
+        ``where``. The store resolves every ``where`` key as a path inside the
+        record's ``data``, and ``room_id`` is an envelope column rather than a
+        data field, so a ``where`` that names it matches no record at all and a
+        filter typed in one room would return nothing. The index is therefore
+        asked for as many rows as it will give, and the room filter narrows
+        them, so a narrow room does not truncate the page the caller asked for.
         """
         filters = dict(raw or {})
+        page = max(1, min(int(limit), 1000))
+        records = self.store.find(QUOTE, filters, limit=1000 if room_id else page)
         if room_id:
-            filters["room_id"] = room_id
-        return self.store.find(QUOTE, filters, limit=min(limit, 1000))
+            records = [row for row in records if row.get("room_id") == room_id]
+        return records[:page]
 
     # -- activity ----------------------------------------------------------- #
 
