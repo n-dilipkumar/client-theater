@@ -19,7 +19,7 @@ Source: ``docs/research/digital-sales-room-workflows/wf/WF-097.md``.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from dsr.quote_engagement.vocabulary import (
     ACCEPTED_STATUSES,
@@ -54,9 +54,6 @@ from dsr.quote_engagement.vocabulary import (
     VIEW_COUNT,
     VIEW_EVENT,
 )
-
-#: A day in seconds, for the two windows that are measured in days.
-SECONDS_PER_DAY = 86400
 
 
 class QuoteEngagementRuleError(ValueError):
@@ -110,12 +107,6 @@ def iso(moment: datetime | None) -> str | None:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
     return moment.astimezone(timezone.utc).isoformat(timespec="milliseconds")
-
-
-def newest(moments: Iterable[datetime | None]) -> datetime | None:
-    """The latest of the moments that parsed, or ``None``."""
-    known = [moment for moment in moments if moment is not None]
-    return max(known) if known else None
 
 
 # --------------------------------------------------------------------------- #
@@ -890,7 +881,6 @@ __all__ = (
     "is_accepted",
     "is_chasable",
     "iso",
-    "newest",
     "normalise_event",
     "normalise_surface",
     "parse_timestamp",

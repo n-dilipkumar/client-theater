@@ -1088,6 +1088,121 @@ def test_an_unreadable_timestamp_is_absent_rather_than_an_exception():
 
 
 # --------------------------------------------------------------------------- #
+# The edges the rules have to survive
+# --------------------------------------------------------------------------- #
+
+
+def test_a_datetime_is_read_as_a_moment_and_a_naive_one_as_utc():
+    """The rules take datetimes as well as strings, because callers hold both.
+
+    A naive moment is read as UTC rather than refused. Every timestamp the store
+    writes carries an offset, so this only matters for a caller that built the
+    value by hand, and refusing it there buys nothing and loses a comparison
+    later.
+    """
+    assert parse_timestamp(NOW) == NOW
+    assert parse_timestamp(NOW.replace(tzinfo=None)) == NOW
+    assert iso(NOW.replace(tzinfo=None)) == iso(NOW)
+    assert iso(None) is None
+
+
+def test_an_unusable_event_counts_as_nothing_rather_than_raising():
+    """``counts_as_view`` answers a question about a row, so it must total.
+
+    It is called on every row of a log, including a row a teammate wrote through
+    the generic records endpoint with a label this workflow never checked. A row
+    like that is not a view, and asking the question about it must not raise.
+    """
+    assert counts_as_view("Quote telepathed") is False
+    assert counts_as_view(None) is False
+
+
+def test_a_count_that_is_not_a_number_classifies_as_zero():
+    """A counter read from a hand-written field is not always a number.
+
+    A malformed Activity Count is treated as no activity, which is the reading
+    that cannot overstate how engaged a buyer is.
+    """
+    assert classify_activity("many", 10) == ACTIVITY_LOW
+    assert classify_activity(None, 10) == ACTIVITY_LOW
+
+
+def test_a_naive_now_is_read_as_utc_by_every_rule_that_takes_one():
+    """Four rules accept a ``now``, and all four must agree on a naive one.
+
+    Otherwise the same quote measures differently depending on which panel asked,
+    and the pipeline overview and the follow-up list would disagree.
+    """
+    naive = NOW.replace(tzinfo=None)
+    events = [{"event": QUOTE_VIEWED, "surface": SURFACE_QUOTE_LINK, "occurred_at": iso(NOW)}]
+    assert summarise_events(events, now=naive, threshold=10)["days_since_last_activity"] == 0
+    rows = [_row("q1", data={"status": "PUBLISHED"}, counters={LAST_ACTIVITY_AT: iso(NOW)})]
+    assert recommend_follow_ups(rows, now=naive, no_activity_after_days=1) == []
+    assert pipeline_overview(rows, now=naive, threshold=10)["quotes"] == 1
+    assert chart_points(rows, now=naive, threshold=10)["count"] == 1
+
+
+def test_an_expired_unaccepted_quote_is_counted_as_at_risk_in_the_overview():
+    """The overview's at-risk figure covers the past as well as the next window.
+
+    A quote that already expired and was never accepted is the seller problem the
+    researched figure is describing, so it counts even though the "expires soon"
+    window is a forward-looking number.
+    """
+    rows = [
+        _row(
+            "gone",
+            data={"status": "PUBLISHED", "expires_at": iso(NOW - timedelta(days=5))},
+            counters={ACTIVITY_COUNT: 3},
+        ),
+        _row(
+            "won",
+            data={"status": "ACCEPTED", "expires_at": iso(NOW - timedelta(days=5))},
+            counters={ACTIVITY_COUNT: 3},
+        ),
+    ]
+    out = pipeline_overview(rows, now=NOW, threshold=10, expiring_within_days=14)
+    assert out["quotes_expired"] == 2
+    assert out["quotes_at_risk"] == 1
+
+
+def test_an_amount_that_is_not_a_number_contributes_nothing():
+    """A value read from a hand-written field is not always a number either.
+
+    A malformed amount is skipped rather than added as zero, so the high-activity
+    value is the sum of the amounts it could read.
+    """
+    rows = [
+        _row(
+            "q1",
+            data={"status": "PUBLISHED", "hs_quote_amount": "a lot"},
+            counters={ACTIVITY_COUNT: 12, "activity_class": ACTIVITY_HIGH},
+        )
+    ]
+    out = pipeline_overview(rows, now=NOW, threshold=10)
+    assert out["quotes_with_a_value"] == 0
+    assert out["total_value"] == 0.0
+
+
+
+def test_the_seed_counter_pass_tolerates_a_quote_that_is_gone(service):
+    """One id in, one counter block out; a missing quote is skipped, not fatal.
+
+    The helper is given the ids the seed created, so a missing one means a quote
+    was deleted between the two passes. Raising there would take the whole
+    seeder down for a row this workflow no longer needs.
+    """
+    engine, db = service
+    from dsr.features import wf097_track_buyer_engagement_on_a_shared_quote as plugin  # noqa: PLC0415
+
+    quote = make_quote(engine, title="Written by another workflow")
+
+    message = plugin._seed_counter_block(db, "room_1", [quote["id"], "quote_absent"])
+
+    assert message == "counters recomputed on 1 seeded quotes"
+
+
+# --------------------------------------------------------------------------- #
 # The seed
 # --------------------------------------------------------------------------- #
 
