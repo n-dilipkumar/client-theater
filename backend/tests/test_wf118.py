@@ -564,6 +564,18 @@ def test_select_next_returns_the_first_eligible_in_tier_order():
     assert chosen["blocked"] is None
 
 
+def test_evaluate_tolerates_a_malformed_throttle_document():
+    guide = {"key": "a", "name": "A", "activation": activation()}
+    order = {"guide_keys": ["a"], "throttling": {"enabled": True}}
+    session = rules.default_session("app", "dana", BASE)
+    session = rules.apply_dismissal(session, "a", "dismissed", BASE)
+    view = rules.evaluate(guide, order, session, at(hours=1))
+    # The count and unit default rather than raising, so a malformed stored
+    # document cannot turn into a 5xx.
+    assert view["throttle_due_at"] == rules.to_iso(at(days=1))
+    assert view["eligible"] is False
+
+
 def test_select_next_reports_why_none_is_eligible():
     guides = [{"key": "a", "name": "A", "activation": activation(repeat={"enabled": False})}]
     order = {"guide_keys": ["a"], "throttling": {"enabled": False}}
