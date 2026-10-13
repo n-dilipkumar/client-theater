@@ -313,16 +313,19 @@ class CrmFileSyncEngine:
         row = self.store.create(
             vocabulary.ASSETS, body, actor=actor, source=source, room_id=room_id
         )
-        result = {"asset": asset_rules.summarise(_as_data(row) or {}, connection)}
         if mirror:
-            result["mirror"] = self.mirror_asset(
+            # The mirror's own answer carries the asset state *after* the mirror.
+            # Returning the summary computed here would report ``pending`` beside a
+            # result that says ``mirrored``, which is a response that contradicts
+            # itself in the same object.
+            result = self.mirror_asset(
                 row["id"],
-                connection_id=connection_id,
                 room_id=room_id,
                 actor=actor,
                 source=source,
             )
-        return result
+            return {"asset": result["asset"], "mirror": result}
+        return {"asset": asset_rules.summarise(_as_data(row) or {}, connection)}
 
     def read_asset(self, asset_id: str, *, room_id: str | None = None) -> dict[str, Any]:
         """One asset, with its chip state and its mirror history."""
@@ -431,6 +434,16 @@ class CrmFileSyncEngine:
         The digest moves, so the chip becomes ``stale`` and the next mirror creates
         a new CRM file. The old ``crm_file_id`` is kept on the row until that
         mirror runs, so a reader can see which file the CRM still holds.
+
+        With ``mirror`` set, the returned asset is the one *after* the mirror, for
+        the same reason :meth:`register_asset` does it that way: a response that
+        says ``stale`` beside a mirror that says ``mirrored`` contradicts itself.
+        """
+        """Replace an asset's bytes, which is how a revision arrives.
+
+        The digest moves, so the chip becomes ``stale`` and the next mirror creates
+        a new CRM file. The old ``crm_file_id`` is kept on the row until that
+        mirror runs, so a reader can see which file the CRM still holds.
         """
         row = self._row(vocabulary.ASSETS, asset_id)
         if row is None or (room_id is not None and row["room_id"] != room_id):
@@ -463,6 +476,7 @@ class CrmFileSyncEngine:
                 actor=actor,
                 source=source,
             )
+            result["asset"] = result["mirror"]["asset"]
         return result
 
     # ----------------------------------------------------------------- #
@@ -690,6 +704,22 @@ class CrmFileSyncEngine:
         stamp = now or _utcnow()
         connections = self.connections(room_id)
         due = [entry for entry in connections if self._is_due(entry, stamp, interval_seconds)]
+        # The floor this run actually applied, not a constant. A scheduler that
+        # passed an override needs to read back the number it got, and a run that
+        # did not needs to read the per-connection floors it used.
+        applied = (
+            self._poll_interval(interval_seconds)
+            if interval_seconds is not None
+            else vocabulary.DEFAULT_POLL_INTERVAL_SECONDS
+        )
+        floors = {
+            str(entry["id"]): self._poll_interval(
+                interval_seconds
+                if interval_seconds is not None
+                else entry.get("poll_interval_seconds")
+            )
+            for entry in connections
+        }
         if not due and not force:
             return {
                 "room_id": room_id,
@@ -698,7 +728,8 @@ class CrmFileSyncEngine:
                     "no connection was due. The reconciliation floor is a floor a scheduler "
                     "respects, not a timer this package runs."
                 ),
-                "interval_seconds": vocabulary.DEFAULT_POLL_INTERVAL_SECONDS,
+                "interval_seconds": applied,
+                "connection_intervals": floors,
                 "mirrored": 0,
                 "results": [],
                 "candidates": 0,
@@ -738,7 +769,8 @@ class CrmFileSyncEngine:
             "mirrored": sum(1 for r in results if r["outcome"] == vocabulary.OUTCOME_MIRRORED),
             "candidates": len(candidates),
             "results": results,
-            "interval_seconds": vocabulary.DEFAULT_POLL_INTERVAL_SECONDS,
+            "interval_seconds": applied,
+            "connection_intervals": floors,
             "at": stamp,
         }
 
@@ -749,13 +781,22 @@ class CrmFileSyncEngine:
         candidate, and an asset whose digest moved since its last mirror is a
         revision waiting. An asset whose push is off is never a candidate, because
         the rep switched it off.
+
+        This reads the **raw** rows rather than the summaries :meth:`list_assets`
+        returns. The summary renames the two digest fields for the page's benefit,
+        so a candidate test written against it would compare ``digest`` with
+        ``mirrored_content_digest``, find nothing equal, and quietly never report a
+        revision the event path missed. That is the whole job of this method.
         """
         ordered: list[str] = []
-        for asset in self.list_assets(room_id=room_id, limit=1000):
-            if not asset_rules.push_enabled(asset):
+        rows = self.store.list(vocabulary.ASSETS, room_id=room_id, limit=1000)
+        for row in rows:
+            payload = _as_data(row) or {}
+            connection = self._connection_payload(payload.get("connection_id"), room_id)
+            if not asset_rules.push_enabled(payload, connection):
                 continue
-            if asset_rules.missing_file_id(asset) or asset_rules.is_revision(asset):
-                ordered.append(asset["id"])
+            if asset_rules.missing_file_id(payload) or asset_rules.is_revision(payload):
+                ordered.append(str(row["id"]))
         return ordered[: max(1, min(int(limit), 1000))]
 
     def _is_due(self, connection: Mapping[str, Any], stamp: str, override: int | None) -> bool:
@@ -784,6 +825,11 @@ class CrmFileSyncEngine:
         try:
             seconds = int(raw)
         except (TypeError, ValueError):
+            return vocabulary.DEFAULT_POLL_INTERVAL_SECONDS
+        if seconds <= 0:
+            # A zero floor is a floor nobody set, and a negative one is not a time.
+            # Both read as "unset" rather than being silently clamped to the
+            # minimum, because a caller who wrote 0 meant "use your default".
             return vocabulary.DEFAULT_POLL_INTERVAL_SECONDS
         return max(vocabulary.MIN_POLL_INTERVAL_SECONDS, seconds)
 
