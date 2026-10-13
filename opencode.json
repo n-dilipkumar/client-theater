@@ -1,15 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/space-bunny-free",
-  "small_model": "opencode/space-bunny-free",
+  "model": "opencode/step-5-preview-free",
+  "small_model": "opencode/step-5-preview-free",
   "agents": {
-    "build": { "model": "opencode/space-bunny-free#max" },
-    "plan": { "model": "opencode/space-bunny-free#max" },
-    "general": { "model": "opencode/space-bunny-free#max" },
-    "explore": { "model": "opencode/space-bunny-free#max" },
-    "compaction": { "model": "opencode/space-bunny-free#max" },
-    "title": { "model": "opencode/space-bunny-free#max" },
-    "summary": { "model": "opencode/space-bunny-free#max" }
+    "build": { "model": "opencode/step-5-preview-free#high" },
+    "plan": { "model": "opencode/step-5-preview-free#high" },
+    "general": { "model": "opencode/step-5-preview-free#high" },
+    "explore": { "model": "opencode/step-5-preview-free#high" },
+    "compaction": { "model": "opencode/step-5-preview-free#high" },
+    "title": { "model": "opencode/step-5-preview-free#high" },
+    "summary": { "model": "opencode/step-5-preview-free#high" }
   },
   "autoupdate": false,
   "share": "disabled",
