@@ -566,4 +566,3 @@ def test_the_seed_returns_a_cp1252_string_of_mixed_states(memory_db):
     assert text.isascii()
     assert text.encode("cp1252").decode("cp1252") == text
     assert "recorded" in text and "refused" in text
-
