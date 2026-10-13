@@ -119,6 +119,7 @@ LINK_SOURCE = f"POST {PREFIX}/links"
 MODULE = "wf053_route_a_booking_to_the_owner_of_the_cr"
 FEATURE_ID = "wf-053-route-a-booking-to-the-owner-of-the-cr"
 
+
 #: A fixed moment, so "the next Monday" is a fact rather than a race with the wall
 #: clock. ``now`` is a Monday at 08:00 UTC, which leaves the whole working week in
 #: front of every slot assertion below.
