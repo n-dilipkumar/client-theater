@@ -33,7 +33,6 @@ import {
 import {
   governanceApi,
   listRooms,
-  shortTimestamp,
   wholeInRange,
 } from './api'
 import {
