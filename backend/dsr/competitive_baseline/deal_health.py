@@ -982,7 +982,16 @@ class DealHealthEngine:
             if where
             else self.store.list(collection, limit=limit)
         )
-        return sorted(rows, key=lambda row: str(row.get("created_at") or ""))
+        # The order is explicit and total: `created_at` alone is not a total
+        # order, because one call raises several cues or writes several events
+        # inside the same microsecond. Without the id as a tiebreaker, two
+        # identical requests could return the same rows in different orders, and
+        # a caller that paired two responses would pair the wrong rows. The id is
+        # arbitrary but fixed per run, which is all determinism needs.
+        return sorted(
+            rows,
+            key=lambda row: (str(row.get("created_at") or ""), str(row.get("id") or "")),
+        )
 
     def _verify_visible(
         self, collection: str, record_id: str, label: str, expected: Mapping[str, Any]

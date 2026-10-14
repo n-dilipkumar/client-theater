@@ -434,7 +434,11 @@ def test_a_cue_can_be_listed_open_only_and_closed_by_an_outcome(client: TestClie
     listed = client.get(
         f"{PREFIX}/deals/{deal['id']}/coaching", params={"open_only": "true"}
     ).json()["coaching"]
-    assert [row["id"] for row in listed] == [row["id"] for row in cues]
+    # Set equality, not list equality: this call raises every cue inside the same
+    # instant, so `created_at` ties and the wire order is not part of the
+    # contract. The engine's order is deterministic per run, and the property
+    # that matters is which cues are open, not the order they arrive in.
+    assert {row["id"] for row in listed} == {row["id"] for row in cues}
 
     closed = client.post(
         f"{PREFIX}/coaching/outcome", json={"cue_id": cues[0]["id"], "state": "actioned"}
@@ -446,6 +450,25 @@ def test_a_cue_can_be_listed_open_only_and_closed_by_an_outcome(client: TestClie
         f"{PREFIX}/deals/{deal['id']}/coaching", params={"open_only": "true"}
     ).json()["coaching"]
     assert cues[0]["id"] not in [row["id"] for row in still_open]
+
+
+def test_two_identical_reads_of_one_collection_return_the_same_order(
+    client: TestClient, room_id: str
+):
+    """The read order is total and stable, which is what the CI defect was.
+
+    One scoring call raises every cue inside the same instant, so `created_at`
+    ties. Without the id as a tiebreaker the two reads below could disagree, and
+    a caller that paired them would pair the wrong rows.
+    """
+    deal = _deal(client, room_id, "Contoso")
+    created = client.post(f"{PREFIX}/deals/{deal['id']}/score").json()["coaching"]
+    assert len(created) >= 2
+
+    first = client.get(f"{PREFIX}/deals/{deal['id']}/coaching").json()["coaching"]
+    second = client.get(f"{PREFIX}/deals/{deal['id']}/coaching").json()["coaching"]
+    assert [row["id"] for row in first] == [row["id"] for row in second]
+    assert {row["id"] for row in first} == {row["id"] for row in created}
 
 
 def test_the_readiness_route_reports_the_closed_loop(client: TestClient, room_id: str):
