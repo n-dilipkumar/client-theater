@@ -247,7 +247,7 @@ describe('the page', () => {
     expect(await screen.findByText('Qualification capture')).toBeTruthy()
     expect(await screen.findByLabelText('Room')).toBeTruthy()
     expect(screen.getAllByText('Submissions').length).toBeGreaterThan(0)
-    expect(screen.getByText('Qualified')).toBeTruthy()
+    expect(screen.getAllByText('Qualified').length).toBeGreaterThan(0)
     expect(await screen.findByLabelText('Form name')).toBeTruthy()
 
     // The buyer's questions, their options, and the seller-only note.
