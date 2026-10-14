@@ -168,6 +168,29 @@ horizontal scroll on mobile.
 4. Have the change validated by Jev before merge.
 5. Merge only when tests pass and the Jev gate returns `pass`.
 
+## Lifecycle and cleanup
+
+A pass is not finished when the merge lands. Every orchestration pass performs
+the full lifecycle itself, without being asked:
+
+1. The PR body opens with `Closes #<issue>`, so the merge closes the issue.
+2. Browser validation of the merged feature runs against the seeded host app.
+3. The pass owner then cleans up:
+   - release every settled dispatch so its retained terminal is freed:
+     `orca orchestration worker-release --dispatch <dispatch-id>`
+   - close stray terminals, including leftover shells and orphaned agent tabs
+     whose dispatch has settled: `orca terminal close`
+   - remove each merged branch's worktree once its browser validation has run:
+     `orca worktree rm --worktree <selector> --force`
+4. Workers do their part: after `worker_done` is sent, a worker releases its own
+   dispatch terminal (`orca orchestration worker-release --dispatch <id>`); if
+   that is refused it stops there. It leaves the worktree clean and committed so
+   the later forced removal is safe, and it never removes the worktree itself —
+   browser validation happens after the merge and needs the checkout.
+
+No pass waits for a person to enforce this. If a step is refused by the tool,
+record it and continue; never delete daemon runtime files to recover.
+
 ## Commands
 
 ```sh
