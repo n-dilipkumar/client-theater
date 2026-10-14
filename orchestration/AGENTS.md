@@ -11,10 +11,10 @@ were ever dispatched. It reports no counts rather than reporting zero:
 zero is a measurement, and no measurement was taken. The programme
 state it can measure is below.
 
-`main` at `baaa07f Rebuild STATUS.md as a per-workflow table, measured from git (#77)`
-measured 2026-10-01T19:20:35+05:30 in 1s
+`main` at `943cd9f Merge pull request #302 from n-dilipkumar/wf138-branded-domain`
+measured 2026-10-14T18:59:56+05:30 in 1s
 
-**48** features on `main` of 138. Board:  (0 cards).
+**133** features on `main` of 138. Board:  (0 cards).
 
 ## Every agent dispatched
 
