@@ -45,6 +45,7 @@ from dsr.demo_analytics import (
     heatmap,
     metrics,
     normalise_demo,
+    normalise_email,
     normalise_event,
     normalise_nodes,
     normalise_share,
@@ -54,6 +55,7 @@ from dsr.demo_analytics import (
     section_counts,
     stakeholder_role,
 )
+from dsr.demo_analytics.rules import parse_instant
 from dsr.store import RecordStore
 
 NOW = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
@@ -115,6 +117,35 @@ def domain_feature_seed(db, context):
         "dsr.features.wf127_interactive_demo_sandbox_analytics_with_stakeholder"
     )
     return module.seed(db, context)
+
+
+# --------------------------------------------------------------------------- #
+# The scalar helpers
+# --------------------------------------------------------------------------- #
+
+
+class TestTheScalarHelpers:
+    def test_parse_instant_needs_a_value_when_no_default_is_given(self):
+        with pytest.raises(DemoValidationError):
+            parse_instant(None)
+
+    def test_parse_instant_accepts_a_datetime_and_a_z_suffix(self):
+        assert parse_instant(NOW) == NOW
+        assert parse_instant("2026-05-01T12:00:00Z") == NOW
+
+    def test_parse_instant_reads_a_naive_value_as_utc(self):
+        assert parse_instant("2026-05-01T12:00:00") == NOW
+
+    def test_parse_instant_refuses_a_non_timestamp(self):
+        with pytest.raises(DemoValidationError):
+            parse_instant("not a time")
+
+    def test_an_email_is_case_folded(self):
+        assert normalise_email("Buyer@Northwind.example") == "buyer@northwind.example"
+
+    def test_an_email_without_an_at_is_refused(self):
+        with pytest.raises(DemoValidationError):
+            normalise_email("nope")
 
 
 # --------------------------------------------------------------------------- #
@@ -214,6 +245,35 @@ class TestTheClickPath:
         nodes = normalise_nodes("a\nb")
         assert [node["id"] for node in nodes] == ["a", "b"]
 
+    def test_an_empty_click_path_is_refused(self):
+        with pytest.raises(DemoValidationError):
+            normalise_nodes([])
+
+    def test_a_node_that_is_neither_object_nor_string_is_refused(self):
+        with pytest.raises(DemoValidationError):
+            normalise_nodes([123])
+
+    def test_a_node_without_an_id_is_refused(self):
+        with pytest.raises(DemoValidationError):
+            normalise_nodes([{"label": "x"}])
+
+    def test_a_next_given_as_a_comma_string_is_split(self):
+        nodes = normalise_nodes([{"id": "a", "next": "b"}, {"id": "b"}])
+        assert nodes[0]["next"] == ["b"]
+
+    def test_a_next_that_is_not_a_list_is_refused(self):
+        with pytest.raises(DemoValidationError):
+            normalise_nodes([{"id": "a", "next": 5}])
+
+    def test_a_published_demo_stamps_its_publish_time(self):
+        data = normalise_demo({"title": "x", "state": "published"}, now=NOW)
+        assert data["published_at"] == NOW.isoformat()
+
+    def test_a_path_step_that_is_blank_is_refused(self):
+        demo = normalise_demo({"title": "x"}, now=NOW)
+        with pytest.raises(EventRefused):
+            resolve_path(demo, [""])
+
     def test_a_reachable_path_resolves(self):
         demo = normalise_demo({"title": "x"}, now=NOW)
         assert resolve_path(demo, ["dashboard", "export"]) == ["overview", "dashboard", "export"]
@@ -281,6 +341,17 @@ class TestTheEvent:
         )
         assert event["is_internal"] is True
 
+    def test_a_truthy_internal_flag_string_is_read_as_true(self):
+        event = normalise_event(
+            {"viewer": "dana@b.example", "event": "view", "is_internal": "yes"}, now=NOW
+        )
+        assert event["is_internal"] is True
+
+    def test_an_upstream_reference_that_is_not_an_email_is_refused(self):
+        with pytest.raises(EventRefused) as refused:
+            normalise_event({"viewer": "a@b.example", "shared_from": "nope"}, now=NOW)
+        assert refused.value.context["field"] == "shared_from"
+
     @pytest.mark.parametrize(
         "key", ["body", "content", "form_values", "recording", "screen_capture"]
     )
@@ -317,6 +388,14 @@ class TestTheShare:
     def test_an_unknown_kind_is_refused(self):
         with pytest.raises(ShareRefused):
             normalise_share({"kind": "broadcast", "recipients": ["a@b.example"]})
+
+    def test_a_recipient_that_is_not_an_email_is_refused(self):
+        with pytest.raises(ShareRefused):
+            normalise_share({"recipients": ["not-an-address"]})
+
+    def test_a_sender_that_is_not_an_email_is_refused(self):
+        with pytest.raises(ShareRefused):
+            normalise_share({"kind": "forward", "sender": "nope", "recipients": ["a@b.example"]})
 
 
 # --------------------------------------------------------------------------- #
@@ -395,6 +474,10 @@ class TestTheMetrics:
     def test_the_denominators_are_stated(self):
         block = metrics([], [], [])
         assert block["denominators"]["demos_sent"] == "distinct initial recipients"
+
+    def test_a_share_that_lists_its_recipients_is_counted(self):
+        shares = [{"kind": "initial", "recipients": ["a@b.example", "c@d.example"]}]
+        assert metrics([], [], shares)["demos_sent"] == 2
 
 
 class TestTheHeatmap:
@@ -568,6 +651,10 @@ class TestTheRollup:
         with pytest.raises(DemoValidationError):
             rollup("galaxy", self._demos(), [], [], [])
 
+    def test_recently_shared_with_no_share_is_empty(self):
+        block = rollup("recently_shared", self._demos(), self._events(), [], [])
+        assert block["count"] == 0
+
 
 # --------------------------------------------------------------------------- #
 # The book: writes through the audited store
@@ -621,6 +708,20 @@ class TestTheBook:
         book.archive_demo(demo["id"], source="seed")
         with pytest.raises(DemoArchived):
             book.update_demo(demo["id"], {"title": "x"}, source="PATCH")
+
+    def test_an_archived_demo_cannot_be_republished(self, book: DemoAnalyticsBook, room: dict):
+        demo = make_demo(book, room["id"])
+        book.archive_demo(demo["id"], source="seed")
+        with pytest.raises(DemoArchived):
+            book.publish_demo(demo["id"], source="seed")
+
+    def test_an_archived_demo_cannot_be_shared(self, book: DemoAnalyticsBook, room: dict):
+        demo = make_demo(book, room["id"])
+        book.archive_demo(demo["id"], source="seed")
+        with pytest.raises(DemoArchived):
+            book.record_share(
+                demo["id"], {"kind": "initial", "recipients": ["a@b.example"]}, source="seed"
+            )
 
     def test_an_initial_share_mints_initial_recipients(
         self, store: RecordStore, book: DemoAnalyticsBook, room: dict
@@ -807,6 +908,19 @@ class TestTheBook:
         block = book.rollup("all_demos", room_id=room["id"])
         assert block["count"] == 2
 
+    def test_the_rollup_over_one_demo_uses_that_demo(self, book: DemoAnalyticsBook, room: dict):
+        demo = make_demo(book, room["id"])
+        block = book.rollup("top_level", demo_id=demo["id"])
+        assert block["count"] == 1
+
+    def test_listing_stakeholders_for_a_demo_reads_its_engagement(
+        self, book: DemoAnalyticsBook, room: dict
+    ):
+        demo = make_demo(book, room["id"])
+        book.record_event(demo["id"], a_view("a@b.example"), source="POST events")
+        rows = book.list_stakeholders(demo_id=demo["id"])
+        assert rows[0]["viewer"] == "a@b.example"
+
     def test_the_summary_counts_the_states_a_reviewer_checks(
         self, book: DemoAnalyticsBook, room: dict
     ):
@@ -933,3 +1047,16 @@ class TestSeed:
         summary = domain_feature_seed(db, {"room_ids": [], "now": NOW, "rng": None})
         assert "0 interactive demos" in summary
         summary.encode("cp1252")
+
+
+# --------------------------------------------------------------------------- #
+# The error envelope
+# --------------------------------------------------------------------------- #
+
+
+def test_an_error_can_carry_its_own_code_and_context():
+    error = domain.DemoValidationError("nope", code="custom_code", field="x")
+    assert error.status_code == 422
+    assert error.payload()["error"] == "custom_code"
+    assert error.payload()["field"] == "x"
+    assert error.payload()["detail"] == "nope"
