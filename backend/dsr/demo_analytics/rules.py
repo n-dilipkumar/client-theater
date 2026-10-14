@@ -710,9 +710,10 @@ def _group_rows(
                 "demo_ids": [demo_id],
             }
         ]
-    # buyer_group is grouped on the event, not on the demo, so its demo_ids are
-    # filled per group below.
-    return []
+    # buyer_group is grouped on the event, not on the demo, so it never reaches
+    # this helper; rollup handles it above. The empty list keeps the function
+    # total.
+    return []  # pragma: no cover - buyer_group is handled in rollup
 
 
 def rollup(
